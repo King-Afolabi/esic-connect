@@ -138,4 +138,20 @@ public class UserAccount extends BaseEntity {
     public Instant getLastLoginAt() {
         return lastLoginAt;
     }
+
+    public Instant getEmailVerifiedAt() {
+        return emailVerifiedAt;
+    }
+
+    /**
+     * Active le compte à l'issue du parcours d'invitation (cahier §8.3) :
+     * enregistre le hachage du mot de passe choisi, marque l'adresse
+     * comme vérifiée et bascule le statut en {@link AccountStatus#ACTIVE}.
+     * Le mot de passe en clair n'entre jamais dans cette méthode.
+     */
+    public void activateWithPassword(String encodedPassword, Instant activatedAt) {
+        this.passwordHash = encodedPassword;
+        this.emailVerifiedAt = activatedAt;
+        this.status = AccountStatus.ACTIVE;
+    }
 }

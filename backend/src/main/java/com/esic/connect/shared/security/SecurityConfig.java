@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,6 +43,7 @@ import java.nio.charset.StandardCharsets;
  * n'existe encore aucune route métier.
  */
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private static final String[] PUBLIC_PATHS = {
@@ -49,7 +51,10 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/api/v1/auth/login"
+            "/api/v1/auth/login",
+            // Parcours public d'activation (le jeton reçu par email fait foi).
+            "/api/v1/account-invitations/validate",
+            "/api/v1/account-invitations/activate"
     };
 
     @Bean

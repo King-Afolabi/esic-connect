@@ -140,6 +140,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-012 | Anti-rejeu | `iot` | TO-003 | Refus doublon | BC03/BC04 |
 | TR-013 | Sauvegarde | scripts | TR-007 | Rapport | BC03 |
 | TR-014 | Pilotage | docs | Revue | Backlog | BC01 |
+| TR-015 | Invitation / activation de compte | `identity`, `notification` | `AccountInvitation*Tests` | `./mvnw test` + Mailpit | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -168,12 +169,34 @@ Une exigence décrite n’est pas automatiquement réalisée.
   vérifiée pour email inconnu/mauvais mot de passe/compte non actif,
   `last_login_at` mis à jour. MFA et WebAuthn restent `REPORTÉ`
   (hors périmètre de cette tâche).
+- **TR-015 (Invitation / activation de compte)** : `IMPLÉMENTÉ` et
+  `TESTÉ` — `POST /api/v1/account-invitations` (protégé par
+  `@PreAuthorize` : `ADMIN`, `SUPER_ADMIN`, `PEDAGOGICAL_MANAGER`,
+  `SCHOOL_ADMINISTRATION` ; émission limitée aux comptes
+  `PENDING_ACTIVATION` ; attribution du rôle demandé via `user_role` ;
+  rôle inconnu ou inactif refusé), `GET …/validate` et `POST …/activate`
+  publics. Jeton `SecureRandom` 32 octets Base64URL sans padding, seule
+  l'empreinte SHA-256 est stockée (`account_invitation`, migration `V3`,
+  `token_hash` UNIQUE, une seule invitation `PENDING` par compte via
+  colonne générée), TTL configurable (`P30D` par défaut, refus de
+  démarrage si ≤ 0), révocation des invitations `PENDING` antérieures,
+  jeton à usage unique. Validation publique strictement générique
+  (`{"valid": bool}`, réponse identique pour jeton inconnu / expiré /
+  révoqué / accepté). Activation : mot de passe encodé (BCrypt), statut
+  `ACTIVE`, `email_verified_at`. Email d'activation via Mailpit (module
+  `notification`, écouteur `AFTER_COMMIT`, échec avalé sans jeton/email/
+  lien dans les logs — file persistante = dette technique). Audit
+  `ACCOUNT_INVITATION_ISSUED` / `ACCOUNT_ACTIVATED` sans jeton.
+  `@PreAuthorize` refusé désormais traduit en `403` neutre
+  (`GlobalExceptionHandler`).
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
+`backend/src/test/java/com/esic/connect/notification/`,
 `backend/src/test/java/com/esic/connect/audit/`, exécution réelle de
-`./mvnw test` (24/24, `BUILD SUCCESS`) — voir `docs/CURRENT-STATE.md`.
-Émetteur JWT vérifié explicitement (`JwtValidators`), jeton à émetteur
-incorrect refusé (401 nu, aucun détail de validation exposé).
+`./mvnw test` (**50/50**, `BUILD SUCCESS`, lancé deux fois) — voir
+`docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
+(`JwtValidators`), jeton à émetteur incorrect refusé (401 nu, aucun
+détail de validation exposé).
 
 ---
 

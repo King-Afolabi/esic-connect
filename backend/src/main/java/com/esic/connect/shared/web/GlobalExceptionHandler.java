@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -48,6 +49,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS",
                 "Adresse électronique ou mot de passe incorrect.", request, List.of());
+    }
+
+    /**
+     * Refus d'autorisation ({@code @PreAuthorize}, contrôle de périmètre).
+     * Sans ce handler, le catch-all générique renverrait un 500 : la
+     * réponse doit être un 403 neutre (docs/07-securite-rgpd.md §7,
+     * docs/02 §29.2).
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return build(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Accès refusé.", request, List.of());
     }
 
     /**

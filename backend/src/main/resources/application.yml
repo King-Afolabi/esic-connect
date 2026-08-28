@@ -10,6 +10,14 @@ spring:
     hibernate:
       # Flyway est seul responsable du schéma : Hibernate ne doit jamais le générer.
       ddl-auto: validate
+  mail:
+    # Serveur SMTP local (Mailpit) par défaut ; surchargé par MAIL_HOST /
+    # MAIL_PORT. Aucune authentification en développement.
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
 
 management:
   endpoints:
@@ -36,3 +44,13 @@ app:
       secret: ${JWT_SECRET}
       issuer: esic-connect
       access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}
+    invitation:
+      # Durée de validité d'une invitation d'activation (RG-005 / RG-08 :
+      # « un mois »). Configurable, doit rester strictement positive
+      # (le démarrage échoue sinon, voir AccountInvitationService).
+      token-ttl: ${INVITATION_TOKEN_TTL:P30D}
+  activation:
+    # Base du lien d'activation inséré dans l'email (front Angular à venir).
+    base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}
+  mail:
+    from: ${APP_MAIL_FROM:no-reply@esic-connect.test}

@@ -65,6 +65,12 @@ public class UserRole extends BaseEntity {
         this.active = active;
     }
 
+    /** Trace l'auteur et le motif de l'affectation (docs/02 §30). */
+    public void recordAssignment(Long assignedById, String assignmentReason) {
+        this.assignedById = assignedById;
+        this.assignmentReason = assignmentReason;
+    }
+
     public UserAccount getUser() {
         return user;
     }
