@@ -143,6 +143,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-015 | Invitation / activation de compte | `identity`, `notification` | `AccountInvitation*Tests` | `./mvnw test` + Mailpit | BC02/BC03 |
 | TR-016 | Administration des comptes et des rôles | `identity`, `audit` | `UserManagement*Tests` | `./mvnw test` | BC02/BC03 |
 | TR-017 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | `organization`, `identity`, `audit` | `Organization*Tests`, `CidrValidatorTests` | `./mvnw test` (V4 appliquée) | BC02/BC03 |
+| TR-018 | Référentiel académique (formation/niveau/année/promotion/classe) | `academic`, `organization`, `identity`, `audit` | `Academic*Tests` | `./mvnw clean test` (V5 appliquée) | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -260,13 +261,58 @@ Une exigence décrite n’est pas automatiquement réalisée.
   `OrganizationConstraintsTests` (`@DataJpaTest`),
   `OrganizationIntegrationTests`, `OrganizationSecurityTests`,
   `ModularityTests` (frontières du nouveau module respectées).
+- **TR-018 (Référentiel académique)** : `IMPLÉMENTÉ` et `TESTÉ` —
+  nouveau module `academic` (docs/03 §7.2) + migration Flyway `V5`
+  (`academic_year`, `program`, `program_level`, `promotion`,
+  `class_group` ; schéma en version 5). Hiérarchie
+  formation → promotion → classe/groupe ; `academic_year` et
+  `program_level` inclus comme support des FK de `promotion` et
+  `class_group`. Périmètre limité : ni inscriptions, ni matières, ni
+  responsabilités pédagogiques, ni Angular. CRUD + archivage logique +
+  restauration des 5 entités, **aucun DELETE physique**, `code` et
+  rattachements parents immuables. Consultation paginée (max 100,
+  défaut 20) + filtres (`status`, `q` ; promotions par
+  `program`/`academicYear` ; classes par
+  `promotion`/`programLevel`/`site`) + tri liste blanche ; routes
+  exclusivement en `public_id`. Règles vérifiées : `end_date >
+  start_date` (année), période de promotion incluse dans celle de
+  l'année, `program_level` d'une classe = même formation que sa
+  promotion, refus de création sous parent archivé, archivage refusé
+  tant qu'il reste des enfants actifs, restauration refusée sous parent
+  archivé, unicités `academic_year.code` / `program.code` /
+  `(program,code)` / `(program,academicYear,code)` / `(promotion,code)`.
+  `@PreAuthorize` : lecture =
+  `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`,
+  écriture = `ADMIN`/`SUPER_ADMIN` (écriture `PEDAGOGICAL_MANAGER`
+  reportée au périmètre pédagogique T-J1-023 ; `TEACHER`/`STUDENT`
+  exclus). DTO sans identifiant SQL interne ni colonne auteur. Audit
+  `ACADEMIC_YEAR_*` / `PROGRAM_*` / `PROGRAM_LEVEL_*` / `PROMOTION_*` /
+  `CLASS_GROUP_*` (catégorie `ACADEMIC`, transaction `REQUIRES_NEW`,
+  motif non sensible — code —, jamais de donnée personnelle) via
+  `academic.AcademicChangeEvent` → `audit.internal.AcademicAuditListener`.
+  Nouveau port public `organization.SiteDirectory` (impl
+  `organization.internal.DefaultSiteDirectory`) : `class_group.site_id`
+  est une valeur technique, aucun import de `organization.internal`
+  depuis `academic`, aucune relation JPA inter-module. Aucune donnée
+  fictive en `V5`. Passe corrective : restauration d'une classe vérifiant
+  toute la chaîne de rattachement (promotion, sa formation, son année, le
+  niveau, la formation du niveau, le site présent et actif) + invariant
+  niveau↔formation revérifié ; modification de la période d'une année
+  refusée si elle exclut une promotion existante à période renseignée
+  (`ACAD_ACADEMIC_YEAR_PERIOD_CONFLICT`) ; résolution du site sans retour
+  `null` silencieux. Tests : `AcademicServiceTests` (Mockito),
+  `AcademicConstraintsTests` (`@DataJpaTest`, unicités + FK `RESTRICT`
+  année→promotion / niveau→classe / site→classe + `CHECK` période et
+  capacité), `AcademicIntegrationTests`, `AcademicSecurityTests`,
+  `ModularityTests` (frontières du nouveau module respectées).
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,
 `backend/src/test/java/com/esic/connect/audit/`,
-`backend/src/test/java/com/esic/connect/organization/`, exécution réelle
-de `./mvnw test` (**164/164**, `BUILD SUCCESS`, lancé deux fois) — voir
-`docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
+`backend/src/test/java/com/esic/connect/organization/`,
+`backend/src/test/java/com/esic/connect/academic/`, exécution réelle
+de `./mvnw clean test` (**214/214**, `BUILD SUCCESS`, lancé trois fois) —
+voir `docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
 (`JwtValidators`), jeton à émetteur incorrect refusé (401 nu, aucun
 détail de validation exposé).
 
