@@ -1,0 +1,97 @@
+name: backend-ci
+
+# CI minimale du back-end : compile et exécute la suite de tests
+# (./mvnw --batch-mode test) sur MySQL et Redis éphémères.
+#
+# Identifiants : uniquement dédiés à cette CI, non sensibles, jamais
+# réutilisés ailleurs. Le fichier .env n'est jamais utilisé.
+# Aucun SMTP réel : le profil "test" désactive l'indicateur santé mail
+# et les tests remplacent l'envoi d'email par un double en mémoire.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Droits minimaux : lecture du contenu uniquement.
+permissions:
+  contents: read
+
+# Annule une exécution obsolète quand un nouveau commit arrive sur la
+# même référence (PR ou branche).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: esic_connect_ci
+          MYSQL_USER: esic_ci_user
+          MYSQL_PASSWORD: esic_ci_mysql_pw
+          MYSQL_ROOT_PASSWORD: esic_ci_root_pw
+        ports:
+          - "3306:3306"
+        # `mysqladmin ping` renvoie 0 dès que le serveur répond (même sans
+        # identifiants), ce qui suffit comme sonde de disponibilité.
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+          --health-start-period 30s
+
+      redis:
+        image: redis:7.4-alpine
+        command: redis-server --requirepass esic_ci_redis_pw
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli -a esic_ci_redis_pw ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Datasource / Redis résolus par application-test.yml.
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: esic_connect_ci
+      MYSQL_USER: esic_ci_user
+      MYSQL_PASSWORD: esic_ci_mysql_pw
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: esic_ci_redis_pw
+      # Le profil "test" surcharge déjà app.security.jwt.secret en dur ;
+      # cette valeur ≥ 32 octets n'est fournie que pour satisfaire le
+      # placeholder ${JWT_SECRET} du profil par défaut. Valeur CI factice.
+      JWT_SECRET: ci-only-jwt-secret-value-at-least-32-bytes-long
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 (Temurin) + cache Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Ensure Maven wrapper is executable
+        run: chmod +x ./mvnw
+
+      - name: Run backend test suite
+        run: ./mvnw --batch-mode test
