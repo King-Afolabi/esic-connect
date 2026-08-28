@@ -9,6 +9,7 @@
 
 # Java
 backend/target/
+build/
 *.class
 *.log
 
