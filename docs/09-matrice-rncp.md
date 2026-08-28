@@ -142,6 +142,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-014 | Pilotage | docs | Revue | Backlog | BC01 |
 | TR-015 | Invitation / activation de compte | `identity`, `notification` | `AccountInvitation*Tests` | `./mvnw test` + Mailpit | BC02/BC03 |
 | TR-016 | Administration des comptes et des rôles | `identity`, `audit` | `UserManagement*Tests` | `./mvnw test` | BC02/BC03 |
+| TR-017 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | `organization`, `identity`, `audit` | `Organization*Tests`, `CidrValidatorTests` | `./mvnw test` (V4 appliquée) | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -225,11 +226,46 @@ Une exigence décrite n’est pas automatiquement réalisée.
   implémenté. Tests : `UserManagementServiceTests` (unitaires),
   `UserManagementIntegrationTests`, `UserManagementSecurityTests`,
   `ModularityTests`.
+- **TR-017 (Référentiel organisationnel)** : `IMPLÉMENTÉ` et `TESTÉ` —
+  nouveau module `organization` (élargit et remplace le module `room`
+  prévu par l'architecture, docs/03 §7.6) + migration Flyway `V4`
+  (`site`, `building`, `room`, `site_network_range` ; schéma en
+  version 4). Hiérarchie site → bâtiment → salle avec conventions
+  techniques complètes (`public_id`, `created_at/by`, `updated_at/by`,
+  `version`, `status`, `archived_at/by`, `archive_reason` ;
+  `site_network_range` reçoit en plus `public_id`, `updated_at`,
+  `version`). CRUD + archivage logique + restauration (site/bâtiment/
+  salle), plages réseau en création + activation/désactivation ;
+  **aucun DELETE physique**, `code` et rattachement au site immuables.
+  Consultation paginée (max 100, défaut 20) + filtres + tri liste
+  blanche ; routes exclusivement en `public_id`. Règles vérifiées :
+  refus building/room sous parent archivé, `room.site` = `building.site`,
+  archivage d'un site/bâtiment refusé tant qu'il reste des enfants
+  actifs, unicités `site.code` / `(site,code)` / `(site,cidr)` active.
+  Validations réelles : fuseau IANA (`ZoneId`), code pays ISO 3166-1
+  alpha-2, CIDR IPv4 **et** IPv6 (préfixes bornés 0..32 / 0..128, sans
+  résolution DNS). `@PreAuthorize` : lecture site/bâtiment/salle =
+  `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`,
+  écriture = `ADMIN`/`SUPER_ADMIN`, `site_network_range` = `SUPER_ADMIN`
+  pour **toute** opération, consultation comprise. DTO sans identifiant
+  SQL interne ni colonne auteur. Audit `SITE_*` / `BUILDING_*` /
+  `ROOM_*` / `SITE_NETWORK_RANGE_*` (catégorie `ORGANIZATION`,
+  transaction `REQUIRES_NEW`, motif non sensible — code, CIDR —, jamais
+  d'IP ni de donnée personnelle) via `organization.OrganizationChangeEvent`
+  → `audit.internal.OrganizationAuditListener`. Port public
+  `identity.CurrentUserResolver` (résout l'id interne depuis le sujet du
+  JWT ; n'expose ni `UserAccount`, ni repository, ni classe
+  `identity.internal`). Aucun site fictif ni donnée métier en `V4`.
+  Tests : `CidrValidatorTests`, `OrganizationServiceTests` (Mockito),
+  `OrganizationConstraintsTests` (`@DataJpaTest`),
+  `OrganizationIntegrationTests`, `OrganizationSecurityTests`,
+  `ModularityTests` (frontières du nouveau module respectées).
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,
-`backend/src/test/java/com/esic/connect/audit/`, exécution réelle de
-`./mvnw test` (**98/98**, `BUILD SUCCESS`, lancé deux fois) — voir
+`backend/src/test/java/com/esic/connect/audit/`,
+`backend/src/test/java/com/esic/connect/organization/`, exécution réelle
+de `./mvnw test` (**164/164**, `BUILD SUCCESS`, lancé deux fois) — voir
 `docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
 (`JwtValidators`), jeton à émetteur incorrect refusé (401 nu, aucun
 détail de validation exposé).
