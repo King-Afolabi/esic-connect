@@ -71,6 +71,17 @@ public class UserRole extends BaseEntity {
         this.assignmentReason = assignmentReason;
     }
 
+    /**
+     * Clôture l'affectation sans la supprimer (docs/04 §10.3 : « un rôle
+     * n'est pas supprimé d'un utilisateur : son affectation est
+     * clôturée »). L'historique reste consultable ; le couple
+     * (utilisateur, rôle) redevient réattribuable.
+     */
+    public void close(Instant at) {
+        this.active = false;
+        this.validUntil = at;
+    }
+
     public UserAccount getUser() {
         return user;
     }
@@ -81,5 +92,13 @@ public class UserRole extends BaseEntity {
 
     public boolean isActive() {
         return active;
+    }
+
+    public Instant getValidFrom() {
+        return validFrom;
+    }
+
+    public Instant getValidUntil() {
+        return validUntil;
     }
 }

@@ -102,6 +102,14 @@ public class AuditEvent extends BaseEntity {
         this.actorPublicIdSnapshot = actorPublicIdSnapshot;
     }
 
+    public void setResourcePublicId(UUID resourcePublicId) {
+        this.resourcePublicId = resourcePublicId;
+    }
+
+    public UUID getResourcePublicId() {
+        return resourcePublicId;
+    }
+
     public void setActorRole(String actorRole) {
         this.actorRole = actorRole;
     }

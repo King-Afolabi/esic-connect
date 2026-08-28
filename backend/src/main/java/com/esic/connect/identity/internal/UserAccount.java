@@ -114,12 +114,71 @@ public class UserAccount extends BaseEntity {
         return lastName;
     }
 
+    public String getPhone() {
+        return phone;
+    }
+
     public AccountStatus getStatus() {
         return status;
     }
 
     public void setStatus(AccountStatus status) {
         this.status = status;
+    }
+
+    public Instant getSuspendedAt() {
+        return suspendedAt;
+    }
+
+    public String getSuspensionReason() {
+        return suspensionReason;
+    }
+
+    public Instant getArchivedAt() {
+        return archivedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    /**
+     * Suspend le compte (cahier §9.5, modèle §2.5 {@code ACTIVE →
+     * SUSPENDED}). La connexion est alors refusée
+     * ({@code UserAccountUserDetails}). Le motif et l'auteur sont
+     * conservés pour l'audit ; aucune donnée n'est supprimée.
+     */
+    public void suspend(String reason, Long actorId, Instant at) {
+        this.status = AccountStatus.SUSPENDED;
+        this.suspendedAt = at;
+        this.suspendedById = actorId;
+        this.suspensionReason = reason;
+        this.updatedById = actorId;
+    }
+
+    /** Réactive un compte suspendu ({@code SUSPENDED → ACTIVE}, cahier §9.5). */
+    public void reactivate(Long actorId) {
+        this.status = AccountStatus.ACTIVE;
+        this.suspendedAt = null;
+        this.suspendedById = null;
+        this.suspensionReason = null;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Archivage logique (cahier §9.7, modèle §2.4/§2.5) : aucune
+     * suppression physique, l'historique est conservé. Opération
+     * irréversible dans ce périmètre. La clôture des rôles actifs est
+     * réalisée par le service, dans la même transaction.
+     */
+    public void archive(Long actorId, Instant at) {
+        this.status = AccountStatus.ARCHIVED;
+        this.archivedAt = at;
+        this.updatedById = actorId;
     }
 
     public String getPasswordHash() {

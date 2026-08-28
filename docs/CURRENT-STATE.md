@@ -15,8 +15,34 @@
 ## Phase actuelle
 
 ```text
-Flux d'invitation et d'activation de compte créé (branche
-feature/account-invitation, non fusionnée, non committée) :
+Administration minimale des comptes et des rôles ajoutée (branche
+feature/user-management, non fusionnée, non committée) — aucune migration
+V4 (colonnes suspended_*/archived_at/user_role.* déjà présentes en V1) :
+- GET /api/v1/users (ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION) : liste
+  paginée (taille max 100, défaut 20), filtres status / role (affectation
+  active) / q (email+prénom+nom, normalisé, borné à 100 car., LIKE
+  échappé), tri restreint à createdAt/lastLoginAt/email/lastName ;
+- GET /api/v1/users/{public_id} : détail + historique complet des rôles ;
+- POST …/{public_id}/suspend | /restore (ACTIVE↔SUSPENDED, motif
+  obligatoire) — SCHOOL_ADMINISTRATION autorisé ;
+- POST …/{public_id}/archive (ADMIN/SUPER_ADMIN) : statut ARCHIVED,
+  clôture de tous les user_role actifs dans la même transaction
+  (historique conservé), irréversible dans ce lot ;
+- POST …/{public_id}/roles et …/roles/{roleCode}/revoke
+  (ADMIN/SUPER_ADMIN) : attribution = nouvelle ligne user_role ; retrait =
+  clôture (active=false, valid_until), jamais de suppression ; retrait du
+  dernier rôle actif refusé.
+DTO exposant uniquement public_id (jamais id SQL, password_hash, jeton).
+Contrôles sensibles doublés dans le service (au-delà de @PreAuthorize) :
+un compte ou le rôle SUPER_ADMIN n'est administrable que par un
+SUPER_ADMIN ; auto-suspension / auto-archivage / retrait de son propre
+rôle interdits. Audit ACCOUNT_SUSPENDED / ACCOUNT_REACTIVATED /
+ACCOUNT_ARCHIVED / ROLE_ASSIGNED / ROLE_REVOKED (module audit, motif
+seul, sans donnée sensible). PEDAGOGICAL_MANAGER exclu tant que le
+périmètre pédagogique n'existe pas. Aucune suppression physique. Toujours
+aucun MFA, WebAuthn, refresh token ni réinitialisation de mot de passe.
+
+Flux d'invitation et d'activation de compte (fusionné sur main via PR #4) :
 - POST /api/v1/account-invitations (protégé ADMIN/SUPER_ADMIN/
   PEDAGOGICAL_MANAGER/SCHOOL_ADMINISTRATION) : émission réservée aux
   comptes PENDING_ACTIVATION, attribution du rôle demandé via user_role,
@@ -30,8 +56,7 @@ feature/account-invitation, non fusionnée, non committée) :
   (BCrypt), statut ACTIVE, email_verified_at, invitation ACCEPTED à usage
   unique.
 Audit ACCOUNT_INVITATION_ISSUED / ACCOUNT_ACTIVATED (module audit, sans
-jeton). Toujours aucun MFA, WebAuthn, refresh token ni réinitialisation
-de mot de passe.
+jeton).
 
 Dette technique : l'email d'activation est envoyé de façon synchrone
 après commit ; en cas d'échec l'invitation est conservée et seule une
@@ -70,7 +95,8 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation` — migrations appliquées et vérifiées, schéma en version 3) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
-| Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; désormais attribués via `user_role` lors de l'émission d'une invitation — pas encore d'API de gestion dédiée) |
+| Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; attribués via `user_role` à l'émission d'une invitation ; API d'attribution / retrait dédiée — voir « Gestion des comptes / rôles ») |
+| Gestion des comptes / rôles | TESTED (`GET /api/v1/users` paginé/filtré/trié, `GET /api/v1/users/{public_id}`, `POST …/{public_id}/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{roleCode}/revoke` ; `@PreAuthorize` + contrôles sensibles dans `UserManagementService` (protection SUPER_ADMIN, auto-action interdite, dernier rôle actif protégé) ; archivage = clôture transactionnelle des rôles actifs, ARCHIVED irréversible ; DTO sans id SQL / `password_hash` / jeton ; audit `ACCOUNT_SUSPENDED`/`ACCOUNT_REACTIVATED`/`ACCOUNT_ARCHIVED`/`ROLE_ASSIGNED`/`ROLE_REVOKED` ; aucune migration V4 ; `PEDAGOGICAL_MANAGER` exclu jusqu'au périmètre pédagogique) |
 | Invitation / activation | TESTED (`POST /api/v1/account-invitations` protégé par rôle, `GET …/validate` et `POST …/activate` publics ; migration V3 `account_invitation` ; jeton SecureRandom 32 o Base64URL, empreinte SHA-256 unique stockée, TTL configurable strictement positif, révocation des invitations PENDING antérieures, jeton à usage unique ; validation publique strictement générique ; email d'activation via Mailpit ; audit `ACCOUNT_INVITATION_ISSUED`/`ACCOUNT_ACTIVATED` sans jeton) |
 | Notification (email) | TESTED (module `notification` : écouteur `AFTER_COMMIT` sur `AccountInvitationIssuedEvent`, envoi SMTP `SimpleMailMessage` via Mailpit ; échec d'envoi avalé, invitation conservée, log sans jeton/email/lien ; pas de file persistante — dette technique) |
 | Référentiels | TODO |
@@ -79,7 +105,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte — jamais de jeton ni de donnée sensible) |
+| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle — jamais de jeton ni de donnée sensible ; pour les actions d'administration, le compte concerné est porté par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -221,6 +247,48 @@ variables dans `.env.example` (`MAIL_HOST`, `MAIL_PORT`, `APP_MAIL_FROM`,
 `APP_ACTIVATION_BASE_URL`, `INVITATION_TOKEN_TTL`) ; `.env`, `compose.yaml`,
 `V1` et `V2` inchangés. TTL par défaut `P30D`, configurable via
 `INVITATION_TOKEN_TTL`, refus de démarrage si ≤ 0.
+
+Gestion des comptes / rôles vérifiée le 28 août 2026, sur la branche
+`feature/user-management` (non fusionnée, non committée) : `./mvnw test`
+(mêmes commandes ci-dessus, `JAVA_HOME` OpenJDK 21) → `BUILD SUCCESS`,
+**98 tests** exécutés (48 nouveaux), 0 échec, exécuté deux fois pour
+vérifier la stabilité (dont `ModularityTests` : frontières de modules
+respectées). Nouveaux tests : `UserManagementServiceTests` (35 —
+transitions ACTIVE↔SUSPENDED, un compte SUSPENDED ne peut pas se
+réactiver lui-même, archivage clôturant les rôles actifs sans
+suppression, protection d'un compte `SUPER_ADMIN` (y compris pour une
+réactivation par `SCHOOL_ADMINISTRATION` et pour l'attribution/retrait
+de *n'importe quel* rôle par un `ADMIN`), `SUPER_ADMIN` interdit de
+s'auto-suspendre / s'auto-archiver / retirer son propre rôle, dernier
+rôle actif protégé, rôle inconnu, tri hors liste blanche, direction de
+tri invalide (`email,wrong`) refusée au lieu d'un ASC silencieux, filtre
+invalide, taille de page bornée à 100 / défaut 20),
+`UserManagementIntegrationTests` (5 — liste paginée/filtrée/triée sans
+`id` ni `password_hash`, détail par `public_id` + 404, suspension →
+connexion refusée → réactivation → connexion rétablie, archivage
+bloquant la connexion et refusant la réactivation (409), attribution
+puis retrait de rôle conservant l'historique, dernier rôle protégé,
+audit écrit), `UserManagementSecurityTests` (8 — 401 anonyme, 403
+`STUDENT`/`TEACHER`, `SCHOOL_ADMINISTRATION` peut suspendre mais pas
+archiver ni gérer les rôles, `ADMIN` ne peut pas archiver un
+`SUPER_ADMIN` ni attribuer le rôle `SUPER_ADMIN`, auto-suspension
+refusée (409), `public_id` inconnu → 404).
+
+Aucune migration `V4` : `user_account` (`suspended_at`/`suspended_by_id`/
+`suspension_reason`/`archived_at`/`updated_by_id`) et `user_role`
+(`valid_until`/`active`/`assigned_by_id`/`assignment_reason`) portaient
+déjà les colonnes nécessaires depuis `V1`. Fichiers back-end ajoutés
+dans `identity.internal` (`UserAccountController`, `UserManagementService`,
+`UserAdminSpecifications`, `UserManagementException(+Handler)`, DTO
+`UserSummaryResponse`/`UserDetailResponse`/`RoleAssignmentResponse`/
+`PageResponse`, requêtes `AccountActionRequest`/`AssignRoleRequest`) ;
+modifiés : `UserAccount` (méthodes `suspend`/`reactivate`/`archive` +
+getters), `UserRole` (`close` + getters), `UserAccountRepository`
+(`JpaSpecificationExecutor`), `UserRoleRepository` (requêtes de rôles
+actifs), `identity.AccountLifecycleAction` (+5 actions),
+`audit.internal.AuditEvent` (`setResourcePublicId`),
+`AccountLifecycleAuditListener`. `.env`, `compose.yaml`, `V1`–`V3`,
+`SecurityConfig` et le workflow CI inchangés. Aucun commit, aucun push.
 
 ## Règle de mise à jour
 
