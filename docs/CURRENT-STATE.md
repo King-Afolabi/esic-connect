@@ -84,6 +84,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | MQTT | TODO |
 | Raspberry Pi | TODO |
 | WebAuthn | TODO |
+| CI (GitHub Actions) | IMPLEMENTED (`.github/workflows/backend-ci.yml` : déclenché sur PR vers `main` et push sur `main` ; job unique `ubuntu-latest`, `permissions: contents: read`, `timeout-minutes: 20`, concurrence avec annulation des exécutions obsolètes ; Java 21 Temurin + cache Maven ; services `mysql:8.4` et `redis:7.4-alpine` (mot de passe via `command: redis-server --requirepass`) avec identifiants dédiés CI non sensibles ; exécute `./mvnw --batch-mode test` depuis `backend/` ; aucun usage de `.env`, aucun SMTP réel. Non encore exécuté sur GitHub — statut à confirmer au premier run) |
 | Staging | TODO |
 
 ## Prochaine priorité
