@@ -15,11 +15,11 @@
 ## Phase actuelle
 
 ```text
-Socle de persistance identité + audit créé (branche
-feature/identity-foundation, non fusionnée, non committée) — 4 tables
-(user_account, role, user_role, audit_event), 6 rôles système seedés.
-Aucune connexion, JWT, MFA, WebAuthn, service métier ni route API pour
-le moment.
+Authentification locale email/mot de passe créée (branche
+feature/authentication-foundation, non fusionnée, non committée) :
+POST /api/v1/auth/login, JWT HS256 stateless, réponse publique uniforme
+en cas d'échec. Aucun MFA, WebAuthn, refresh token, inscription
+publique ni réinitialisation de mot de passe pour le moment.
 ```
 
 ## Documents
@@ -51,7 +51,7 @@ le moment.
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles — migrations appliquées et vérifiées) |
-| Authentification | TODO (aucune connexion, JWT, MFA ni WebAuthn) |
+| Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
 | Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture — pas encore de service métier ni d'API) |
 | Référentiels | TODO |
 | Import apprenants | TODO |
@@ -69,12 +69,12 @@ le moment.
 ## Prochaine priorité
 
 ```text
-Implémenter la connexion (email/mot de passe, hachage, cookie sécurisé,
-/auth/login, /auth/me, /auth/logout) puis le contrôle des rôles, sur la
-base du socle identité/audit existant — voir
-docs/05b-sprint-backlog-prototype.md T-J1-021 et T-J1-022. Les
-référentiels pédagogiques (formation, classe, inscription) restent
-ensuite à créer.
+Créer les référentiels pédagogiques (formation, classe, inscription) et
+le contrôle d'accès par périmètre pédagogique, sur la base du socle
+d'authentification existant — voir
+docs/05b-sprint-backlog-prototype.md T-J1-022, T-J1-023, T-J1-030 à
+T-J1-032. /auth/logout et la révocation de session restent à évaluer
+(jeton stateless sans état serveur pour l'instant).
 ```
 
 ## Blocages
@@ -127,6 +127,33 @@ vérifier la stabilité. Migrations Flyway `V1` (tables `user_account`,
 `role`, `user_role`, `audit_event`) et `V2` (6 rôles système) appliquées
 sur la base locale. Aucune donnée de démonstration, aucun compte
 administrateur, aucun JWT, aucun contrôleur d'authentification.
+
+Authentification vérifiée le 28 août 2026, sur la branche
+`feature/authentication-foundation` (non fusionnée, non committée) :
+`./mvnw test` (mêmes commandes ci-dessus) → `BUILD SUCCESS`, 24 tests
+exécutés (15 nouveaux : adaptateur `UserDetailsService`, service
+d'authentification unitaire — y compris qu'un échec de journalisation
+d'audit ne modifie ni ne masque jamais le résultat réel —, connexion
+réussie de bout en bout avec jeton décodable et audit committé, réponse
+publique strictement identique pour email inconnu/mauvais mot de
+passe/compte non actif, aucune fuite de l'email brut d'un compte
+inconnu dans l'audit, rejet sans jeton d'une route protégée, refus d'un
+jeton correctement signé mais à l'émetteur (`iss`) incorrect (401 nu,
+sans détail de validation exposé), routes `/actuator/health` et
+`/v3/api-docs` toujours publiques), 0 échec, exécuté deux fois pour
+vérifier la stabilité. Aucune migration `V3` : le schéma `V1`
+suffisait. `JwtDecoder` vérifie désormais explicitement l'émetteur
+(`JwtValidators.createDefaultWithIssuer`) et `AuthenticationService`
+refuse de démarrer si `JWT_ACCESS_TOKEN_TTL_SECONDS` n'est pas
+strictement positif. Un `AuthenticationEntryPoint` dédié a dû remplacer
+celui par défaut de Resource Server, qui exposait le motif technique du
+refus (ex. « the iss claim is not valid ») dans l'en-tête
+`WWW-Authenticate` — désormais un 401 nu. **`JWT_SECRET` est requis**
+(≥ 32 octets, aucune valeur par défaut) : à ajouter manuellement à
+votre `.env` local
+(voir `.env.example`) pour lancer l'application hors des tests — les
+tests utilisent un secret dédié dans `application-test.yml`, jamais
+`.env`.
 
 ## Règle de mise à jour
 

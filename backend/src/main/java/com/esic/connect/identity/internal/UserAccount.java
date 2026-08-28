@@ -129,4 +129,13 @@ public class UserAccount extends BaseEntity {
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
     }
+
+    /** Horodate la dernière connexion réussie (docs/04 §10.1). */
+    public void recordSuccessfulLogin(Instant loginAt) {
+        this.lastLoginAt = loginAt;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
 }

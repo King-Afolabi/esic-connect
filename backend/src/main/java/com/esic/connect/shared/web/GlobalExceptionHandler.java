@@ -1,11 +1,15 @@
 package com.esic.connect.shared.web;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,6 +27,8 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
@@ -32,8 +38,33 @@ public class GlobalExceptionHandler {
                 request, details);
     }
 
+    /**
+     * Réponse strictement uniforme quel que soit le motif réel
+     * (email inconnu, mot de passe incorrect, compte non actif) : le
+     * détail n'est jamais exposé à l'appelant, seulement à l'audit
+     * interne (docs/02 §27.2, §49).
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS",
+                "Adresse électronique ou mot de passe incorrect.", request, List.of());
+    }
+
+    /**
+     * Sans ce handler explicite, le catch-all générique ci-dessous
+     * masquerait le 404 standard de Spring (aucune route ni ressource
+     * statique) derrière un 500 trompeur.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Ressource introuvable.", request, List.of());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception ex, HttpServletRequest request) {
+        // Le détail reste côté serveur uniquement : la réponse au client
+        // ne doit jamais exposer de trace ni de message d'implémentation.
+        log.error("Erreur inattendue sur {}", request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Une erreur inattendue est survenue.",
                 request, List.of());
     }
