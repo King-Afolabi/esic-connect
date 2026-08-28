@@ -143,24 +143,37 @@ Une exigence décrite n’est pas automatiquement réalisée.
 
 ## Avancement vérifié — 28 août 2026
 
-- **TR-002 (Rôles)** : `IMPLÉMENTÉ` et `TESTÉ` au niveau persistance
-  uniquement (`identity/internal` : `UserAccount`, `Role`, `UserRole` ;
-  migrations Flyway `V1`/`V2` ; 6 rôles système seedés ; unicité d'une
-  affectation active + réattribution après clôture vérifiées par test
-  réel). Le contrôle d'accès par rôle (TZ-001 à 010) reste `REPORTÉ` :
-  aucune route ni service métier n'existe encore.
-- **TR-009 (Audit)** : `IMPLÉMENTÉ` et `TESTÉ` au niveau persistance
-  (`audit/internal.AuditEvent` : acteur nullable après suppression du
-  compte avec conservation du snapshot, vérifié par test réel). Aucune
-  écriture d'audit depuis un service métier réel : `REPORTÉ`.
-- **TR-001 (Connexion)** : toujours `CONÇU` uniquement — le socle de
-  persistance de `user_account` existe (`password_hash` en base), mais
-  aucune authentification, JWT, MFA ni WebAuthn n'est implémenté à ce
-  stade (hors périmètre de cette tâche).
+- **TR-002 (Rôles)** : `IMPLÉMENTÉ` et `TESTÉ` — persistance
+  (`identity/internal` : `UserAccount`, `Role`, `UserRole` ; migrations
+  Flyway `V1`/`V2` ; 6 rôles système seedés ; unicité d'une affectation
+  active + réattribution après clôture) **et** désormais portés dans le
+  jeton JWT émis à la connexion (claim `roles`, autorités
+  `ROLE_<code>`, filtrées aux affectations actives). Le contrôle
+  d'accès par rôle sur des routes métier (TZ-001 à 010) reste
+  `REPORTÉ` : aucune route métier n'existe encore.
+- **TR-009 (Audit)** : `IMPLÉMENTÉ` et `TESTÉ`, désormais alimenté par
+  un flux métier réel (connexion réussie/refusée), plus seulement par
+  test direct de persistance : événement applicatif découplé
+  (`identity.LoginSucceededEvent`/`LoginFailedEvent` →
+  `audit/internal.SecurityAuditEventListener`, transaction dédiée
+  `REQUIRES_NEW`), acteur nullable conservé pour un email inconnu sans
+  jamais stocker l'adresse brute, échec de journalisation vérifié
+  sans impact sur la réponse d'authentification.
+- **TR-001 (Connexion)** : `IMPLÉMENTÉ` et `TESTÉ` —
+  `POST /api/v1/auth/login` (email/mot de passe, `UserDetailsService`
+  standard, `PasswordEncoder` délégué BCrypt, `AuthenticationManager`
+  standard), JWT HS256 stateless (Spring Security OAuth2 Resource
+  Server + Nimbus, sujet = identifiant public, `iat`/`exp`/`jti`/`roles`,
+  aucune donnée personnelle), réponse publique strictement uniforme
+  vérifiée pour email inconnu/mauvais mot de passe/compte non actif,
+  `last_login_at` mis à jour. MFA et WebAuthn restent `REPORTÉ`
+  (hors périmètre de cette tâche).
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/audit/`, exécution réelle de
-`./mvnw test` (9/9, `BUILD SUCCESS`) — voir `docs/CURRENT-STATE.md`.
+`./mvnw test` (24/24, `BUILD SUCCESS`) — voir `docs/CURRENT-STATE.md`.
+Émetteur JWT vérifié explicitement (`JwtValidators`), jeton à émetteur
+incorrect refusé (401 nu, aucun détail de validation exposé).
 
 ---
 

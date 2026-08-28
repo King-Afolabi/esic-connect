@@ -27,3 +27,12 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+app:
+  security:
+    jwt:
+      # Obligatoire, aucune valeur par défaut : le démarrage échoue si
+      # absent ou trop court (voir SecurityConfig.jwtSigningKey).
+      secret: ${JWT_SECRET}
+      issuer: esic-connect
+      access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}

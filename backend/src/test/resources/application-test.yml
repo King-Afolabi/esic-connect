@@ -12,3 +12,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
+
+app:
+  security:
+    jwt:
+      # Secret exclusif aux tests automatisés (≥ 32 octets) — jamais dans
+      # .env, jamais une valeur de production.
+      secret: test-only-jwt-signing-secret-for-esic-connect-automated-tests-do-not-use-in-prod
