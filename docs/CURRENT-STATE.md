@@ -3,7 +3,7 @@
 ## Dernière mise à jour
 
 ```text
-28 août 2026
+29 août 2026
 ```
 
 ## Dernier commit stable
@@ -15,6 +15,79 @@
 ## Phase actuelle
 
 ```text
+Référentiel académique minimal ajouté (branche feature/academic-foundation,
+non fusionnée, non committée) — nouveau module `academic` + migration V5
+`academic_year` / `program` / `program_level` / `promotion` / `class_group`
+(schéma en version 5, appliqué et vérifié). Couvre la hiérarchie
+formation → promotion → classe/groupe (docs/04 §12) ; n'aborde ni les
+inscriptions, ni les matières, ni les responsabilités pédagogiques, ni
+Angular.
+- `academic_year` et `program_level` inclus uniquement comme référentiels
+  support des FK de `promotion` (academic_year_id) et `class_group`
+  (program_level_id). Conventions techniques complètes (public_id,
+  created_at/by, updated_at/by, version, status, archived_at/by,
+  archive_reason). Écarts documentés vs docs/04 §12 : `program_level`
+  reçoit public_id/horodatage/version/archivage (absents du tableau
+  §12.3) ; `promotion` reçoit start_date/end_date optionnelles pour la
+  validation de période ; les colonnes external_source/external_id de
+  §12.2/§12.5 ne sont pas reprises (pas de synchronisation externe).
+- CRUD + archivage logique + restauration pour les cinq entités. Aucun
+  DELETE physique. `code` immuable après création ; tous les
+  rattachements parents (program, academic_year, program_level,
+  promotion, site) immuables.
+- Consultation paginée (max 100, défaut 20) + filtres : status, q
+  (code+name, LIKE échappé) ; promotions filtrables par program /
+  academicYear ; classes par promotion / programLevel / site ; niveaux
+  listés sous /programs/{id}/levels. Tri liste blanche (sinon 400
+  ACAD_INVALID_SORT). Consultation par public_id. Routes exclusivement
+  en public_id : `/api/v1/academic-years`, `/api/v1/programs`,
+  `/api/v1/programs/{id}/levels` + `/api/v1/program-levels/{id}`,
+  `/api/v1/promotions`, `/api/v1/class-groups`.
+- Règles métier vérifiées : end_date > start_date (année, + CHECK SQL) ;
+  période de promotion, si renseignée, strictement incluse dans celle de
+  l'année (ACAD_PROMOTION_PERIOD_OUT_OF_YEAR) ; modification de la période
+  d'une année refusée si elle exclurait une promotion existante à période
+  renseignée (ACAD_ACADEMIC_YEAR_PERIOD_CONFLICT, deux `exists` ciblés,
+  aucun chargement de liste) ; le program_level d'une classe doit
+  appartenir à la même formation que sa promotion
+  (ACAD_PROGRAM_LEVEL_MISMATCH), revérifié aussi à la restauration ;
+  création refusée sous un parent archivé (ACAD_ARCHIVED_PARENT) ;
+  archivage refusé tant qu'il reste des enfants actifs
+  (ACAD_HAS_ACTIVE_CHILDREN : niveaux/promotions pour une formation,
+  promotions pour une année, classes pour niveau/promotion) ;
+  restauration d'une classe refusée si un maillon de la chaîne est
+  archivé — promotion, sa formation, son année, le niveau, la formation
+  du niveau — ou si le site est absent/archivé ; restauration d'une
+  promotion refusée si sa formation ou son année est archivée.
+  `capacity > 0` (class_group, + CHECK SQL).
+- Unicités testées : academic_year.code (global), program.code (global),
+  (program_id, code) pour program_level, (program_id, academic_year_id,
+  code) pour promotion, (promotion_id, code) pour class_group, tous les
+  public_id ; FK RESTRICT vérifiées (program→promotion,
+  promotion→class_group).
+- Rattachement au site : `class_group.site_id` est une valeur technique
+  (FK SQL `fk_class_group_site` vers `site.id`), jamais une relation JPA
+  inter-module. Résolu via un nouveau port public minimal
+  `organization.SiteDirectory` (impl `organization.internal.
+  DefaultSiteDirectory`) qui n'expose que `SiteRef(internalId, publicId,
+  archived)` — ni `Site`, ni `SiteRepository`, ni `organization.internal`.
+  Le module `academic` n'importe jamais `organization.internal`.
+  `ModularityTests` reste vert.
+- Autorisations @PreAuthorize : lecture =
+  ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER ; écriture
+  = ADMIN/SUPER_ADMIN uniquement (écriture PEDAGOGICAL_MANAGER reportée
+  au périmètre pédagogique T-J1-023). TEACHER et STUDENT exclus (401/403
+  testés).
+- DTO sans identifiant SQL interne ni colonne auteur ; erreurs via
+  ApiError commun (AcademicExceptionHandler, codes ACAD_*).
+- Audit : événement applicatif `academic.AcademicChangeEvent` (module
+  racine) → `audit/internal.AcademicAuditListener` (catégorie ACADEMIC,
+  transaction REQUIRES_NEW), actions
+  ACADEMIC_YEAR_/PROGRAM_/PROGRAM_LEVEL_/PROMOTION_/CLASS_GROUP_ +
+  CREATED/UPDATED/ARCHIVED/RESTORED, motif non sensible (code), jamais de
+  donnée personnelle.
+- Aucune formation, promotion ni classe fictive insérée en V5.
+
 Référentiel organisationnel ajouté (branche feature/organization-foundation,
 non fusionnée, non committée) — nouveau module `organization` +
 migration V4 `site` / `building` / `room` / `site_network_range` (schéma
@@ -134,20 +207,20 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Angular | TODO |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
-| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range` — migrations appliquées et vérifiées, schéma en version 4) |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group` — migrations appliquées et vérifiées, schéma en version 5) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
 | Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; attribués via `user_role` à l'émission d'une invitation ; API d'attribution / retrait dédiée — voir « Gestion des comptes / rôles ») |
 | Gestion des comptes / rôles | TESTED (`GET /api/v1/users` paginé/filtré/trié, `GET /api/v1/users/{public_id}`, `POST …/{public_id}/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{roleCode}/revoke` ; `@PreAuthorize` + contrôles sensibles dans `UserManagementService` (protection SUPER_ADMIN, auto-action interdite, dernier rôle actif protégé) ; archivage = clôture transactionnelle des rôles actifs, ARCHIVED irréversible ; DTO sans id SQL / `password_hash` / jeton ; audit `ACCOUNT_SUSPENDED`/`ACCOUNT_REACTIVATED`/`ACCOUNT_ARCHIVED`/`ROLE_ASSIGNED`/`ROLE_REVOKED` ; aucune migration V4 ; `PEDAGOGICAL_MANAGER` exclu jusqu'au périmètre pédagogique) |
 | Invitation / activation | TESTED (`POST /api/v1/account-invitations` protégé par rôle, `GET …/validate` et `POST …/activate` publics ; migration V3 `account_invitation` ; jeton SecureRandom 32 o Base64URL, empreinte SHA-256 unique stockée, TTL configurable strictement positif, révocation des invitations PENDING antérieures, jeton à usage unique ; validation publique strictement générique ; email d'activation via Mailpit ; audit `ACCOUNT_INVITATION_ISSUED`/`ACCOUNT_ACTIVATED` sans jeton) |
 | Notification (email) | TESTED (module `notification` : écouteur `AFTER_COMMIT` sur `AccountInvitationIssuedEvent`, envoi SMTP `SimpleMailMessage` via Mailpit ; échec d'envoi avalé, invitation conservée, log sans jeton/email/lien ; pas de file persistante — dette technique) |
-| Référentiels pédagogiques (formation/classe/inscription) | TODO |
+| Référentiels pédagogiques (formation/niveau/année/promotion/classe) | TESTED (module `academic`, migration V5 ; CRUD + archivage/restauration des 5 entités, aucun DELETE physique ; hiérarchie formation → promotion → classe/groupe ; routes en public_id sous `/api/v1/academic-years`, `/api/v1/programs`, `/api/v1/programs/{id}/levels` + `/api/v1/program-levels/{id}`, `/api/v1/promotions`, `/api/v1/class-groups` ; pagination max 100 + tri liste blanche ; unicités academic_year.code / program.code / (program,code) / (program,academicYear,code) / (promotion,code) ; période année (end>start), période promotion incluse dans l'année, program_level d'une classe = même formation que sa promotion, refus parent archivé, archivage bloqué si enfants actifs, code + rattachements immuables ; `class_group.site_id` = valeur technique via port public `organization.SiteDirectory` (aucun import de `organization.internal`, aucune relation JPA inter-module) ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN ; DTO sans id SQL ; audit `ACADEMIC_YEAR_*`/`PROGRAM_*`/`PROGRAM_LEVEL_*`/`PROMOTION_*`/`CLASS_GROUP_*` catégorie ACADEMIC). Inscriptions, apprenants, formateurs, matières : hors périmètre de ce lot. |
 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | TESTED (module `organization`, migration V4 ; CRUD + archivage/restauration site·bâtiment·salle, création + activation/désactivation plages réseau, aucun DELETE physique ; routes en public_id sous `/api/v1/sites`, `/api/v1/buildings/{id}`, `/api/v1/rooms/{id}`, `/api/v1/network-ranges/{id}` ; pagination max 100 + tri liste blanche ; unicités site.code / (site,code) / (site,cidr) active ; refus parent archivé, room.site=building.site, archivage bloqué si enfants actifs, code immuable ; ZoneId + ISO 3166-1 + CIDR IPv4/IPv6 validés ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN, plages réseau SUPER_ADMIN pour toute opération ; DTO sans id SQL ; audit `SITE_*`/`BUILDING_*`/`ROOM_*`/`SITE_NETWORK_RANGE_*` catégorie ORGANIZATION ; port public `identity.CurrentUserResolver` pour l'auteur des écritures) |
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, et changements du référentiel organisationnel — site/bâtiment/salle/plage réseau, catégorie `ORGANIZATION` — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
+| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe, catégorie `ACADEMIC` — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -158,21 +231,29 @@ n'existe pas encore de file persistante ni de reprise garantie
 ## Prochaine priorité
 
 ```text
-Le référentiel organisationnel (site → bâtiment → salle, plages réseau)
-est en place (module `organization`, migration V4). Prochaine étape :
-créer les référentiels pédagogiques (formation, classe, inscription) et
-le contrôle d'accès par périmètre pédagogique, sur la base du socle
-d'authentification existant — voir
-docs/05b-sprint-backlog-prototype.md T-J1-022, T-J1-023, T-J1-030 à
-T-J1-032. /auth/logout et la révocation de session restent à évaluer
-(jeton stateless sans état serveur pour l'instant).
+Les référentiels organisationnel (module `organization`, V4) et académique
+minimal (module `academic`, V5 : formation → promotion → classe/groupe,
++ année scolaire et niveau comme support de FK) sont en place. Prochaines
+étapes :
+- contrôle d'accès par périmètre pédagogique (T-J1-023) : restreindre la
+  lecture/écriture académique d'un PEDAGOGICAL_MANAGER à ses formations,
+  puis ouvrir l'écriture académique à ce rôle dans son périmètre ;
+- inscriptions historiques et rythmes d'alternance minimaux
+  (T-J1-032, T-J1-033), puis import des apprenants ;
+- affectation d'un responsable pédagogique principal à une formation
+  (pedagogical_assignment, RG-010), non traitée dans ce lot.
+/auth/logout et la révocation de session restent à évaluer (jeton
+stateless sans état serveur pour l'instant).
 
 Dettes techniques à traiter ultérieurement :
 - file persistante + reprise garantie pour les emails d'activation
   (actuellement envoi synchrone après commit, échec seulement journalisé) ;
 - purge / expiration explicite des invitations `PENDING` périmées ;
 - création de comptes `PENDING_ACTIVATION` par API (l'émission cible
-  aujourd'hui un compte déjà existant, créé par fixture ou futur import).
+  aujourd'hui un compte déjà existant, créé par fixture ou futur import) ;
+- incohérences docs à corriger : docs/03 §6.4 (dépendances du module
+  `academic` : ajouter `organization` et la publication vers `audit`) ;
+  docs/04 §12.3 (colonnes techniques de `program_level`).
 ```
 
 ## Blocages
@@ -379,6 +460,76 @@ auteur et vers le parent hiérarchique, `version`, colonnes générées
 `audit.internal.OrganizationAuditListener`. `.env`, `compose.yaml`,
 `V1`–`V3`, `SecurityConfig`, `pom.xml` et le workflow CI inchangés.
 Aucun site fictif ni donnée métier insérés. Aucun commit, aucun push.
+
+Référentiel académique minimal vérifié le 29 août 2026, sur la branche
+`feature/academic-foundation` (non fusionnée, non committée), après la
+passe corrective : `./mvnw clean test` (`JAVA_HOME` OpenJDK 21,
+`set -a && source ../.env`) → `BUILD SUCCESS`, **214 tests** exécutés
+(50 nouveaux : 32 du premier lot + 18 correctifs), 0 échec, exécuté trois
+fois pour vérifier la stabilité (dont `ModularityTests` : nouveau module
+`academic`, frontières respectées, aucun cycle). Tests académiques :
+`AcademicServiceTests` (22, Mockito — période inversée, code dupliqué, tri
+hors liste blanche / direction invalide, archivage bloqué par enfants
+actifs (formation via niveau **et** via promotion seule, niveau via
+classe, promotion via classe), type de formation inconnu, période de
+promotion hors année, promotion sous formation archivée, niveau d'une
+autre formation, site inconnu, modification d'année excluant une
+promotion existante, restauration de promotion refusée si formation ou
+année archivée / réussie et auditée si parents actifs, restauration de
+classe refusée si année ou formation-du-programme archivée, si site
+archivé, si site absent), `AcademicConstraintsTests` (13, `@DataJpaTest`
+— unicités `academic_year.code` / `program.code` / `public_id` /
+`(program,code)` / `(program,academicYear,code)` / `(promotion,code)`,
+FK `RESTRICT` formation→promotion, promotion→classe, année→promotion,
+niveau→classe et site→classe (DELETE natif du site refusé), `CHECK`
+période `academic_year` et `CHECK` capacité `class_group` ; le site
+requis par les FK est inséré en SQL natif),
+`AcademicIntegrationTests` (9, `@SpringBootTest` `RANDOM_PORT` — cycle
+complet année→formation→niveau→promotion→classe rattachée à un site,
+DTO sans `id`/`siteId`/`programId`, archivage en cascade contrôlée +
+restauration complète (année, formation, niveau, promotion, classe) +
+audit `…_RESTORED` inclus, archivage refusé avec enfants actifs (409),
+niveau d'une autre formation refusé (400), période de promotion hors
+année refusée (400), période d'année inversée refusée (400), code de
+formation dupliqué (409), création de classe sous promotion archivée
+refusée (409), restauration de classe refusée sous année archivée (409),
+modification d'année excluant une promotion existante refusée (409) puis
+acceptée si la période l'englobe, pagination bornée à 100, tri inconnu
+400), `AcademicSecurityTests` (6 — 401 anonyme, 403 `STUDENT`/`TEACHER`,
+`SCHOOL_ADMINISTRATION` et `PEDAGOGICAL_MANAGER` lisent mais n'écrivent
+pas (403), `ADMIN` crée (201)).
+
+Passe corrective (module `academic` + tests uniquement) :
+`ClassGroupService.restore` vérifie désormais toute la chaîne de
+rattachement (promotion, sa formation, son année, le niveau, la formation
+du niveau, le site présent et actif) et revérifie l'invariant
+niveau↔formation ; `AcademicYearService.update` refuse une période qui
+exclurait une promotion existante à période renseignée (nouveau code
+`ACAD_ACADEMIC_YEAR_PERIOD_CONFLICT`, requêtes `exists` ciblées) ;
+`ClassGroupService.resolveSitePublicId` lève une erreur métier contrôlée
+au lieu de renvoyer `null` silencieusement, sans exposer d'identifiant
+SQL.
+
+Migration Flyway `V5` (`academic_year`, `program`, `program_level`,
+`promotion`, `class_group` : `public_id` unique, FK `RESTRICT` vers
+`user_account` pour les colonnes auteur et vers le parent hiérarchique,
+FK `RESTRICT` `class_group.site_id` → `site.id`, `version`,
+`CHECK (end_date > start_date)` année, `CHECK (end_date IS NULL OR
+start_date IS NULL OR end_date > start_date)` promotion,
+`CHECK (capacity IS NULL OR capacity > 0)`) appliquée sur la base locale
+(schéma en version 5). Fichiers back-end ajoutés : nouveau module
+`com.esic.connect.academic` (package racine : `AcademicChangeEvent` +
+enums `AcademicResourceType`/`AcademicChangeAction` ; `academic.internal` :
+entités `AcademicYear`/`Program`/`ProgramLevel`/`Promotion`/`ClassGroup`
++ `AcademicStatus`/`ProgramType`, 5 repositories, 5 services,
+5 contrôleurs, DTO de réponse et records de requête, `AcademicWeb`,
+`AcademicQuerySupport`, `AcademicSpecifications`, `AcademicChangePublisher`,
+`AcademicException(+Handler)`, `PageResponse` local) ;
+`organization.SiteDirectory` (port public) +
+`organization.internal.DefaultSiteDirectory` (implémentation) ;
+`audit.internal.AcademicAuditListener`. `.env`, `compose.yaml`, `V1`–`V4`,
+`SecurityConfig`, `pom.xml` et le workflow CI inchangés. Aucune formation,
+promotion ni classe fictive insérée. Aucun commit, aucun push.
 
 ## Règle de mise à jour
 
