@@ -91,11 +91,11 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | Conteneuriser | Docker Compose | Fichiers Compose | À FAIRE |
 | Séparer les environnements | 4 profils | Configuration | À FAIRE |
 | Authentifier | Password/WebAuthn/MFA | Tests | À FAIRE |
-| Autoriser | RBAC et périmètres | Tests `403` | À FAIRE |
+| Autoriser | RBAC et périmètres | Tests `403` | IMPLÉMENTÉ |
 | Protéger les sessions | Cookies sécurisés | Configuration | À FAIRE |
 | Limiter les attaques | Redis/Turnstile | Tests | À FAIRE |
 | Protéger les données | MySQL/fichiers | Tests | À FAIRE |
-| Auditer | AuditEvent | Écran et données | À FAIRE |
+| Auditer | AuditEvent | Écran et données | IMPLÉMENTÉ |
 | Superviser | Actuator | Health checks | À FAIRE |
 | Sauvegarder | MySQL/fichiers | Script | À FAIRE |
 | Restaurer | Procédure | Rapport de test | À FAIRE |
@@ -141,6 +141,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-013 | Sauvegarde | scripts | TR-007 | Rapport | BC03 |
 | TR-014 | Pilotage | docs | Revue | Backlog | BC01 |
 | TR-015 | Invitation / activation de compte | `identity`, `notification` | `AccountInvitation*Tests` | `./mvnw test` + Mailpit | BC02/BC03 |
+| TR-016 | Administration des comptes et des rôles | `identity`, `audit` | `UserManagement*Tests` | `./mvnw test` | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -149,17 +150,24 @@ Une exigence décrite n’est pas automatiquement réalisée.
   Flyway `V1`/`V2` ; 6 rôles système seedés ; unicité d'une affectation
   active + réattribution après clôture) **et** désormais portés dans le
   jeton JWT émis à la connexion (claim `roles`, autorités
-  `ROLE_<code>`, filtrées aux affectations actives). Le contrôle
-  d'accès par rôle sur des routes métier (TZ-001 à 010) reste
-  `REPORTÉ` : aucune route métier n'existe encore.
-- **TR-009 (Audit)** : `IMPLÉMENTÉ` et `TESTÉ`, désormais alimenté par
-  un flux métier réel (connexion réussie/refusée), plus seulement par
-  test direct de persistance : événement applicatif découplé
-  (`identity.LoginSucceededEvent`/`LoginFailedEvent` →
-  `audit/internal.SecurityAuditEventListener`, transaction dédiée
-  `REQUIRES_NEW`), acteur nullable conservé pour un email inconnu sans
-  jamais stocker l'adresse brute, échec de journalisation vérifié
-  sans impact sur la réponse d'authentification.
+  `ROLE_<code>`, filtrées aux affectations actives) **et** exposés par
+  une API d'administration dédiée (voir TR-016 : attribution / retrait
+  auditée, clôture sans suppression, historique conservé). Le contrôle
+  d'accès par rôle sur les autres routes métier (TZ-001 à 010) reste
+  `REPORTÉ` : elles n'existent pas encore.
+- **TR-009 (Audit)** : `IMPLÉMENTÉ` et `TESTÉ`, alimenté par des flux
+  métier réels (connexion réussie/refusée ; émission d'invitation et
+  activation ; suspension, réactivation, archivage d'un compte ;
+  attribution et retrait d'un rôle), plus seulement par test direct de
+  persistance : événements applicatifs découplés
+  (`identity.LoginSucceededEvent`/`LoginFailedEvent` /
+  `AccountLifecycleEvent` → `audit/internal.*Listener`, transaction
+  dédiée `REQUIRES_NEW`), acteur nullable conservé pour un email inconnu
+  sans jamais stocker l'adresse brute, échec de journalisation vérifié
+  sans impact sur la réponse d'authentification. Pour les actions
+  d'administration, le compte concerné est porté par `resource_public_id`
+  et l'acteur (administrateur) par `actor_user_id` ; seul un motif non
+  sensible est journalisé.
 - **TR-001 (Connexion)** : `IMPLÉMENTÉ` et `TESTÉ` —
   `POST /api/v1/auth/login` (email/mot de passe, `UserDetailsService`
   standard, `PasswordEncoder` délégué BCrypt, `AuthenticationManager`
@@ -189,11 +197,39 @@ Une exigence décrite n’est pas automatiquement réalisée.
   `ACCOUNT_INVITATION_ISSUED` / `ACCOUNT_ACTIVATED` sans jeton.
   `@PreAuthorize` refusé désormais traduit en `403` neutre
   (`GlobalExceptionHandler`).
+- **TR-016 (Administration des comptes et des rôles)** : `IMPLÉMENTÉ` et
+  `TESTÉ` — `GET /api/v1/users` (liste paginée, taille bornée à 100 /
+  défaut 20 ; filtres `status`, `role` sur affectation active, `q`
+  normalisé et `LIKE` échappé ; tri restreint à une liste blanche
+  `createdAt`/`lastLoginAt`/`email`/`lastName`), `GET
+  /api/v1/users/{public_id}` (détail + historique complet des rôles),
+  `POST …/{public_id}/suspend` · `/restore` (ACTIVE↔SUSPENDED, motif
+  obligatoire, `SCHOOL_ADMINISTRATION` autorisé), `POST …/archive`
+  (`ADMIN`/`SUPER_ADMIN` : statut `ARCHIVED`, clôture transactionnelle de
+  tous les `user_role` actifs sans suppression, irréversible dans ce
+  lot), `POST …/roles` et `…/roles/{roleCode}/revoke`
+  (`ADMIN`/`SUPER_ADMIN` : attribution = nouvelle ligne, retrait =
+  clôture, retrait du dernier rôle actif refusé). Contrôles fins doublés
+  dans `UserManagementService` en complément des `@PreAuthorize` : un
+  compte `SUPER_ADMIN` (y compris sa réactivation) et le rôle
+  `SUPER_ADMIN` ne sont administrables que par un `SUPER_ADMIN`, et un
+  `ADMIN` ne peut modifier *aucun* rôle d'un compte `SUPER_ADMIN` ;
+  auto-suspension / auto-réactivation / auto-archivage / retrait de son
+  propre rôle interdits (y compris pour un `SUPER_ADMIN`). Direction de
+  tri invalide refusée (jamais réinterprétée en ASC). DTO exposant
+  uniquement `public_id` (jamais l'id
+  SQL, le `password_hash` ni un jeton). Audit `ACCOUNT_SUSPENDED` /
+  `ACCOUNT_REACTIVATED` / `ACCOUNT_ARCHIVED` / `ROLE_ASSIGNED` /
+  `ROLE_REVOKED`. Aucune migration `V4` (colonnes déjà en `V1`).
+  `PEDAGOGICAL_MANAGER` exclu tant que le périmètre pédagogique n'est pas
+  implémenté. Tests : `UserManagementServiceTests` (unitaires),
+  `UserManagementIntegrationTests`, `UserManagementSecurityTests`,
+  `ModularityTests`.
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,
 `backend/src/test/java/com/esic/connect/audit/`, exécution réelle de
-`./mvnw test` (**50/50**, `BUILD SUCCESS`, lancé deux fois) — voir
+`./mvnw test` (**98/98**, `BUILD SUCCESS`, lancé deux fois) — voir
 `docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
 (`JwtValidators`), jeton à émetteur incorrect refusé (401 nu, aucun
 détail de validation exposé).
