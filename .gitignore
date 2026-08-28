@@ -51,3 +51,6 @@ presentation/generated/
 # Temporary imports
 tmp/
 temp/.claude/
+
+# Claude local files
+.claude/
