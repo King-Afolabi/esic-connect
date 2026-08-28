@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: esic-connect-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  flyway:
+    locations: classpath:db/migration
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway est seul responsable du schéma : Hibernate ne doit jamais le générer.
+      ddl-auto: validate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Seule la route de santé est exposée pour l'instant (cf. consigne sécurité).
+        include: health
+  endpoint:
+    health:
+      # Pas de détails exposés publiquement tant que l'authentification n'existe pas.
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
