@@ -15,9 +15,11 @@
 ## Phase actuelle
 
 ```text
-Socle Spring Boot initialisé (branche feature/spring-boot-foundation,
-non fusionnée, non committée) — aucune entité métier ni authentification
-réelle pour le moment
+Socle de persistance identité + audit créé (branche
+feature/identity-foundation, non fusionnée, non committée) — 4 tables
+(user_account, role, user_role, audit_event), 6 rôles système seedés.
+Aucune connexion, JWT, MFA, WebAuthn, service métier ni route API pour
+le moment.
 ```
 
 ## Documents
@@ -48,16 +50,16 @@ réelle pour le moment
 | Angular | TODO |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
-| Flyway | TESTED (connexion + création de `flyway_schema_history` vérifiées ; aucune migration métier écrite) |
-| Authentification | TODO |
-| Rôles | TODO |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles — migrations appliquées et vérifiées) |
+| Authentification | TODO (aucune connexion, JWT, MFA ni WebAuthn) |
+| Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture — pas encore de service métier ni d'API) |
 | Référentiels | TODO |
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TODO |
+| Audit | TESTED (persistance `audit_event` : acteur nullable après suppression du compte, snapshot conservé — pas encore d'écriture depuis un service métier réel) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -67,10 +69,12 @@ réelle pour le moment
 ## Prochaine priorité
 
 ```text
-Créer les migrations Flyway des tables de référence (utilisateur, rôle,
-formation, classe, inscription) puis implémenter l'authentification
-(module identity) — voir docs/05b-sprint-backlog-prototype.md T-J1-012
-et T-J1-021.
+Implémenter la connexion (email/mot de passe, hachage, cookie sécurisé,
+/auth/login, /auth/me, /auth/logout) puis le contrôle des rôles, sur la
+base du socle identité/audit existant — voir
+docs/05b-sprint-backlog-prototype.md T-J1-021 et T-J1-022. Les
+référentiels pédagogiques (formation, classe, inscription) restent
+ensuite à créer.
 ```
 
 ## Blocages
@@ -108,7 +112,21 @@ JPA, aucune authentification réelle. Sécurité : seules
 `/actuator/health`, `/v3/api-docs/**`, `/swagger-ui/**` et
 `/swagger-ui.html` sont ouvertes ; toutes les autres routes exigent une
 authentification (non implémentée). Travaux réalisés sur la branche
-`feature/spring-boot-foundation`, non fusionnée et non committée.
+`feature/spring-boot-foundation`, non fusionnée et non committée (fusionnée
+depuis sur `main` via la PR #1).
+
+Socle identité + audit vérifié le 28 août 2026, sur la branche
+`feature/identity-foundation` (non fusionnée, non committée) : `./mvnw test`
+(mêmes commandes ci-dessus) → `BUILD SUCCESS`, 9 tests exécutés (rôles
+seedés, unicité email, unicité public_id, suppression d'un utilisateur
+référencé refusée par `RESTRICT`, unicité d'une affectation active +
+réattribution possible après clôture, acteur d'audit mis à `NULL` après
+suppression du compte avec conservation du snapshot, chargement du
+contexte, structure modulaire), 0 échec, exécuté deux fois pour
+vérifier la stabilité. Migrations Flyway `V1` (tables `user_account`,
+`role`, `user_role`, `audit_event`) et `V2` (6 rôles système) appliquées
+sur la base locale. Aucune donnée de démonstration, aucun compte
+administrateur, aucun JWT, aucun contrôleur d'authentification.
 
 ## Règle de mise à jour
 
