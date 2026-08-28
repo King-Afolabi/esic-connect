@@ -141,6 +141,27 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-013 | Sauvegarde | scripts | TR-007 | Rapport | BC03 |
 | TR-014 | Pilotage | docs | Revue | Backlog | BC01 |
 
+## Avancement vérifié — 28 août 2026
+
+- **TR-002 (Rôles)** : `IMPLÉMENTÉ` et `TESTÉ` au niveau persistance
+  uniquement (`identity/internal` : `UserAccount`, `Role`, `UserRole` ;
+  migrations Flyway `V1`/`V2` ; 6 rôles système seedés ; unicité d'une
+  affectation active + réattribution après clôture vérifiées par test
+  réel). Le contrôle d'accès par rôle (TZ-001 à 010) reste `REPORTÉ` :
+  aucune route ni service métier n'existe encore.
+- **TR-009 (Audit)** : `IMPLÉMENTÉ` et `TESTÉ` au niveau persistance
+  (`audit/internal.AuditEvent` : acteur nullable après suppression du
+  compte avec conservation du snapshot, vérifié par test réel). Aucune
+  écriture d'audit depuis un service métier réel : `REPORTÉ`.
+- **TR-001 (Connexion)** : toujours `CONÇU` uniquement — le socle de
+  persistance de `user_account` existe (`password_hash` en base), mais
+  aucune authentification, JWT, MFA ni WebAuthn n'est implémenté à ce
+  stade (hors périmètre de cette tâche).
+
+Preuve : `backend/src/test/java/com/esic/connect/identity/`,
+`backend/src/test/java/com/esic/connect/audit/`, exécution réelle de
+`./mvnw test` (9/9, `BUILD SUCCESS`) — voir `docs/CURRENT-STATE.md`.
+
 ---
 
 # 7. Mise à jour

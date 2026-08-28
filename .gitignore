@@ -50,4 +50,4 @@ presentation/generated/
 
 # Temporary imports
 tmp/
-temp/
+temp/.claude/
