@@ -11,3 +11,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
+
+management:
+  health:
+    # Mailpit n'est pas une dépendance critique en développement : son
+    # indisponibilité ne doit pas faire passer /actuator/health en DOWN.
+    mail:
+      enabled: false

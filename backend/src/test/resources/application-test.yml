@@ -12,6 +12,18 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
+  mail:
+    # Un JavaMailSender est requis par le contexte ; les tests remplacent
+    # l'InvitationMailer par un double enregistreur et n'ouvrent jamais de
+    # connexion SMTP réelle.
+    host: localhost
+    port: 1025
+
+management:
+  health:
+    # L'indicateur santé mail est désactivé en test (pas de SMTP réel).
+    mail:
+      enabled: false
 
 app:
   security:
@@ -19,3 +31,11 @@ app:
       # Secret exclusif aux tests automatisés (≥ 32 octets) — jamais dans
       # .env, jamais une valeur de production.
       secret: test-only-jwt-signing-secret-for-esic-connect-automated-tests-do-not-use-in-prod
+    invitation:
+      # TTL court pour les tests ; un cas dédié vérifie le rejet d'un TTL
+      # non positif via un contexte séparé.
+      token-ttl: PT1H
+  activation:
+    base-url: http://localhost:4200/activation
+  mail:
+    from: no-reply@esic-connect.test

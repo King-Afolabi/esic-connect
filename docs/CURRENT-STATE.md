@@ -15,11 +15,29 @@
 ## Phase actuelle
 
 ```text
-Authentification locale email/mot de passe créée (branche
-feature/authentication-foundation, non fusionnée, non committée) :
-POST /api/v1/auth/login, JWT HS256 stateless, réponse publique uniforme
-en cas d'échec. Aucun MFA, WebAuthn, refresh token, inscription
-publique ni réinitialisation de mot de passe pour le moment.
+Flux d'invitation et d'activation de compte créé (branche
+feature/account-invitation, non fusionnée, non committée) :
+- POST /api/v1/account-invitations (protégé ADMIN/SUPER_ADMIN/
+  PEDAGOGICAL_MANAGER/SCHOOL_ADMINISTRATION) : émission réservée aux
+  comptes PENDING_ACTIVATION, attribution du rôle demandé via user_role,
+  jeton SecureRandom 32 octets Base64URL, empreinte SHA-256 seule stockée,
+  TTL configurable (défaut P30D, strictement positif), révocation des
+  invitations PENDING antérieures, email d'activation via Mailpit ;
+- GET /api/v1/account-invitations/validate (public) : réponse générique
+  {"valid": bool} — aucune donnée personnelle, réponse identique pour
+  jeton inconnu/expiré/révoqué/accepté ;
+- POST /api/v1/account-invitations/activate (public) : mot de passe encodé
+  (BCrypt), statut ACTIVE, email_verified_at, invitation ACCEPTED à usage
+  unique.
+Audit ACCOUNT_INVITATION_ISSUED / ACCOUNT_ACTIVATED (module audit, sans
+jeton). Toujours aucun MFA, WebAuthn, refresh token ni réinitialisation
+de mot de passe.
+
+Dette technique : l'email d'activation est envoyé de façon synchrone
+après commit ; en cas d'échec l'invitation est conservée et seule une
+erreur technique est journalisée (ni jeton, ni email, ni lien). Il
+n'existe pas encore de file persistante ni de reprise garantie
+(docs/03-architecture.md §18, cahier §23.3).
 ```
 
 ## Documents
@@ -50,16 +68,18 @@ publique ni réinitialisation de mot de passe pour le moment.
 | Angular | TODO |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
-| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles — migrations appliquées et vérifiées) |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation` — migrations appliquées et vérifiées, schéma en version 3) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
-| Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture — pas encore de service métier ni d'API) |
+| Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; désormais attribués via `user_role` lors de l'émission d'une invitation — pas encore d'API de gestion dédiée) |
+| Invitation / activation | TESTED (`POST /api/v1/account-invitations` protégé par rôle, `GET …/validate` et `POST …/activate` publics ; migration V3 `account_invitation` ; jeton SecureRandom 32 o Base64URL, empreinte SHA-256 unique stockée, TTL configurable strictement positif, révocation des invitations PENDING antérieures, jeton à usage unique ; validation publique strictement générique ; email d'activation via Mailpit ; audit `ACCOUNT_INVITATION_ISSUED`/`ACCOUNT_ACTIVATED` sans jeton) |
+| Notification (email) | TESTED (module `notification` : écouteur `AFTER_COMMIT` sur `AccountInvitationIssuedEvent`, envoi SMTP `SimpleMailMessage` via Mailpit ; échec d'envoi avalé, invitation conservée, log sans jeton/email/lien ; pas de file persistante — dette technique) |
 | Référentiels | TODO |
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TESTED (persistance `audit_event` : acteur nullable après suppression du compte, snapshot conservé — pas encore d'écriture depuis un service métier réel) |
+| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte — jamais de jeton ni de donnée sensible) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -75,6 +95,13 @@ d'authentification existant — voir
 docs/05b-sprint-backlog-prototype.md T-J1-022, T-J1-023, T-J1-030 à
 T-J1-032. /auth/logout et la révocation de session restent à évaluer
 (jeton stateless sans état serveur pour l'instant).
+
+Dettes techniques à traiter ultérieurement :
+- file persistante + reprise garantie pour les emails d'activation
+  (actuellement envoi synchrone après commit, échec seulement journalisé) ;
+- purge / expiration explicite des invitations `PENDING` périmées ;
+- création de comptes `PENDING_ACTIVATION` par API (l'émission cible
+  aujourd'hui un compte déjà existant, créé par fixture ou futur import).
 ```
 
 ## Blocages
@@ -154,6 +181,45 @@ votre `.env` local
 (voir `.env.example`) pour lancer l'application hors des tests — les
 tests utilisent un secret dédié dans `application-test.yml`, jamais
 `.env`.
+
+Invitation / activation vérifiée le 28 août 2026, sur la branche
+`feature/account-invitation` (non fusionnée, non committée) : `./mvnw test`
+(mêmes commandes ci-dessus) → `BUILD SUCCESS`, **50 tests** exécutés
+(26 nouveaux), 0 échec, exécuté deux fois pour vérifier la stabilité.
+Nouveaux tests : `InvitationTokenServiceTests` (SecureRandom ≥ 32 o,
+Base64URL sans padding, SHA-256 hex déterministe + vecteur
+`SHA-256("abc")`), `AccountInvitationServiceTests` (TTL non positif
+refusé au démarrage, émission limitée à `PENDING_ACTIVATION`, rôle
+inconnu/inactif refusé, révocation des invitations PENDING antérieures
+avec `flush` avant insert, empreinte stockée jamais égale au jeton,
+activation encodant le mot de passe, jetons inconnu/expiré/accepté →
+même erreur générique, `validate` = booléen seul),
+`InvitationEmailListenerTests` (transmission au mailer, échec avalé sans
+propagation), `AccountInvitationIntegrationTests` (émission protégée →
+email capturé par un mailer enregistreur → `validate` public générique →
+activation → connexion avec le nouveau mot de passe → jeton à usage
+unique refusé en 400 `INVITATION_INVALID` → audit
+`ACCOUNT_INVITATION_ISSUED`/`ACCOUNT_ACTIVATED` ; réémission révoquant le
+jeton précédent), `AccountInvitationSecurityTests` (émission : 401 sans
+jeton, 403 rôle `STUDENT` ; `validate` public : uniquement `{"valid":
+bool}`, réponse identique pour tout jeton invalide ; `activate` jeton
+inconnu → 400 générique sans fuite).
+
+Migration Flyway `V3` (`account_invitation` : `public_id`, `version`,
+`token_hash` UNIQUE, `active_invitation_key` générée → une seule
+invitation `PENDING` par compte, FK `RESTRICT`) appliquée sur la base
+locale (schéma en version 3). `pom.xml` : ajout de
+`spring-boot-starter-mail`. `SecurityConfig` : `@EnableMethodSecurity` +
+`/api/v1/account-invitations/validate` et `/activate` publics.
+`GlobalExceptionHandler` : `AccessDeniedException` → 403 neutre (sinon
+masqué en 500 par le catch-all). Module `shared` déclaré `OPEN`
+(noyau technique : `ApiError` consommé hors module). Nouveau module
+`notification`. `management.health.mail.enabled=false` **uniquement**
+dans les profils `local` et `test` (pas globalement). Nouvelles
+variables dans `.env.example` (`MAIL_HOST`, `MAIL_PORT`, `APP_MAIL_FROM`,
+`APP_ACTIVATION_BASE_URL`, `INVITATION_TOKEN_TTL`) ; `.env`, `compose.yaml`,
+`V1` et `V2` inchangés. TTL par défaut `P30D`, configurable via
+`INVITATION_TOKEN_TTL`, refus de démarrage si ≤ 0.
 
 ## Règle de mise à jour
 
