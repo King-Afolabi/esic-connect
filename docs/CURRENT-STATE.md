@@ -15,9 +15,50 @@
 ## Phase actuelle
 
 ```text
-Administration minimale des comptes et des rôles ajoutée (branche
-feature/user-management, non fusionnée, non committée) — aucune migration
-V4 (colonnes suspended_*/archived_at/user_role.* déjà présentes en V1) :
+Référentiel organisationnel ajouté (branche feature/organization-foundation,
+non fusionnée, non committée) — nouveau module `organization` +
+migration V4 `site` / `building` / `room` / `site_network_range` (schéma
+en version 4, appliqué et vérifié). Ce module élargit et remplace le
+module `room` prévu par l'architecture (docs/03 §7.6).
+- Hiérarchie site → bâtiment → salle. Conventions techniques complètes
+  (public_id, created_at/by, updated_at/by, version, status, archived_at/by,
+  archive_reason) ; `site_network_range` reçoit en plus public_id,
+  updated_at et version.
+- CRUD + archivage logique + restauration (site/bâtiment/salle) ;
+  plages réseau = création + activation/désactivation. Aucun DELETE
+  physique. `code` immuable après création ; rattachement au site immuable.
+- Consultation paginée (max 100, défaut 20) + filtres (status, q, site,
+  building, active) + tri liste blanche. Consultation par public_id.
+  Routes exclusivement en public_id.
+- Règles : refus building/room sous parent archivé ; room.site =
+  building.site imposé ; archivage d'un site/bâtiment refusé tant qu'il
+  reste des enfants actifs ; unicité site.code (global), (site,code) pour
+  building et room, (site,cidr) active pour les plages.
+- Validations : fuseau IANA via ZoneId, code pays ISO 3166-1 alpha-2,
+  CIDR IPv4 et IPv6 réellement validé (préfixes bornés 0..32 / 0..128,
+  sans résolution DNS).
+- Autorisations @PreAuthorize : lecture site/bâtiment/salle =
+  ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER ; écriture
+  = ADMIN/SUPER_ADMIN ; site_network_range = SUPER_ADMIN pour TOUTES les
+  opérations, consultation comprise.
+- DTO sans identifiant SQL interne ni colonne auteur ; erreurs via
+  ApiError commun (OrganizationExceptionHandler).
+- Audit : événement applicatif `organization.OrganizationChangeEvent`
+  (module racine) → `audit/internal.OrganizationAuditListener`
+  (catégorie ORGANIZATION, transaction REQUIRES_NEW), actions
+  SITE_/BUILDING_/ROOM_/SITE_NETWORK_RANGE_ + CREATED/UPDATED/ARCHIVED/
+  RESTORED/ACTIVATED/DEACTIVATED, motif non sensible (code, cidr), jamais
+  de donnée personnelle ni d'IP.
+- Port public minimal ajouté au module `identity` :
+  `identity.CurrentUserResolver` (résout l'id interne depuis le subject
+  public du JWT) ; implémentation `DefaultCurrentUserResolver` confinée à
+  `identity.internal`. N'expose ni UserAccount, ni repository, ni autre
+  classe interne. `ModularityTests` reste vert.
+- Aucun site fictif ni donnée métier insérés en V4.
+
+Administration minimale des comptes et des rôles (fusionnée sur main via
+PR #6) — n'avait ajouté aucune migration (colonnes suspended_*/archived_at/
+user_role.* déjà présentes en V1) :
 - GET /api/v1/users (ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION) : liste
   paginée (taille max 100, défaut 20), filtres status / role (affectation
   active) / q (email+prénom+nom, normalisé, borné à 100 car., LIKE
@@ -93,19 +134,20 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Angular | TODO |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
-| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation` — migrations appliquées et vérifiées, schéma en version 3) |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range` — migrations appliquées et vérifiées, schéma en version 4) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
 | Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; attribués via `user_role` à l'émission d'une invitation ; API d'attribution / retrait dédiée — voir « Gestion des comptes / rôles ») |
 | Gestion des comptes / rôles | TESTED (`GET /api/v1/users` paginé/filtré/trié, `GET /api/v1/users/{public_id}`, `POST …/{public_id}/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{roleCode}/revoke` ; `@PreAuthorize` + contrôles sensibles dans `UserManagementService` (protection SUPER_ADMIN, auto-action interdite, dernier rôle actif protégé) ; archivage = clôture transactionnelle des rôles actifs, ARCHIVED irréversible ; DTO sans id SQL / `password_hash` / jeton ; audit `ACCOUNT_SUSPENDED`/`ACCOUNT_REACTIVATED`/`ACCOUNT_ARCHIVED`/`ROLE_ASSIGNED`/`ROLE_REVOKED` ; aucune migration V4 ; `PEDAGOGICAL_MANAGER` exclu jusqu'au périmètre pédagogique) |
 | Invitation / activation | TESTED (`POST /api/v1/account-invitations` protégé par rôle, `GET …/validate` et `POST …/activate` publics ; migration V3 `account_invitation` ; jeton SecureRandom 32 o Base64URL, empreinte SHA-256 unique stockée, TTL configurable strictement positif, révocation des invitations PENDING antérieures, jeton à usage unique ; validation publique strictement générique ; email d'activation via Mailpit ; audit `ACCOUNT_INVITATION_ISSUED`/`ACCOUNT_ACTIVATED` sans jeton) |
 | Notification (email) | TESTED (module `notification` : écouteur `AFTER_COMMIT` sur `AccountInvitationIssuedEvent`, envoi SMTP `SimpleMailMessage` via Mailpit ; échec d'envoi avalé, invitation conservée, log sans jeton/email/lien ; pas de file persistante — dette technique) |
-| Référentiels | TODO |
+| Référentiels pédagogiques (formation/classe/inscription) | TODO |
+| Référentiel organisationnel (site/bâtiment/salle/plage réseau) | TESTED (module `organization`, migration V4 ; CRUD + archivage/restauration site·bâtiment·salle, création + activation/désactivation plages réseau, aucun DELETE physique ; routes en public_id sous `/api/v1/sites`, `/api/v1/buildings/{id}`, `/api/v1/rooms/{id}`, `/api/v1/network-ranges/{id}` ; pagination max 100 + tri liste blanche ; unicités site.code / (site,code) / (site,cidr) active ; refus parent archivé, room.site=building.site, archivage bloqué si enfants actifs, code immuable ; ZoneId + ISO 3166-1 + CIDR IPv4/IPv6 validés ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN, plages réseau SUPER_ADMIN pour toute opération ; DTO sans id SQL ; audit `SITE_*`/`BUILDING_*`/`ROOM_*`/`SITE_NETWORK_RANGE_*` catégorie ORGANIZATION ; port public `identity.CurrentUserResolver` pour l'auteur des écritures) |
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle — jamais de jeton ni de donnée sensible ; pour les actions d'administration, le compte concerné est porté par `resource_public_id`, l'acteur par `actor_user_id`) |
+| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, et changements du référentiel organisationnel — site/bâtiment/salle/plage réseau, catégorie `ORGANIZATION` — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -116,7 +158,9 @@ n'existe pas encore de file persistante ni de reprise garantie
 ## Prochaine priorité
 
 ```text
-Créer les référentiels pédagogiques (formation, classe, inscription) et
+Le référentiel organisationnel (site → bâtiment → salle, plages réseau)
+est en place (module `organization`, migration V4). Prochaine étape :
+créer les référentiels pédagogiques (formation, classe, inscription) et
 le contrôle d'accès par périmètre pédagogique, sur la base du socle
 d'authentification existant — voir
 docs/05b-sprint-backlog-prototype.md T-J1-022, T-J1-023, T-J1-030 à
@@ -289,6 +333,52 @@ actifs), `identity.AccountLifecycleAction` (+5 actions),
 `audit.internal.AuditEvent` (`setResourcePublicId`),
 `AccountLifecycleAuditListener`. `.env`, `compose.yaml`, `V1`–`V3`,
 `SecurityConfig` et le workflow CI inchangés. Aucun commit, aucun push.
+
+Référentiel organisationnel vérifié le 28 août 2026, sur la branche
+`feature/organization-foundation` (non fusionnée, non committée) :
+`./mvnw test` (mêmes commandes ci-dessus, `JAVA_HOME` OpenJDK 21) →
+`BUILD SUCCESS`, **164 tests** exécutés (66 nouveaux), 0 échec, exécuté
+deux fois pour vérifier la stabilité (dont `ModularityTests` : nouveau
+module `organization`, frontières respectées, aucun cycle). Nouveaux
+tests : `CidrValidatorTests` (32 — littéraux IPv4/IPv6 valides, préfixes
+hors bornes, octets > 255, noms d'hôte refusés, absence de résolution
+DNS), `OrganizationServiceTests` (11, Mockito — fuseau inconnu, code
+pays non ISO, code dupliqué, archivage bloqué par enfants actifs, tri
+hors liste blanche / direction invalide, bâtiment d'un autre site,
+création sous site archivé, CIDR invalide, doublon de plage active,
+publication d'événement), `OrganizationConstraintsTests` (8, `@DataJpaTest`
+— unicité `site.code`, `(site,code)` bâtiment libre entre sites, unicité
+`(site,code)` salle, `public_id` unique, FK `RESTRICT` site→bâtiment et
+bâtiment→salle, unicité de la plage réseau active, créneau libéré après
+désactivation), `OrganizationIntegrationTests` (8, `@SpringBootTest`
+`RANDOM_PORT` — cycle complet site/bâtiment/salle + archivage en cascade
+contrôlée + restauration + audit `SITE_*`/`BUILDING_*`/`ROOM_*`, DTO sans
+`id`/`siteId`/`createdById`, archivage refusé avec enfants actifs,
+création sous parent archivé refusée, `room.site` ≠ `building.site`
+refusé, unicité/fuseau/pays validés, pagination bornée à 100, tri
+inconnu 400, CRUD plage réseau IPv4 + IPv6 par SUPER_ADMIN avec audit),
+`OrganizationSecurityTests` (7 — 401 anonyme, 403 `STUDENT`/`TEACHER`,
+`PEDAGOGICAL_MANAGER` lit mais n'écrit pas, `SCHOOL_ADMINISTRATION` lit
+les sites, plages réseau réservées à `SUPER_ADMIN` y compris en lecture,
+`ADMIN` et `SCHOOL_ADMINISTRATION` reçoivent 403).
+
+Migration Flyway `V4` (`site`, `building`, `room`, `site_network_range` :
+`public_id` unique, FK `RESTRICT` vers `user_account` pour les colonnes
+auteur et vers le parent hiérarchique, `version`, colonnes générées
+`active_range_key`, `CHECK (capacity > 0)`) appliquée sur la base locale
+(schéma en version 4). Fichiers back-end ajoutés : nouveau module
+`com.esic.connect.organization` (package racine : `OrganizationChangeEvent`
++ enums `OrganizationResourceType`/`OrganizationChangeAction` ;
+`organization.internal` : entités `Site`/`Building`/`Room`/
+`SiteNetworkRange` + `OrganizationStatus`, 4 repositories, 4 services,
+4 contrôleurs, DTO de réponse et records de requête, `CidrValidator`,
+`SiteFieldValidator`, `OrganizationQuerySupport`, `OrganizationSpecifications`,
+`OrganizationChangePublisher`, `OrganizationException(+Handler)`,
+`PageResponse` local) ; `identity.CurrentUserResolver` (port public) +
+`identity.internal.DefaultCurrentUserResolver` (implémentation) ;
+`audit.internal.OrganizationAuditListener`. `.env`, `compose.yaml`,
+`V1`–`V3`, `SecurityConfig`, `pom.xml` et le workflow CI inchangés.
+Aucun site fictif ni donnée métier insérés. Aucun commit, aucun push.
 
 ## Règle de mise à jour
 
