@@ -67,4 +67,44 @@ describe('apiErrorInterceptor', () => {
     expect(notifications.error).not.toHaveBeenCalled();
     expect(auth.handleUnauthorized).not.toHaveBeenCalled();
   });
+
+  it('never clears the session on a 401 from the public activation endpoint', () => {
+    const onError = vi.fn();
+    http.post('/api/v1/account-invitations/activate', {}).subscribe({ error: onError });
+    controller
+      .expectOne('/api/v1/account-invitations/activate')
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(auth.handleUnauthorized).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it('does not raise the global snackbar for a 5xx from the public invitation endpoints', () => {
+    http
+      .get('/api/v1/account-invitations/validate', { params: { token: 'x' } })
+      .subscribe({ error: () => undefined });
+    controller
+      .expectOne((r) => r.url === '/api/v1/account-invitations/validate')
+      .flush(null, { status: 503, statusText: 'Service Unavailable' });
+
+    expect(notifications.error).not.toHaveBeenCalled();
+  });
+
+  it('still rethrows public activation failures so the component can map them', () => {
+    const onError = vi.fn();
+    http.post('/api/v1/account-invitations/activate', {}).subscribe({ error: onError });
+    controller.expectOne('/api/v1/account-invitations/activate').flush(
+      {
+        status: 400,
+        code: 'INVITATION_INVALID',
+        message: "Lien d'activation invalide ou expire.",
+        path: '',
+        correlationId: null,
+        details: [],
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    expect(onError).toHaveBeenCalledOnce();
+  });
 });

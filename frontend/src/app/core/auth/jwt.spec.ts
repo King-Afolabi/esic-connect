@@ -1,13 +1,5 @@
 import { decodeJwtPayload, readExpiry, readRoles, readSubject } from './jwt';
-
-/** Fabrique un JWT non signé (signature factice) pour les tests. */
-export function makeJwt(payload: Record<string, unknown>): string {
-  const b64url = (value: string) =>
-    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = b64url(JSON.stringify(payload));
-  return `${header}.${body}.signature-not-verified`;
-}
+import { makeJwt } from './jwt.testing';
 
 describe('jwt helpers', () => {
   it('decodes a base64url payload', () => {

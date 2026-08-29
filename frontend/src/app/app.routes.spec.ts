@@ -102,4 +102,24 @@ describe('application routes (guard wiring)', () => {
     await router.navigateByUrl('/login');
     expect(location.path()).toBe('/dashboard');
   });
+
+  describe('public /activation route', () => {
+    it('is declared without authGuard, roleGuard or guestGuard', () => {
+      const activation = routes.find((r) => r.path === 'activation');
+      expect(activation).toBeDefined();
+      expect(activation?.canActivate).toBeUndefined();
+      expect(activation?.canActivateChild).toBeUndefined();
+    });
+
+    it('is reachable by an anonymous visitor', async () => {
+      await router.navigateByUrl('/activation?token=raw-secret-value-123');
+      expect(location.path().split('?')[0]).toBe('/activation');
+    });
+
+    it('is reachable by an authenticated user (no guestGuard redirect)', async () => {
+      signIn(['ADMIN']);
+      await router.navigateByUrl('/activation?token=raw-secret-value-123');
+      expect(location.path().split('?')[0]).toBe('/activation');
+    });
+  });
 });

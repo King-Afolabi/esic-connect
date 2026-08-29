@@ -50,4 +50,29 @@ describe('authTokenInterceptor', () => {
     expect(req.request.headers.has('Authorization')).toBe(false);
     req.flush({});
   });
+
+  it('never attaches a bearer to the public invitation validate/activate endpoints', () => {
+    auth.accessToken = 'token-abc';
+
+    http.get('/api/v1/account-invitations/validate', { params: { token: 'x' } }).subscribe();
+    const validateReq = controller.expectOne(
+      (r) => r.url === '/api/v1/account-invitations/validate',
+    );
+    expect(validateReq.request.headers.has('Authorization')).toBe(false);
+    validateReq.flush({ valid: true });
+
+    http.post('/api/v1/account-invitations/activate', { token: 'x', password: 'y' }).subscribe();
+    const activateReq = controller.expectOne('/api/v1/account-invitations/activate');
+    expect(activateReq.request.headers.has('Authorization')).toBe(false);
+    activateReq.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('still attaches a bearer to the protected issue endpoint', () => {
+    auth.accessToken = 'token-abc';
+    http.post('/api/v1/account-invitations', { email: 'x@y.z', role: 'STUDENT' }).subscribe();
+
+    const req = controller.expectOne('/api/v1/account-invitations');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token-abc');
+    req.flush({});
+  });
 });

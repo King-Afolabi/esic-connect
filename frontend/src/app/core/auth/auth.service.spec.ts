@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { AuthService } from './auth.service';
-import { makeJwt } from './jwt.spec';
+import { makeJwt } from './jwt.testing';
 
 describe('AuthService', () => {
   let service: AuthService;
