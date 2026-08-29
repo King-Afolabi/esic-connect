@@ -68,9 +68,9 @@ Une exigence décrite n’est pas automatiquement réalisée.
 |---|---|---|---|
 | Choisir une méthode | Scrum/Kanban | Roadmap et backlog | CONÇU |
 | Choisir les technologies | Stack | Architecture | CONÇU |
-| Concevoir l’UX | Angular/PWA | Maquettes et écrans | À FAIRE |
+| Concevoir l’UX | Angular Material, coquille responsive, accessibilité (labels, focus, repères, `aria-live`) | `frontend/` : `AppShell`, écran de connexion, tableau de bord | PARTIEL (socle, `feature/frontend-foundation`) |
 | Développer le back-end | Spring Boot | Code et tests | À FAIRE |
-| Développer le front-end | Angular | Code et captures | À FAIRE |
+| Développer le front-end | Angular 21.2 (standalone, signaux, lazy routes), `authGuard`/`guestGuard`/`roleGuard`, intercepteurs, 69 tests Vitest | `frontend/`, branche `feature/frontend-foundation` (PR #11 ouverte) ; `npm ci` / `npm test` / `npm run build` / `npm run lint` verts | IMPLÉMENTÉ (socle : connexion → tableau de bord rapportant un état de session local ; gardes de route par rôle ; navigation limitée aux écrans livrés) |
 | Concevoir la base | MySQL | Modèle de données | CONÇU |
 | Utiliser Redis | Cache et QR | Tests | À FAIRE |
 | Importer les données | CSV/XLSX | Démonstration | À FAIRE |

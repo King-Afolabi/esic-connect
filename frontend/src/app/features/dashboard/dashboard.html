@@ -1,0 +1,75 @@
+<h1 class="dashboard__title">Tableau de bord</h1>
+
+@if (session(); as currentSession) {
+  <p class="dashboard__intro">
+    Bienvenue. Votre session locale est active (établie après votre connexion).
+  </p>
+
+  <div class="dashboard__grid">
+    <mat-card appearance="outlined" class="dashboard__card">
+      <mat-card-header>
+        <mat-card-title>Session</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <dl class="dashboard__facts">
+          <div>
+            <dt>Compte</dt>
+            <dd>{{ currentSession.email }}</dd>
+          </div>
+          <div>
+            <dt>Identifiant public</dt>
+            <dd>{{ currentSession.subject ?? 'non communiqué' }}</dd>
+          </div>
+          <div>
+            <dt>Expiration</dt>
+            <dd>{{ expiresLabel() }}</dd>
+          </div>
+        </dl>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined" class="dashboard__card">
+      <mat-card-header>
+        <mat-card-title>Rôles</mat-card-title>
+        <mat-card-subtitle>Déterminent les écrans accessibles</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @if (roles().length) {
+          <ul class="dashboard__roles">
+            @for (role of roles(); track role) {
+              <li class="dashboard__role-chip">{{ roleLabel(role) }}</li>
+            }
+          </ul>
+        } @else {
+          <p class="dashboard__empty">
+            Aucun rôle actif n'est associé à votre compte. Contactez un administrateur.
+          </p>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined" class="dashboard__card">
+      <mat-card-header>
+        <mat-card-title>Accès rapides</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (quickLinks().length) {
+          <mat-nav-list>
+            @for (link of quickLinks(); track link.path) {
+              <a mat-list-item [routerLink]="link.path">
+                <mat-icon matListItemIcon aria-hidden="true">{{ link.icon }}</mat-icon>
+                <span matListItemTitle>{{ link.label }}</span>
+              </a>
+            }
+          </mat-nav-list>
+        } @else {
+          <p class="dashboard__empty">
+            Aucun autre écran n'est disponible pour vos rôles actuels.
+          </p>
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+} @else {
+  <p class="dashboard__empty" role="status">Session introuvable. Redirection vers la connexion…</p>
+}

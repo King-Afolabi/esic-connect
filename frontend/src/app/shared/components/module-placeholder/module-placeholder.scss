@@ -1,0 +1,33 @@
+.placeholder__title {
+  font: var(--mat-sys-headline-medium);
+  margin: 0 0 1rem;
+}
+
+.placeholder__card {
+  max-width: 40rem;
+}
+
+.placeholder__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.placeholder__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 2.5rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.placeholder__text {
+  font: var(--mat-sys-body-large);
+  margin: 0;
+}
+
+.placeholder__ref {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0;
+}

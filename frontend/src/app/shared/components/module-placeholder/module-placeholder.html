@@ -1,0 +1,11 @@
+<h1 class="placeholder__title">{{ pageTitle() }}</h1>
+
+<mat-card appearance="outlined" class="placeholder__card">
+  <mat-card-content class="placeholder__content">
+    <mat-icon class="placeholder__icon" aria-hidden="true">construction</mat-icon>
+    <p class="placeholder__text">{{ pageDescription() }}</p>
+    @if (docReference()) {
+      <p class="placeholder__ref">Référence : {{ docReference() }}</p>
+    }
+  </mat-card-content>
+</mat-card>

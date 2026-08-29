@@ -1,0 +1,78 @@
+import { signal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+
+import { AuthService } from '../../core/auth/auth.service';
+import { Role } from '../../core/models/role';
+import { Session } from '../../core/models/session';
+import { Dashboard } from './dashboard';
+
+describe('Dashboard', () => {
+  let fixture: ComponentFixture<Dashboard>;
+  const session = signal<Session | null>(null);
+  const roles = signal<Role[]>([]);
+
+  beforeEach(async () => {
+    session.set({
+      accessToken: 't',
+      subject: 'public-77',
+      roles: ['ADMIN'],
+      email: 'admin@esic.test',
+      expiresAt: Date.now() + 600_000,
+    });
+    roles.set(['ADMIN']);
+
+    await TestBed.configureTestingModule({
+      imports: [Dashboard],
+      providers: [
+        provideRouter([]),
+        { provide: AuthService, useValue: { session, roles } },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Dashboard);
+    fixture.detectChanges();
+  });
+
+  const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+  it('reports a local active session and shows the account identity', () => {
+    expect(text()).toContain('Votre session locale est active');
+    expect(text()).toContain('admin@esic.test');
+    expect(text()).toContain('public-77');
+  });
+
+  it('does not claim that a second authenticated API call was verified', () => {
+    expect(text()).not.toContain("appel d'API");
+    expect(text()).not.toContain('API authentifié');
+    expect(text()).not.toContain('/auth/me');
+  });
+
+  it('lists the held roles as chips', () => {
+    const chips = fixture.nativeElement.querySelectorAll('.dashboard__role-chip');
+    expect(chips.length).toBe(1);
+    expect(chips[0].textContent).toContain('Administrateur');
+  });
+
+  it('shows the empty state when the account carries no role', () => {
+    roles.set([]);
+    fixture.detectChanges();
+    expect(text()).toContain("Aucun rôle actif n'est associé à votre compte");
+  });
+
+  it('never exposes placeholder routes as quick links, whatever the role', () => {
+    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION'], ['TEACHER']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('a[href="/administration"]')).toBeNull();
+      expect(root.querySelector('a[href="/students"]')).toBeNull();
+    }
+  });
+
+  it('shows the quick-links empty state for a role whose only routes are placeholders', () => {
+    roles.set(['SCHOOL_ADMINISTRATION']);
+    fixture.detectChanges();
+    expect(text()).toContain("Aucun autre écran n'est disponible");
+  });
+});

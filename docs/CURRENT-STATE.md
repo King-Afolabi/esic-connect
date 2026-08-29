@@ -9,15 +9,135 @@
 ## Dernier commit stable
 
 ```text
-À renseigner
+495c2bf — feat: student profiles and historical enrollments (#10), sur main
 ```
 
 ## Phase actuelle
 
 ```text
-Inscriptions historiques — branche `feature/enrollment-history`,
-committée (commit `ba26dd5`), ouverte en PR #10, non fusionnée — nouveau
-module `enrollment` + migration V7 `student_profile` / `enrollment`
+Socle front-end Angular — branche `feature/frontend-foundation`, PR #11
+ouverte contre `main`, NON fusionnée. Première tranche verticale
+authentifiée : connexion → tableau de bord (rapport d'un **état de
+session local** établi après connexion réussie). Aucun module métier
+back-end ajouté ; migrations V1–V7 inchangées ; docs/01–04 inchangés.
+- Application créée avec `ng new` sous `frontend/` (docs/03 §9.1) :
+  Angular **21.2** (paquets framework / CLI / build résolus en 21.2.22 ;
+  Material + CDK en 21.2.14 — même ligne mineure 21.2, versionnement
+  propre à Angular Components ; runner de tests `@angular/build:unit-test`
+  = Vitest + jsdom ; application **zoneless** par défaut), Node.js 24.13,
+  npm 11. `package.json` déclare une politique de version cohérente
+  (`^21.2.x` pour tous les paquets `@angular/*`). Composants standalone,
+  TypeScript strict, formulaires réactifs, signaux, routes de
+  fonctionnalités en lazy loading, control flow natif (`@if` / `@for`).
+- Dépendances ajoutées, toutes first-party : `@angular/material` +
+  `@angular/cdk` (Angular Material explicitement requis par docs/02 §48.1,
+  docs/01 §5.3, US-023, T-J1-040) ; `angular-eslint` (+ `eslint`,
+  `typescript-eslint`) en dev pour `npm run lint`. Pas de NgRx, pas de
+  Tailwind/Bootstrap, pas de SSR ni service worker.
+- Routes implémentées :
+  * `/login` — écran de connexion (`guestGuard`), formulaire réactif
+    email + mot de passe, validations alignées sur `LoginRequest`
+    (`@NotBlank @Email` / `@NotBlank`), message d'échec unique et
+    générique (aucune énumération de comptes), bouton désactivé +
+    barre de progression pendant l'appel ;
+  * `/dashboard` — premier écran authentifié (`authGuard`) : rapporte un
+    **état de session local** (établi après connexion réussie ; le
+    tableau de bord ne prétend PAS avoir revérifié le jeton porteur via
+    un second appel d'API authentifié), affiche le compte (email saisi),
+    l'identifiant public (claim `sub`), l'échéance du jeton et les rôles ;
+    carte « accès rapides » n'exposant que des écrans livrés (donc vide
+    tant qu'il n'y en a pas d'autre que le tableau de bord) ; état vide
+    si aucun rôle ;
+  * `/administration` — `roleGuard(['ADMIN','SUPER_ADMIN'])`, écran
+    d'attente (placeholder) — périmètre aligné sur `UserAccountController` ;
+  * `/students` — `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])`,
+    placeholder — périmètre aligné sur `EnrollmentWeb.MANAGE_ROLES` ;
+  * `/forbidden` (403) et `**` (404).
+  Les deux routes placeholder sont **masquées de la navigation principale
+  et des accès rapides** (`NavItem.placeholder`), mais restent
+  directement adressables et gardées par rôle — un rôle non autorisé est
+  toujours redirigé vers `/forbidden`. La navigation principale ne
+  présente que les écrans réellement utilisables (aujourd'hui : le seul
+  tableau de bord). Les routes authentifiées sont enfants d'une coquille
+  `AppShell` (barre Material + navigation latérale responsive, repères
+  `<nav>` / `<main>`, lien d'évitement, `aria-current`, email + rôles +
+  déconnexion).
+- Authentification / session :
+  * `POST /api/v1/auth/login` consommé tel quel (réponse
+    `{ accessToken, tokenType, expiresInSeconds }`) ; aucun endpoint
+    `/auth/me` ni `/auth/logout` n'existe côté back-end — la déconnexion
+    est purement locale, l'identité affichée vient de l'email saisi et des
+    claims du JWT ;
+  * **stockage du jeton en mémoire uniquement** (signal `AuthService`),
+    ni `localStorage` ni `sessionStorage` ni cookie JS — conforme à
+    docs/07 §6 et RG-085. Conséquence assumée : un rechargement de page
+    perd la session et renvoie vers `/login`. `AuthService.restoreSession()`
+    est le point d'ancrage d'un futur cookie `HttpOnly` + refresh token
+    (stratégie cible docs/03 §15.2, docs/07 §6), non exposé par le
+    back-end à ce jour ;
+  * le décodage du JWT (rôles, `sub`, `exp`) est **non vérifié** et ne
+    sert qu'à l'affichage et au filtrage de la navigation ; toute
+    autorisation réelle reste décidée par Spring Security (consigne du
+    lot ; docs/07 §7) ;
+  * intercepteur de jeton porteur (en-tête `Authorization` sur les appels
+    `/api`, jamais journalisé) ; intercepteur d'erreurs : `401` non-login
+    → purge de session + redirection `/login?reason=expired` ; `0` / `5xx`
+    → bandeau générique (aucune trace serveur exposée) ; `4xx` laissé au
+    composant ; `normalizeHttpError` conserve le `code` métier
+    (`ApiError`, docs/03 §10.3).
+- Infra HTTP : URL de base d'API **relative** (`/api`) via
+  `src/environments/environment*.ts` ; `ng serve` proxifie `/api` vers
+  `http://localhost:8080` (`proxy.conf.json`) → aucune requête
+  cross-origin, **aucune modification de la configuration CORS du
+  back-end** (inexistante à ce jour) nécessaire en local. Un déploiement
+  cross-origin devra définir l'URL absolue ici ET activer une
+  configuration CORS Spring (documenté dans `environment.ts`).
+- Accessibilité : labels de formulaire associés (Material), navigation
+  clavier, focus visible, repères sémantiques, messages de validation
+  `aria-live` / `role="alert"`, état de soumission communiqué
+  (`aria-busy`), CSS responsive sans framework additionnel, aucun secret
+  en paramètre d'URL.
+- Tests front (69, Vitest) : `AuthService` (login succès/échec, session
+  en mémoire, `restoreSession` sans persistance, `logout`,
+  `handleUnauthorized`, `hasAnyRole`), décodage JWT, `normalizeHttpError`
+  (préservation du code métier, masquage des 5xx, réseau, non-HTTP),
+  intercepteur jeton porteur, intercepteur d'erreurs (401 / 5xx / 4xx),
+  `authGuard` / `guestGuard` / `roleGuard`, matrice de navigation
+  (placeholders jamais rendus quel que soit le rôle ; mapping
+  rôle → route conservé pour la traçabilité), câblage réel des gardes sur
+  `app.routes` (routes placeholder toujours déclarées et gardées ;
+  TEACHER → `/forbidden` sur route ADMIN, SCHOOL_ADMINISTRATION →
+  `/students` mais pas `/administration`, invité → `/login`), `Login`
+  (rendu, état de soumission, message générique), `Dashboard` (rapport
+  d'état de session **local**, aucune allégation d'appel d'API
+  revérifié, rôles, état vide, absence des placeholders dans les accès
+  rapides), `AppShell` (navigation limitée aux écrans livrés, placeholders
+  absents même pour un ADMIN, déconnexion), `App`.
+- CI : nouveau workflow `.github/workflows/frontend-ci.yml` (lint + tests
+  + build de production, déclenché sur `frontend/**`). `backend-ci.yml`
+  inchangé.
+- Commandes de vérification front (voir plus bas) : `npm ci`,
+  `npm test -- --watch=false`, `npm run build`, `npm run lint` — tous
+  exécutés avec succès en local le 29 août 2026.
+- Limites connues : pas de restauration de session au rechargement — un
+  rechargement de page perd la session et renvoie vers `/login` ; une
+  vraie session persistante exige le futur cookie `HttpOnly` + refresh
+  token côté back-end ; pas d'écran d'activation de compte
+  (`/activation`, pointé par `app.activation.base-url`, renverra 404 dans
+  la SPA — **prochaine tranche front-end prioritaire**) ; pas de contexte
+  de rôle sélectionnable (docs/02 §6.1) ; `/administration` et
+  `/students` sont des routes gardées sans contenu métier, volontairement
+  masquées de la navigation ; PWA, notifications, SSE non abordés.
+- Correction de revue (2ᵉ commit sur la PR) : formulation du tableau de
+  bord rendue exacte (« session locale » au lieu de « appel d'API
+  authentifié fonctionne ») ; routes placeholder retirées de la
+  navigation visible tout en restant gardées et adressables ; alignement
+  des versions `@angular/*` sur la ligne 21.2 ; `package-lock.json`
+  régénéré ; 64 → 69 tests.
+
+Inscriptions historiques — fusionné sur `main` via PR #10 (commit
+`495c2bf`) — module `enrollment` + migration V7 `student_profile` /
+`enrollment`
 (schéma en version 7, appliquée et vérifiée). Couvre le profil apprenant
 et l'inscription d'un apprenant
 dans une classe pour une année scolaire, avec conservation de
@@ -446,7 +566,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | TODO |
+| Angular | IMPLEMENTED (socle `frontend/`, branche `feature/frontend-foundation`, PR #11 ouverte non fusionnée — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/dashboard`, `/administration`, `/students`, `/forbidden`, `**` — `/administration` et `/students` gardées par rôle mais masquées de la navigation ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs ; jeton **en mémoire uniquement** (docs/07 §6, RG-085) ; le tableau de bord rapporte un état de session **local** (pas de second appel d'API vérifié) ; 69 tests Vitest verts, `npm ci` / `npm run build` / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment` — migrations appliquées et vérifiées, schéma en version 7) |
@@ -479,8 +599,17 @@ Les référentiels organisationnel (module `organization`, V4), académique
 minimal (module `academic`, V5), le périmètre pédagogique (module
 `academic`, V6) et les inscriptions historiques (module `enrollment`,
 V7 : `student_profile` + `enrollment` + changement de classe conservant
-l'historique) sont en place.
+l'historique) sont en place. Le socle front-end Angular
+(`feature/frontend-foundation`, PR #11 ouverte) fournit connexion +
+tableau de bord (état de session local) + gardes de route par rôle ;
+la navigation principale ne montre que les écrans livrés.
 Prochaines étapes :
+- front-end (prioritaire) : brancher l'écran d'activation de compte
+  (`/activation`, `GET/POST /api/v1/account-invitations/validate|activate`)
+  — le back-end génère déjà des liens vers `/activation`, non encore
+  implémenté dans la SPA ; puis sélecteur de contexte de rôle
+  (docs/02 §6.1) ; premiers écrans de liste (formations, apprenants) une
+  fois la PR socle fusionnée ;
 - rythmes d'alternance minimaux (T-J1-033 / US-060 à 062) : module
   `alternation` — `work_study_pattern`, `class_work_study_pattern`,
   `student_schedule_exception` (docs/04 §14) ;
@@ -540,6 +669,17 @@ Infrastructure vérifiée le 28 août 2026 : MySQL et Redis en état
 `healthy` (authentification testée), Mailpit `healthy`, Mosquitto
 démarré (pas de healthcheck configuré). Nécessite un fichier `.env`
 local non versionné (voir `.env.example`).
+
+Front-end (dossier `frontend/`, Node.js 24) :
+
+```text
+cd frontend
+npm ci
+npm start                    # ng serve — http://localhost:4200, proxifie /api vers :8080
+npm test -- --watch=false    # Vitest + jsdom (builder @angular/build:unit-test)
+npm run build                # build de production dans dist/
+npm run lint                 # angular-eslint
+```
 
 ```text
 cd backend
@@ -914,8 +1054,8 @@ l'`INSERT` via `AssignmentPersister` ; les cinq services académiques
 inchangés. Aucune affectation fictive insérée. Aucun commit, aucun push.
 
 Inscriptions historiques vérifiées le 29 août 2026, sur la branche
-`feature/enrollment-history` — committée (`ba26dd5`), ouverte en PR #10,
-non fusionnée. Après la passe corrective de revue de PR #10 (sémantique
+`feature/enrollment-history` — depuis **fusionnée sur `main` via PR #10**
+(commit `495c2bf`). Après la passe corrective de revue de PR #10 (sémantique
 de date du changement de classe + isolation transactionnelle des
 collisions concurrentes) : `./mvnw clean test` (`JAVA_HOME` OpenJDK 21,
 `set -a && source ../.env && set +a`) → `BUILD SUCCESS`, **320 tests**
@@ -1064,9 +1204,113 @@ local) ; `academic.ClassGroupDirectory` (port public) +
 `src/test/resources/application-test.yml` (pool HikariCP plafonné).
 `.env`, `compose.yaml`, `V1`–`V6`, `SecurityConfig`, `pom.xml`,
 `docs/01`–`docs/04` et le workflow CI inchangés. Aucun profil, aucune
-inscription fictive insérés. Commit `ba26dd5` sur
-`feature/enrollment-history` + passe corrective de revue PR #10 ;
-PR #10 ouverte, non fusionnée.
+inscription fictive insérés. **PR #10 fusionnée sur `main`** (commit
+`495c2bf`).
+
+---
+
+## Socle front-end Angular — 29 août 2026 (corrigé après revue de PR #11)
+
+Branche `feature/frontend-foundation` (créée depuis `main` à `495c2bf`),
+PR #11 ouverte contre `main`, **non fusionnée**. Aucun fichier back-end
+modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`, `SecurityConfig`,
+`backend/**` et `backend-ci.yml` inchangés. Autorisation et CORS
+back-end inchangés.
+
+Application créée avec `ng new` sous `frontend/`. **Angular 21.2**,
+politique de version cohérente dans `package.json` (`^21.2.x` pour tous
+les paquets `@angular/*`). Versions résolues : `@angular/{core, common,
+compiler, compiler-cli, forms, platform-browser, router, cli, build}` =
+**21.2.22** ; `@angular/material` + `@angular/cdk` = **21.2.14**. Le
+décalage de patch entre le framework (21.2.22) et Material/CDK (21.2.14)
+est normal : Angular Components suit sa propre cadence de patch et
+21.2.14 est son dernier patch de la ligne **21.2**, compatible avec le
+framework 21.2.22. **Node.js 24.13.0**, npm 11.6.2. Application
+*zoneless* par défaut, composants standalone, TypeScript strict,
+formulaires réactifs, signaux, routes de fonctionnalités en lazy
+loading, control flow natif. Dépendances first-party ajoutées :
+`@angular/material` + `@angular/cdk` (Material explicitement requis —
+docs/02 §48.1, docs/01 §5.3, US-023, T-J1-040) ; `angular-eslint` (dev)
+pour `npm run lint`. `package-lock.json` régénéré via `npm install`,
+`npm ci` vérifié depuis un `node_modules` vide.
+
+Routes : `/login` (guestGuard), `/dashboard` (authGuard, 1re tranche
+verticale authentifiée), `/administration`
+(`roleGuard(['ADMIN','SUPER_ADMIN'])`), `/students`
+(`roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])`),
+`/forbidden` (403), `**` (404). `/administration` et `/students` sont des
+écrans d'attente (placeholder) : **masqués de la navigation principale
+et des accès rapides** (`NavItem.placeholder`, `visibleNavItems` les
+exclut), mais toujours déclarés, directement adressables et gardés par
+rôle — un rôle non autorisé est redirigé vers `/forbidden`, un rôle
+autorisé atteint l'écran « À venir ». La navigation principale ne
+présente que les écrans livrés (aujourd'hui : le seul `/dashboard`).
+Routes authentifiées enfants d'une coquille `AppShell` (barre Material +
+navigation latérale responsive, `<nav>`/`<main>`, lien d'évitement,
+`aria-current`).
+
+Tableau de bord : rapporte un **état de session local** établi après une
+connexion réussie. Il n'effectue **pas** de second appel d'API
+authentifié et ne prétend pas avoir revérifié le jeton porteur via un
+autre endpoint back-end (aucun `/auth/me` n'existe et aucun n'a été
+ajouté). Il affiche l'email saisi, le claim `sub`, l'échéance du jeton,
+les rôles, et une carte « accès rapides » limitée aux écrans livrés.
+
+Authentification : `POST /api/v1/auth/login` consommé tel quel — c'est
+cette requête qui prouve l'authentification. Pas d'endpoint `/auth/me`
+ni `/auth/logout` côté back-end → déconnexion locale, identité affichée
+= email saisi + claims JWT. **Stockage du jeton en mémoire uniquement**
+(signal `AuthService`), ni `localStorage` ni `sessionStorage` ni
+IndexedDB ni cookie JS (docs/07 §6, RG-085). Rechargement de page =
+perte de session et retour à `/login` ; une vraie session persistante
+exige le futur cookie `HttpOnly` + refresh token côté back-end.
+`AuthService.restoreSession()` reste le point d'ancrage de ce futur flux
+(aucun faux endpoint de refresh ni de current-user ajouté). Décodage JWT
+non vérifié, affichage et navigation uniquement — autorisation réelle =
+Spring Security. Intercepteurs : jeton porteur (`Authorization` sur
+`/api`, jamais journalisé) ; erreurs (`401` non-login → purge +
+`/login?reason=expired`, `0`/`5xx` → bandeau générique, `4xx` →
+composant ; `normalizeHttpError` conserve le `code` métier `ApiError`
+docs/03 §10.3).
+
+Infra HTTP : URL d'API **relative** (`/api`) via
+`src/environments/environment*.ts` ; `ng serve` proxifie `/api` vers
+`http://localhost:8080` (`proxy.conf.json`) → aucune requête
+cross-origin, **CORS back-end non modifié** (inexistant, non requis en
+local). Déploiement cross-origin ultérieur : URL absolue + CORS Spring
+(documenté dans `environment.ts`).
+
+Vérifications exécutées avec succès en local le 29 août 2026 (Node
+24.13.0), depuis `frontend/` :
+
+```text
+rm -rf node_modules && npm ci   # 582 paquets, 0 vulnérabilité
+npm test -- --watch=false        # 14 fichiers, 69 tests, 0 échec (Vitest + jsdom)
+npm run build                    # bundle initial 409 kB brut / 106 kB transféré, 0 alerte de budget
+npm run lint                     # angular-eslint, « All files pass linting »
+```
+
+`cd backend && ./mvnw clean test` non ré-exécuté : aucun fichier
+back-end modifié.
+
+CI : `.github/workflows/frontend-ci.yml` (lint + tests + build sur
+`frontend/**`).
+
+Limites connues :
+- pas de restauration de session au rechargement — un rechargement de
+  page perd la session et renvoie vers `/login` ; une vraie session
+  persistante exige le futur cookie `HttpOnly` + refresh token côté
+  back-end ;
+- pas d'écran d'activation de compte : `app.activation.base-url` pointe
+  vers `/activation`, non implémenté dans la SPA (404) — **prochaine
+  tranche front-end prioritaire**, aucune fausse page ni faux endpoint
+  d'activation ajoutés ici ;
+- pas de sélecteur de contexte de rôle (docs/02 §6.1) ;
+- `/administration` et `/students` sont des routes gardées sans contenu
+  métier, volontairement masquées de la navigation ;
+- PWA, notifications, SSE non abordés ;
+- tests front en TestBed/Vitest uniquement, pas de tests e2e Angular →
+  Spring Boot.
 
 ## Règle de mise à jour
 
