@@ -16,8 +16,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Administration des formations (docs/04 §12.2). Mêmes rôles que
- * {@link AcademicYearController}. Toutes les routes utilisent
+ * Administration des formations (docs/04 §12.2). Lecture : rôles de
+ * gestion (filtrée par périmètre pour un {@code PEDAGOGICAL_MANAGER}).
+ * Création réservée à {@code ADMIN}/{@code SUPER_ADMIN} ; modification et
+ * cycle de vie ouverts au {@code PEDAGOGICAL_MANAGER} dans son périmètre
+ * ({@link AcademicScopeGuard}). Toutes les routes utilisent
  * exclusivement {@code public_id}.
  */
 @RestController
@@ -55,7 +58,7 @@ class ProgramController {
     }
 
     @PatchMapping("/{publicId}")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     ProgramResponse update(@PathVariable String publicId,
                            @Valid @RequestBody ProgramRequests.Update request,
                            @AuthenticationPrincipal Jwt caller) {
@@ -64,7 +67,7 @@ class ProgramController {
     }
 
     @PostMapping("/{publicId}/archive")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void archive(@PathVariable String publicId,
                  @Valid @RequestBody ArchiveRequest request,
@@ -74,7 +77,7 @@ class ProgramController {
     }
 
     @PostMapping("/{publicId}/restore")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void restore(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
         service.restore(AcademicWeb.parseUuid(publicId, AcademicException.Kind.PROGRAM_NOT_FOUND),

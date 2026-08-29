@@ -46,7 +46,35 @@ class AcademicException extends RuntimeException {
         /** Champ ou direction de tri hors liste blanche. */
         INVALID_SORT,
         /** Valeur de filtre invalide (statut...). */
-        INVALID_FILTER
+        INVALID_FILTER,
+        /**
+         * L'appelant n'a pas d'affectation effective sur la formation
+         * visée (contrôle de périmètre). Exposé {@code ACAD_FORBIDDEN}.
+         */
+        OUT_OF_SCOPE,
+        /** Aucune affectation de responsable pédagogique pour ce {@code public_id} ({@code ACAD_ASSIGNMENT_NOT_FOUND}). */
+        PEDAGOGICAL_ASSIGNMENT_NOT_FOUND,
+        /** Rôle d'affectation hors {@link PedagogicalAssignmentRole}. */
+        INVALID_ASSIGNMENT_ROLE,
+        /**
+         * Cible d'affectation inéligible : compte inexistant, archivé ou
+         * sans rôle actif {@code PEDAGOGICAL_MANAGER}
+         * ({@code ACAD_TARGET_NOT_ELIGIBLE}).
+         */
+        ASSIGNMENT_TARGET_NOT_ELIGIBLE,
+        /**
+         * Une affectation {@code PRIMARY_MANAGER} active existe déjà pour
+         * cette formation ({@code ACAD_PRIMARY_MANAGER_EXISTS}).
+         */
+        PRIMARY_MANAGER_ALREADY_ASSIGNED,
+        /** Clôture demandée sur une affectation déjà clôturée ({@code ACAD_ASSIGNMENT_ALREADY_CLOSED}). */
+        ASSIGNMENT_ALREADY_CLOSED,
+        /**
+         * Date d'affectation invalide : {@code validUntil} &lt;
+         * {@code validFrom} à la création, ou {@code effectiveDate} &lt;
+         * {@code validFrom} à la clôture ({@code ACAD_ASSIGNMENT_DATE_INVALID}).
+         */
+        ASSIGNMENT_DATE_INVALID
     }
 
     private final Kind kind;

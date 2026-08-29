@@ -49,7 +49,7 @@ class PromotionController {
     }
 
     @PostMapping
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.CREATED)
     PromotionResponse create(@Valid @RequestBody PromotionRequests.Create request,
                              @AuthenticationPrincipal Jwt caller) {
@@ -57,7 +57,7 @@ class PromotionController {
     }
 
     @PatchMapping("/{publicId}")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     PromotionResponse update(@PathVariable String publicId,
                              @Valid @RequestBody PromotionRequests.Update request,
                              @AuthenticationPrincipal Jwt caller) {
@@ -66,7 +66,7 @@ class PromotionController {
     }
 
     @PostMapping("/{publicId}/archive")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void archive(@PathVariable String publicId,
                  @Valid @RequestBody ArchiveRequest request,
@@ -76,7 +76,7 @@ class PromotionController {
     }
 
     @PostMapping("/{publicId}/restore")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void restore(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
         service.restore(AcademicWeb.parseUuid(publicId, AcademicException.Kind.PROMOTION_NOT_FOUND),

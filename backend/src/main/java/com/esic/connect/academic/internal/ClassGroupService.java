@@ -40,15 +40,17 @@ class ClassGroupService {
     private final PromotionRepository promotionRepository;
     private final ProgramLevelRepository programLevelRepository;
     private final SiteDirectory siteDirectory;
+    private final AcademicScopeGuard scopeGuard;
     private final AcademicChangePublisher changePublisher;
 
     ClassGroupService(ClassGroupRepository classGroupRepository, PromotionRepository promotionRepository,
                       ProgramLevelRepository programLevelRepository, SiteDirectory siteDirectory,
-                      AcademicChangePublisher changePublisher) {
+                      AcademicScopeGuard scopeGuard, AcademicChangePublisher changePublisher) {
         this.classGroupRepository = classGroupRepository;
         this.promotionRepository = promotionRepository;
         this.programLevelRepository = programLevelRepository;
         this.siteDirectory = siteDirectory;
+        this.scopeGuard = scopeGuard;
         this.changePublisher = changePublisher;
     }
 
@@ -56,7 +58,15 @@ class ClassGroupService {
     PageResponse<ClassGroupResponse> list(String promotionPublicId, String programLevelPublicId, String sitePublicId,
                                           String statusFilter, String textFilter, int page, int size, String sort) {
         Pageable pageable = AcademicQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
+        Set<Long> visible = scopeGuard.visibleProgramIds();
+        if (visible != null && visible.isEmpty()) {
+            return PageResponse.of(Page.<ClassGroup>empty(pageable),
+                    cg -> ClassGroupResponse.from(cg, null));
+        }
         List<Specification<ClassGroup>> specs = new ArrayList<>();
+        if (visible != null) {
+            specs.add(AcademicSpecifications.classGroupProgramIdIn(visible));
+        }
         if (promotionPublicId != null && !promotionPublicId.isBlank()) {
             specs.add(AcademicSpecifications.classGroupHasPromotion(requirePromotion(parseUuid(promotionPublicId,
                     AcademicException.Kind.PROMOTION_NOT_FOUND)).getId()));
@@ -85,12 +95,14 @@ class ClassGroupService {
     @Transactional(readOnly = true)
     ClassGroupResponse get(UUID publicId) {
         ClassGroup classGroup = require(publicId);
+        scopeGuard.requireProgramInScope(classGroup.getPromotion().getProgram());
         return ClassGroupResponse.from(classGroup, resolveSitePublicId(classGroup.getSiteId()));
     }
 
     ClassGroupResponse create(ClassGroupRequests.Create request, String callerSubject) {
         Promotion promotion = requirePromotion(parseUuid(request.promotionPublicId(),
                 AcademicException.Kind.PROMOTION_NOT_FOUND));
+        scopeGuard.requireProgramInScope(promotion.getProgram());
         if (promotion.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ARCHIVED_PARENT);
         }
@@ -125,6 +137,7 @@ class ClassGroupService {
 
     ClassGroupResponse update(UUID publicId, ClassGroupRequests.Update request, String callerSubject) {
         ClassGroup classGroup = require(publicId);
+        scopeGuard.requireProgramInScope(classGroup.getPromotion().getProgram());
         if (classGroup.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ENTITY_ARCHIVED);
         }
@@ -137,6 +150,7 @@ class ClassGroupService {
 
     void archive(UUID publicId, String reason, String callerSubject) {
         ClassGroup classGroup = require(publicId);
+        scopeGuard.requireProgramInScope(classGroup.getPromotion().getProgram());
         if (classGroup.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }
@@ -148,6 +162,7 @@ class ClassGroupService {
 
     void restore(UUID publicId, String callerSubject) {
         ClassGroup classGroup = require(publicId);
+        scopeGuard.requireProgramInScope(classGroup.getPromotion().getProgram());
         if (!classGroup.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }

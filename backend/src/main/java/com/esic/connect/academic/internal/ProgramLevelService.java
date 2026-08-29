@@ -33,13 +33,16 @@ class ProgramLevelService {
     private final ProgramLevelRepository programLevelRepository;
     private final ProgramRepository programRepository;
     private final ClassGroupRepository classGroupRepository;
+    private final AcademicScopeGuard scopeGuard;
     private final AcademicChangePublisher changePublisher;
 
     ProgramLevelService(ProgramLevelRepository programLevelRepository, ProgramRepository programRepository,
-                        ClassGroupRepository classGroupRepository, AcademicChangePublisher changePublisher) {
+                        ClassGroupRepository classGroupRepository, AcademicScopeGuard scopeGuard,
+                        AcademicChangePublisher changePublisher) {
         this.programLevelRepository = programLevelRepository;
         this.programRepository = programRepository;
         this.classGroupRepository = classGroupRepository;
+        this.scopeGuard = scopeGuard;
         this.changePublisher = changePublisher;
     }
 
@@ -47,6 +50,7 @@ class ProgramLevelService {
     PageResponse<ProgramLevelResponse> listForProgram(UUID programPublicId, String statusFilter, String textFilter,
                                                       int page, int size, String sort) {
         Program program = requireProgram(programPublicId);
+        scopeGuard.requireProgramInScope(program);
         Pageable pageable = AcademicQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
         List<Specification<ProgramLevel>> specs = new ArrayList<>();
         specs.add(AcademicSpecifications.levelHasProgram(program.getId()));
@@ -60,11 +64,14 @@ class ProgramLevelService {
 
     @Transactional(readOnly = true)
     ProgramLevelResponse get(UUID publicId) {
-        return ProgramLevelResponse.from(require(publicId));
+        ProgramLevel level = require(publicId);
+        scopeGuard.requireProgramInScope(level.getProgram());
+        return ProgramLevelResponse.from(level);
     }
 
     ProgramLevelResponse create(UUID programPublicId, ProgramLevelRequests.Create request, String callerSubject) {
         Program program = requireProgram(programPublicId);
+        scopeGuard.requireProgramInScope(program);
         if (program.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ARCHIVED_PARENT);
         }
@@ -83,6 +90,7 @@ class ProgramLevelService {
 
     ProgramLevelResponse update(UUID publicId, ProgramLevelRequests.Update request, String callerSubject) {
         ProgramLevel level = require(publicId);
+        scopeGuard.requireProgramInScope(level.getProgram());
         if (level.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ENTITY_ARCHIVED);
         }
@@ -95,6 +103,7 @@ class ProgramLevelService {
 
     void archive(UUID publicId, String reason, String callerSubject) {
         ProgramLevel level = require(publicId);
+        scopeGuard.requireProgramInScope(level.getProgram());
         if (level.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }
@@ -109,6 +118,7 @@ class ProgramLevelService {
 
     void restore(UUID publicId, String callerSubject) {
         ProgramLevel level = require(publicId);
+        scopeGuard.requireProgramInScope(level.getProgram());
         if (!level.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }

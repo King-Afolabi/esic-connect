@@ -43,6 +43,8 @@ class AcademicServiceTests {
     @Mock
     private ClassGroupRepository classGroupRepository;
     @Mock
+    private AcademicScopeGuard scopeGuard;
+    @Mock
     private SiteDirectory siteDirectory;
     @Mock
     private AcademicChangePublisher changePublisher;
@@ -52,22 +54,23 @@ class AcademicServiceTests {
     }
 
     private ProgramService programService() {
-        return new ProgramService(programRepository, programLevelRepository, promotionRepository, changePublisher);
+        return new ProgramService(programRepository, programLevelRepository, promotionRepository,
+                scopeGuard, changePublisher);
     }
 
     private PromotionService promotionService() {
         return new PromotionService(promotionRepository, programRepository, academicYearRepository,
-                classGroupRepository, changePublisher);
+                classGroupRepository, scopeGuard, changePublisher);
     }
 
     private ProgramLevelService programLevelService() {
         return new ProgramLevelService(programLevelRepository, programRepository, classGroupRepository,
-                changePublisher);
+                scopeGuard, changePublisher);
     }
 
     private ClassGroupService classGroupService() {
         return new ClassGroupService(classGroupRepository, promotionRepository, programLevelRepository,
-                siteDirectory, changePublisher);
+                siteDirectory, scopeGuard, changePublisher);
     }
 
     // ------------------------------------------------------------------

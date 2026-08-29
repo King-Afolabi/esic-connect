@@ -5,5 +5,6 @@ public enum AcademicChangeAction {
     CREATED,
     UPDATED,
     ARCHIVED,
-    RESTORED
+    RESTORED,
+    CLOSED
 }

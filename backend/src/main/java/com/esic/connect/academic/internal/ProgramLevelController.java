@@ -44,7 +44,7 @@ class ProgramLevelController {
     }
 
     @PostMapping("/programs/{programPublicId}/levels")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.CREATED)
     ProgramLevelResponse create(@PathVariable String programPublicId,
                                 @Valid @RequestBody ProgramLevelRequests.Create request,
@@ -60,7 +60,7 @@ class ProgramLevelController {
     }
 
     @PatchMapping("/program-levels/{publicId}")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     ProgramLevelResponse update(@PathVariable String publicId,
                                 @Valid @RequestBody ProgramLevelRequests.Update request,
                                 @AuthenticationPrincipal Jwt caller) {
@@ -69,7 +69,7 @@ class ProgramLevelController {
     }
 
     @PostMapping("/program-levels/{publicId}/archive")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void archive(@PathVariable String publicId,
                  @Valid @RequestBody ArchiveRequest request,
@@ -79,7 +79,7 @@ class ProgramLevelController {
     }
 
     @PostMapping("/program-levels/{publicId}/restore")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void restore(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
         service.restore(AcademicWeb.parseUuid(publicId, AcademicException.Kind.PROGRAM_LEVEL_NOT_FOUND),
