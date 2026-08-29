@@ -7,6 +7,7 @@ import { RouterLink } from '@angular/router';
 import { interval, startWith } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { RoleContextService } from '../../core/auth/role-context.service';
 import { roleLabel } from '../../core/models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../core/navigation/navigation';
 
@@ -19,17 +20,24 @@ import { NAV_ITEMS, visibleNavItems } from '../../core/navigation/navigation';
 })
 export class Dashboard {
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
 
   protected readonly roleLabel = roleLabel;
 
   protected readonly session = this.auth.session;
   protected readonly roles = this.auth.roles;
 
+  /** Contexte d'utilisation actif (docs/02 §6.1) — affichage seul. */
+  protected readonly activeContextLabel = this.roleContext.activeLabel;
+  protected readonly hasContextChoice = this.roleContext.hasChoice;
+
   /** Ré-évalue l'échéance affichée chaque minute. */
   private readonly tick = toSignal(interval(60_000).pipe(startWith(0)), { initialValue: 0 });
 
   protected readonly quickLinks = computed(() =>
-    visibleNavItems(NAV_ITEMS, this.roles()).filter((item) => item.path !== '/dashboard'),
+    visibleNavItems(NAV_ITEMS, this.roleContext.effectiveRoles()).filter(
+      (item) => item.path !== '/dashboard',
+    ),
   );
 
   protected readonly expiresLabel = computed(() => {

@@ -1,0 +1,31 @@
+@if (hasChoice()) {
+  <button
+    type="button"
+    mat-button
+    class="role-context__trigger"
+    [matMenuTriggerFor]="menu"
+    aria-haspopup="menu"
+  >
+    <mat-icon aria-hidden="true">badge</mat-icon>
+    <span class="role-context__label">
+      Contexte : <strong>{{ activeLabel() ?? 'non défini' }}</strong>
+    </span>
+    <mat-icon aria-hidden="true">arrow_drop_down</mat-icon>
+  </button>
+
+  <mat-menu #menu="matMenu" aria-label="Choisir un contexte d'utilisation">
+    @for (role of available(); track role) {
+      <button
+        type="button"
+        mat-menu-item
+        (click)="select(role)"
+        [attr.aria-current]="role === active() ? 'true' : null"
+      >
+        @if (role === active()) {
+          <mat-icon aria-hidden="true">check</mat-icon>
+        }
+        <span>{{ contextLabel(role) }}</span>
+      </button>
+    }
+  </mat-menu>
+}
