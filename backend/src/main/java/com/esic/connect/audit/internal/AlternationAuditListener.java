@@ -20,6 +20,20 @@ import java.time.Instant;
  * ni donnée personnelle : l'événement ne transporte que des identifiants
  * publics, l'action et un complément non sensible (codes fonctionnels,
  * types).
+ *
+ * <p><strong>Dette transactionnelle connue (non résolue dans cette PR).</strong>
+ * Comme les autres listeners d'audit du projet, celui-ci est un
+ * {@link EventListener} synchrone en {@code REQUIRES_NEW} : il peut donc
+ * écrire la ligne d'audit <em>avant</em> le commit définitif de la
+ * transaction métier qui a publié l'événement (et cette ligne subsiste si
+ * la transaction métier échoue ensuite). Spring Modulith recommande une
+ * intégration événementielle transactionnelle
+ * ({@code @TransactionalEventListener(phase = AFTER_COMMIT)} ou
+ * {@code @ApplicationModuleListener}) pour découpler le traitement de
+ * l'événement de la transaction métier. Ce changement doit être fait
+ * <em>globalement</em> et de façon cohérente pour tous les modules :
+ * modifier le seul {@code AlternationAuditListener} rendrait la stratégie
+ * d'audit incohérente. La migration reste à planifier.
  */
 @Component
 public class AlternationAuditListener {

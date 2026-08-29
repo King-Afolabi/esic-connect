@@ -58,6 +58,14 @@ class AlternationConfigParser {
     private static final Set<DayOfWeek> WEEKDAYS = EnumSet.of(
             DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY);
 
+    /**
+     * Les cinq clés — et seulement elles — de la forme canonique produite
+     * par {@link #canonicalize}. {@link #parseCanonical} exige leur
+     * présence et rejette toute autre propriété.
+     */
+    private static final Set<String> CANONICAL_KEYS = Set.of(
+            "cycleLengthWeeks", "schoolWeeks", "companyWeeks", "schoolDays", "companyDays");
+
     private final ObjectMapper objectMapper;
 
     AlternationConfigParser(ObjectMapper objectMapper) {
@@ -91,19 +99,43 @@ class AlternationConfigParser {
      * revalidation propre au type : la donnée a déjà été validée à
      * l'écriture et n'est plus fournie par un client. Sert la résolution
      * calendaire ({@code AlternationContextService}).
+     *
+     * <p>Contrairement à {@link #parse}, cette relecture accepte des
+     * tableaux {@code schoolDays} / {@code companyDays} <em>vides</em> —
+     * {@link #canonicalize} en produit systématiquement (ex.
+     * {@code companyDays:[]} pour un rythme semaine/4). Elle reste
+     * néanmoins stricte : les cinq clés canoniques sont obligatoires,
+     * toute autre propriété est rejetée, les index de semaine sont
+     * contrôlés contre {@code cycleLengthWeeks}, et aucune intersection
+     * semaines école/entreprise ni jours école/entreprise n'est tolérée.
+     * Une forme canonique incohérente ne produit jamais de configuration
+     * silencieusement acceptée ({@link AlternationException.Kind#INVALID_CONFIGURATION}).
      */
     PatternConfiguration parseCanonical(String canonicalJson) {
         JsonNode root = readObject(canonicalJson);
+        rejectUnknownKeys(root, CANONICAL_KEYS);
+        for (String key : CANONICAL_KEYS) {
+            if (!root.has(key)) {
+                throw invalid("propriété canonique obligatoire absente : " + key);
+            }
+        }
         JsonNode cycleNode = root.get("cycleLengthWeeks");
-        if (cycleNode == null || !cycleNode.canConvertToInt() || cycleNode.asInt() <= 0) {
+        if (!cycleNode.canConvertToInt() || cycleNode.asInt() <= 0) {
             throw invalid("cycleLengthWeeks canonique invalide");
         }
         int cycle = cycleNode.asInt();
-        return new PatternConfiguration(cycle,
-                optionalWeeks(root, "schoolWeeks", cycle),
-                optionalWeeks(root, "companyWeeks", cycle),
-                root.has("schoolDays") ? requireDays(root, "schoolDays") : Set.of(),
-                root.has("companyDays") ? requireDays(root, "companyDays") : Set.of());
+        Set<Integer> schoolWeeks = requireWeeks(root, "schoolWeeks", cycle);
+        Set<Integer> companyWeeks = requireWeeks(root, "companyWeeks", cycle);
+        if (!intersection(schoolWeeks, companyWeeks).isEmpty()) {
+            throw invalid("les listes schoolWeeks et companyWeeks ne peuvent pas se recouper");
+        }
+        Set<DayOfWeek> schoolDays = requireCanonicalDays(root, "schoolDays");
+        Set<DayOfWeek> companyDays = requireCanonicalDays(root, "companyDays");
+        if (!intersection(schoolDays, companyDays).isEmpty()) {
+            throw invalid("un jour ne peut pas être à la fois école et entreprise");
+        }
+        return new PatternConfiguration(cycle, Set.copyOf(schoolWeeks), Set.copyOf(companyWeeks),
+                Set.copyOf(schoolDays), Set.copyOf(companyDays));
     }
 
     /**
@@ -263,6 +295,36 @@ class AlternationConfigParser {
         JsonNode node = root.get(field);
         if (node == null || !node.isArray() || node.isEmpty()) {
             throw invalid(field + " doit être une liste de jours non vide");
+        }
+        Set<DayOfWeek> days = EnumSet.noneOf(DayOfWeek.class);
+        for (JsonNode element : node) {
+            if (!element.isTextual()) {
+                throw invalid(field + " ne doit contenir que des noms de jours");
+            }
+            DayOfWeek day;
+            try {
+                day = DayOfWeek.valueOf(element.asText().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException unknown) {
+                throw invalid("jour inconnu : " + element.asText());
+            }
+            if (!days.add(day)) {
+                throw invalid(field + " contient un doublon : " + day);
+            }
+        }
+        return days;
+    }
+
+    /**
+     * Lecture d'un tableau de jours <em>canonique</em> : la clé est
+     * obligatoire, le tableau peut être vide, mais toute valeur non
+     * textuelle, tout jour inconnu et tout doublon sont refusés. À la
+     * différence de {@link #requireDays}, un tableau vide est valide (la
+     * forme canonique en contient légitimement).
+     */
+    private static Set<DayOfWeek> requireCanonicalDays(JsonNode root, String field) {
+        JsonNode node = root.get(field);
+        if (node == null || !node.isArray()) {
+            throw invalid(field + " canonique doit être une liste de jours");
         }
         Set<DayOfWeek> days = EnumSet.noneOf(DayOfWeek.class);
         for (JsonNode element : node) {

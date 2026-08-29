@@ -224,6 +224,65 @@ class ClassWorkStudyPatternServiceTests {
     }
 
     @Test
+    void closeRejectsEffectiveDateAfterInitialValidUntil() {
+        // Affectation ACTIVE mais déjà bornée : clôturer au-delà de sa
+        // propre fin de validité est une date invalide (400).
+        ClassWorkStudyPattern assignment = new ClassWorkStudyPattern(42L, pattern(false),
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
+        UUID id = UUID.randomUUID();
+        ReflectionTestUtils.setField(assignment, "publicId", id);
+        when(assignmentRepository.findByPublicId(id)).thenReturn(Optional.of(assignment));
+        when(classGroupDirectory.findByInternalId(42L)).thenReturn(Optional.of(classRef(true)));
+        when(academicScope.hasGlobalScope()).thenReturn(true);
+
+        assertThatThrownBy(() -> service().close(id,
+                new ClassAssignmentRequests.Close("x", LocalDate.of(2027, 1, 15)), "sub"))
+                .extracting(ex -> ((AlternationException) ex).kind())
+                .isEqualTo(AlternationException.Kind.INVALID_PERIOD);
+    }
+
+    @Test
+    void closeAcceptsDayBeforeNextHistoricisedAssignment() {
+        ClassWorkStudyPattern assignment = new ClassWorkStudyPattern(42L, pattern(false),
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 1), null);
+        UUID id = UUID.randomUUID();
+        ReflectionTestUtils.setField(assignment, "publicId", id);
+        when(assignmentRepository.findByPublicId(id)).thenReturn(Optional.of(assignment));
+        when(classGroupDirectory.findByInternalId(42L)).thenReturn(Optional.of(classRef(true)));
+        when(academicScope.hasGlobalScope()).thenReturn(true);
+        when(assignmentRepository.findFirstByClassGroupIdAndValidFromGreaterThanOrderByValidFromAscIdAsc(
+                42L, LocalDate.of(2026, 9, 1)))
+                .thenReturn(Optional.of(new ClassWorkStudyPattern(42L, pattern(false),
+                        LocalDate.of(2027, 1, 1), LocalDate.of(2027, 1, 1), null)));
+        when(changePublisher.actorId("sub")).thenReturn(3L);
+
+        service().close(id, new ClassAssignmentRequests.Close("réorg", LocalDate.of(2026, 12, 31)), "sub");
+
+        assertThat(assignment.getStatus()).isEqualTo(ClassPatternStatus.CLOSED);
+        assertThat(assignment.getValidUntil()).isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    void closeRejectsEffectiveDateReachingNextAssignmentStart() {
+        ClassWorkStudyPattern assignment = new ClassWorkStudyPattern(42L, pattern(false),
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 1), null);
+        UUID id = UUID.randomUUID();
+        ReflectionTestUtils.setField(assignment, "publicId", id);
+        when(assignmentRepository.findByPublicId(id)).thenReturn(Optional.of(assignment));
+        when(classGroupDirectory.findByInternalId(42L)).thenReturn(Optional.of(classRef(true)));
+        when(academicScope.hasGlobalScope()).thenReturn(true);
+        when(assignmentRepository.findFirstByClassGroupIdAndValidFromGreaterThanOrderByValidFromAscIdAsc(
+                42L, LocalDate.of(2026, 9, 1)))
+                .thenReturn(Optional.of(new ClassWorkStudyPattern(42L, pattern(false),
+                        LocalDate.of(2027, 1, 1), LocalDate.of(2027, 1, 1), null)));
+
+        assertThatThrownBy(() -> service().close(id,
+                new ClassAssignmentRequests.Close("x", LocalDate.of(2027, 1, 1)), "sub"))
+                .extracting(ex -> ((AlternationException) ex).kind())
+                .isEqualTo(AlternationException.Kind.ASSIGNMENT_CLOSE_CONFLICT);
+    }
+
+    @Test
     void closeUsesInjectedClockByDefaultAndPublishesClosedEvent() {
         ClassWorkStudyPattern assignment = new ClassWorkStudyPattern(42L, pattern(false),
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 1), null);

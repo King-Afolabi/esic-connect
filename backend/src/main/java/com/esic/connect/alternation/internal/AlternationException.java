@@ -66,6 +66,14 @@ class AlternationException extends RuntimeException {
         OPEN_ASSIGNMENT_EXISTS,
         /** Clôture demandée sur une affectation déjà clôturée. */
         ASSIGNMENT_ALREADY_CLOSED,
+        /**
+         * Clôture refusée : la {@code effectiveDate} atteint ou dépasse le
+         * {@code valid_from} de l'affectation historisée suivante de la
+         * même classe — elle produirait un historique qui se chevauche
+         * ({@code ALT_ASSIGNMENT_CLOSE_CONFLICT}). Avec bornes inclusives,
+         * la date maximale autorisée est {@code next.validFrom - 1 jour}.
+         */
+        ASSIGNMENT_CLOSE_CONFLICT,
         /** Annulation demandée sur une exception déjà annulée. */
         EXCEPTION_ALREADY_CANCELLED,
         /**

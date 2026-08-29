@@ -138,19 +138,42 @@ class AlternationContextService {
                 assignment.getPublicId(), pattern.getPublicId(), pattern.getCode(), weekIndex, dayOfWeek);
     }
 
+    /**
+     * Exceptions {@code ACTIVE} de l'inscription qui <em>couvrent</em> la
+     * date civile demandée.
+     *
+     * <p>Sémantique retenue : une exception est l'intervalle instantané
+     * demi-ouvert {@code [startAt, endAt)}. La date civile {@code date},
+     * projetée dans le fuseau propre à l'exception, est elle aussi
+     * l'intervalle demi-ouvert
+     * {@code [date 00:00 dans le fuseau, lendemain 00:00 dans le fuseau)}.
+     * La date est couverte si et seulement si les deux intervalles se
+     * recoupent :
+     * <pre>{@code exception.startAt < dayEnd && exception.endAt > dayStart}</pre>
+     * La couverture n'est donc <strong>jamais</strong> déduite d'un simple
+     * {@code startDay}/{@code endDay} arrondi. Ce calcul traite
+     * correctement : une exception se terminant exactement à minuit (non
+     * couverte pour le jour suivant), une exception commençant exactement
+     * à la fin du jour interrogé (non couverte), les fuseaux à changement
+     * d'heure (l'ancrage {@code atStartOfDay(zone)} résout le décalage),
+     * les exceptions de quelques heures comme celles couvrant plusieurs
+     * jours.
+     */
     private List<StudentScheduleException> coveringExceptions(long enrollmentInternalId, LocalDate date) {
-        // Fenêtre UTC large ; le recoupement exact est ensuite vérifié
-        // dans le fuseau propre à chaque exception (jour civil).
+        // Fenêtre de présélection SQL volontairement large (± 2 jours en
+        // UTC) : elle absorbe tous les décalages de fuseau et de
+        // changement d'heure ; le recoupement exact est ensuite calculé
+        // par intersection d'intervalles dans le fuseau de l'exception.
         Instant from = date.minusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant to = date.plusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
         List<StudentScheduleException> candidates = exceptionRepository
                 .findActiveOverlapping(enrollmentInternalId, from, to);
         List<StudentScheduleException> covering = new ArrayList<>();
         for (StudentScheduleException exception : candidates) {
-            ZoneId zone = safeZone(exception.getTimeZoneId());
-            LocalDate startDay = exception.getStartAt().atZone(zone).toLocalDate();
-            LocalDate endDay = exception.getEndAt().atZone(zone).toLocalDate();
-            if (!date.isBefore(startDay) && !date.isAfter(endDay)) {
+            ZoneId zone = persistedZone(exception.getTimeZoneId());
+            Instant dayStart = date.atStartOfDay(zone).toInstant();
+            Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
+            if (exception.getStartAt().isBefore(dayEnd) && exception.getEndAt().isAfter(dayStart)) {
                 covering.add(exception);
             }
         }
@@ -163,11 +186,18 @@ class AlternationContextService {
         }
     }
 
-    private static ZoneId safeZone(String id) {
+    /**
+     * Résout le fuseau IANA <em>persisté</em> avec une exception. Une
+     * valeur invalide est un état interne corrompu (elle a été validée à
+     * l'écriture par {@code StudentScheduleExceptionService.requireZone}) :
+     * elle lève une erreur interne explicite plutôt que d'être remplacée
+     * silencieusement par UTC, ce qui fausserait la projection calendaire.
+     */
+    private static ZoneId persistedZone(String id) {
         try {
             return ZoneId.of(id);
         } catch (RuntimeException invalid) {
-            return ZoneOffset.UTC;
+            throw new IllegalStateException("Fuseau horaire persisté invalide pour une exception de calendrier");
         }
     }
 

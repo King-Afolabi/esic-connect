@@ -166,6 +166,73 @@ class AlternationSecurityTests {
         assertThat(status(HttpMethod.GET,
                 "/api/v1/alternation/classes/" + inScope.classGroup() + "/assignments", null, pm))
                 .isEqualTo(HttpStatus.OK);
+
+        // La liste plate ne retourne que les affectations du périmètre du
+        // responsable — et aucun paramètre client ne l'élargit.
+        Map<String, Object> flat = getMap("/api/v1/alternation/class-assignments", pm);
+        List<?> content = (List<?>) flat.get("content");
+        assertThat(content).allSatisfy(item ->
+                assertThat(((Map<?, ?>) item).get("classGroupPublicId")).isEqualTo(inScope.classGroup()));
+        assertThat(((Number) flat.get("totalElements")).intValue()).isEqualTo(1);
+        // Filtrer explicitement sur une classe hors périmètre -> 403 (jamais un élargissement)
+        assertThat(status(HttpMethod.GET,
+                "/api/v1/alternation/class-assignments?class=" + outOfScope.classGroup(), null, pm))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void pedagogicalManagerIsLimitedToItsPerimeterForStudentExceptionsAndContext() {
+        String admin = adminToken();
+        Perimeter inScope = academicChain(admin);
+        Perimeter outOfScope = academicChain(admin);
+        Account managerAccount = accountWithRoles(RoleCode.PEDAGOGICAL_MANAGER);
+        created("/api/v1/pedagogical-assignments", Map.of("programPublicId", inScope.program(),
+                "userPublicId", managerAccount.publicId(), "type", "PRIMARY_MANAGER",
+                "validFrom", LocalDate.now().minusDays(1).toString()), admin);
+        String pm = tokenFor(managerAccount);
+
+        String inScopeEnrollment = enrollmentInClass(admin, inScope.classGroup());
+        String outOfScopeEnrollment = enrollmentInClass(admin, outOfScope.classGroup());
+
+        // Exception individuelle dans le périmètre -> autorisée (201)
+        Map<String, Object> body = Map.of("type", "REMOTE_ALLOWED", "startAt", "2026-09-07T08:00:00Z",
+                "endAt", "2026-09-07T18:00:00Z", "timeZoneId", "Europe/Paris", "reason", "santé");
+        Map<String, Object> inBody = new java.util.HashMap<>(body);
+        inBody.put("enrollmentPublicId", inScopeEnrollment);
+        assertThat(status(HttpMethod.POST, "/api/v1/alternation/student-exceptions", inBody, pm))
+                .isEqualTo(HttpStatus.CREATED);
+
+        // Exception individuelle hors périmètre -> 403
+        Map<String, Object> outBody = new java.util.HashMap<>(body);
+        outBody.put("enrollmentPublicId", outOfScopeEnrollment);
+        ResponseEntity<Map<String, Object>> deniedException = exchange(HttpMethod.POST,
+                "/api/v1/alternation/student-exceptions", outBody, pm);
+        assertThat(deniedException.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(deniedException.getBody().get("code")).isEqualTo("ALT_FORBIDDEN");
+
+        // Contexte d'une inscription dans le périmètre -> autorisé (200)
+        assertThat(status(HttpMethod.GET, "/api/v1/alternation/enrollments/" + inScopeEnrollment
+                + "/context?date=2026-09-07", null, pm)).isEqualTo(HttpStatus.OK);
+        // Contexte d'une inscription hors périmètre -> 403
+        assertThat(status(HttpMethod.GET, "/api/v1/alternation/enrollments/" + outOfScopeEnrollment
+                + "/context?date=2026-09-07", null, pm)).isEqualTo(HttpStatus.FORBIDDEN);
+        // Liste des exceptions d'une inscription hors périmètre -> 403
+        assertThat(status(HttpMethod.GET, "/api/v1/alternation/enrollments/" + outOfScopeEnrollment
+                + "/exceptions", null, pm)).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private String enrollmentInClass(String admin, String classPublicId) {
+        String studentUser = accountWithRoles(RoleCode.STUDENT).publicId();
+        String profile = (String) created("/api/v1/student-profiles", Map.of("userPublicId", studentUser,
+                "studentNumber", "ESIC-2026-" + code()), admin).get("publicId");
+        return (String) created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+                "classGroupPublicId", classPublicId), admin).get("publicId");
+    }
+
+    private Map<String, Object> getMap(String path, String token) {
+        ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.GET, path, null, token);
+        assertThat(response.getStatusCode()).as("GET " + path).isEqualTo(HttpStatus.OK);
+        return response.getBody();
     }
 
     // ------------------------------------------------------------------

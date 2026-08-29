@@ -127,6 +127,11 @@ class AlternationExceptionHandler {
                 code = "ALT_ASSIGNMENT_ALREADY_CLOSED";
                 message = "Cette affectation est déjà clôturée.";
             }
+            case ASSIGNMENT_CLOSE_CONFLICT -> {
+                status = HttpStatus.CONFLICT;
+                code = "ALT_ASSIGNMENT_CLOSE_CONFLICT";
+                message = "Cette date de clôture chevaucherait l'affectation de rythme suivante de la classe.";
+            }
             case EXCEPTION_ALREADY_CANCELLED -> {
                 status = HttpStatus.CONFLICT;
                 code = "ALT_EXCEPTION_ALREADY_CANCELLED";

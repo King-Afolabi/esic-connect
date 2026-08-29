@@ -35,6 +35,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -249,6 +253,222 @@ class AlternationIntegrationTests {
                 + "/context?date=2026-09-10", admin);
         assertThat(before.get("context")).isEqualTo("UNKNOWN");
         assertThat(before.get("source")).isEqualTo("NONE");
+    }
+
+    // ------------------------------------------------------------------
+    // Les quatre rythmes du MVP : parcours HTTP complet
+    // création -> affectation -> contexte SCHOOL puis COMPANY
+    // (prouve aussi le round-trip canonique de configuration_json)
+    // ------------------------------------------------------------------
+
+    @Test
+    void oneWeekOutOfFourResolvesSchoolThenCompanyOverHttp() {
+        assertWeekPatternContext("ONE_WEEK_SCHOOL_OUT_OF_FOUR",
+                Map.of("schoolWeeks", List.of(1), "companyWeeks", List.of(2, 3, 4)),
+                "2026-09-02", "2026-09-09"); // semaine 1 (école) puis semaine 2 (entreprise)
+    }
+
+    @Test
+    void twoWeeksOutOfFourResolvesSchoolThenCompanyOverHttp() {
+        assertWeekPatternContext("TWO_WEEKS_SCHOOL_OUT_OF_FOUR",
+                Map.of("schoolWeeks", List.of(1, 2), "companyWeeks", List.of(3, 4)),
+                "2026-09-09", "2026-09-16"); // semaine 2 (école) puis semaine 3 (entreprise)
+    }
+
+    @Test
+    void customPatternWithEmptyCompanyDaysResolvesOverHttp() {
+        // cycle de 2 semaines, companyDays omis (canonicalisé en []) :
+        // le round-trip parseCanonical doit l'accepter à la résolution.
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Map<String, Object> body = Map.of("code", "RYT-" + code(), "name", "Rythme custom 1/2",
+                "type", "CUSTOM", "cycleLengthWeeks", 2,
+                "configuration", Map.of("cycleLengthWeeks", 2,
+                        "schoolWeeks", List.of(1), "companyWeeks", List.of(2)));
+        Map<String, Object> pattern = created("/api/v1/alternation/patterns", body, admin);
+        // La forme canonique renvoyée contient bien un companyDays vide.
+        assertThat(((Map<?, ?>) pattern.get("configuration")).get("companyDays")).isEqualTo(List.of());
+        String patternId = (String) pattern.get("publicId");
+
+        created("/api/v1/alternation/class-assignments", Map.of("classGroupPublicId", chain.classA(),
+                "workStudyPatternPublicId", patternId, "cycleStartDate", "2026-09-01",
+                "validFrom", "2026-09-01"), admin);
+
+        assertThat(getMap("/api/v1/alternation/classes/" + chain.classA() + "/context?date=2026-09-02", admin)
+                .get("context")).isEqualTo("SCHOOL"); // semaine 1
+        assertThat(getMap("/api/v1/alternation/classes/" + chain.classA() + "/context?date=2026-09-09", admin)
+                .get("context")).isEqualTo("COMPANY"); // semaine 2
+    }
+
+    private void assertWeekPatternContext(String type, Map<String, Object> configuration,
+                                          String schoolDate, String companyDate) {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        String pattern = (String) created("/api/v1/alternation/patterns", Map.of(
+                "code", "RYT-" + code(), "name", type, "type", type,
+                "configuration", configuration), admin).get("publicId");
+        created("/api/v1/alternation/class-assignments", Map.of("classGroupPublicId", chain.classA(),
+                "workStudyPatternPublicId", pattern, "cycleStartDate", "2026-09-01",
+                "validFrom", "2026-09-01"), admin);
+
+        Map<String, Object> school = getMap("/api/v1/alternation/classes/" + chain.classA()
+                + "/context?date=" + schoolDate, admin);
+        assertThat(school.get("context")).as("contexte école au " + schoolDate).isEqualTo("SCHOOL");
+        assertThat(school.get("source")).isEqualTo("PATTERN");
+
+        Map<String, Object> company = getMap("/api/v1/alternation/classes/" + chain.classA()
+                + "/context?date=" + companyDate, admin);
+        assertThat(company.get("context")).as("contexte entreprise au " + companyDate).isEqualTo("COMPANY");
+        assertThat(company.get("source")).isEqualTo("PATTERN");
+    }
+
+    // ------------------------------------------------------------------
+    // Concurrence
+    // ------------------------------------------------------------------
+
+    @Test
+    void twoConcurrentOpenAssignmentsYieldExactlyOne201AndOne409() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        String pattern = (String) created("/api/v1/alternation/patterns", threeTwoBody("RYT-" + code()), admin)
+                .get("publicId");
+        Map<String, Object> body = Map.of("classGroupPublicId", chain.classA(),
+                "workStudyPatternPublicId", pattern, "cycleStartDate", "2026-09-01", "validFrom", "2026-09-01");
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<HttpStatus> call = () -> (HttpStatus) exchange(HttpMethod.POST,
+                    "/api/v1/alternation/class-assignments", body, admin).getStatusCode();
+            List<Future<HttpStatus>> results = pool.invokeAll(List.of(call, call));
+            List<HttpStatus> statuses = List.of(get(results.get(0)), get(results.get(1)));
+            assertThat(statuses).filteredOn(HttpStatus.CREATED::equals).hasSize(1);
+            assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+            assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        } finally {
+            pool.shutdownNow();
+        }
+        // Une seule affectation ACTIVE « ouverte » persistée pour la classe.
+        List<?> content = (List<?>) getMap("/api/v1/alternation/classes/" + chain.classA()
+                + "/assignments?status=ACTIVE", admin).get("content");
+        long open = content.stream()
+                .map(item -> ((Map<?, ?>) item).get("validUntil"))
+                .filter(java.util.Objects::isNull)
+                .count();
+        assertThat(open).isEqualTo(1);
+    }
+
+    @Test
+    void twoConcurrentSameTypeExceptionsNeverReturn500() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        String enrollmentId = enrollmentInClass(admin, chain.classA());
+        Map<String, Object> body = Map.of("enrollmentPublicId", enrollmentId, "type", "COMPANY_PERIOD",
+                "startAt", "2026-09-07T00:00:00Z", "endAt", "2026-09-08T00:00:00Z",
+                "timeZoneId", "Europe/Paris", "reason", "immersion");
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<HttpStatus> call = () -> (HttpStatus) exchange(HttpMethod.POST,
+                    "/api/v1/alternation/student-exceptions", body, admin).getStatusCode();
+            List<Future<HttpStatus>> results = pool.invokeAll(List.of(call, call));
+            List<HttpStatus> statuses = List.of(get(results.get(0)), get(results.get(1)));
+            // Limite connue et documentée : aucune contrainte de plage
+            // n'existe en MySQL pour ce cas ; en concurrence, les deux
+            // insertions PEUVENT réussir. On garantit seulement l'absence
+            // de 500 et une issue déterministe par requête (201 ou 409).
+            assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+            assertThat(statuses).allMatch(s -> s == HttpStatus.CREATED || s == HttpStatus.CONFLICT);
+            assertThat(statuses).filteredOn(HttpStatus.CREATED::equals).size().isGreaterThanOrEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static HttpStatus get(Future<HttpStatus> future) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Clôture bornée par l'affectation suivante
+    // ------------------------------------------------------------------
+
+    @Test
+    void closeIsBoundedByTheNextHistoricisedAssignment() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        String pattern = (String) created("/api/v1/alternation/patterns", threeTwoBody("RYT-" + code()), admin)
+                .get("publicId");
+        String cls = chain.classA();
+
+        // Historique déjà en place : A (jan→juin, clôturée), B (juil→déc, clôturée).
+        String a = assignmentOpen(admin, cls, pattern, "2026-01-01");
+        closeOk(admin, a, "2026-06-30");
+        String b = assignmentOpen(admin, cls, pattern, "2026-07-01");
+        closeOk(admin, b, "2026-12-31");
+
+        // C, ACTIVE et ouverte, débute AVANT B (2026-03-01) : B est donc
+        // « l'affectation historisée suivante » de C.
+        String c = assignmentOpen(admin, cls, pattern, "2026-03-01");
+
+        // Clôture de C avant son propre validFrom -> 400
+        assertCloseError(admin, c, "2026-02-01", HttpStatus.BAD_REQUEST, "ALT_INVALID_PERIOD");
+
+        // Clôture de C le jour de début de B -> 409
+        assertCloseError(admin, c, "2026-07-01", HttpStatus.CONFLICT, "ALT_ASSIGNMENT_CLOSE_CONFLICT");
+        // Clôture de C après le début de B -> 409
+        assertCloseError(admin, c, "2026-09-15", HttpStatus.CONFLICT, "ALT_ASSIGNMENT_CLOSE_CONFLICT");
+
+        // Clôture de C la veille du début de B -> acceptée
+        closeOk(admin, c, "2026-06-30");
+        assertThat(getMap("/api/v1/alternation/class-assignments/" + c, admin).get("validUntil"))
+                .isEqualTo("2026-06-30");
+        // Historique sans chevauchement avec l'affectation suivante :
+        // C.validUntil (2026-06-30) est strictement antérieure à B.validFrom (2026-07-01).
+        assertThat(getMap("/api/v1/alternation/class-assignments/" + b, admin).get("validFrom"))
+                .isEqualTo("2026-07-01");
+    }
+
+    @Test
+    void closeRejectsEffectiveDateAfterInitialValidUntil() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        String pattern = (String) created("/api/v1/alternation/patterns", threeTwoBody("RYT-" + code()), admin)
+                .get("publicId");
+        // Affectation ACTIVE mais déjà bornée.
+        String assignment = (String) created("/api/v1/alternation/class-assignments", Map.of(
+                "classGroupPublicId", chain.classA(), "workStudyPatternPublicId", pattern,
+                "cycleStartDate", "2026-09-01", "validFrom", "2026-09-01", "validUntil", "2026-12-31"), admin)
+                .get("publicId");
+        assertCloseError(admin, assignment, "2027-02-01", HttpStatus.BAD_REQUEST, "ALT_INVALID_PERIOD");
+        // Clôture à l'intérieur de la période propre -> acceptée
+        closeOk(admin, assignment, "2026-11-30");
+        assertThat(getMap("/api/v1/alternation/class-assignments/" + assignment, admin).get("validUntil"))
+                .isEqualTo("2026-11-30");
+    }
+
+    private String assignmentOpen(String admin, String classPublicId, String pattern, String validFrom) {
+        return (String) created("/api/v1/alternation/class-assignments", Map.of(
+                "classGroupPublicId", classPublicId, "workStudyPatternPublicId", pattern,
+                "cycleStartDate", validFrom, "validFrom", validFrom), admin).get("publicId");
+    }
+
+    private void closeOk(String admin, String assignmentId, String effectiveDate) {
+        assertThat(status(HttpMethod.POST, "/api/v1/alternation/class-assignments/" + assignmentId + "/close",
+                Map.of("reason", "réorganisation", "effectiveDate", effectiveDate), admin))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    private void assertCloseError(String admin, String assignmentId, String effectiveDate,
+                                 HttpStatus expectedStatus, String expectedCode) {
+        ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST,
+                "/api/v1/alternation/class-assignments/" + assignmentId + "/close",
+                Map.of("reason", "x", "effectiveDate", effectiveDate), admin);
+        assertThat(response.getStatusCode()).isEqualTo(expectedStatus);
+        assertThat(response.getBody().get("code")).isEqualTo(expectedCode);
     }
 
     // ------------------------------------------------------------------

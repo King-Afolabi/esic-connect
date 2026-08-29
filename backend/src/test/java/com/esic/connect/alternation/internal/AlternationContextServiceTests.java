@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -151,6 +152,93 @@ class AlternationContextServiceTests {
         assertThat(response.effectiveContext()).isEqualTo(AlternationContext.SCHOOL);
         assertThat(response.source()).isEqualTo(ContextSource.PATTERN);
         assertThat(response.coveringExceptionTypes()).containsExactly(ScheduleExceptionType.REMOTE_ALLOWED);
+    }
+
+    // ------------------------------------------------------------------
+    // Sémantique demi-ouverte [startAt, endAt) et projection calendaire
+    // par intersection d'intervalles (section 4 du lot)
+    // ------------------------------------------------------------------
+
+    /**
+     * {@code [2026-09-07T00:00, 2026-09-08T00:00)} en Europe/Paris (CEST,
+     * UTC+2) = {@code [2026-09-06T22:00Z, 2026-09-07T22:00Z)} : couvre le
+     * 7 septembre (lundi, le rythme dit SCHOOL → COMPANY par l'exception)
+     * mais pas le 8 septembre (le rythme reprend, SCHOOL).
+     */
+    @Test
+    void civilDayIntervalCoversStartDayButNotEndDay() {
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-09-06T22:00:00Z", "2026-09-07T22:00:00Z", LocalDate.of(2026, 9, 7)))
+                .isEqualTo(AlternationContext.COMPANY);
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-09-06T22:00:00Z", "2026-09-07T22:00:00Z", LocalDate.of(2026, 9, 8)))
+                .isEqualTo(AlternationContext.SCHOOL);
+    }
+
+    /** Une exception se terminant exactement au début du jour interrogé ne le couvre pas. */
+    @Test
+    void exceptionEndingExactlyAtQueriedDayStartDoesNotCover() {
+        // fin = 2026-09-07T00:00 Europe/Paris = 2026-09-06T22:00Z ; jour interrogé = 7 sept.
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-09-04T00:00:00Z", "2026-09-06T22:00:00Z", LocalDate.of(2026, 9, 7)))
+                .isEqualTo(AlternationContext.SCHOOL);
+    }
+
+    /** Une exception commençant exactement à la fin du jour interrogé ne le couvre pas. */
+    @Test
+    void exceptionStartingExactlyAtQueriedDayEndDoesNotCover() {
+        // début = 2026-09-08T00:00 Europe/Paris = 2026-09-07T22:00Z ; jour interrogé = 7 sept.
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-09-07T22:00:00Z", "2026-09-10T00:00:00Z", LocalDate.of(2026, 9, 7)))
+                .isEqualTo(AlternationContext.SCHOOL);
+        // mais le 8 septembre, lui, est couvert
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-09-07T22:00:00Z", "2026-09-10T00:00:00Z", LocalDate.of(2026, 9, 8)))
+                .isEqualTo(AlternationContext.COMPANY);
+    }
+
+    /**
+     * Changement d'heure Europe/Paris : la nuit du 25 octobre 2026, les
+     * horloges reculent (CEST→CET), le 25 octobre dure 25 h. Une exception
+     * {@code COMPANY_PERIOD} couvrant exactement ce jour civil
+     * ({@code [2026-10-24T22:00Z, 2026-10-25T23:00Z)}) couvre le 25 (→
+     * COMPANY) mais pas le 26 (le lundi 26 reste SCHOOL par le rythme).
+     * Un calcul « +24 h » fixe placerait à tort la borne du 26 octobre à
+     * {@code 2026-10-25T22:00Z} et couvrirait le lundi : seul
+     * {@code date.plusDays(1).atStartOfDay(zone)} donne le bon résultat.
+     */
+    @Test
+    void daylightSavingTransitionIsHandledByZoneAwareDayBoundaries() {
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-10-24T22:00:00Z", "2026-10-25T23:00:00Z", LocalDate.of(2026, 10, 25)))
+                .isEqualTo(AlternationContext.COMPANY);
+        assertThat(effectiveOn(ScheduleExceptionType.COMPANY_PERIOD,
+                "2026-10-24T22:00:00Z", "2026-10-25T23:00:00Z", LocalDate.of(2026, 10, 26)))
+                .isEqualTo(AlternationContext.SCHOOL);
+    }
+
+    /** Une valeur de fuseau persistée invalide lève une erreur interne explicite, jamais un repli UTC. */
+    @Test
+    void invalidPersistedTimeZoneRaisesInternalErrorInsteadOfSilentUtcFallback() {
+        stubEnrollmentWithPattern();
+        StudentScheduleException broken = new StudentScheduleException(11L,
+                ScheduleExceptionType.COMPANY_PERIOD, Instant.parse("2026-09-06T22:00:00Z"),
+                Instant.parse("2026-09-07T22:00:00Z"), "Europe/Paris", "x");
+        ReflectionTestUtils.setField(broken, "timeZoneId", "Mars/Olympus");
+        when(exceptionRepository.findActiveOverlapping(eq(11L), any(), any())).thenReturn(List.of(broken));
+
+        assertThatThrownBy(() -> service().resolveEnrollmentContext(enrollmentPublicId.toString(),
+                LocalDate.of(2026, 9, 7)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    private AlternationContext effectiveOn(ScheduleExceptionType type, String startZ, String endZ,
+                                          LocalDate date) {
+        stubEnrollmentWithPattern();
+        StudentScheduleException exception = new StudentScheduleException(11L, type,
+                Instant.parse(startZ), Instant.parse(endZ), "Europe/Paris", "motif");
+        when(exceptionRepository.findActiveOverlapping(eq(11L), any(), any())).thenReturn(List.of(exception));
+        return service().resolveEnrollmentContext(enrollmentPublicId.toString(), date).effectiveContext();
     }
 
     @Test

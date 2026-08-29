@@ -132,9 +132,23 @@ class ClassWorkStudyPatternService {
         }
         requireInScope(classRefOf(assignment.getClassGroupId()).publicId());
         LocalDate effective = request.effectiveDate() != null ? request.effectiveDate() : LocalDate.now(clock);
-        if (effective.isBefore(assignment.getValidFrom())) {
+        // La borne de clôture doit rester dans la période propre de
+        // l'affectation : >= valid_from, et <= valid_until s'il est déjà
+        // fixé (affectation ACTIVE mais bornée).
+        if (effective.isBefore(assignment.getValidFrom())
+                || (assignment.getValidUntil() != null && effective.isAfter(assignment.getValidUntil()))) {
             throw new AlternationException(AlternationException.Kind.INVALID_PERIOD);
         }
+        // Elle ne doit pas non plus atteindre le valid_from de l'affectation
+        // historisée suivante de la même classe : avec bornes inclusives,
+        // la dernière date acceptable est next.validFrom - 1 jour.
+        assignmentRepository
+                .findFirstByClassGroupIdAndValidFromGreaterThanOrderByValidFromAscIdAsc(
+                        assignment.getClassGroupId(), assignment.getValidFrom())
+                .filter(next -> !effective.isBefore(next.getValidFrom()))
+                .ifPresent(next -> {
+                    throw new AlternationException(AlternationException.Kind.ASSIGNMENT_CLOSE_CONFLICT);
+                });
         Long actorId = changePublisher.actorId(callerSubject);
         assignment.close(request.reason().trim(), actorId, effective);
         ClassGroupDirectory.ClassGroupRef classRef = classRefOf(assignment.getClassGroupId());

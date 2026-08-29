@@ -19,6 +19,16 @@ interface ClassWorkStudyPatternRepository
             Long classGroupId, ClassPatternStatus status);
 
     /**
+     * Prochaine affectation historisée de la classe strictement après
+     * {@code validFrom} (tous statuts confondus : l'historique clôturé
+     * compte aussi). Déterministe : tri {@code valid_from} puis {@code id}.
+     * Sert à borner la {@code effectiveDate} d'une clôture pour ne pas
+     * produire un historique qui se chevauche.
+     */
+    Optional<ClassWorkStudyPattern> findFirstByClassGroupIdAndValidFromGreaterThanOrderByValidFromAscIdAsc(
+            Long classGroupId, LocalDate validFrom);
+
+    /**
      * Affectations {@code ACTIVE} de la classe qui recouvrent la date
      * fournie (bornes inclusives ; {@code valid_until} nul = ouvert). Il
      * ne doit en exister qu'une au plus — l'invariant de non-chevauchement
