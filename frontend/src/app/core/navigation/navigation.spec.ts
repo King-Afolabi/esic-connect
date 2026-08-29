@@ -13,6 +13,18 @@ describe('NAV_ITEMS', () => {
     expect(students?.placeholder).toBeUndefined();
     expect(students?.roles).toEqual(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION']);
   });
+
+  it('exposes /academic as a real screen gated on AcademicWeb.READ_ROLES', () => {
+    const academic = NAV_ITEMS.find((i) => i.path === '/academic');
+    expect(academic).toBeDefined();
+    expect(academic?.placeholder).toBeUndefined();
+    expect(academic?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+    ]);
+  });
 });
 
 describe('visibleNavItems', () => {
@@ -34,6 +46,15 @@ describe('visibleNavItems', () => {
     }
     for (const role of ['PEDAGOGICAL_MANAGER', 'TEACHER', 'STUDENT'] as const) {
       expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/students');
+    }
+  });
+
+  it('shows /academic for the roles that back AcademicWeb.READ_ROLES, and hides it otherwise', () => {
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/academic');
+    }
+    for (const role of ['TEACHER', 'STUDENT'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/academic');
     }
   });
 

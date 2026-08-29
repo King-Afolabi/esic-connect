@@ -46,6 +46,7 @@ src/app/
     account-activation/  parcours public `/activation?token=…` (validation + définition du mot de passe)
     dashboard/           premier écran authentifié
     students/            liste des apprenants + fiche + historique d'inscriptions
+    academic/            consultation (lecture seule) du référentiel académique
     errors/              403 / 404
 ```
 
@@ -73,6 +74,40 @@ un état « accès refusé » explicite.
 Aucun endpoint ni champ n'est inventé. Les états chargement, vide,
 erreur (avec « Réessayer »), accès refusé et succès sont couverts. Aucune
 donnée n'est écrite dans `localStorage` / `sessionStorage`.
+
+## Référentiels académiques (`/academic`)
+
+Consultation **en lecture seule** du référentiel académique
+(`com.esic.connect.academic`) : années scolaires → formations → niveaux
+→ promotions → classes. Réservé côté serveur à `ADMIN` / `SUPER_ADMIN` /
+`SCHOOL_ADMINISTRATION` / `PEDAGOGICAL_MANAGER` (`AcademicWeb.READ_ROLES`).
+Le `roleGuard` reprend ce périmètre pour masquer la navigation ; il ne
+remplace pas Spring Security — un `403` de l'API (dont `ACAD_FORBIDDEN`
+pour un `PEDAGOGICAL_MANAGER` hors périmètre) est rendu comme un état
+« accès refusé » explicite.
+
+- `/academic` redirige vers `/academic/academic-years`. Onglets :
+  Années scolaires, Formations, Promotions, Classes.
+- Écrans de liste (`academic-years`, `programs`, `promotions`,
+  `class-groups`) : `GET /api/v1/academic-years` · `/programs` ·
+  `/promotions` · `/class-groups`. Recherche `q` (code **ou** nom),
+  filtre `status` (`ACTIVE` / `ARCHIVED`), tri limité à la liste blanche
+  du service (`code`, `name`, `startDate`/`endDate` pour les années,
+  sinon repli silencieux sur le tri par défaut), pagination bornée à 100.
+- Écrans de fiche (`…/:publicId`, plus `program-levels/:publicId`) :
+  `GET .../{publicId}` + sous-listes des enfants directs via des filtres
+  **réellement exposés** — `GET /programs/{id}/levels`,
+  `GET /promotions?program=…` / `?academicYear=…`,
+  `GET /class-groups?promotion=…` / `?programLevel=…`. Liens vers les
+  fiches parentes (formation, année scolaire, promotion, niveau).
+
+Aucune écriture (`POST` / `PATCH` create·update·archive·restore n'est
+appelé), aucun endpoint ni champ inventé. États chargement, vide, erreur
+(avec « Réessayer »), accès refusé (403) et introuvable (404) couverts.
+Aucune donnée écrite dans `localStorage` / `sessionStorage`. Le
+placeholder `/administration` est **inchangé** : son périmètre
+(`ADMIN` / `SUPER_ADMIN`) ne correspond pas à celui de la lecture
+académique.
 
 ## Activation de compte
 

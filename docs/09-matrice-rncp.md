@@ -68,9 +68,9 @@ Une exigence décrite n’est pas automatiquement réalisée.
 |---|---|---|---|
 | Choisir une méthode | Scrum/Kanban | Roadmap et backlog | CONÇU |
 | Choisir les technologies | Stack | Architecture | CONÇU |
-| Concevoir l’UX | Angular Material, coquille responsive, accessibilité (labels, focus, repères, `aria-live`, `aria-current`, `aria-haspopup`, table `mat-table` + `mat-paginator` francisé), états chargement / vide / erreur / accès refusé | `frontend/` : `AppShell`, écran de connexion, tableau de bord, activation, sélecteur de contexte de rôle, **liste des apprenants + fiche + historique d'inscriptions** | PARTIEL (socle + activation + contexte de rôle fusionnés ; espace Apprenants sur `feature/frontend-student-list`) |
+| Concevoir l’UX | Angular Material, coquille responsive, accessibilité (labels, focus, repères, `aria-live`, `aria-current`, `aria-haspopup`, table `mat-table` + `mat-paginator` francisé), états chargement / vide / erreur / accès refusé / introuvable | `frontend/` : `AppShell`, écran de connexion, tableau de bord, activation, sélecteur de contexte de rôle, liste des apprenants + fiche + historique d'inscriptions, **consultation lecture seule des référentiels académiques (années → formations → niveaux → promotions → classes)** | PARTIEL (socle + activation + contexte de rôle + espace Apprenants fusionnés ; référentiels académiques sur `feature/frontend-academic-reference`) |
 | Développer le back-end | Spring Boot | Code et tests | À FAIRE |
-| Développer le front-end | Angular 21.2 (standalone, signaux, lazy routes), `authGuard`/`guestGuard`/`roleGuard`, intercepteurs, `RoleContextService` (contexte de rôle en mémoire seule), tests Vitest | socle `frontend/` fusionné (PR #11, `6fa341f`) ; activation fusionnée (PR #12, `2ff7aa8`) ; contexte de rôle fusionné (PR #13, `810c8a2`) ; **espace Apprenants sur `feature/frontend-student-list` (PR ouverte)** ; `npm ci` / `npm test` / `npm run build` / `npm run lint` verts | IMPLÉMENTÉ (connexion → tableau de bord ; gardes de route par rôle ; navigation limitée aux écrans livrés ; parcours public `/activation` ; sélecteur de contexte de rôle (docs/02 §6.1) — rôles du seul JWT, mémoire seule, affichage/navigation uniquement ; **espace Apprenants — `/students` (liste `GET /api/v1/student-profiles`, recherche numéro étudiant / filtre statut / tri `studentNumber`\|`createdAt` / pagination, strictement ceux exposés par l'API) et `/students/:publicId` (fiche `GET /api/v1/student-profiles/{id}` + historique `GET /api/v1/enrollments?student={id}` + identité civile facultative `GET /api/v1/users/{id}`) ; périmètre `EnrollmentWeb.MANAGE_ROLES`, 403 API rendu « accès refusé », JWT et contexte en mémoire seule**) |
+| Développer le front-end | Angular 21.2 (standalone, signaux, lazy routes), `authGuard`/`guestGuard`/`roleGuard`, intercepteurs, `RoleContextService` (contexte de rôle en mémoire seule), tests Vitest | socle `frontend/` fusionné (PR #11, `6fa341f`) ; activation fusionnée (PR #12, `2ff7aa8`) ; contexte de rôle fusionné (PR #13, `810c8a2`) ; espace Apprenants fusionné (PR #14, `1678399`) ; **référentiels académiques sur `feature/frontend-academic-reference` (PR ouverte)** ; `npm ci` / `npm test` (167) / `npm run build` (initial 478,71 kB brut, < seuil 500 kB) / `npm run lint` verts | IMPLÉMENTÉ (connexion → tableau de bord ; gardes de route par rôle ; navigation limitée aux écrans livrés ; parcours public `/activation` ; sélecteur de contexte de rôle (docs/02 §6.1) ; espace Apprenants `/students` ; **référentiels académiques — `/academic` (parent gardé `AcademicWeb.READ_ROLES` : `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`) en LECTURE SEULE : `AcademicReferenceList` + `AcademicReferenceDetail` génériques pilotés par `data.resource`, consommant `GET /api/v1/academic-years`·`/programs`·`/promotions`·`/class-groups`·`/programs/{id}/levels` et les fiches `GET .../{publicId}` (recherche `q` code ou nom / filtre `status` / tri liste blanche par ressource / pagination ≤ 100, strictement l'API ; sous-listes d'enfants via filtres réels `program`/`academicYear`/`promotion`/`programLevel`) ; aucune écriture consommée ; 403 API (dont `ACAD_FORBIDDEN`) rendu « accès refusé », 404 rendu « introuvable » ; placeholder `/administration` inchangé (périmètre distinct) ; JWT et contexte en mémoire seule**) |
 | Concevoir la base | MySQL | Modèle de données | CONÇU |
 | Utiliser Redis | Cache et QR | Tests | À FAIRE |
 | Importer les données | CSV/XLSX | Démonstration | À FAIRE |
@@ -313,6 +313,30 @@ Une exigence décrite n’est pas automatiquement réalisée.
   année→promotion / niveau→classe / site→classe + `CHECK` période et
   capacité), `AcademicIntegrationTests`, `AcademicSecurityTests`,
   `ModularityTests` (frontières du nouveau module respectées).
+  Côté front-end (branche `feature/frontend-academic-reference`, PR
+  ouverte) : consultation **en lecture seule** à `/academic` (parent
+  gardé `roleGuard`/`canActivateChild` sur `AcademicWeb.READ_ROLES` :
+  `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` /
+  `PEDAGOGICAL_MANAGER`), composants génériques `AcademicReferenceList` +
+  `AcademicReferenceDetail` pilotés par `data.resource`. `AcademicApiService`
+  ne consomme que les `GET` (`/academic-years`, `/programs`,
+  `/programs/{id}/levels`, `/promotions`, `/class-groups` + fiches
+  `/{publicId}`) ; recherche `q` (code ou nom), filtre `status`, tri
+  restreint à la liste blanche de chaque service, pagination ≤ 100,
+  sous-listes d'enfants via les filtres réels `program` / `academicYear`
+  / `promotion` / `programLevel`. Aucune écriture appelée (les `POST`
+  create / `{id}/archive` / `{id}/restore` et `PATCH` update du module
+  ne sont pas consommés faute de parcours complet livrable sans
+  approximation — p. ex. aucune liste de sites exposée par `academic`
+  pour rattacher une classe). Un `403` de l'API (dont `ACAD_FORBIDDEN`
+  pour un `PEDAGOGICAL_MANAGER` hors périmètre) est rendu « accès
+  refusé », un `404` « introuvable ». Le placeholder `/administration`
+  reste inchangé (périmètre `ADMIN`/`SUPER_ADMIN` distinct). Tests :
+  `academic-api.service.spec.ts` (11), `academic-reference-list.spec.ts`
+  (10), `academic-reference-detail.spec.ts` (8), + mises à jour
+  `navigation` / `app-shell` / `dashboard` / `app.routes` — 167 tests
+  Vitest verts ; `npm run build` initial 478,71 kB brut (< seuil
+  500 kB), `npm run lint` vert.
 
 - **TR-019 (Périmètre pédagogique)** : `IMPLÉMENTÉ` et `TESTÉ` — table
   `pedagogical_assignment` (migration Flyway `V6`, réécrite tant qu'elle

@@ -116,6 +116,59 @@ describe('application routes (guard wiring)', () => {
     expect(location.path()).toBe('/forbidden');
   });
 
+  describe('academic reference routes', () => {
+    it('declares /academic as a guarded parent redirecting to academic-years', () => {
+      const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+      const academic = shell?.children?.find((c) => c.path === 'academic');
+      expect(academic).toBeDefined();
+      expect(academic?.canActivate?.length).toBeGreaterThan(0);
+      expect(academic?.canActivateChild?.length).toBeGreaterThan(0);
+      const index = (academic?.children ?? []).find((c) => c.path === '');
+      expect(index?.redirectTo).toBe('academic-years');
+      const childPaths = (academic?.children ?? []).map((c) => c.path);
+      expect(childPaths).toEqual(
+        expect.arrayContaining([
+          'academic-years',
+          'academic-years/:publicId',
+          'programs',
+          'programs/:publicId',
+          'program-levels/:publicId',
+          'promotions',
+          'promotions/:publicId',
+          'class-groups',
+          'class-groups/:publicId',
+        ]),
+      );
+    });
+
+    it('redirects an anonymous user from /academic to /login', async () => {
+      await router.navigateByUrl('/academic/programs');
+      expect(location.path()).toContain('/login');
+    });
+
+    it('routes an authenticated TEACHER to /forbidden on /academic', async () => {
+      signIn(['TEACHER']);
+      await router.navigateByUrl('/academic');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('lets a PEDAGOGICAL_MANAGER browse the academic reference but not /students', async () => {
+      signIn(['PEDAGOGICAL_MANAGER']);
+
+      await router.navigateByUrl('/academic/programs');
+      expect(location.path()).toBe('/academic/programs');
+
+      await router.navigateByUrl('/students');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('lets SCHOOL_ADMINISTRATION open an academic detail route (canActivateChild)', async () => {
+      signIn(['SCHOOL_ADMINISTRATION']);
+      await router.navigateByUrl('/academic/academic-years/2f1a9b7c-0000-4000-8000-000000000000');
+      expect(location.path()).toBe('/academic/academic-years/2f1a9b7c-0000-4000-8000-000000000000');
+    });
+  });
+
   it('keeps an authenticated user away from the guest-only login route', async () => {
     signIn(['STUDENT']);
     await router.navigateByUrl('/login');
