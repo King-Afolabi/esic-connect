@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
@@ -44,12 +45,14 @@ class EnrollmentServiceTests {
     @Mock
     private StudentProfileRepository profileRepository;
     @Mock
+    private EnrollmentPersister persister;
+    @Mock
     private ClassGroupDirectory classGroupDirectory;
     @Mock
     private EnrollmentChangePublisher changePublisher;
 
     private EnrollmentService service() {
-        return new EnrollmentService(enrollmentRepository, profileRepository, classGroupDirectory,
+        return new EnrollmentService(enrollmentRepository, profileRepository, persister, classGroupDirectory,
                 changePublisher, FIXED_CLOCK);
     }
 
@@ -148,12 +151,12 @@ class EnrollmentServiceTests {
         when(enrollmentRepository.existsByStudentProfileIdAndAcademicYearIdAndStatus(1L, 50L, EnrollmentStatus.ACTIVE))
                 .thenReturn(false);
         when(changePublisher.actorId("caller")).thenReturn(42L);
-        when(enrollmentRepository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
+        when(persister.persist(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
 
         EnrollmentResponse response = service().enroll(enrollRequest(p.getPublicId(), classId, null), "caller");
 
         ArgumentCaptor<Enrollment> captor = ArgumentCaptor.forClass(Enrollment.class);
-        verify(enrollmentRepository).saveAndFlush(captor.capture());
+        verify(persister).persist(captor.capture());
         assertThat(captor.getValue().getStartDate()).isEqualTo(TODAY);
         assertThat(captor.getValue().getEnrollmentSource()).isEqualTo(EnrollmentSource.MANUAL);
         assertThat(captor.getValue().getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
@@ -172,13 +175,46 @@ class EnrollmentServiceTests {
         when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
         when(enrollmentRepository.existsByStudentProfileIdAndAcademicYearIdAndStatus(1L, 50L, EnrollmentStatus.ACTIVE))
                 .thenReturn(false);
-        when(enrollmentRepository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
+        when(persister.persist(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
 
         service().enroll(enrollRequest(p.getPublicId(), classId, start), null);
 
         ArgumentCaptor<Enrollment> captor = ArgumentCaptor.forClass(Enrollment.class);
-        verify(enrollmentRepository).saveAndFlush(captor.capture());
+        verify(persister).persist(captor.capture());
         assertThat(captor.getValue().getStartDate()).isEqualTo(start);
+    }
+
+    @Test
+    void enrollTranslatesActivePerYearCollisionInto409() {
+        StudentProfile p = profile(1L);
+        UUID classId = UUID.randomUUID();
+        when(profileRepository.findByPublicId(p.getPublicId())).thenReturn(Optional.of(p));
+        when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
+        when(enrollmentRepository.existsByStudentProfileIdAndAcademicYearIdAndStatus(1L, 50L, EnrollmentStatus.ACTIVE))
+                .thenReturn(false);
+        when(persister.persist(any(Enrollment.class))).thenThrow(new DataIntegrityViolationException(
+                "could not execute statement; Duplicate entry '1-50' for key 'uq_enrollment_active_per_year'"));
+
+        assertThatThrownBy(() -> service().enroll(enrollRequest(p.getPublicId(), classId, null), null))
+                .extracting(ex -> ((EnrollmentException) ex).kind())
+                .isEqualTo(EnrollmentException.Kind.ACTIVE_ENROLLMENT_EXISTS);
+        verify(changePublisher, never()).publish(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void enrollRethrowsUnrelatedIntegrityViolationUnchanged() {
+        StudentProfile p = profile(1L);
+        UUID classId = UUID.randomUUID();
+        DataIntegrityViolationException unrelated = new DataIntegrityViolationException(
+                "Duplicate entry 'x' for key 'uq_enrollment_public_id'");
+        when(profileRepository.findByPublicId(p.getPublicId())).thenReturn(Optional.of(p));
+        when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
+        when(enrollmentRepository.existsByStudentProfileIdAndAcademicYearIdAndStatus(1L, 50L, EnrollmentStatus.ACTIVE))
+                .thenReturn(false);
+        when(persister.persist(any(Enrollment.class))).thenThrow(unrelated);
+
+        assertThatThrownBy(() -> service().enroll(enrollRequest(p.getPublicId(), classId, null), null))
+                .isSameAs(unrelated);
     }
 
     // ------------------------------------------------------------------
@@ -264,7 +300,10 @@ class EnrollmentServiceTests {
         assertThat(next.getEnrollmentSource()).isEqualTo(EnrollmentSource.CLASS_TRANSFER);
         assertThat(next.getPreviousEnrollmentId()).isEqualTo(500L);
         assertThat(next.getClassGroupId()).isEqualTo(20L);
-        assertThat(next.getStartDate()).isEqualTo(TODAY);
+        // `end_date` de l'ancienne inscription est inclusif : la nouvelle
+        // débute le lendemain, sans chevauchement de période.
+        assertThat(next.getStartDate()).isEqualTo(TODAY.plusDays(1));
+        assertThat(next.getStartDate()).isAfter(current.getEndDate());
 
         assertThat(response.enrollmentSource()).isEqualTo(EnrollmentSource.CLASS_TRANSFER);
         assertThat(response.previousEnrollmentPublicId()).isEqualTo(current.getPublicId());
@@ -272,6 +311,33 @@ class EnrollmentServiceTests {
                 eq(EnrollmentChangeAction.TRANSFERRED), eq(7L), any());
         verify(changePublisher).publish(eq(EnrollmentResourceType.ENROLLMENT), eq(next.getPublicId()),
                 eq(EnrollmentChangeAction.CREATED), eq(7L), any());
+    }
+
+    @Test
+    void transferStartsNewEnrollmentTheDayAfterInclusiveEndDate() {
+        StudentProfile p = profile(1L);
+        Enrollment current = enrollment(p, 500L, 10L, 50L, LocalDate.of(2026, 6, 1));
+        UUID targetPublicId = UUID.randomUUID();
+        ClassGroupDirectory.ClassGroupRef targetRef = classRef(20L, 50L, true);
+        LocalDate effectiveDate = LocalDate.of(2026, 9, 30);
+        when(enrollmentRepository.findByPublicId(current.getPublicId())).thenReturn(Optional.of(current));
+        when(classGroupDirectory.findByPublicId(targetPublicId)).thenReturn(Optional.of(targetRef));
+        when(classGroupDirectory.findByInternalId(10L)).thenReturn(Optional.of(classRef(10L, 50L, true)));
+        when(enrollmentRepository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
+
+        EnrollmentResponse response = service().transfer(current.getPublicId(),
+                new EnrollmentRequests.Transfer(targetPublicId.toString(), "mutation", effectiveDate), null);
+
+        assertThat(current.getEndDate()).isEqualTo(effectiveDate);
+
+        ArgumentCaptor<Enrollment> captor = ArgumentCaptor.forClass(Enrollment.class);
+        verify(enrollmentRepository, org.mockito.Mockito.times(2)).saveAndFlush(captor.capture());
+        Enrollment next = captor.getAllValues().get(1);
+        assertThat(next.getStartDate()).isEqualTo(effectiveDate.plusDays(1));
+        // Aucun jour commun entre l'ancienne (…→ end_date inclus) et la
+        // nouvelle (start_date →…).
+        assertThat(next.getStartDate()).isAfter(current.getEndDate());
+        assertThat(response.startDate()).isEqualTo(effectiveDate.plusDays(1));
     }
 
     // ------------------------------------------------------------------

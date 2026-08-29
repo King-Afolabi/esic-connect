@@ -24,9 +24,11 @@ final class EnrollmentRequests {
 
     /**
      * Changement de classe (docs/04 §13.2). L'inscription courante est
-     * clôturée en {@code TRANSFERRED} à {@code effectiveDate} (par défaut
-     * aujourd'hui, ≥ sa date de début) et une nouvelle inscription
-     * {@code ACTIVE} est créée, {@code previous_enrollment_id} renseigné.
+     * clôturée en {@code TRANSFERRED} avec {@code end_date = effectiveDate}
+     * (borne inclusive ; {@code effectiveDate} par défaut aujourd'hui, ≥ sa
+     * date de début). La nouvelle inscription {@code ACTIVE} débute le
+     * lendemain ({@code effectiveDate + 1 jour}) — les deux périodes ne se
+     * chevauchent pas — avec {@code previous_enrollment_id} renseigné.
      * {@code reason} obligatoire (opération auditée).
      */
     record Transfer(

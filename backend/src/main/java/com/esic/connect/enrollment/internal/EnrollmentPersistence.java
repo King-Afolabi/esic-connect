@@ -30,6 +30,14 @@ final class EnrollmentPersistence {
         return matchesConstraint(violation, ACTIVE_ENROLLMENT_CONSTRAINT);
     }
 
+    static boolean isProfileUserUniqueViolation(DataIntegrityViolationException violation) {
+        return matchesConstraint(violation, PROFILE_USER_CONSTRAINT);
+    }
+
+    static boolean isProfileStudentNumberUniqueViolation(DataIntegrityViolationException violation) {
+        return matchesConstraint(violation, PROFILE_STUDENT_NUMBER_CONSTRAINT);
+    }
+
     static boolean matchesConstraint(DataIntegrityViolationException violation, String constraintLowercase) {
         for (Throwable cause = violation; cause != null; cause = cause.getCause()) {
             if (cause instanceof org.hibernate.exception.ConstraintViolationException constraint) {

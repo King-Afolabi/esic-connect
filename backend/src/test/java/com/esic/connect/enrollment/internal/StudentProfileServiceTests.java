@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
@@ -35,12 +36,14 @@ class StudentProfileServiceTests {
     @Mock
     private StudentProfileRepository profileRepository;
     @Mock
+    private EnrollmentPersister persister;
+    @Mock
     private UserDirectory userDirectory;
     @Mock
     private EnrollmentChangePublisher changePublisher;
 
     private StudentProfileService service() {
-        return new StudentProfileService(profileRepository, userDirectory, changePublisher);
+        return new StudentProfileService(profileRepository, persister, userDirectory, changePublisher);
     }
 
     private static StudentProfileRequests.Create create(UUID userPublicId, String studentNumber) {
@@ -111,7 +114,7 @@ class StudentProfileServiceTests {
         when(profileRepository.existsByStudentNumberIgnoreCase("ESIC-2026-000001")).thenReturn(false);
         when(profileRepository.existsByUserId(7L)).thenReturn(false);
         when(changePublisher.actorId("caller")).thenReturn(99L);
-        when(profileRepository.saveAndFlush(any(StudentProfile.class))).thenAnswer(inv -> {
+        when(persister.persist(any(StudentProfile.class))).thenAnswer(inv -> {
             StudentProfile p = inv.getArgument(0);
             ReflectionTestUtils.setField(p, "publicId", UUID.randomUUID());
             return p;
@@ -126,6 +129,49 @@ class StudentProfileServiceTests {
         assertThat(response.status()).isEqualTo(StudentProfileStatus.ACTIVE);
         verify(changePublisher).publish(eq(EnrollmentResourceType.STUDENT_PROFILE), any(),
                 eq(EnrollmentChangeAction.CREATED), eq(99L), isNull());
+    }
+
+    @Test
+    void createTranslatesConcurrentUserCollisionInto409() {
+        UUID user = UUID.randomUUID();
+        when(userDirectory.findByPublicId(user)).thenReturn(Optional.of(student(7L)));
+        when(profileRepository.existsByStudentNumberIgnoreCase("ESIC-2026-000001")).thenReturn(false);
+        when(profileRepository.existsByUserId(7L)).thenReturn(false);
+        when(persister.persist(any(StudentProfile.class))).thenThrow(new DataIntegrityViolationException(
+                "Duplicate entry '7' for key 'uq_student_profile_user'"));
+
+        assertThatThrownBy(() -> service().create(create(user, "ESIC-2026-000001"), null))
+                .extracting(ex -> ((EnrollmentException) ex).kind())
+                .isEqualTo(EnrollmentException.Kind.PROFILE_ALREADY_EXISTS);
+        verify(changePublisher, never()).publish(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createTranslatesConcurrentStudentNumberCollisionInto409() {
+        UUID user = UUID.randomUUID();
+        when(userDirectory.findByPublicId(user)).thenReturn(Optional.of(student(7L)));
+        when(profileRepository.existsByStudentNumberIgnoreCase("ESIC-2026-000001")).thenReturn(false);
+        when(profileRepository.existsByUserId(7L)).thenReturn(false);
+        when(persister.persist(any(StudentProfile.class))).thenThrow(new DataIntegrityViolationException(
+                "Duplicate entry 'ESIC-2026-000001' for key 'uq_student_profile_student_number'"));
+
+        assertThatThrownBy(() -> service().create(create(user, "ESIC-2026-000001"), null))
+                .extracting(ex -> ((EnrollmentException) ex).kind())
+                .isEqualTo(EnrollmentException.Kind.DUPLICATE_STUDENT_NUMBER);
+    }
+
+    @Test
+    void createRethrowsUnrelatedIntegrityViolationUnchanged() {
+        UUID user = UUID.randomUUID();
+        DataIntegrityViolationException unrelated = new DataIntegrityViolationException(
+                "Duplicate entry 'x' for key 'uq_student_profile_public_id'");
+        when(userDirectory.findByPublicId(user)).thenReturn(Optional.of(student(7L)));
+        when(profileRepository.existsByStudentNumberIgnoreCase("ESIC-2026-000001")).thenReturn(false);
+        when(profileRepository.existsByUserId(7L)).thenReturn(false);
+        when(persister.persist(any(StudentProfile.class))).thenThrow(unrelated);
+
+        assertThatThrownBy(() -> service().create(create(user, "ESIC-2026-000001"), null))
+                .isSameAs(unrelated);
     }
 
     @Test

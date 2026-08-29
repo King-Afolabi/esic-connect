@@ -32,6 +32,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -126,12 +127,21 @@ class EnrollmentIntegrationTests {
         Map<String, Object> closedFirst = getMap("/api/v1/enrollments/" + firstId, admin);
         assertThat(closedFirst.get("status")).isEqualTo("TRANSFERRED");
         assertThat(closedFirst.get("endDate")).isNotNull();
+        // Bornes inclusives : la nouvelle inscription débute le lendemain
+        // de la fin de l'ancienne — les périodes ne se chevauchent pas.
+        LocalDate previousEnd = LocalDate.parse((String) closedFirst.get("endDate"));
+        LocalDate newStart = LocalDate.parse((String) second.get("startDate"));
+        assertThat(newStart).isEqualTo(previousEnd.plusDays(1));
+        assertThat(newStart).isAfter(previousEnd);
         assertThat(count("/api/v1/enrollments?student=" + profileId, admin)).isEqualTo(2);
         assertThat(auditActions(firstId)).contains("ENROLLMENT_TRANSFERRED");
         assertThat(auditActions(secondId)).contains("ENROLLMENT_CREATED");
 
+        // La nouvelle inscription débute le lendemain du transfert : la
+        // clôture doit prendre effet au plus tôt à cette date.
         assertThat(status(HttpMethod.POST, "/api/v1/enrollments/" + secondId + "/close",
-                Map.of("status", "COMPLETED", "reason", "diplômé"), admin)).isEqualTo(HttpStatus.OK);
+                Map.of("status", "COMPLETED", "reason", "diplômé", "effectiveDate", newStart.toString()), admin))
+                .isEqualTo(HttpStatus.OK);
         Map<String, Object> closedSecond = getMap("/api/v1/enrollments/" + secondId, admin);
         assertThat(closedSecond.get("status")).isEqualTo("COMPLETED");
         assertThat(closedSecond.get("endDate")).isNotNull();

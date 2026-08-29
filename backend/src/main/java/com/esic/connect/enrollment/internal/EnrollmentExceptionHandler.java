@@ -112,12 +112,24 @@ class EnrollmentExceptionHandler {
     }
 
     /**
-     * Filet de sécurité pour les courses entre deux écritures : la
-     * transaction du service est déjà annulée quand l'exception parvient
-     * ici (contrainte violée au {@code flush}). Seules les collisions
-     * <em>connues</em> deviennent un 409 ciblé ; toute autre violation
-     * d'intégrité est relancée (500 via le gestionnaire global).
+     * Filet de sécurité pour la course résiduelle du <em>changement de
+     * classe</em> ({@code EnrollmentService.transfer}) : là, l'INSERT de
+     * la nouvelle inscription doit voir, dans la même transaction, la
+     * clôture qui vient de libérer le créneau, donc la collision ne peut
+     * pas être captée dans le service sans capter dans une transaction
+     * déjà rollback-only. Quand l'exception parvient ici, le proxy
+     * {@code @Transactional} a déjà annulé la transaction (contrainte
+     * violée au {@code flush}).
      *
+     * <p>Les créations de profil et d'inscription
+     * ({@code StudentProfileService.create}, {@code EnrollmentService.enroll})
+     * ne dépendent pas de ce filet : elles isolent leur INSERT dans
+     * {@link EnrollmentPersister} ({@code REQUIRES_NEW}) et retraduisent la
+     * collision sur place, hors de toute transaction en échec.
+     *
+     * <p>Seules les collisions sur ces contraintes <em>exactes</em>
+     * deviennent un 409 ciblé ; toute autre violation d'intégrité est
+     * relancée telle quelle (500 via le gestionnaire global) :
      * <ul>
      *   <li>{@code uq_enrollment_active_per_year} → une seconde inscription
      *       {@code ACTIVE} sur le même couple (apprenant, année) ;</li>

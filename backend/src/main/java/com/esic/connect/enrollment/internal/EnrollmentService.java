@@ -3,6 +3,7 @@ package com.esic.connect.enrollment.internal;
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.enrollment.EnrollmentChangeAction;
 import com.esic.connect.enrollment.EnrollmentResourceType;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -30,15 +31,33 @@ import java.util.UUID;
  * {@code ACTIVE} par année scolaire (docs/04 §13.3) — pré-contrôle
  * applicatif renvoyant {@code ENR_ACTIVE_ENROLLMENT_EXISTS}, doublé par la
  * contrainte SQL {@code uq_enrollment_active_per_year} (colonnes
- * générées). Une collision concurrente est retraduite en 409 par
- * {@link EnrollmentExceptionHandler}, jamais un 500.
+ * générées).
+ *
+ * <p>Frontières transactionnelles et courses concurrentes :
+ * <ul>
+ *   <li>{@link #enroll} n'est pas transactionnel ; l'insertion passe par
+ *       {@link EnrollmentPersister} ({@code REQUIRES_NEW}). Une collision
+ *       sur {@code uq_enrollment_active_per_year} est reçue <em>hors</em>
+ *       de toute transaction en échec et retraduite en 409 sur place ;
+ *       toute autre violation d'intégrité est relancée telle quelle.</li>
+ *   <li>{@link #transfer} est transactionnel : la clôture de l'ancienne
+ *       inscription (UPDATE) et la création de la nouvelle (INSERT) sont
+ *       atomiques, et l'INSERT doit voir, dans la même transaction, le
+ *       créneau d'unicité libéré par la clôture. Il ne peut donc pas
+ *       utiliser {@link EnrollmentPersister} ni capter la collision
+ *       localement (la transaction serait déjà rollback-only) : une
+ *       course résiduelle est retraduite par
+ *       {@link EnrollmentExceptionHandler}, après l'annulation faite par
+ *       le proxy, en 409 ciblé sur cette seule contrainte.</li>
+ * </ul>
  *
  * <p>Un changement de classe ({@link #transfer}) clôture l'inscription
- * courante en {@code TRANSFERRED} ({@code end_date} = date effective) et
- * crée une nouvelle inscription {@code ACTIVE} avec
- * {@code previous_enrollment_id}. Aucune ligne n'est jamais supprimée
- * (docs/04 §13.2, §13.4) : l'ancienne inscription reste consultable
- * (AC-006).
+ * courante en {@code TRANSFERRED} ({@code end_date} = date effective,
+ * borne inclusive) et crée une nouvelle inscription {@code ACTIVE}
+ * débutant le lendemain ({@code effectiveDate.plusDays(1)}) — aucun
+ * chevauchement de période — avec {@code previous_enrollment_id}. Aucune
+ * ligne n'est jamais supprimée (docs/04 §13.2, §13.4) : l'ancienne
+ * inscription reste consultable (AC-006).
  */
 @Service
 class EnrollmentService {
@@ -48,23 +67,29 @@ class EnrollmentService {
 
     private final EnrollmentRepository enrollmentRepository;
     private final StudentProfileRepository profileRepository;
+    private final EnrollmentPersister persister;
     private final ClassGroupDirectory classGroupDirectory;
     private final EnrollmentChangePublisher changePublisher;
     private final Clock clock;
 
     EnrollmentService(EnrollmentRepository enrollmentRepository,
                       StudentProfileRepository profileRepository,
+                      EnrollmentPersister persister,
                       ClassGroupDirectory classGroupDirectory,
                       EnrollmentChangePublisher changePublisher,
                       Clock clock) {
         this.enrollmentRepository = enrollmentRepository;
         this.profileRepository = profileRepository;
+        this.persister = persister;
         this.classGroupDirectory = classGroupDirectory;
         this.changePublisher = changePublisher;
         this.clock = clock;
     }
 
-    @Transactional
+    /**
+     * Non transactionnel : voir la note de classe. L'insertion passe par
+     * {@link EnrollmentPersister} ({@code REQUIRES_NEW}).
+     */
     EnrollmentResponse enroll(EnrollmentRequests.Enroll request, String callerSubject) {
         StudentProfile profile = requireProfile(parseUuid(request.studentProfilePublicId(),
                 EnrollmentException.Kind.STUDENT_PROFILE_NOT_FOUND));
@@ -80,7 +105,16 @@ class EnrollmentService {
         Enrollment enrollment = new Enrollment(profile, classRef.internalId(), classRef.academicYearInternalId(),
                 startDate, EnrollmentSource.MANUAL, null, null);
         enrollment.markCreatedBy(actorId);
-        Enrollment saved = enrollmentRepository.saveAndFlush(enrollment);
+
+        Enrollment saved;
+        try {
+            saved = persister.persist(enrollment);
+        } catch (DataIntegrityViolationException collision) {
+            if (EnrollmentPersistence.isActiveEnrollmentUniqueViolation(collision)) {
+                throw new EnrollmentException(EnrollmentException.Kind.ACTIVE_ENROLLMENT_EXISTS);
+            }
+            throw collision;
+        }
 
         changePublisher.publish(EnrollmentResourceType.ENROLLMENT, saved.getPublicId(),
                 EnrollmentChangeAction.CREATED, actorId, detail(classRef));
@@ -117,8 +151,14 @@ class EnrollmentService {
         // même année) avant l'INSERT suivant.
         enrollmentRepository.saveAndFlush(current);
 
+        // `end_date` est une borne inclusive (dernier jour dans l'ancienne
+        // classe) : la nouvelle inscription débute le lendemain, sans
+        // chevauchement de période (docs/04 §13.2 ne fixe pas de valeur
+        // de `start_date` ; la non-superposition découle des bornes
+        // inclusives et de l'unicité d'une inscription active — §13.3).
+        LocalDate newStartDate = effectiveDate.plusDays(1);
         Enrollment next = new Enrollment(current.getStudentProfile(), targetRef.internalId(),
-                targetRef.academicYearInternalId(), effectiveDate, EnrollmentSource.CLASS_TRANSFER, reason,
+                targetRef.academicYearInternalId(), newStartDate, EnrollmentSource.CLASS_TRANSFER, reason,
                 current.getId());
         next.markCreatedBy(actorId);
         Enrollment saved = enrollmentRepository.saveAndFlush(next);

@@ -3,6 +3,7 @@ package com.esic.connect.enrollment.internal;
 import com.esic.connect.enrollment.EnrollmentChangeAction;
 import com.esic.connect.enrollment.EnrollmentResourceType;
 import com.esic.connect.identity.UserDirectory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -27,9 +28,17 @@ import java.util.UUID;
  * rôle actif {@code STUDENT} (sinon {@code ENR_USER_NOT_ELIGIBLE}),
  * vérifié via le port {@link UserDirectory}. Un seul profil par compte
  * ({@code ENR_PROFILE_EXISTS}) ; numéro étudiant unique
- * ({@code ENR_DUPLICATE_STUDENT_NUMBER}). Les collisions concurrentes sur
- * ces contraintes sont retraduites en 409 par
- * {@link EnrollmentExceptionHandler}.
+ * ({@code ENR_DUPLICATE_STUDENT_NUMBER}).
+ *
+ * <p>La création n'est pas transactionnelle : les lectures s'exécutent en
+ * transactions implicites et l'insertion est déléguée à
+ * {@link EnrollmentPersister} ({@code REQUIRES_NEW}). En cas de course
+ * entre deux requêtes, la
+ * {@link DataIntegrityViolationException} remonte <em>hors</em> de toute
+ * transaction en échec ; elle n'est retraduite en 409 que si elle vise
+ * {@code uq_student_profile_user} ou
+ * {@code uq_student_profile_student_number}. Toute autre violation
+ * d'intégrité est relancée telle quelle (500 via le gestionnaire global).
  */
 @Service
 class StudentProfileService {
@@ -39,18 +48,26 @@ class StudentProfileService {
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
 
     private final StudentProfileRepository profileRepository;
+    private final EnrollmentPersister persister;
     private final UserDirectory userDirectory;
     private final EnrollmentChangePublisher changePublisher;
 
     StudentProfileService(StudentProfileRepository profileRepository,
+                          EnrollmentPersister persister,
                           UserDirectory userDirectory,
                           EnrollmentChangePublisher changePublisher) {
         this.profileRepository = profileRepository;
+        this.persister = persister;
         this.userDirectory = userDirectory;
         this.changePublisher = changePublisher;
     }
 
-    @Transactional
+    /**
+     * Non transactionnel : voir la note de classe. L'insertion passe par
+     * {@link EnrollmentPersister} ({@code REQUIRES_NEW}) et la
+     * retraduction de collision se fait donc hors de toute transaction en
+     * échec.
+     */
     StudentProfileResponse create(StudentProfileRequests.Create request, String callerSubject) {
         UserDirectory.UserRef target = userDirectory.findByPublicId(parseUuid(request.userPublicId(),
                         EnrollmentException.Kind.USER_NOT_ELIGIBLE))
@@ -71,7 +88,19 @@ class StudentProfileService {
         StudentProfile profile = new StudentProfile(target.internalId(), studentNumber, request.birthDate(),
                 Boolean.TRUE.equals(request.workStudy()), EnrollmentQuerySupport.trimToNull(request.companyName()));
         profile.markCreatedBy(actorId);
-        StudentProfile saved = profileRepository.saveAndFlush(profile);
+
+        StudentProfile saved;
+        try {
+            saved = persister.persist(profile);
+        } catch (DataIntegrityViolationException collision) {
+            if (EnrollmentPersistence.isProfileUserUniqueViolation(collision)) {
+                throw new EnrollmentException(EnrollmentException.Kind.PROFILE_ALREADY_EXISTS);
+            }
+            if (EnrollmentPersistence.isProfileStudentNumberUniqueViolation(collision)) {
+                throw new EnrollmentException(EnrollmentException.Kind.DUPLICATE_STUDENT_NUMBER);
+            }
+            throw collision;
+        }
 
         changePublisher.publish(EnrollmentResourceType.STUDENT_PROFILE, saved.getPublicId(),
                 EnrollmentChangeAction.CREATED, actorId, null);
