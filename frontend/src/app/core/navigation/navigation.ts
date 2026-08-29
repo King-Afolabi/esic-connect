@@ -43,11 +43,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     placeholder: true,
   },
   {
+    // Écran livré : liste des profils apprenants + fiche + historique
+    // d'inscriptions. Périmètre aligné sur `EnrollmentWeb.MANAGE_ROLES`.
     label: 'Apprenants',
     path: '/students',
     icon: 'groups',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
-    placeholder: true,
   },
 ];
 

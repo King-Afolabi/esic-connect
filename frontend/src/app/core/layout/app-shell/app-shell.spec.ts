@@ -45,23 +45,28 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders only usable screens in the main navigation (currently the dashboard)', () => {
-    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
+  it('renders the dashboard and the delivered Apprenants screen for an ADMIN', () => {
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard', '/students']);
     expect(text()).toContain('Tableau de bord');
+    expect(text()).toContain('Apprenants');
   });
 
-  it('does not show the guarded placeholder routes in the navigation, even for an ADMIN', () => {
+  it('does not show the /administration placeholder route in the navigation, even for an ADMIN', () => {
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
     expect(hrefs).not.toContain('/administration');
-    expect(hrefs).not.toContain('/students');
     expect(text()).not.toContain('Administration');
-    expect(text()).not.toContain('Apprenants');
   });
 
   it('keeps the navigation limited to the dashboard for a role with no extra screens', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
+  });
+
+  it('hides Apprenants for a role outside EnrollmentWeb.MANAGE_ROLES', () => {
+    roles.set(['PEDAGOGICAL_MANAGER']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/students');
   });
 
   it('offers no usage-context switch for a single-role account', () => {

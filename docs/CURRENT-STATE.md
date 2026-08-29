@@ -9,78 +9,135 @@
 ## Dernier commit stable
 
 ```text
-495c2bf — feat: student profiles and historical enrollments (#10), sur main
+810c8a2 — feat(frontend): role-context selector (#13), sur main
 ```
 
 ## Phase actuelle
 
 ```text
-Sélecteur de contexte de rôle (front-end) — branche
-`feature/frontend-role-context`, PR ouverte contre `main`, NON fusionnée.
-Troisième tranche verticale front-end : docs/02 §6.1 (exigence
-EF-AUTH-003 « Choisir un contexte de rôle »). Le socle front-end (PR #11,
-`6fa341f`) et le parcours public d'activation (PR #12, `2ff7aa8`) sont
-fusionnés sur `main`. Aucun fichier back-end, migration V1–V7 ou
-docs/01–04 modifié ; autorisation, CORS et endpoints back-end inchangés ;
-aucune dépendance npm ajoutée.
-- Nouveau `core/auth/role-context.service.ts` (`RoleContextService`,
-  `providedIn: 'root'`) : contextes proposés = **uniquement les rôles
-  présents dans le claim `roles` du JWT** (`AuthService.roles`), aucune
-  valeur inventée. `active` = signal **en mémoire seule** (ni
-  `localStorage` ni `sessionStorage` ni cookie JS ; docs/07 §6, RG-085),
-  au même titre que le jeton d'accès — un rechargement le perd comme la
-  session. Contexte par défaut = rôle le plus privilégié présent (ordre
-  de `ROLES`, helper exporté `defaultContext`). Un `effect` réaligne le
-  contexte sur la session : à tout changement de rôles, un contexte
-  encore valide est conservé, sinon retour au défaut ; jeu de rôles vide
-  → `null`.
-- `effectiveRoles` (contexte actif seul, sinon union des rôles) ne sert
-  **qu'à l'affichage et à la navigation** : `AppShell.navItems` et
-  `Dashboard.quickLinks` filtrent désormais dessus via
-  `visibleNavItems`. Cela ne peut que **restreindre** les entrées
-  visibles, jamais élargir un droit — toute autorisation reste décidée
-  par Spring Security (`roleGuard` inchangé, gardes de route toujours sur
-  l'union réelle des rôles ; RG-002, RG-087).
-- Nouveau composant `core/layout/role-context-menu/` (`app-role-context-menu`,
-  `MatMenu`) affiché dans la barre supérieure de `AppShell`
-  **uniquement si le compte cumule au moins deux rôles** (`hasChoice`).
-  Accessibilité : bouton déclencheur `aria-haspopup="menu"`, items de
-  menu avec `aria-current="true"` + icône `check` sur le contexte actif,
-  libellés explicites. Le tableau de bord affiche le contexte actif et
-  rappelle qu'il n'affecte pas les autorisations (visible seulement si
-  plusieurs rôles).
-- `/login`, `/activation` et `/dashboard` : comportement inchangé
-  (`app.routes.ts` non modifié ; aucune route ajoutée, aucun endpoint
-  créé). `AuthService`, intercepteurs, `jwt.ts`, gardes : inchangés.
-- Tests front : **102** (17 nouveaux, 0 échec ; 85 → 102).
-  `role-context.service.spec.ts` (12 : `defaultContext` ordre/vide ;
-  contextes = rôles du JWT seuls ; 0 rôle → pas de choix, `effectiveRoles`
-  vide ; 1 rôle → contexte adopté sans choix ; multi-rôles → défaut au
-  plus privilégié + choix ; `select` restreint `effectiveRoles` sans
-  toucher `available` ; `select` d'un rôle absent du JWT ignoré ;
-  contexte encore valide conservé au changement de rôles, sinon retour au
-  défaut ; aucun accès `Storage.prototype.setItem`).
-  `role-context-menu.spec.ts` (3 : masqué pour un rôle unique ; contexte
-  actif dans le déclencheur + `aria-haspopup` ; items = rôles détenus,
-  repère `check`/`aria-current`, clic → `RoleContextService.select`).
-  `app-shell.spec.ts` (+2 : pas de sélecteur pour un rôle unique ;
-  sélecteur présent pour un compte multi-rôles). `dashboard.spec.ts`
-  (+2 : pas de mention de contexte pour un rôle unique ; contexte actif
-  affiché + « vos autorisations restent inchangées » pour un compte
-  multi-rôles).
+Espace Apprenants (front-end) — branche `feature/frontend-student-list`,
+PR ouverte contre `main`, NON fusionnée. Quatrième tranche verticale
+front-end : liste des apprenants → fiche d'un apprenant → historique de
+ses inscriptions. Le socle front-end (PR #11, `6fa341f`), le parcours
+public d'activation (PR #12, `2ff7aa8`) et le sélecteur de contexte de
+rôle (PR #13, `810c8a2`) sont fusionnés sur `main`. Aucun fichier
+back-end, migration V1–V7 ou docs/01–04 modifié ; autorisation, CORS et
+endpoints back-end inchangés ; aucune dépendance npm ajoutée
+(`package.json` / `package-lock.json` inchangés).
+
+Contrat back-end consommé **tel quel** (module `enrollment`, rien
+d'inventé ; toutes réservées côté serveur à
+`ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `EnrollmentWeb.MANAGE_ROLES`) :
+- `GET /api/v1/student-profiles` → `PageResponse<StudentProfileResponse>` :
+  params réellement exposés uniquement — `q` (sous-chaîne du **numéro
+  étudiant** seul ; le nom n'est pas interrogeable par l'API), `status`
+  (`ACTIVE`|`ARCHIVED`, sinon 400 `ENR_INVALID_FILTER`), `sort` (liste
+  blanche `studentNumber`|`createdAt`, sinon 400 `ENR_INVALID_SORT`),
+  `page`, `size` (borné à 100). Le filtre `user` existe mais n'est pas
+  utilisé ici.
+- `GET /api/v1/student-profiles/{publicId}` → `StudentProfileResponse` ;
+  identifiant inconnu / non-UUID → 404 `ENR_STUDENT_PROFILE_NOT_FOUND`.
+- `GET /api/v1/enrollments?student={profilePublicId}&sort=startDate,desc`
+  → `PageResponse<EnrollmentResponse>` (historique complet d'un
+  apprenant ; `size=100`, aucune pagination — un cursus tient largement
+  sous 100). `sort` liste blanche `startDate`|`endDate`|`createdAt`.
+- `GET /api/v1/users/{userPublicId}` → sous-ensemble de
+  `UserDetailResponse` (`firstName`, `lastName`, `email`), **facultatif** :
+  le profil apprenant n'expose que `userPublicId` ; cet appel enrichit la
+  fiche avec l'identité civile et son échec est **ignoré** (la fiche
+  reste affichée, titrée « Apprenant <numéro> »). Même périmètre de rôles
+  (`UserAccountController` READ_ROLES).
+Les POST du module `enrollment` (`create`, `{id}/transfer`, `{id}/close`)
+ne sont **pas** consommés : cette tranche est en lecture seule.
+
+- Route `/students` : le placeholder est **remplacé** par un écran réel.
+  Devient un parent gardé (`roleGuard(['ADMIN','SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION'])` + `canActivateChild` identique — aligné sur
+  `EnrollmentWeb.MANAGE_ROLES`) avec deux enfants : `''` → `StudentList`,
+  `:publicId` → `StudentProfile`. `/administration` reste un placeholder
+  gardé et masqué de la navigation. `/login`, `/activation`,
+  `/dashboard`, le sélecteur de contexte : inchangés.
+- `NAV_ITEMS` : l'entrée « Apprenants » perd son drapeau `placeholder`
+  (elle conserve son filtre de rôles). Elle apparaît donc dans la
+  navigation de `AppShell` et dans les accès rapides du tableau de bord
+  pour `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`, filtrée en plus par
+  le contexte de rôle actif (`effectiveRoles`) — sans jamais élargir un
+  droit. `/administration` reste absent de la navigation.
+- `StudentsApiService` (nouveau, `providedIn: 'root'`) : lecture seule ;
+  `HttpParams` construits en omettant toute clé absente (aucun filtre
+  vide envoyé). Les appels passent par les intercepteurs existants
+  (jeton porteur en mémoire ; `401` → purge + `/login` ; `5xx` → bandeau
+  générique) — aucun intercepteur modifié.
+- `StudentList` (`app-student-list`) : `mat-table` + `mat-sort` (en-têtes
+  triables limités à `studentNumber` et `createdAt` — un clic sur une
+  colonne hors liste blanche retombe sur le tri par défaut
+  `createdAt,desc`) + `mat-paginator` (options 10/20/50/100 ; libellés
+  français via `MatPaginatorIntl` fourni au composant). Formulaire de
+  filtres : recherche « Numéro étudiant » (`q`, trim) + sélecteur de
+  statut ; « Filtrer » remet à la page 0 ; « Réinitialiser » vide les
+  filtres. Colonne d'action = lien `Consulter` (accessible clavier,
+  `aria-label` explicite) vers `/students/{publicId}` ; **aucune ligne
+  cliquable sans équivalent clavier**. États : `loading` (barre de
+  progression + `role="status"`), `ready` vide (« Aucun profil
+  apprenant… »), `ready` peuplé, `error` (message générique +
+  « Réessayer »), `forbidden` (403 API → panneau « Vous n'êtes pas
+  autorisé… » + retour tableau de bord).
+- `StudentProfile` (`app-student-profile`) : lit `:publicId` depuis
+  `ActivatedRoute.snapshot`. Charge le profil, puis (en parallèle)
+  l'identité civile facultative et l'historique. Carte « Profil »
+  (numéro étudiant, e-mail si dispo, statut, alternance, entreprise,
+  naissance, date de création) + section « Historique des inscriptions »
+  (`mat-table` : année scolaire, classe, formation, période
+  `début – fin|en cours`, statut, origine `MANUAL`/`CLASS_TRANSFER` +
+  motif de changement). États profil : `loading`, `ready`, `not-found`
+  (404 → « Aucun profil apprenant ne correspond… » + retour liste),
+  `forbidden` (403), `error` (+ « Réessayer »). États historique
+  indépendants : `loading`, `ready` (vide → « Aucune inscription… »),
+  `error` (+ « Réessayer » ne recharge que l'historique). Lien de retour
+  « ← Retour à la liste des apprenants ».
+- Sécurité / confidentialité : JWT et contexte de rôle restent **en
+  mémoire seule** (docs/07 §6, RG-085) ; aucun accès `localStorage` /
+  `sessionStorage` (asserté en test). Aucun message d'exception, trace,
+  requête SQL, `correlationId` ou identifiant SQL interne n'est affiché
+  (les DTO back-end n'en exposent pas ; les `5xx` sont neutralisés par
+  `normalizeHttpError`). Les gardes de route ne remplacent pas Spring
+  Security : un `403` de l'API est rendu comme un état « accès refusé »
+  explicite.
+- Tests front : **102 → 131** (0 échec). Nouveaux :
+  `students-api.service.spec.ts` (7 : URL / méthode / params inclus
+  seulement si renseignés pour `listProfiles`, `getProfile`,
+  `listEnrollments` avec filtre `student` + `sort`, `getUserIdentity`).
+  `student-list.spec.ts` (9 : 1re page + tri par défaut + état de
+  chargement ; une ligne par profil + lien clavier vers le détail ; état
+  vide ; panneau 403 ; erreur générique + « Réessayer » qui relance ;
+  filtres `q` (trim) + `status` remettant à la page 0 ; tri toujours
+  dans la liste blanche, repli sur le défaut ; pagination transmet
+  `page`/`size` ; rien en storage). `student-profile.spec.ts` (8 :
+  chargement → faits du profil ; profil rendu même si l'identité
+  facultative échoue ; historique demandé avec `student` + `sort=startDate,desc`
+  et rendu ; historique vide ; 404 → panneau introuvable sans autre
+  appel ; 403 → panneau accès refusé ; « Réessayer » sur l'historique ;
+  rien en storage). Specs mis à jour : `navigation.spec.ts`,
+  `app-shell.spec.ts`, `dashboard.spec.ts` (l'entrée « Apprenants » est
+  désormais un écran livré, visible pour les rôles de
+  `EnrollmentWeb.MANAGE_ROLES` ; `/administration` reste masqué),
+  `app.routes.spec.ts` (`/students` = parent gardé avec enfants `''` et
+  `:publicId` ; `SCHOOL_ADMINISTRATION` ouvre un détail ; `TEACHER` →
+  `/forbidden` via `canActivateChild`).
 - Vérifs locales le 29 août 2026 (Node 24.13.0), depuis `frontend/` :
-  `rm -rf node_modules && npm ci` → 0 vulnérabilité ;
-  `npm test -- --watch=false` → 18 fichiers, 102 tests, 0 échec ;
-  `npm run build` → bundle initial 437,57 kB brut / 112,73 kB transféré,
-  0 alerte de budget ; `npm run lint` → « All files pass linting ».
-  `package.json` / `package-lock.json` inchangés.
-- Ambiguïtés documentaires (aucune règle inventée) : docs/02 §6.1 donne
-  un exemple de libellés de contexte (« Gérer mes formations », « Consulter
-  mes séances de formateur ») sans liste normative → une table
-  `ROLE_CONTEXT_LABELS` fournit un libellé par rôle, modifiable ; le choix
-  du contexte par défaut (rôle le plus privilégié) et la conservation
-  d'un contexte encore valide au changement de session ne sont pas
-  spécifiés → comportement retenu et testé, documenté ici.
+  `npm test -- --watch=false` → 21 fichiers, 131 tests, 0 échec ;
+  `npm run build` → bundle initial 477,42 kB brut / 123,31 kB transféré,
+  0 alerte de budget (seuil d'avertissement 500 kB) ; `npm run lint` →
+  « All files pass linting ». `cd backend && ./mvnw test` non ré-exécuté :
+  aucun fichier back-end modifié.
+- Ambiguïtés documentaires (aucune règle inventée) : docs/02 §48.5 /
+  §7 n'imposent pas d'écran normatif ; la fiche apprenant complète le
+  profil (qui n'a pas de nom) par `GET /api/v1/users/{id}`, endpoint
+  réel de même périmètre — décision documentée, appel rendu facultatif
+  et non bloquant. La recherche est limitée au numéro étudiant car
+  `GET /api/v1/student-profiles` n'expose pas d'autre critère textuel
+  (le libellé du champ le précise). L'historique n'est pas paginé
+  (`size=100`, cursus < 100).
 ```
 
 ### Activation de compte (front-end) — fusionnée sur `main` via PR #12 (commit `2ff7aa8`)
@@ -738,7 +795,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = commit `6fa341f` ; activation de compte fusionnée via PR #12 = commit `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) sur branche `feature/frontend-role-context`, PR ouverte non fusionnée — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, `/administration`, `/students`, `/forbidden`, `**` — `/administration` et `/students` gardées par rôle mais masquées de la navigation ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs, endpoints publics d'activation exclus (pas de bearer, pas de purge de session) ; jeton d'accès **en mémoire uniquement** (docs/07 §6, RG-085) ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL (`Location.replaceState`), jamais journalisé / affiché / stocké / envoyé en bearer ; activation `POST …/activate` → `204`, **aucune connexion automatique** ; le tableau de bord rapporte un état de session **local** (pas de second appel d'API vérifié) ; `RoleContextService` (contexte de rôle en mémoire seule, rôles du seul JWT, affichage/navigation uniquement, aucun effet sur Spring Security) + `app-role-context-menu` visible seulement si ≥ 2 rôles ; 102 tests Vitest verts, `npm ci` / `npm run build` / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
+| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; **espace Apprenants sur branche `feature/frontend-student-list`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, `/administration` (placeholder gardé, masqué), **`/students` (parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `EnrollmentWeb.MANAGE_ROLES`) → `''` `StudentList`, `:publicId` `StudentProfile`**, `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; **espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles` (recherche `q` = numéro étudiant seul, filtre `status`, tri `studentNumber`\|`createdAt`, pagination ≤ 100 — strictement l'API), `GET /api/v1/student-profiles/{id}`, `GET /api/v1/enrollments?student={id}&sort=startDate,desc`, et `GET /api/v1/users/{id}` (identité civile facultative, échec ignoré) ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / succès ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; action « Consulter » accessible clavier ; aucun endpoint ni champ inventé** ; 131 tests Vitest verts, `npm test` / `npm run build` (initial 477 kB brut / 123 kB transféré, < seuil 500 kB) / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment` — migrations appliquées et vérifiées, schéma en version 7) |
@@ -777,11 +834,15 @@ session local) + gardes de route par rôle. Le parcours public
 d'activation de compte (`/activation`,
 `GET/POST /api/v1/account-invitations/validate|activate`) est fusionné
 sur `main` (PR #12, commit `2ff7aa8`). Le sélecteur de contexte de rôle
-(docs/02 §6.1, EF-AUTH-003) est implémenté sur
-`feature/frontend-role-context` (PR ouverte, non fusionnée).
+(docs/02 §6.1, EF-AUTH-003) est fusionné sur `main` (PR #13, commit
+`810c8a2`). L'espace Apprenants front-end (liste `/students` + fiche
+`/students/:publicId` + historique d'inscriptions, consommant
+`GET /api/v1/student-profiles`, `GET /api/v1/enrollments` et, en option,
+`GET /api/v1/users/{id}`) est implémenté sur
+`feature/frontend-student-list` (PR ouverte, non fusionnée).
 Prochaines étapes :
-- front-end : premiers écrans de liste (formations, apprenants) une fois
-  la PR de contexte de rôle fusionnée ;
+- front-end : écran de liste des formations (`GET /api/v1/programs`),
+  sur le même patron que l'espace Apprenants ;
 - rythmes d'alternance minimaux (T-J1-033 / US-060 à 062) : module
   `alternation` — `work_study_pattern`, `class_work_study_pattern`,
   `student_schedule_exception` (docs/04 §14) ;
@@ -1556,6 +1617,101 @@ Limites connues (activation) :
 - pas de champ de confirmation du mot de passe (hors contrat back-end) ;
 - l'activation ne connecte pas automatiquement (le `204` ne renvoie
   aucun identifiant) : écran de succès + lien explicite vers `/login`.
+
+---
+
+## Espace Apprenants (front-end) — 29 août 2026
+
+Branche `feature/frontend-student-list` (créée depuis `main` à `810c8a2`),
+PR ouverte contre `main`, **non fusionnée**. Aucun fichier back-end
+modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`, `SecurityConfig`,
+`backend/**`, `backend-ci.yml`, autorisation et CORS back-end inchangés.
+Aucune dépendance ajoutée → `package.json` / `package-lock.json`
+inchangés.
+
+Liste des apprenants → fiche d'un apprenant → historique de ses
+inscriptions. Lecture seule : aucun `POST` du module `enrollment`
+(`create` / `transfer` / `close`) n'est consommé.
+
+Contrat back-end consommé **tel quel** (rien inventé) :
+
+| Endpoint | Usage front | Points du contrat respectés |
+|---|---|---|
+| `GET /api/v1/student-profiles` | liste `/students` | params **réellement exposés uniquement** : `q` (sous-chaîne du **numéro étudiant** — `StudentProfileSpecifications.profileMatchesStudentNumber` ; le nom n'est pas un critère), `status` (`ACTIVE`/`ARCHIVED`, sinon 400 `ENR_INVALID_FILTER`), `sort` (liste blanche `studentNumber`/`createdAt`, sinon 400 `ENR_INVALID_SORT`), `page`, `size` (≤ 100). `PageResponse<StudentProfileResponse>`. Filtre `user` non utilisé. |
+| `GET /api/v1/student-profiles/{publicId}` | fiche | 404 `ENR_STUDENT_PROFILE_NOT_FOUND` (inconnu / non-UUID) → état « introuvable ». |
+| `GET /api/v1/enrollments?student={publicId}&sort=startDate,desc` | historique | filtre `student` = `public_id` de profil ; `sort` liste blanche `startDate`/`endDate`/`createdAt` ; `size=100`, pas de pagination (cursus < 100). `EnrollmentResponse` : `academicYearCode`, `classGroupCode`, `programCode`, `startDate`, `endDate`, `status`, `enrollmentSource`, `changeReason`, `previousEnrollmentPublicId`. |
+| `GET /api/v1/users/{userPublicId}` | fiche (identité civile) | **facultatif** — le profil n'expose que `userPublicId` ; `firstName` / `lastName` / `email` seuls sont lus ; échec **ignoré** (fiche titrée « Apprenant <numéro> »). Même périmètre de rôles que le module `enrollment`. |
+
+Toutes ces routes sont réservées côté serveur à
+`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+(`EnrollmentWeb.MANAGE_ROLES`, `UserAccountController` READ_ROLES).
+
+Fichiers ajoutés : `frontend/src/app/features/students/`
+(`students.models.ts`, `students-api.service.ts` (+ `.spec`),
+`student-list/student-list.ts` / `.html` / `.scss` (+ `.spec`),
+`student-profile/student-profile.ts` / `.html` / `.scss` (+ `.spec`)).
+Fichiers modifiés : `app.routes.ts` (`/students` : placeholder →
+parent gardé `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])`
++ `canActivateChild` identique, enfants `''` → `StudentList` et
+`:publicId` → `StudentProfile`) ; `core/navigation/navigation.ts`
+(l'entrée « Apprenants » perd `placeholder`, garde son filtre de rôles) ;
+specs `navigation.spec.ts`, `app-shell.spec.ts`, `dashboard.spec.ts`,
+`app.routes.spec.ts` mis à jour. `/login`, `/activation`, `/dashboard`,
+`/administration` (placeholder), le sélecteur de contexte, les
+intercepteurs, `AuthService`, `jwt.ts`, les gardes : inchangés.
+
+Décisions :
+- **Recherche limitée au numéro étudiant** : `GET /api/v1/student-profiles`
+  n'expose pas d'autre critère textuel. Le libellé du champ l'indique
+  (« Numéro étudiant »). Aucune recherche par nom n'est simulée.
+- **Fiche enrichie par `GET /api/v1/users/{id}`** : le profil apprenant
+  n'ayant pas de nom, cet endpoint réel (même périmètre de rôles) fournit
+  l'identité civile. Appel **facultatif et non bloquant** — un échec
+  n'empêche jamais l'affichage du profil ni de l'historique.
+- **Tri** : en-têtes triables réduits à `studentNumber` / `createdAt`
+  (liste blanche back-end) ; toute autre colonne retombe sur le défaut
+  `createdAt,desc` avant l'appel, jamais un 400.
+- **403 rendu explicitement** : bien que `roleGuard` filtre déjà la
+  route, un `403` de l'API donne un état « accès refusé » — Spring
+  Security reste l'autorité.
+- **Historique non paginé** (`size=100`).
+- Libellés de statut d'inscription / d'origine : table de correspondance
+  FR modifiable, aucune valeur d'enum inventée.
+
+Accessibilité : `<h1>` par écran, libellés de formulaire associés
+(Material), `role="status"` sur les chargements asynchrones,
+`role="alert"` sur les panneaux d'erreur / accès refusé, action
+« Consulter » = lien focalisable avec `aria-label` explicite (aucune
+ligne cliquable sans équivalent clavier), `mat-paginator` francisé
+(`MatPaginatorIntl`), tables défilables horizontalement
+(`overflow-x: auto`).
+
+Confidentialité : JWT et contexte de rôle **en mémoire seule** (docs/07
+§6, RG-085) ; aucun accès `localStorage` / `sessionStorage` (asserté).
+Aucun identifiant SQL interne, `correlationId`, message d'exception,
+trace ou requête SQL affiché ; les `5xx` sont neutralisés en message
+générique par `normalizeHttpError` (le bandeau global de
+`apiErrorInterceptor` reste la voie transverse pour `0` / `5xx`).
+
+Vérifications exécutées avec succès en local le 29 août 2026 (Node
+24.13.0), depuis `frontend/` :
+
+```text
+npm test -- --watch=false   # 21 fichiers, 131 tests, 0 échec (102 → 131)
+npm run build               # bundle initial 477,42 kB brut / 123,31 kB transféré, 0 alerte (seuil 500 kB)
+npm run lint                # angular-eslint, « All files pass linting »
+```
+
+`cd backend && ./mvnw test` non ré-exécuté : aucun fichier back-end
+modifié (CI back-end inchangée).
+
+Limites connues (Apprenants) :
+- recherche par numéro étudiant uniquement (limite de l'API) ;
+- pas de tri interactif sur l'historique (fixé `startDate,desc`) ;
+- l'identité civile dépend d'un second appel facultatif ; sans lui, la
+  fiche n'affiche que le numéro étudiant et le statut ;
+- écran non démontré de bout en bout avec le back-end en marche ;
+- pas de tests e2e Angular → Spring Boot (TestBed / Vitest uniquement).
 
 ## Règle de mise à jour
 

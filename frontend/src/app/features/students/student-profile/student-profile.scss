@@ -1,0 +1,72 @@
+.profile__back {
+  margin: 0 0 1rem;
+}
+
+.profile__back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font: var(--mat-sys-body-medium);
+}
+
+.profile__title {
+  font: var(--mat-sys-headline-medium);
+  margin: 0 0 1rem;
+}
+
+.profile__section-title {
+  font: var(--mat-sys-title-large);
+  margin: 2rem 0 1rem;
+}
+
+.profile__card {
+  max-width: 48rem;
+}
+
+.profile__facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem 1.5rem;
+}
+
+.profile__facts dt {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.profile__facts dd {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  word-break: break-word;
+}
+
+.profile__status {
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 1rem 0;
+}
+
+.profile__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.5rem;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.profile__table-wrapper {
+  overflow-x: auto;
+}
+
+.profile__table-wrapper table[mat-table] {
+  width: 100%;
+}
+
+.profile__reason {
+  color: var(--mat-sys-on-surface-variant);
+}

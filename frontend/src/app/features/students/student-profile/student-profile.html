@@ -1,0 +1,166 @@
+<p class="profile__back">
+  <a routerLink="/students">
+    <mat-icon aria-hidden="true">arrow_back</mat-icon>
+    Retour à la liste des apprenants
+  </a>
+</p>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement de la fiche apprenant"></mat-progress-bar>
+    <p class="profile__status" role="status">Chargement de la fiche…</p>
+  }
+
+  @case ('not-found') {
+    <div class="profile__panel" role="alert">
+      <mat-icon aria-hidden="true">person_off</mat-icon>
+      <p>Aucun profil apprenant ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/students">Retour à la liste</a>
+    </div>
+  }
+
+  @case ('forbidden') {
+    <div class="profile__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter cette fiche apprenant.</p>
+      <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="profile__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retryProfile()">Réessayer</button>
+    </div>
+  }
+
+  @case ('ready') {
+    @if (profile(); as currentProfile) {
+      <h1 class="profile__title">
+        @if (identity(); as civil) {
+          {{ civil.firstName }} {{ civil.lastName }}
+        } @else {
+          Apprenant {{ currentProfile.studentNumber }}
+        }
+      </h1>
+
+      <mat-card appearance="outlined" class="profile__card">
+        <mat-card-header>
+          <mat-card-title>Profil</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <dl class="profile__facts">
+            <div>
+              <dt>Numéro étudiant</dt>
+              <dd>{{ currentProfile.studentNumber }}</dd>
+            </div>
+            @if (identity(); as civil) {
+              <div>
+                <dt>Adresse électronique</dt>
+                <dd>{{ civil.email }}</dd>
+              </div>
+            }
+            <div>
+              <dt>Statut</dt>
+              <dd>{{ statusLabel(currentProfile.status) }}</dd>
+            </div>
+            <div>
+              <dt>Alternance</dt>
+              <dd>{{ currentProfile.workStudy ? 'Oui' : 'Non' }}</dd>
+            </div>
+            <div>
+              <dt>Entreprise d'accueil</dt>
+              <dd>{{ currentProfile.companyName || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Date de naissance</dt>
+              <dd>
+                {{ currentProfile.birthDate ? (currentProfile.birthDate | date: 'dd/MM/yyyy') : '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Créé le</dt>
+              <dd>{{ currentProfile.createdAt | date: 'dd/MM/yyyy' }}</dd>
+            </div>
+          </dl>
+        </mat-card-content>
+      </mat-card>
+
+      <section class="profile__history" aria-labelledby="history-heading">
+        <h2 id="history-heading" class="profile__section-title">Historique des inscriptions</h2>
+
+        @switch (history().kind) {
+          @case ('loading') {
+            <mat-progress-bar
+              mode="indeterminate"
+              aria-label="Chargement de l'historique des inscriptions"
+            ></mat-progress-bar>
+            <p class="profile__status" role="status">Chargement de l'historique…</p>
+          }
+
+          @case ('error') {
+            <div class="profile__panel" role="alert">
+              <mat-icon aria-hidden="true">error_outline</mat-icon>
+              <p>{{ historyError() }}</p>
+              <button mat-stroked-button type="button" (click)="retryHistory()">Réessayer</button>
+            </div>
+          }
+
+          @case ('ready') {
+            @if (historyEmpty()) {
+              <p class="profile__status" role="status">
+                Aucune inscription n'est enregistrée pour cet apprenant.
+              </p>
+            } @else {
+              <div class="profile__table-wrapper">
+                <table mat-table [dataSource]="historyRows()">
+                  <ng-container matColumnDef="academicYear">
+                    <th mat-header-cell *matHeaderCellDef>Année scolaire</th>
+                    <td mat-cell *matCellDef="let row">{{ row.academicYearCode }}</td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="classGroup">
+                    <th mat-header-cell *matHeaderCellDef>Classe</th>
+                    <td mat-cell *matCellDef="let row">{{ row.classGroupCode }}</td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="program">
+                    <th mat-header-cell *matHeaderCellDef>Formation</th>
+                    <td mat-cell *matCellDef="let row">{{ row.programCode }}</td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="period">
+                    <th mat-header-cell *matHeaderCellDef>Période</th>
+                    <td mat-cell *matCellDef="let row">
+                      {{ row.startDate | date: 'dd/MM/yyyy' }} –
+                      {{ row.endDate ? (row.endDate | date: 'dd/MM/yyyy') : 'en cours' }}
+                    </td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="status">
+                    <th mat-header-cell *matHeaderCellDef>Statut</th>
+                    <td mat-cell *matCellDef="let row">{{ enrollmentStatusLabel(row.status) }}</td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="source">
+                    <th mat-header-cell *matHeaderCellDef>Origine</th>
+                    <td mat-cell *matCellDef="let row">
+                      {{ enrollmentSourceLabel(row.enrollmentSource) }}
+                      @if (row.changeReason) {
+                        <span class="profile__reason">— {{ row.changeReason }}</span>
+                      }
+                    </td>
+                  </ng-container>
+
+                  <tr mat-header-row *matHeaderRowDef="historyColumns"></tr>
+                  <tr mat-row *matRowDef="let row; columns: historyColumns"></tr>
+                </table>
+              </div>
+            }
+          }
+        }
+      </section>
+    }
+  }
+}

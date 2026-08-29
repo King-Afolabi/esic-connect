@@ -59,15 +59,22 @@ describe('application routes (guard wiring)', () => {
     location = TestBed.inject(Location);
   });
 
-  it('still declares the guarded placeholder routes so they stay directly addressable', () => {
+  it('still declares the /administration placeholder route, guarded and addressable', () => {
     const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
-    const childPaths = (shell?.children ?? []).map((c) => c.path);
-    expect(childPaths).toContain('administration');
-    expect(childPaths).toContain('students');
-    for (const path of ['administration', 'students']) {
-      const route = shell?.children?.find((c) => c.path === path);
-      expect(route?.canActivate?.length).toBeGreaterThan(0);
-    }
+    const route = shell?.children?.find((c) => c.path === 'administration');
+    expect(route).toBeDefined();
+    expect(route?.canActivate?.length).toBeGreaterThan(0);
+  });
+
+  it('declares /students as a guarded parent with list and detail children', () => {
+    const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+    const students = shell?.children?.find((c) => c.path === 'students');
+    expect(students).toBeDefined();
+    expect(students?.canActivate?.length).toBeGreaterThan(0);
+    expect(students?.canActivateChild?.length).toBeGreaterThan(0);
+    const childPaths = (students?.children ?? []).map((c) => c.path);
+    expect(childPaths).toContain('');
+    expect(childPaths).toContain(':publicId');
   });
 
   it('redirects an anonymous user from a protected route to /login', async () => {
@@ -94,6 +101,18 @@ describe('application routes (guard wiring)', () => {
     expect(location.path()).toBe('/students');
 
     await router.navigateByUrl('/administration');
+    expect(location.path()).toBe('/forbidden');
+  });
+
+  it('lets SCHOOL_ADMINISTRATION open a student detail route', async () => {
+    signIn(['SCHOOL_ADMINISTRATION']);
+    await router.navigateByUrl('/students/2f1a9b7c-0000-4000-8000-000000000000');
+    expect(location.path()).toBe('/students/2f1a9b7c-0000-4000-8000-000000000000');
+  });
+
+  it('redirects a TEACHER away from a student detail route (canActivateChild)', async () => {
+    signIn(['TEACHER']);
+    await router.navigateByUrl('/students/2f1a9b7c-0000-4000-8000-000000000000');
     expect(location.path()).toBe('/forbidden');
   });
 
