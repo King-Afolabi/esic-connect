@@ -146,6 +146,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-018 | Référentiel académique (formation/niveau/année/promotion/classe) | `academic`, `organization`, `identity`, `audit` | `Academic*Tests` | `./mvnw clean test` (V5 appliquée) | BC02/BC03 |
 | TR-019 | Périmètre pédagogique (affectation responsable → formation, contrôle d'accès sur formation/niveau/promotion/classe) | `academic`, `identity`, `audit` | `PedagogicalAssignment*Tests`, `PedagogicalScopeIntegrationTests`, `PedagogicalAssignmentIntegrationTests` | `./mvnw clean test` (V6 appliquée) | BC02/BC03 |
 | TR-020 | Inscriptions historiques (profil apprenant, inscription apprenant → classe/année, changement de classe conservant l'historique) | `enrollment`, `academic`, `identity`, `audit` | `EnrollmentServiceTests`, `StudentProfileServiceTests`, `EnrollmentConstraintsTests`, `EnrollmentIntegrationTests`, `EnrollmentSecurityTests`, `ClassGroupDirectoryTests` | `./mvnw clean test` (V7 appliquée) | BC02/BC03 |
+| TR-021 | Rythmes d'alternance (modèles de rythme, affectation historisée à une classe, exceptions individuelles de calendrier, résolution du contexte SCHOOL / COMPANY / UNKNOWN) | `alternation`, `academic`, `enrollment`, `identity`, `audit` | `AlternationConfigParserTests`, `AlternationResolverTests`, `AlternationConstraintsTests`, `WorkStudyPatternServiceTests`, `ClassWorkStudyPatternServiceTests`, `StudentScheduleExceptionServiceTests`, `AlternationContextServiceTests`, `AlternationIntegrationTests`, `AlternationSecurityTests`, `EnrollmentDirectoryTests`, `AcademicScopeDirectoryTests` | `./mvnw clean test` (V8 appliquée) | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -473,6 +474,99 @@ Une exigence décrite n’est pas automatiquement réalisée.
   étant mis en cache par classe `@SpringBootTest`, MySQL saturait
   (« Too many connections ») ; aucun test métier existant modifié.
   `docs/03` et `docs/04` non modifiés.
+
+- **TR-021 (Rythmes d'alternance)** : `IMPLÉMENTÉ` et `TESTÉ` — nouveau
+  module `alternation` (docs/03 §7.4) + migration Flyway `V8`
+  (`work_study_pattern`, `class_work_study_pattern`,
+  `student_schedule_exception` ; schéma en version 8). Couvre docs/02 §8,
+  docs/04 §14, backlog EP-07 / US-060 à US-063, sprint T-J1-033.
+  * **Modèles de rythme** : agrégat réutilisable
+    (`code` unique immuable, `pattern_type` immuable, `configuration_json`
+    validé et canonicalisé par le composant métier pur
+    `AlternationConfigParser` — types `THREE_DAYS_SCHOOL_TWO_DAYS_COMPANY`,
+    `ONE_WEEK_SCHOOL_OUT_OF_FOUR`, `TWO_WEEKS_SCHOOL_OUT_OF_FOUR`,
+    `CUSTOM` ; jamais d'acceptation silencieuse d'une propriété inconnue,
+    d'un jour inconnu, d'une intersection école/entreprise, d'un nombre de
+    semaines incohérent ou d'un index hors cycle). CRUD + archivage
+    logique + restauration.
+  * **Affectation historisée à une classe** (`class_work_study_pattern`,
+    `class_group_id` valeur technique via `academic.ClassGroupDirectory`,
+    `cycle_start_date` porté ici et non dans le modèle) : bornes
+    inclusives, `valid_until >= valid_from` (`CHECK`), pas de
+    chevauchement de périodes ACTIVE pour une même classe (deux périodes
+    strictement adjacentes autorisées ; pré-contrôle applicatif), au plus
+    une affectation ACTIVE « ouverte » par classe (colonne générée
+    `active_open_key` + `UNIQUE` ; course concurrente retraduite en 409
+    `ALT_OPEN_ASSIGNMENT_EXISTS` par `ClassAssignmentPersister`
+    (`REQUIRES_NEW`), jamais un 500). Clôture explicite, historique
+    conservé (aucune suppression).
+  * **Exceptions individuelles** (`student_schedule_exception`,
+    `enrollment_id` valeur technique via le **nouveau port public**
+    `enrollment.EnrollmentDirectory`) : types
+    `REMOTE_ALLOWED` / `ON_SITE_REQUIRED` / `COMPANY_PERIOD` /
+    `VALIDATED_UNAVAILABILITY`, statut `ACTIVE` / `CANCELLED`
+    (annulation sans suppression), `end_at > start_at` (`CHECK`),
+    `time_zone_id` IANA validé, `reason` obligatoire borné. Règle de
+    chevauchement minimale et testée : deux exceptions ACTIVE de **même
+    type** ne peuvent pas se recouper pour une même inscription.
+  * **Résolution calendaire** (`AlternationResolver`, service pur) : pour
+    une classe (ou une inscription) et une date, renvoie
+    `SCHOOL` / `COMPANY` / `UNKNOWN` (déterministe, bornes inclusives ;
+    date antérieure à l'ancre → `UNKNOWN`, week-end → `UNKNOWN`, absence
+    d'affectation → `UNKNOWN` / source `NONE`). Endpoints de lecture
+    `GET /api/v1/alternation/classes/{id}/context?date=` et
+    `GET /api/v1/alternation/enrollments/{id}/context?date=`. La
+    résolution effective d'une inscription applique la seule priorité
+    **structurelle** d'une exception `ON_SITE_REQUIRED` (→ `SCHOOL`) /
+    `COMPANY_PERIOD` (→ `COMPANY`) sur le rythme (source
+    `INDIVIDUAL_EXCEPTION`) ; `REMOTE_ALLOWED` /
+    `VALIDATED_UNAVAILABILITY` sont signalés sans modifier l'axe
+    SCHOOL/COMPANY. **Aucun calcul d'assiduité** (modules `planning`,
+    `coursesession`, `attendance` inexistants).
+  * **Ports inter-modules ajoutés** : `enrollment.EnrollmentDirectory`
+    (résolution d'une inscription + classe + `usable`) et
+    `academic.AcademicScopeDirectory` (périmètre pédagogique de
+    l'appelant sans importer `AcademicScopeGuard`, qui reste interne).
+    `ModularityTests` reste vert : `alternation` ne dépend d'aucune classe
+    de `academic.internal` ni `enrollment.internal` ; `audit` ne dépend
+    que de l'événement public `alternation.AlternationChangeEvent`.
+  * **Sécurité** : lecture des modèles ouverte à
+    `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`,
+    écriture des modèles à
+    `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` ; affectations de
+    classe et exceptions ouvertes en plus au `PEDAGOGICAL_MANAGER`,
+    restreint à son périmètre par le service (via
+    `AcademicScopeDirectory`, jamais d'après un paramètre client) ;
+    `TEACHER` et `STUDENT` toujours refusés (403).
+  * **Audit** : `WORK_STUDY_PATTERN_CREATED` / `_UPDATED` / `_ARCHIVED` /
+    `_RESTORED`, `CLASS_WORK_STUDY_PATTERN_ASSIGNED` / `_CLOSED`,
+    `STUDENT_SCHEDULE_EXCEPTION_CREATED` / `_CANCELLED` (catégorie
+    `ALTERNATION`, transaction `REQUIRES_NEW`, motif non sensible — codes
+    et types uniquement) via `alternation.AlternationChangeEvent` →
+    `audit.internal.AlternationAuditListener`.
+  * **Tests** (99 ajoutés, 320 → **419**) : `AlternationConfigParserTests`
+    (21, pur), `AlternationResolverTests` (6, pur),
+    `AlternationConstraintsTests` (14, `@DataJpaTest` — unicités, FK
+    `RESTRICT`, `CHECK` dates, verrouillage optimiste, `active_open_key`
+    libéré par clôture, adjacence, annulation sans suppression),
+    `WorkStudyPatternServiceTests` (10, Mockito),
+    `ClassWorkStudyPatternServiceTests` (12, Mockito — chevauchement,
+    adjacence, collision `active_open` → 409, violation FK relancée,
+    périmètre, horloge injectée), `StudentScheduleExceptionServiceTests`
+    (10, Mockito), `AlternationContextServiceTests` (6, Mockito),
+    `AlternationIntegrationTests` (10, `@SpringBootTest` — cycles complets
+    modèle / affectation / exception, résolution par classe et par
+    inscription, pagination plafonnée à 100, tri hors liste blanche →
+    400, `ApiError`, absence d'identifiant SQL, audit écrit),
+    `AlternationSecurityTests` (5, `@SpringBootTest` — 401 anonyme,
+    matrice de rôles, `PEDAGOGICAL_MANAGER` limité à son périmètre sans
+    élargissement par paramètre client), `EnrollmentDirectoryTests` (3,
+    `@SpringBootTest`), `AcademicScopeDirectoryTests` (2,
+    `@SpringBootTest`), `ModularityTests` vert.
+  * **Différé** : `planning`, `coursesession`, `attendance`, calcul réel
+    d'assiduité, frontend Angular. Aucune donnée métier de référence
+    seedée par `V8` (les trois rythmes MVP sont créés via l'API ou les
+    fixtures de tests).
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,

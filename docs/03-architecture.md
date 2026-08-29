@@ -490,6 +490,49 @@ Responsabilités :
 - exceptions individuelles ;
 - calcul des périodes attendues.
 
+### État d’implémentation (lot TR-021, migration V8)
+
+Module Spring Modulith `com.esic.connect.alternation` livré et testé
+(voir `docs/09-matrice-rncp.md` TR-021 et `docs/CURRENT-STATE.md`) :
+
+- agrégat `work_study_pattern` (modèle réutilisable de rythme :
+  `THREE_DAYS_SCHOOL_TWO_DAYS_COMPANY`, `ONE_WEEK_SCHOOL_OUT_OF_FOUR`,
+  `TWO_WEEKS_SCHOOL_OUT_OF_FOUR`, `CUSTOM` ; `configuration_json` validé
+  et canonicalisé, aucune acceptation silencieuse d’une entrée
+  incohérente) ;
+- `class_work_study_pattern` : affectation historisée d’un rythme à une
+  classe, avec `cycle_start_date` (l’ancre du cycle est portée par
+  l’affectation, pas par le modèle), non-chevauchement des périodes
+  ACTIVE d’une classe (adjacence stricte autorisée) et unicité SQL de
+  l’affectation ACTIVE « ouverte » ;
+- `student_schedule_exception` : exceptions individuelles rattachées à
+  une inscription (`REMOTE_ALLOWED`, `ON_SITE_REQUIRED`,
+  `COMPANY_PERIOD`, `VALIDATED_UNAVAILABILITY` ; annulation sans
+  suppression) ;
+- résolution du contexte `SCHOOL` / `COMPANY` / `UNKNOWN` pour une classe
+  ou une inscription et une date (déterministe, bornes inclusives).
+  **Différé** : aucun calcul d’assiduité — les modules `planning`,
+  `coursesession` et `attendance` n’existent pas ; la résolution
+  effective applique la seule priorité *structurelle* d’une exception
+  individuelle sur le rythme.
+
+Dépendances inter-modules, **uniquement via ports publics** (frontières
+vérifiées par `ModularityTests`) :
+
+- `identity.CurrentUserResolver` (auteur des écritures) ;
+- `academic.ClassGroupDirectory` (résolution d’une classe et de son année
+  scolaire) ;
+- `academic.AcademicScopeDirectory` — **port ajouté par ce lot** :
+  expose au module `alternation` le périmètre pédagogique effectif de
+  l’appelant (`hasGlobalScope`, `isClassInScope`, `visibleClassGroupIds`)
+  sans importer `AcademicScopeGuard`, qui reste interne à `academic` ;
+- `enrollment.EnrollmentDirectory` — **port ajouté par ce lot** :
+  résout une inscription (classe, année, statut exploitable) pour y
+  rattacher une exception de calendrier, sans partage d’entité JPA.
+
+Publie `alternation.AlternationChangeEvent`, consommé par `audit`
+(`audit.internal.AlternationAuditListener`, catégorie `ALTERNATION`).
+
 ## 7.5 `planning`
 
 Responsabilités :
