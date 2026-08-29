@@ -24,8 +24,12 @@
  * {@link com.esic.connect.organization.SiteDirectory} (rattachement d'une
  * classe à un site, sans partage d'entité JPA).
  * Publie {@link com.esic.connect.academic.AcademicChangeEvent}, consommé
- * par le module {@code audit}. Les types d'implémentation résident dans
- * {@code academic.internal} et ne sont pas visibles des autres modules.
+ * par le module {@code audit}, et expose le port
+ * {@link com.esic.connect.academic.ClassGroupDirectory} (consommé par
+ * {@code enrollment} pour rattacher une inscription à une classe et à son
+ * année scolaire, sans partage d'entité JPA). Les types d'implémentation
+ * résident dans {@code academic.internal} et ne sont pas visibles des
+ * autres modules.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Academic")
 package com.esic.connect.academic;
