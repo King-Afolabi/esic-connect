@@ -40,6 +40,12 @@
               <li class="dashboard__role-chip">{{ roleLabel(role) }}</li>
             }
           </ul>
+          @if (hasContextChoice()) {
+            <p class="dashboard__context">
+              Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il n'agit que
+              sur l'affichage et la navigation ; vos autorisations restent inchangées.
+            </p>
+          }
         } @else {
           <p class="dashboard__empty">
             Aucun rôle actif n'est associé à votre compte. Contactez un administrateur.

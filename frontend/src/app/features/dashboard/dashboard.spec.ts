@@ -54,6 +54,19 @@ describe('Dashboard', () => {
     expect(chips[0].textContent).toContain('Administrateur');
   });
 
+  it('does not mention a usage context for a single-role account', () => {
+    // roles = ['ADMIN'] (beforeEach) → aucun choix de contexte.
+    expect(text()).not.toContain('Contexte actif');
+  });
+
+  it('reports the active usage context when the account carries several roles', () => {
+    roles.set(['PEDAGOGICAL_MANAGER', 'TEACHER']);
+    fixture.detectChanges();
+    expect(text()).toContain('Contexte actif');
+    expect(text()).toContain('Gestion pédagogique');
+    expect(text()).toContain('vos autorisations restent inchangées');
+  });
+
   it('shows the empty state when the account carries no role', () => {
     roles.set([]);
     fixture.detectChanges();

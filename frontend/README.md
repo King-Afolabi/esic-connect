@@ -32,7 +32,8 @@ npm run lint                # ESLint (angular-eslint)
 ```
 src/app/
   core/         infrastructure transverse
-    auth/       AuthService (session en mémoire), décodage JWT (affichage seul)
+    auth/       AuthService (session en mémoire), décodage JWT (affichage seul),
+                RoleContextService (contexte de rôle, mémoire seule)
     guards/     authGuard, guestGuard, roleGuard(...)
     http/       intercepteurs (jeton porteur, erreurs API)
     layout/     coquille authentifiée (barre + navigation)
@@ -70,3 +71,22 @@ un lien vers `/login`.
   encore exposé par le back-end.
 - Le contenu du JWT (rôles, sujet) ne sert qu'à l'affichage et au filtrage de
   la navigation. Toute autorisation réelle est décidée par Spring Security.
+
+## Contexte d'utilisation (rôle)
+
+Conforme à docs/02-cahier-des-charges.md §6.1 (exigence EF-AUTH-003).
+
+- `RoleContextService` propose comme contextes **uniquement les rôles
+  réellement présents** dans le claim `roles` du JWT ; aucune valeur
+  inventée.
+- Le contexte actif est un signal **en mémoire seule** (ni `localStorage`
+  ni `sessionStorage`), au même titre que le jeton. Un rechargement de
+  page le perd, comme la session. Contexte par défaut = le rôle le plus
+  privilégié présent (ordre de `ROLES`).
+- Il ne pilote que l'affichage et la navigation : `effectiveRoles` réduit
+  les entrées visibles au seul rôle choisi. Il **ne remplace jamais** le
+  contrôle d'accès Spring Security, qui revalide chaque appel à partir du
+  JWT — sélectionner un contexte n'accorde ni ne retire aucun droit.
+- Le sélecteur (`app-role-context-menu`, barre supérieure de `AppShell`)
+  n'apparaît que si le compte cumule au moins deux rôles. `/login`,
+  `/activation` et `/dashboard` sont inchangés.

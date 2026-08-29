@@ -15,11 +15,79 @@
 ## Phase actuelle
 
 ```text
-Activation de compte (front-end) — branche
-`feature/frontend-account-activation`, PR ouverte contre `main`, NON
-fusionnée. Deuxième tranche verticale front-end : parcours public
-`/activation?token=<jeton>` atteint via le lien d'invitation généré par
-le back-end. Le socle front-end (PR #11) est fusionné sur `main`
+Sélecteur de contexte de rôle (front-end) — branche
+`feature/frontend-role-context`, PR ouverte contre `main`, NON fusionnée.
+Troisième tranche verticale front-end : docs/02 §6.1 (exigence
+EF-AUTH-003 « Choisir un contexte de rôle »). Le socle front-end (PR #11,
+`6fa341f`) et le parcours public d'activation (PR #12, `2ff7aa8`) sont
+fusionnés sur `main`. Aucun fichier back-end, migration V1–V7 ou
+docs/01–04 modifié ; autorisation, CORS et endpoints back-end inchangés ;
+aucune dépendance npm ajoutée.
+- Nouveau `core/auth/role-context.service.ts` (`RoleContextService`,
+  `providedIn: 'root'`) : contextes proposés = **uniquement les rôles
+  présents dans le claim `roles` du JWT** (`AuthService.roles`), aucune
+  valeur inventée. `active` = signal **en mémoire seule** (ni
+  `localStorage` ni `sessionStorage` ni cookie JS ; docs/07 §6, RG-085),
+  au même titre que le jeton d'accès — un rechargement le perd comme la
+  session. Contexte par défaut = rôle le plus privilégié présent (ordre
+  de `ROLES`, helper exporté `defaultContext`). Un `effect` réaligne le
+  contexte sur la session : à tout changement de rôles, un contexte
+  encore valide est conservé, sinon retour au défaut ; jeu de rôles vide
+  → `null`.
+- `effectiveRoles` (contexte actif seul, sinon union des rôles) ne sert
+  **qu'à l'affichage et à la navigation** : `AppShell.navItems` et
+  `Dashboard.quickLinks` filtrent désormais dessus via
+  `visibleNavItems`. Cela ne peut que **restreindre** les entrées
+  visibles, jamais élargir un droit — toute autorisation reste décidée
+  par Spring Security (`roleGuard` inchangé, gardes de route toujours sur
+  l'union réelle des rôles ; RG-002, RG-087).
+- Nouveau composant `core/layout/role-context-menu/` (`app-role-context-menu`,
+  `MatMenu`) affiché dans la barre supérieure de `AppShell`
+  **uniquement si le compte cumule au moins deux rôles** (`hasChoice`).
+  Accessibilité : bouton déclencheur `aria-haspopup="menu"`, items de
+  menu avec `aria-current="true"` + icône `check` sur le contexte actif,
+  libellés explicites. Le tableau de bord affiche le contexte actif et
+  rappelle qu'il n'affecte pas les autorisations (visible seulement si
+  plusieurs rôles).
+- `/login`, `/activation` et `/dashboard` : comportement inchangé
+  (`app.routes.ts` non modifié ; aucune route ajoutée, aucun endpoint
+  créé). `AuthService`, intercepteurs, `jwt.ts`, gardes : inchangés.
+- Tests front : **102** (17 nouveaux, 0 échec ; 85 → 102).
+  `role-context.service.spec.ts` (12 : `defaultContext` ordre/vide ;
+  contextes = rôles du JWT seuls ; 0 rôle → pas de choix, `effectiveRoles`
+  vide ; 1 rôle → contexte adopté sans choix ; multi-rôles → défaut au
+  plus privilégié + choix ; `select` restreint `effectiveRoles` sans
+  toucher `available` ; `select` d'un rôle absent du JWT ignoré ;
+  contexte encore valide conservé au changement de rôles, sinon retour au
+  défaut ; aucun accès `Storage.prototype.setItem`).
+  `role-context-menu.spec.ts` (3 : masqué pour un rôle unique ; contexte
+  actif dans le déclencheur + `aria-haspopup` ; items = rôles détenus,
+  repère `check`/`aria-current`, clic → `RoleContextService.select`).
+  `app-shell.spec.ts` (+2 : pas de sélecteur pour un rôle unique ;
+  sélecteur présent pour un compte multi-rôles). `dashboard.spec.ts`
+  (+2 : pas de mention de contexte pour un rôle unique ; contexte actif
+  affiché + « vos autorisations restent inchangées » pour un compte
+  multi-rôles).
+- Vérifs locales le 29 août 2026 (Node 24.13.0), depuis `frontend/` :
+  `rm -rf node_modules && npm ci` → 0 vulnérabilité ;
+  `npm test -- --watch=false` → 18 fichiers, 102 tests, 0 échec ;
+  `npm run build` → bundle initial 437,57 kB brut / 112,73 kB transféré,
+  0 alerte de budget ; `npm run lint` → « All files pass linting ».
+  `package.json` / `package-lock.json` inchangés.
+- Ambiguïtés documentaires (aucune règle inventée) : docs/02 §6.1 donne
+  un exemple de libellés de contexte (« Gérer mes formations », « Consulter
+  mes séances de formateur ») sans liste normative → une table
+  `ROLE_CONTEXT_LABELS` fournit un libellé par rôle, modifiable ; le choix
+  du contexte par défaut (rôle le plus privilégié) et la conservation
+  d'un contexte encore valide au changement de session ne sont pas
+  spécifiés → comportement retenu et testé, documenté ici.
+```
+
+### Activation de compte (front-end) — fusionnée sur `main` via PR #12 (commit `2ff7aa8`)
+
+```text
+Parcours public `/activation?token=<jeton>`, fusionné sur `main`
+(commit `2ff7aa8`). Le socle front-end (PR #11) est fusionné sur `main`
 (commit `6fa341f`). Aucun fichier back-end, migration V1–V7 ou docs/01–04
 modifié ; autorisation et CORS back-end inchangés.
 - Route `/activation` — **publique, sans aucune garde** (ni `authGuard`,
@@ -670,7 +738,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = commit `6fa341f` ; activation de compte sur branche `feature/frontend-account-activation`, PR ouverte non fusionnée — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, `/administration`, `/students`, `/forbidden`, `**` — `/administration` et `/students` gardées par rôle mais masquées de la navigation ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs, endpoints publics d'activation exclus (pas de bearer, pas de purge de session) ; jeton d'accès **en mémoire uniquement** (docs/07 §6, RG-085) ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL (`Location.replaceState`), jamais journalisé / affiché / stocké / envoyé en bearer ; activation `POST …/activate` → `204`, **aucune connexion automatique** ; le tableau de bord rapporte un état de session **local** (pas de second appel d'API vérifié) ; 85 tests Vitest verts, `npm ci` / `npm run build` / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
+| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = commit `6fa341f` ; activation de compte fusionnée via PR #12 = commit `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) sur branche `feature/frontend-role-context`, PR ouverte non fusionnée — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, `/administration`, `/students`, `/forbidden`, `**` — `/administration` et `/students` gardées par rôle mais masquées de la navigation ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs, endpoints publics d'activation exclus (pas de bearer, pas de purge de session) ; jeton d'accès **en mémoire uniquement** (docs/07 §6, RG-085) ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL (`Location.replaceState`), jamais journalisé / affiché / stocké / envoyé en bearer ; activation `POST …/activate` → `204`, **aucune connexion automatique** ; le tableau de bord rapporte un état de session **local** (pas de second appel d'API vérifié) ; `RoleContextService` (contexte de rôle en mémoire seule, rôles du seul JWT, affichage/navigation uniquement, aucun effet sur Spring Security) + `app-role-context-menu` visible seulement si ≥ 2 rôles ; 102 tests Vitest verts, `npm ci` / `npm run build` / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment` — migrations appliquées et vérifiées, schéma en version 7) |
@@ -707,12 +775,13 @@ l'historique) sont en place. Le socle front-end Angular est fusionné sur
 `main` (PR #11, commit `6fa341f`) : connexion + tableau de bord (état de
 session local) + gardes de route par rôle. Le parcours public
 d'activation de compte (`/activation`,
-`GET/POST /api/v1/account-invitations/validate|activate`) est implémenté
-sur `feature/frontend-account-activation` (PR ouverte, non fusionnée).
+`GET/POST /api/v1/account-invitations/validate|activate`) est fusionné
+sur `main` (PR #12, commit `2ff7aa8`). Le sélecteur de contexte de rôle
+(docs/02 §6.1, EF-AUTH-003) est implémenté sur
+`feature/frontend-role-context` (PR ouverte, non fusionnée).
 Prochaines étapes :
-- front-end : sélecteur de contexte de rôle (docs/02 §6.1) ; premiers
-  écrans de liste (formations, apprenants) une fois la PR d'activation
-  fusionnée ;
+- front-end : premiers écrans de liste (formations, apprenants) une fois
+  la PR de contexte de rôle fusionnée ;
 - rythmes d'alternance minimaux (T-J1-033 / US-060 à 062) : module
   `alternation` — `work_study_pattern`, `class_work_study_pattern`,
   `student_schedule_exception` (docs/04 §14) ;
@@ -1403,7 +1472,8 @@ Limites connues :
   page perd la session et renvoie vers `/login` ; une vraie session
   persistante exige le futur cookie `HttpOnly` + refresh token côté
   back-end ;
-- pas de sélecteur de contexte de rôle (docs/02 §6.1) ;
+- sélecteur de contexte de rôle (docs/02 §6.1) livré à part sur
+  `feature/frontend-role-context` (voir « Phase actuelle ») ;
 - `/administration` et `/students` sont des routes gardées sans contenu
   métier, volontairement masquées de la navigation ;
 - PWA, notifications, SSE non abordés ;
@@ -1415,8 +1485,8 @@ Limites connues :
 ## Activation de compte (front-end) — 29 août 2026
 
 Branche `feature/frontend-account-activation` (créée depuis `main` à
-`6fa341f`), PR ouverte contre `main`, **non fusionnée**. Aucun fichier
-back-end modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`,
+`6fa341f`), **fusionnée sur `main` via PR #12** (commit `2ff7aa8`). Aucun
+fichier back-end modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`,
 `SecurityConfig`, `backend/**`, `backend-ci.yml`, autorisation et CORS
 back-end inchangés. Aucune dépendance ajoutée → `package.json` /
 `package-lock.json` inchangés.

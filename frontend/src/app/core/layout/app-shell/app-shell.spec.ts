@@ -64,6 +64,18 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
   });
 
+  it('offers no usage-context switch for a single-role account', () => {
+    // roles = ['ADMIN'] (beforeEach) → un seul rôle, pas de choix (docs/02 §6.1).
+    expect(text()).not.toContain('Contexte :');
+  });
+
+  it('shows the usage-context switch when the account carries several roles', () => {
+    roles.set(['PEDAGOGICAL_MANAGER', 'TEACHER']);
+    fixture.detectChanges();
+    expect(text()).toContain('Contexte :');
+    expect(text()).toContain('Gestion pédagogique');
+  });
+
   it('calls AuthService.logout when the logout control is used', () => {
     const buttons = Array.from(
       fixture.nativeElement.querySelectorAll('button'),

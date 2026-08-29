@@ -10,8 +10,10 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 
 import { AuthService } from '../../auth/auth.service';
+import { RoleContextService } from '../../auth/role-context.service';
 import { roleLabel } from '../../models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
+import { RoleContextMenu } from '../role-context-menu/role-context-menu';
 
 /**
  * Coquille applicative authentifiée : barre supérieure, navigation
@@ -32,19 +34,26 @@ import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
     MatListModule,
     MatIconModule,
     MatButtonModule,
+    RoleContextMenu,
   ],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.scss',
 })
 export class AppShell {
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly breakpointObserver = inject(BreakpointObserver);
 
   protected readonly roleLabel = roleLabel;
 
   protected readonly email = this.auth.currentUserEmail;
   protected readonly roles = this.auth.roles;
-  protected readonly navItems = computed(() => visibleNavItems(NAV_ITEMS, this.auth.roles()));
+  // Navigation filtrée selon le contexte d'utilisation actif (docs/02 §6.1) :
+  // le rôle choisi restreint les entrées visibles, sans jamais élargir les
+  // droits — l'autorisation reste côté Spring Security.
+  protected readonly navItems = computed(() =>
+    visibleNavItems(NAV_ITEMS, this.roleContext.effectiveRoles()),
+  );
 
   protected readonly isHandset = toSignal(
     this.breakpointObserver.observe(Breakpoints.Handset).pipe(map((result) => result.matches)),
