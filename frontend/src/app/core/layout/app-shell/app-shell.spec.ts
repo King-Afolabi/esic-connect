@@ -45,21 +45,27 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Apprenants / Référentiels screens for an ADMIN', () => {
+  it('renders the dashboard and the delivered Administration / Apprenants / Référentiels screens for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
+      '/administration',
       '/students',
       '/academic',
     ]);
     expect(text()).toContain('Tableau de bord');
+    expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
     expect(text()).toContain('Référentiels');
   });
 
-  it('does not show the /administration placeholder route in the navigation, even for an ADMIN', () => {
-    const hrefs = navLinks().map((a) => a.getAttribute('href'));
-    expect(hrefs).not.toContain('/administration');
-    expect(text()).not.toContain('Administration');
+  it('shows Administration for SCHOOL_ADMINISTRATION but hides it from a STUDENT', () => {
+    roles.set(['SCHOOL_ADMINISTRATION']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).toContain('/administration');
+
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/administration');
   });
 
   it('keeps the navigation limited to the dashboard for a role with no extra screens', () => {

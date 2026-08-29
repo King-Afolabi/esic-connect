@@ -59,11 +59,15 @@ describe('application routes (guard wiring)', () => {
     location = TestBed.inject(Location);
   });
 
-  it('still declares the /administration placeholder route, guarded and addressable', () => {
+  it('declares /administration as a guarded parent with list and detail children', () => {
     const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
-    const route = shell?.children?.find((c) => c.path === 'administration');
-    expect(route).toBeDefined();
-    expect(route?.canActivate?.length).toBeGreaterThan(0);
+    const admin = shell?.children?.find((c) => c.path === 'administration');
+    expect(admin).toBeDefined();
+    expect(admin?.canActivate?.length).toBeGreaterThan(0);
+    expect(admin?.canActivateChild?.length).toBeGreaterThan(0);
+    const childPaths = (admin?.children ?? []).map((c) => c.path);
+    expect(childPaths).toContain('');
+    expect(childPaths).toContain(':publicId');
   });
 
   it('declares /students as a guarded parent with list and detail children', () => {
@@ -82,7 +86,7 @@ describe('application routes (guard wiring)', () => {
     expect(location.path()).toContain('/login');
   });
 
-  it('routes an authenticated TEACHER to /forbidden on an ADMIN-only route', async () => {
+  it('routes an authenticated TEACHER to /forbidden on the guarded /administration route', async () => {
     signIn(['TEACHER']);
     await router.navigateByUrl('/administration');
     expect(location.path()).toBe('/forbidden');
@@ -94,13 +98,25 @@ describe('application routes (guard wiring)', () => {
     expect(location.path()).toBe('/administration');
   });
 
-  it('lets SCHOOL_ADMINISTRATION reach /students but not /administration', async () => {
+  it('lets SCHOOL_ADMINISTRATION reach /administration and /students', async () => {
     signIn(['SCHOOL_ADMINISTRATION']);
+
+    await router.navigateByUrl('/administration');
+    expect(location.path()).toBe('/administration');
 
     await router.navigateByUrl('/students');
     expect(location.path()).toBe('/students');
+  });
 
-    await router.navigateByUrl('/administration');
+  it('lets SCHOOL_ADMINISTRATION open an account detail route (canActivateChild)', async () => {
+    signIn(['SCHOOL_ADMINISTRATION']);
+    await router.navigateByUrl('/administration/2f1a9b7c-0000-4000-8000-000000000000');
+    expect(location.path()).toBe('/administration/2f1a9b7c-0000-4000-8000-000000000000');
+  });
+
+  it('redirects a PEDAGOGICAL_MANAGER away from an account detail route (canActivateChild)', async () => {
+    signIn(['PEDAGOGICAL_MANAGER']);
+    await router.navigateByUrl('/administration/2f1a9b7c-0000-4000-8000-000000000000');
     expect(location.path()).toBe('/forbidden');
   });
 

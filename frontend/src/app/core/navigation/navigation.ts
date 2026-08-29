@@ -36,11 +36,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'dashboard',
   },
   {
+    // Écran livré : administration des comptes utilisateurs et de leurs
+    // rôles en LECTURE SEULE (liste → fiche → historique des rôles).
+    // Périmètre aligné sur `UserAccountController` `READ_ROLES`.
     label: 'Administration',
     path: '/administration',
     icon: 'admin_panel_settings',
-    roles: ['ADMIN', 'SUPER_ADMIN'],
-    placeholder: true,
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
   },
   {
     // Écran livré : liste des profils apprenants + fiche + historique

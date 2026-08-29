@@ -73,12 +73,20 @@ describe('Dashboard', () => {
     expect(text()).toContain("Aucun rôle actif n'est associé à votre compte");
   });
 
-  it('never exposes the /administration placeholder route as a quick link, whatever the role', () => {
-    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION'], ['TEACHER']] as Role[][]) {
+  it('offers Administration as a quick link only for the roles behind UserAccountController READ_ROLES', () => {
+    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION']] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
-      const root = fixture.nativeElement as HTMLElement;
-      expect(root.querySelector('a[href="/administration"]')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/administration"]'),
+      ).not.toBeNull();
+    }
+    for (const held of [['TEACHER'], ['PEDAGOGICAL_MANAGER'], ['STUDENT']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/administration"]'),
+      ).toBeNull();
     }
   });
 
