@@ -1,0 +1,61 @@
+.dashboard__title {
+  font: var(--mat-sys-headline-medium);
+  margin: 0 0 0.5rem;
+}
+
+.dashboard__intro {
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0 0 1.5rem;
+}
+
+.dashboard__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+}
+
+.dashboard__card {
+  height: 100%;
+}
+
+.dashboard__facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dashboard__facts dt {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.dashboard__facts dd {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  word-break: break-word;
+}
+
+.dashboard__roles {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dashboard__role-chip {
+  font: var(--mat-sys-label-large);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.dashboard__empty {
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0;
+}

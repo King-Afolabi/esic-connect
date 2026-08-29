@@ -1,0 +1,72 @@
+<a class="skip-link" href="#main-content">Aller au contenu principal</a>
+
+<mat-sidenav-container class="shell">
+  <mat-sidenav
+    #sidenav
+    class="shell__sidenav"
+    [mode]="isHandset() ? 'over' : 'side'"
+    [opened]="!isHandset()"
+    [fixedInViewport]="isHandset()"
+  >
+    <nav class="shell__nav" aria-label="Navigation principale">
+      <mat-nav-list>
+        @for (item of navItems(); track item.path) {
+          <a
+            mat-list-item
+            [routerLink]="item.path"
+            routerLinkActive
+            #link="routerLinkActive"
+            [routerLinkActiveOptions]="{ exact: false }"
+            [attr.aria-current]="link.isActive ? 'page' : null"
+            (click)="isHandset() && sidenav.close()"
+          >
+            <mat-icon matListItemIcon aria-hidden="true">{{ item.icon }}</mat-icon>
+            <span matListItemTitle>{{ item.label }}</span>
+            @if (item.upcoming) {
+              <span matListItemLine class="shell__badge">À venir</span>
+            }
+          </a>
+        }
+      </mat-nav-list>
+    </nav>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="shell__content">
+    <mat-toolbar color="primary" class="shell__toolbar">
+      @if (isHandset()) {
+        <button
+          type="button"
+          mat-icon-button
+          aria-label="Ouvrir ou fermer la navigation"
+          (click)="sidenav.toggle()"
+        >
+          <mat-icon aria-hidden="true">menu</mat-icon>
+        </button>
+      }
+      <span class="shell__brand">ESIC Connect</span>
+      <span class="shell__spacer"></span>
+
+      <div class="shell__identity">
+        @if (email(); as currentEmail) {
+          <span class="shell__email" aria-label="Utilisateur connecté">{{ currentEmail }}</span>
+        }
+        @if (roles().length) {
+          <span class="shell__roles">
+            @for (role of roles(); track role) {
+              <span class="shell__role-chip">{{ roleLabel(role) }}</span>
+            }
+          </span>
+        }
+      </div>
+
+      <button type="button" mat-button (click)="logout()">
+        <mat-icon aria-hidden="true">logout</mat-icon>
+        <span>Se déconnecter</span>
+      </button>
+    </mat-toolbar>
+
+    <main id="main-content" class="shell__main" tabindex="-1">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

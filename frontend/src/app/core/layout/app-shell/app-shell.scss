@@ -1,0 +1,98 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  border-radius: 0 0 4px 0;
+
+  &:focus {
+    left: 0;
+  }
+}
+
+.shell {
+  height: 100%;
+}
+
+.shell__sidenav {
+  width: 15rem;
+  border-right: 1px solid var(--mat-sys-outline-variant);
+}
+
+.shell__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.shell__brand {
+  font: var(--mat-sys-title-medium);
+  font-weight: 600;
+}
+
+.shell__spacer {
+  flex: 1 1 auto;
+}
+
+.shell__identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+  margin-right: 0.5rem;
+}
+
+.shell__email {
+  font: var(--mat-sys-body-small);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.shell__role-chip {
+  font: var(--mat-sys-label-small);
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mat-sys-on-primary) 20%, transparent);
+}
+
+.shell__badge {
+  font: var(--mat-sys-label-small);
+  opacity: 0.7;
+}
+
+.shell__main {
+  display: block;
+  padding: 1.5rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  outline: none;
+}
+
+@media (max-width: 599px) {
+  .shell__identity {
+    display: none;
+  }
+
+  .shell__main {
+    padding: 1rem;
+  }
+}
