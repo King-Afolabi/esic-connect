@@ -1,0 +1,119 @@
+<h1 class="academic__title">Référentiels académiques</h1>
+
+<nav class="academic__tabs" aria-label="Référentiels académiques">
+  @for (tab of tabs; track tab.slug) {
+    <a
+      [routerLink]="['/academic', tab.slug]"
+      routerLinkActive="academic__tab--active"
+      #tabLink="routerLinkActive"
+      [attr.aria-current]="tabLink.isActive ? 'page' : null"
+    >
+      {{ tab.label }}
+    </a>
+  }
+</nav>
+
+<h2 class="academic__subtitle">{{ config.listTitle }}</h2>
+
+<form class="academic__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+  <mat-form-field appearance="outline" class="academic__filter">
+    <mat-label>Code ou nom</mat-label>
+    <input matInput type="search" formControlName="q" autocomplete="off" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="academic__filter">
+    <mat-label>Statut</mat-label>
+    <mat-select formControlName="status">
+      <mat-option [value]="''">Tous</mat-option>
+      @for (status of statuses; track status) {
+        <mat-option [value]="status">{{ statusLabel(status) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <div class="academic__filter-actions">
+    <button mat-flat-button type="submit">
+      <mat-icon aria-hidden="true">search</mat-icon>
+      Filtrer
+    </button>
+    <button mat-button type="button" (click)="resetFilters()">Réinitialiser</button>
+  </div>
+</form>
+
+@if (state().kind === 'loading') {
+  <mat-progress-bar mode="indeterminate" aria-label="Chargement du référentiel"></mat-progress-bar>
+  <p class="academic__status" role="status">Chargement…</p>
+}
+
+@if (state().kind === 'forbidden') {
+  <div class="academic__panel" role="alert">
+    <mat-icon aria-hidden="true">lock</mat-icon>
+    <p>Vous n'êtes pas autorisé à consulter ce référentiel.</p>
+    <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+  </div>
+}
+
+@if (state().kind === 'error') {
+  <div class="academic__panel" role="alert">
+    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <p>{{ errorMessage() }}</p>
+    <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+  </div>
+}
+
+@if (state().kind === 'ready') {
+  @if (isEmpty()) {
+    <p class="academic__status" role="status">Aucun élément ne correspond à votre recherche.</p>
+  } @else {
+    <div class="academic__table-wrapper">
+      <table
+        mat-table
+        [dataSource]="rows()"
+        matSort
+        [matSortActive]="sortField()"
+        [matSortDirection]="sortDirection()"
+        matSortDisableClear
+        (matSortChange)="onSortChange($event)"
+      >
+        @for (column of config.columns; track column.key) {
+          <ng-container [matColumnDef]="column.key">
+            @if (column.sortable) {
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ column.header }}</th>
+            } @else {
+              <th mat-header-cell *matHeaderCellDef>{{ column.header }}</th>
+            }
+            <td mat-cell *matCellDef="let row">{{ column.value(row) }}</td>
+          </ng-container>
+        }
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>
+            <span class="academic__sr-only">Actions</span>
+          </th>
+          <td mat-cell *matCellDef="let row">
+            <a
+              mat-button
+              color="primary"
+              [routerLink]="['/academic', resource, row.publicId]"
+              [attr.aria-label]="'Consulter ' + row.code"
+            >
+              Consulter
+            </a>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+    </div>
+
+    <mat-paginator
+      [length]="totalElements()"
+      [pageSize]="pageSize()"
+      [pageIndex]="pageIndex()"
+      [pageSizeOptions]="pageSizeOptions"
+      (page)="onPageChange($event)"
+      aria-label="Pagination du référentiel"
+    ></mat-paginator>
+  }
+}

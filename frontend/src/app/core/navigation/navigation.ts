@@ -50,6 +50,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'groups',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
   },
+  {
+    // Écran livré : consultation en lecture seule du référentiel
+    // académique (années scolaires → formations → niveaux → promotions →
+    // classes). Périmètre aligné sur `AcademicWeb.READ_ROLES`.
+    label: 'Référentiels',
+    path: '/academic',
+    icon: 'school',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
 ];
 
 /**

@@ -45,10 +45,15 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Apprenants screen for an ADMIN', () => {
-    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard', '/students']);
+  it('renders the dashboard and the delivered Apprenants / Référentiels screens for an ADMIN', () => {
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard',
+      '/students',
+      '/academic',
+    ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Apprenants');
+    expect(text()).toContain('Référentiels');
   });
 
   it('does not show the /administration placeholder route in the navigation, even for an ADMIN', () => {
@@ -63,10 +68,18 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
   });
 
-  it('hides Apprenants for a role outside EnrollmentWeb.MANAGE_ROLES', () => {
+  it('hides Apprenants but shows Référentiels for a PEDAGOGICAL_MANAGER', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/students');
+    const hrefs = navLinks().map((a) => a.getAttribute('href'));
+    expect(hrefs).not.toContain('/students');
+    expect(hrefs).toContain('/academic');
+  });
+
+  it('hides Référentiels for a role outside AcademicWeb.READ_ROLES', () => {
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/academic');
   });
 
   it('offers no usage-context switch for a single-role account', () => {

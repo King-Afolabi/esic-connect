@@ -6,6 +6,30 @@ import { roleGuard } from './core/guards/role.guard';
 
 const APP_NAME = 'ESIC Connect';
 
+/**
+ * Périmètre de lecture du référentiel académique, repris **à l'identique**
+ * de `AcademicWeb.READ_ROLES` (`GET /api/v1/academic-years`,
+ * `/programs`, `/promotions`, `/class-groups`, `/program-levels`). Le
+ * garde ne fait que masquer la navigation : Spring Security reste
+ * l'autorité, et un `PEDAGOGICAL_MANAGER` reste filtré par périmètre
+ * (`AcademicScopeGuard`) — un `403` de l'API est rendu « accès refusé ».
+ */
+const ACADEMIC_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
+const academicList = () =>
+  import('./features/academic/academic-reference-list/academic-reference-list').then(
+    (m) => m.AcademicReferenceList,
+  );
+const academicDetail = () =>
+  import('./features/academic/academic-reference-detail/academic-reference-detail').then(
+    (m) => m.AcademicReferenceDetail,
+  );
+
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
   {
@@ -74,6 +98,70 @@ export const routes: Routes = [
               import('./features/students/student-profile/student-profile').then(
                 (m) => m.StudentProfile,
               ),
+          },
+        ],
+      },
+      {
+        // Consultation en LECTURE SEULE du référentiel académique
+        // (`com.esic.connect.academic`) : années scolaires → formations →
+        // niveaux → promotions → classes. Périmètre aligné sur
+        // `AcademicWeb.READ_ROLES`. `data.resource` sélectionne la
+        // configuration d'affichage (colonnes, tris, sous-listes).
+        path: 'academic',
+        canActivate: [roleGuard([...ACADEMIC_READ_ROLES])],
+        canActivateChild: [roleGuard([...ACADEMIC_READ_ROLES])],
+        title: `Référentiels académiques — ${APP_NAME}`,
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'academic-years' },
+          {
+            path: 'academic-years',
+            data: { resource: 'academic-years' },
+            loadComponent: academicList,
+          },
+          {
+            path: 'academic-years/:publicId',
+            title: `Année scolaire — ${APP_NAME}`,
+            data: { resource: 'academic-years' },
+            loadComponent: academicDetail,
+          },
+          {
+            path: 'programs',
+            data: { resource: 'programs' },
+            loadComponent: academicList,
+          },
+          {
+            path: 'programs/:publicId',
+            title: `Formation — ${APP_NAME}`,
+            data: { resource: 'programs' },
+            loadComponent: academicDetail,
+          },
+          {
+            path: 'program-levels/:publicId',
+            title: `Niveau — ${APP_NAME}`,
+            data: { resource: 'program-levels' },
+            loadComponent: academicDetail,
+          },
+          {
+            path: 'promotions',
+            data: { resource: 'promotions' },
+            loadComponent: academicList,
+          },
+          {
+            path: 'promotions/:publicId',
+            title: `Promotion — ${APP_NAME}`,
+            data: { resource: 'promotions' },
+            loadComponent: academicDetail,
+          },
+          {
+            path: 'class-groups',
+            data: { resource: 'class-groups' },
+            loadComponent: academicList,
+          },
+          {
+            path: 'class-groups/:publicId',
+            title: `Classe — ${APP_NAME}`,
+            data: { resource: 'class-groups' },
+            loadComponent: academicDetail,
           },
         ],
       },

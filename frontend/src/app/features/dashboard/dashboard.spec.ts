@@ -99,6 +99,28 @@ describe('Dashboard', () => {
     }
   });
 
+  it('offers Référentiels as a quick link only for the roles behind AcademicWeb.READ_ROLES', () => {
+    for (const held of [
+      ['ADMIN'],
+      ['SUPER_ADMIN'],
+      ['SCHOOL_ADMINISTRATION'],
+      ['PEDAGOGICAL_MANAGER'],
+    ] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
+      ).not.toBeNull();
+    }
+    for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
+      ).toBeNull();
+    }
+  });
+
   it('shows the quick-links empty state for a role with no delivered secondary screen', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
