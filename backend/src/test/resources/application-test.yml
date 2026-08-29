@@ -7,6 +7,17 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
+    hikari:
+      # Chaque classe @SpringBootTest déclare sa propre @TestConfiguration
+      # imbriquée : Spring met donc en cache un contexte (et un pool
+      # HikariCP) distinct par classe. Avec le pool par défaut (10) et une
+      # quinzaine de contextes cumulés, MySQL 8 (`max_connections` = 151
+      # par défaut, y compris en CI) est saturé (« Too many connections »).
+      # Un pool réduit garde assez de connexions pour les transactions
+      # imbriquées (REQUIRES_NEW de l'audit) et les cas concurrents tout
+      # en restant très en dessous de la limite serveur.
+      maximum-pool-size: 6
+      minimum-idle: 1
   data:
     redis:
       host: ${REDIS_HOST:localhost}

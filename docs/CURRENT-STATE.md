@@ -15,6 +15,107 @@
 ## Phase actuelle
 
 ```text
+Inscriptions historiques ajoutées (branche feature/enrollment-history,
+non fusionnée, non committée) — nouveau module `enrollment` + migration
+V7 `student_profile` / `enrollment` (schéma en version 7, appliquée et
+vérifiée). Couvre le profil apprenant et l'inscription d'un apprenant
+dans une classe pour une année scolaire, avec conservation de
+l'historique lors d'un changement de classe (docs/02 §7.6, §13 ;
+docs/04 §11.1, §13 ; RG-006, RG-012, RG-022, RG-023 ; AC-006 ;
+T-J1-032 / US-053). N'aborde ni l'import CSV des apprenants, ni les
+rythmes d'alternance, ni les apprenants provisoires, ni Angular.
+- Entités `enrollment.internal.StudentProfile` (`user_id` = valeur
+  technique via port `identity.UserDirectory`, unique ; `student_number`
+  unique ; `work_study`, `birth_date`, `company_name` ; statut
+  ACTIVE/ARCHIVED — seul ACTIVE produit dans ce lot) et
+  `enrollment.internal.Enrollment` (`student_profile` = relation
+  intra-module ; `class_group_id` / `academic_year_id` = valeurs
+  techniques via nouveau port `academic.ClassGroupDirectory` ;
+  `previous_enrollment_id` auto-référence ; `start_date` / `end_date`
+  en `LocalDate` bornes inclusives ; `enrollment_source`
+  MANUAL/CLASS_TRANSFER ; statut
+  PENDING/ACTIVE/COMPLETED/TRANSFERRED/WITHDRAWN/SUSPENDED/ARCHIVED —
+  ACTIVE/TRANSFERRED/COMPLETED/WITHDRAWN pilotés). Aucun DELETE
+  physique ; rattachements, `start_date`, `enrollment_source` et
+  `previous_enrollment_id` immuables.
+- Règle RG-012 / docs/04 §13.3 : au plus une inscription ACTIVE par
+  apprenant et par année scolaire — pré-contrôle applicatif
+  (`ENR_ACTIVE_ENROLLMENT_EXISTS`, 409) doublé par la contrainte SQL
+  `uq_enrollment_active_per_year` (deux colonnes générées VIRTUAL
+  portant `student_profile_id` / `academic_year_id` uniquement pour une
+  ligne ACTIVE ; une clôture libère immédiatement le créneau). Course
+  concurrente : écritures `@Transactional` au niveau service ; la
+  `DataIntegrityViolationException` levée au `flush` (transaction déjà
+  annulée) est retraduite en 409 **ciblé** par
+  `EnrollmentExceptionHandler` — uniquement pour
+  `uq_enrollment_active_per_year`, `uq_student_profile_user`,
+  `uq_student_profile_student_number` ; toute autre violation relancée
+  (500 via le gestionnaire global). Jamais de `catch (Exception)`.
+- Changement de classe (`POST /api/v1/enrollments/{id}/transfer`,
+  docs/04 §13.2) : l'inscription courante ACTIVE est clôturée en
+  TRANSFERRED (`end_date` = date effective, ≥ sa `start_date`), l'UPDATE
+  est flushé d'abord (colonnes générées → NULL, créneau libéré), puis
+  une nouvelle inscription ACTIVE est créée (`enrollment_source` =
+  CLASS_TRANSFER, `previous_enrollment_id` = ancienne). Vers une autre
+  année : contrôle explicite d'absence d'inscription ACTIVE avant
+  écriture. Deux événements d'audit (`ENROLLMENT_TRANSFERRED` sur
+  l'ancienne, `ENROLLMENT_CREATED` sur la nouvelle). L'ancienne reste
+  consultable (AC-006).
+- Clôture (`POST /api/v1/enrollments/{id}/close`) : `status`
+  (`COMPLETED` | `WITHDRAWN`, `@Pattern` + garde service), `reason`
+  obligatoire, `effectiveDate` par défaut aujourd'hui (horloge
+  injectée), ≥ `start_date`. Audit `ENROLLMENT_CLOSED`.
+- Nouveau port public `academic.ClassGroupDirectory` (impl
+  `academic.internal.DefaultClassGroupDirectory`, confinée) :
+  `ClassGroupRef(internalId, publicId, code, programPublicId,
+  programCode, academicYearInternalId, academicYearPublicId,
+  academicYearCode, openForEnrollment)` — `openForEnrollment` faux dès
+  qu'un maillon de la chaîne (classe, promotion, formation, année
+  scolaire) est archivé ; l'inscription sous une chaîne archivée est
+  refusée (409 `ENR_ARCHIVED_PARENT`). N'expose ni `ClassGroup`, ni
+  repository. `ModularityTests` reste vert (module `enrollment` →
+  `identity`, `academic`, `shared` ; publie vers `audit`).
+- Routes (toutes réservées `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`
+  — cahier §6.4, §10.1 ; `PEDAGOGICAL_MANAGER` exclu tant qu'un port de
+  périmètre pédagogique public n'existe pas ; `TEACHER`/`STUDENT` sans
+  accès — la consultation de son propre historique par l'apprenant
+  relève d'un lot ultérieur) :
+  * `GET/POST /api/v1/student-profiles`, `GET …/{publicId}` — filtres
+    `q` (numéro étudiant), `status`, `user` ; tri liste blanche
+    `studentNumber`/`createdAt` (sinon 400 `ENR_INVALID_SORT`) ;
+    pagination max 100 ;
+  * `GET/POST /api/v1/enrollments`, `GET …/{publicId}`,
+    `POST …/{id}/transfer`, `POST …/{id}/close` — filtres `student`
+    (profil), `classGroup`, `status` ; tri liste blanche
+    `startDate`/`endDate`/`createdAt` ; pagination max 100.
+  Aucun `PATCH`, aucun `DELETE`, aucune route nichée. DTO sans
+  identifiant SQL interne (`id`, `userId`, `studentProfileId`,
+  `classGroupId`, `academicYearId`) ni colonne auteur.
+- Éligibilité de la cible d'un profil : compte existant, non archivé,
+  porteur d'un rôle actif `STUDENT` (via `identity.UserDirectory`) —
+  sinon 422 `ENR_USER_NOT_ELIGIBLE`. Un seul profil par compte
+  (`ENR_PROFILE_EXISTS`), numéro étudiant unique
+  (`ENR_DUPLICATE_STUDENT_NUMBER`).
+- Audit : `enrollment.EnrollmentChangeEvent` (module racine, enums
+  `EnrollmentResourceType` STUDENT_PROFILE/ENROLLMENT,
+  `EnrollmentChangeAction` CREATED/TRANSFERRED/CLOSED) → nouveau
+  `audit.internal.EnrollmentAuditListener` (catégorie `ENROLLMENT`,
+  transaction REQUIRES_NEW), actions `STUDENT_PROFILE_CREATED` /
+  `ENROLLMENT_CREATED` / `_TRANSFERRED` / `_CLOSED`, motif non sensible
+  (`class=<code>;year=<code>` ou `class=<code>;status=<statut>`), jamais
+  de numéro étudiant, de nom ni d'adresse.
+- Horloge : bean `java.time.Clock` (`shared.config.ClockConfig`) injecté
+  dans `EnrollmentService` (`start_date` / `effectiveDate` par défaut).
+- Config test : `application-test.yml` plafonne désormais le pool
+  HikariCP (`maximum-pool-size: 6`, `minimum-idle: 1`). Chaque classe
+  `@SpringBootTest` déclarant sa propre `@TestConfiguration` imbriquée,
+  Spring met en cache un contexte (et un pool) par classe ; avec le pool
+  par défaut (10) et 16 classes `@SpringBootTest`, MySQL 8
+  (`max_connections` = 151) saturait (« Too many connections »). Aucun
+  test métier modifié.
+- docs/03 et docs/04 non modifiés. Aucune donnée fictive en V7.
+- Tests ajoutés (51) — voir la section de vérification.
+
 Périmètre pédagogique ajouté (branche feature/pedagogical-scope, non
 fusionnée, non committée) — table `pedagogical_assignment` via migration
 V6 (réécrite tant qu'elle est non committée ; état Flyway local V6 remis
@@ -332,7 +433,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Angular | TODO |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
-| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment` — migrations appliquées et vérifiées, schéma en version 6) |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment` — migrations appliquées et vérifiées, schéma en version 7) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
 | Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; attribués via `user_role` à l'émission d'une invitation ; API d'attribution / retrait dédiée — voir « Gestion des comptes / rôles ») |
 | Gestion des comptes / rôles | TESTED (`GET /api/v1/users` paginé/filtré/trié, `GET /api/v1/users/{public_id}`, `POST …/{public_id}/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{roleCode}/revoke` ; `@PreAuthorize` + contrôles sensibles dans `UserManagementService` (protection SUPER_ADMIN, auto-action interdite, dernier rôle actif protégé) ; archivage = clôture transactionnelle des rôles actifs, ARCHIVED irréversible ; DTO sans id SQL / `password_hash` / jeton ; audit `ACCOUNT_SUSPENDED`/`ACCOUNT_REACTIVATED`/`ACCOUNT_ARCHIVED`/`ROLE_ASSIGNED`/`ROLE_REVOKED` ; aucune migration V4 ; `PEDAGOGICAL_MANAGER` exclu jusqu'au périmètre pédagogique) |
@@ -341,12 +442,13 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Périmètre pédagogique (pedagogical_assignment) | TESTED (module `academic`, migration V6 réécrite ; entité `PedagogicalAssignment` reliant un responsable (`manager_user_id`) + `delegated_by_id` — valeurs techniques via port `identity.UserDirectory` — à une formation ; rôles PRIMARY_MANAGER/DELEGATE, statut ACTIVE/CLOSED ; validité en `LocalDate`/`DATE` bornes inclusives, colonnes `reason`/`close_reason` ; un seul PRIMARY_MANAGER actif par formation (colonne générée `active_primary_key` + pré-contrôle 409 + collision de contrainte retraduite en 409, jamais 500), DELEGATE multiples ; `CHECK (valid_until IS NULL OR valid_until >= valid_from)`, créneau libéré uniquement par clôture explicite ; cible = compte existant, non archivé, rôle actif PEDAGOGICAL_MANAGER sinon 422 `ACAD_TARGET_NOT_ELIGIBLE` ; routes `/api/v1/pedagogical-assignments` GET liste (filtres `program`/`user`/`type`/`status`/`activeOn` inclusif, tri liste blanche stricte `validFrom`/`validUntil`/`createdAt`) + GET détail + POST création + POST `{id}/close` (`reason` obligatoire, `effectiveDate` défaut aujourd'hui, `>= validFrom` sinon 400 `ACAD_ASSIGNMENT_DATE_INVALID`, persiste `validUntil`), réservées ADMIN/SUPER_ADMIN, aucun PATCH/DELETE/route nichée ; contrôle de périmètre centralisé (`AcademicScopeGuard`) sur formation + niveau + promotion + classe : listes filtrées, détail/écriture hors périmètre → 403 `ACAD_FORBIDDEN` ; accès global = `ROLE_ADMIN`/`ROLE_SUPER_ADMIN`/`ROLE_SCHOOL_ADMINISTRATION` (déduit des autorités Spring Security), écriture ouverte au PEDAGOGICAL_MANAGER dans son périmètre via `SCOPED_WRITE_ROLES`, création de formation toujours ADMIN/SUPER_ADMIN, AcademicYear inchangé ; DTO sans id SQL ; audit `PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED` catégorie ACADEMIC). |
 | Référentiels pédagogiques (formation/niveau/année/promotion/classe) | TESTED (module `academic`, migration V5 ; CRUD + archivage/restauration des 5 entités, aucun DELETE physique ; hiérarchie formation → promotion → classe/groupe ; routes en public_id sous `/api/v1/academic-years`, `/api/v1/programs`, `/api/v1/programs/{id}/levels` + `/api/v1/program-levels/{id}`, `/api/v1/promotions`, `/api/v1/class-groups` ; pagination max 100 + tri liste blanche ; unicités academic_year.code / program.code / (program,code) / (program,academicYear,code) / (promotion,code) ; période année (end>start), période promotion incluse dans l'année, program_level d'une classe = même formation que sa promotion, refus parent archivé, archivage bloqué si enfants actifs, code + rattachements immuables ; `class_group.site_id` = valeur technique via port public `organization.SiteDirectory` (aucun import de `organization.internal`, aucune relation JPA inter-module) ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN ; DTO sans id SQL ; audit `ACADEMIC_YEAR_*`/`PROGRAM_*`/`PROGRAM_LEVEL_*`/`PROMOTION_*`/`CLASS_GROUP_*` catégorie ACADEMIC). Inscriptions, apprenants, formateurs, matières : hors périmètre de ce lot. |
 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | TESTED (module `organization`, migration V4 ; CRUD + archivage/restauration site·bâtiment·salle, création + activation/désactivation plages réseau, aucun DELETE physique ; routes en public_id sous `/api/v1/sites`, `/api/v1/buildings/{id}`, `/api/v1/rooms/{id}`, `/api/v1/network-ranges/{id}` ; pagination max 100 + tri liste blanche ; unicités site.code / (site,code) / (site,cidr) active ; refus parent archivé, room.site=building.site, archivage bloqué si enfants actifs, code immuable ; ZoneId + ISO 3166-1 + CIDR IPv4/IPv6 validés ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN, plages réseau SUPER_ADMIN pour toute opération ; DTO sans id SQL ; audit `SITE_*`/`BUILDING_*`/`ROOM_*`/`SITE_NETWORK_RANGE_*` catégorie ORGANIZATION ; port public `identity.CurrentUserResolver` pour l'auteur des écritures) |
+| Inscriptions historiques (student_profile / enrollment) | TESTED (module `enrollment`, migration V7 ; `StudentProfile` (`user_id` valeur technique via `identity.UserDirectory`, unique ; `student_number` unique ; statut ACTIVE/ARCHIVED) et `Enrollment` (rattachements `class_group_id`/`academic_year_id` = valeurs techniques via nouveau port `academic.ClassGroupDirectory` ; `previous_enrollment_id` auto-référence ; `enrollment_source` MANUAL/CLASS_TRANSFER ; statuts docs/04 §13.1) ; **au plus une inscription ACTIVE par apprenant et par année scolaire** (RG-012 / docs/04 §13.3) : pré-contrôle applicatif + contrainte SQL `uq_enrollment_active_per_year` (colonnes générées) + retraduction ciblée d'une collision concurrente en 409, jamais 500 ; changement de classe `POST …/{id}/transfer` clôturant l'ancienne inscription en TRANSFERRED (`end_date`, historique conservé — AC-006) et créant la nouvelle liée ; clôture `POST …/{id}/close` (COMPLETED/WITHDRAWN, motif obligatoire) ; `CHECK (end_date IS NULL OR end_date >= start_date)` ; routes en public_id sous `/api/v1/student-profiles` et `/api/v1/enrollments` (GET liste filtres + tri liste blanche + pagination max 100, GET détail, POST) réservées ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION (PEDAGOGICAL_MANAGER exclu tant qu'un port de périmètre pédagogique public n'existe pas ; TEACHER/STUDENT sans accès), aucun PATCH/DELETE/route nichée ; horloge `java.time.Clock` injectée ; DTO sans id SQL ; audit `STUDENT_PROFILE_CREATED`/`ENROLLMENT_CREATED`/`_TRANSFERRED`/`_CLOSED` catégorie `ENROLLMENT`. Import CSV, rythmes d'alternance, apprenants provisoires : hors périmètre de ce lot. |
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe **et affectations de responsable pédagogique (`PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED`)**, catégorie `ACADEMIC` — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
+| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe **et affectations de responsable pédagogique (`PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED`)**, catégorie `ACADEMIC` — **et changements du module inscriptions — `STUDENT_PROFILE_CREATED` / `ENROLLMENT_CREATED` / `_TRANSFERRED` / `_CLOSED`, catégorie `ENROLLMENT`** — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -358,19 +460,23 @@ n'existe pas encore de file persistante ni de reprise garantie
 
 ```text
 Les référentiels organisationnel (module `organization`, V4), académique
-minimal (module `academic`, V5) et le périmètre pédagogique (module
-`academic`, V6 : `pedagogical_assignment` + `AcademicScopeGuard`
-restreignant lecture et écriture d'un PEDAGOGICAL_MANAGER à ses
-formations sur formation/niveau/promotion/classe) sont en place.
+minimal (module `academic`, V5), le périmètre pédagogique (module
+`academic`, V6) et les inscriptions historiques (module `enrollment`,
+V7 : `student_profile` + `enrollment` + changement de classe conservant
+l'historique) sont en place.
 Prochaines étapes :
+- rythmes d'alternance minimaux (T-J1-033 / US-060 à 062) : module
+  `alternation` — `work_study_pattern`, `class_work_study_pattern`,
+  `student_schedule_exception` (docs/04 §14) ;
+- import CSV des apprenants (T-J2-001 à 004 / US-050, US-051) : simulation
+  puis confirmation, s'appuyant sur `student-profiles` et `enrollments` ;
+- créer un port de périmètre pédagogique public afin d'ouvrir la gestion
+  des profils / inscriptions au PEDAGOGICAL_MANAGER dans son périmètre
+  (aujourd'hui ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION uniquement) ;
 - exposer éventuellement une route de consultation de ses propres
-  affectations pour le PEDAGOGICAL_MANAGER (les 4 routes actuelles sont
-  ADMIN/SUPER_ADMIN uniquement) ;
+  affectations pour le PEDAGOGICAL_MANAGER ;
 - affectation d'un responsable pédagogique principal à une formation au
-  fil de l'eau depuis les écrans d'administration (aujourd'hui via
-  `POST /api/v1/pedagogical-assignments`) ;
-- inscriptions historiques et rythmes d'alternance minimaux
-  (T-J1-032, T-J1-033), puis import des apprenants.
+  fil de l'eau depuis les écrans d'administration.
 /auth/logout et la révocation de session restent à évaluer (jeton
 stateless sans état serveur pour l'instant).
 
@@ -379,9 +485,24 @@ Dettes techniques à traiter ultérieurement :
   (actuellement envoi synchrone après commit, échec seulement journalisé) ;
 - purge / expiration explicite des invitations `PENDING` périmées ;
 - création de comptes `PENDING_ACTIVATION` par API (l'émission cible
-  aujourd'hui un compte déjà existant, créé par fixture ou futur import) ;
+  aujourd'hui un compte déjà existant, créé par fixture ou futur import ;
+  vaut aussi pour la création d'un `student_profile`, qui exige un
+  compte `STUDENT` préexistant) ;
+- consultation par l'apprenant de son propre profil et de son historique
+  d'inscriptions (routes réservées à l'administration dans ce lot) ;
+- génération locale d'un numéro étudiant `ESIC-{ANNEE}-{SEQUENCE}` quand
+  il est absent (docs/04 §3.5 ; aujourd'hui le numéro est obligatoire
+  dans la requête) ;
+- suite de tests : chaque classe `@SpringBootTest` porte sa propre
+  `@TestConfiguration` imbriquée → un contexte Spring (et un pool
+  HikariCP) mis en cache par classe ; le pool de test est plafonné
+  (`application-test.yml`, `maximum-pool-size: 6`) pour rester sous
+  `max_connections` de MySQL. Une `@TestConfiguration` partagée ou des
+  Testcontainers dédiés seraient préférables à terme ;
 - incohérences docs à corriger : docs/03 §6.4 (dépendances du module
-  `academic` : ajouter `organization` et la publication vers `audit`) ;
+  `academic` : ajouter `organization` et la publication vers `audit` ;
+  ajouter le module `enrollment` → `identity`, `academic`, publication
+  vers `audit`, et le port `academic.ClassGroupDirectory`) ;
   docs/04 §12.3 (colonnes techniques de `program_level`).
 ```
 
@@ -775,6 +896,130 @@ l'`INSERT` via `AssignmentPersister` ; les cinq services académiques
 `AcademicScopeGuard`). `.env`, `compose.yaml`, `V1`–`V6`,
 `SecurityConfig`, `pom.xml`, `docs/03`, `docs/04` et le workflow CI
 inchangés. Aucune affectation fictive insérée. Aucun commit, aucun push.
+
+Inscriptions historiques vérifiées le 29 août 2026, sur la branche
+`feature/enrollment-history` (non fusionnée, non committée) :
+`./mvnw clean test` (`JAVA_HOME` OpenJDK 21,
+`set -a && source ../.env && set +a`) → `BUILD SUCCESS`, **314 tests**
+exécutés (51 nouveaux ; 263 → 314), 0 échec, 0 erreur, 0 ignoré,
+**exécuté deux fois** de suite après tous les changements code + docs
+(résultats identiques), dont `ModularityTests` vert (nouveau module
+`enrollment` → `identity`, `academic`, `shared` ; publie
+`EnrollmentChangeEvent` vers `audit` ; nouveau port
+`academic.ClassGroupDirectory` ; frontières respectées, aucun cycle).
+
+État Flyway local : nouvelle migration `V7`
+(`student_profile` / `enrollment`), appliquée et vérifiée ; schéma en
+version 7. `V1`–`V6` jamais touchées ; aucun `flyway clean`.
+
+`enrollment` — deux entités : `StudentProfile` (`user_id` valeur
+technique, unique ; `student_number` unique ; `birth_date`,
+`work_study`, `company_name` ; statut ACTIVE/ARCHIVED) et `Enrollment`
+(`student_profile` intra-module ; `class_group_id` / `academic_year_id`
+valeurs techniques via `ClassGroupDirectory` ; `previous_enrollment_id`
+auto-référence FK `RESTRICT` ; `start_date`/`end_date` en `LocalDate`,
+`CHECK (end_date IS NULL OR end_date >= start_date)` ;
+`enrollment_source` MANUAL/CLASS_TRANSFER ; statuts docs/04 §13.1).
+Unicité d'une inscription ACTIVE par (apprenant, année) : deux colonnes
+générées `VIRTUAL` (`active_student_key` / `active_year_key`, valorisées
+seulement pour une ligne ACTIVE) + `UNIQUE (active_student_key,
+active_year_key)` ; pré-contrôle applicatif `ENR_ACTIVE_ENROLLMENT_EXISTS`
+(409) ; en cas de course, la `DataIntegrityViolationException` levée au
+`flush` (transaction service déjà annulée) est retraduite en 409 par
+`EnrollmentExceptionHandler` **uniquement** pour
+`uq_enrollment_active_per_year` / `uq_student_profile_user` /
+`uq_student_profile_student_number` — toute autre violation relancée.
+Aucun `catch (Exception)`.
+
+Changement de classe (`transfer`) : `@Transactional` unique — clôture de
+l'inscription courante en TRANSFERRED (`end_date` = date effective ≥
+`start_date`), `saveAndFlush` de l'UPDATE d'abord (colonnes générées →
+NULL), puis création de la nouvelle inscription ACTIVE
+(`enrollment_source` = CLASS_TRANSFER, `previous_enrollment_id`,
+`change_reason`) ; vers une autre année scolaire, contrôle explicite
+d'absence d'inscription ACTIVE avant écriture. `close` : COMPLETED /
+WITHDRAWN (`@Pattern` + garde service), motif obligatoire,
+`effectiveDate` par défaut = `LocalDate.now(clock)` ≥ `start_date`.
+
+Nouveau port public `academic.ClassGroupDirectory` (impl
+`academic.internal.DefaultClassGroupDirectory`, `@Component` confiné) :
+`ClassGroupRef(internalId, publicId, code, programPublicId, programCode,
+academicYearInternalId, academicYearPublicId, academicYearCode,
+openForEnrollment)` — `openForEnrollment` vrai seulement si la classe,
+sa promotion, sa formation et son année scolaire sont toutes ACTIVE
+(sinon inscription refusée en 409 `ENR_ARCHIVED_PARENT`). N'expose ni
+`ClassGroup`, ni repository.
+
+Horloge : `EnrollmentService` reçoit le bean `java.time.Clock`
+(`shared.config.ClockConfig`) — `start_date` et `effectiveDate` par
+défaut lus dessus, testables avec `Clock.fixed(...)`.
+
+Config test : `application-test.yml` plafonne le pool HikariCP
+(`spring.datasource.hikari.maximum-pool-size: 6`, `minimum-idle: 1`).
+Motif : chaque classe `@SpringBootTest` déclare sa propre
+`@TestConfiguration` imbriquée → Spring met en cache un contexte (et un
+pool) par classe ; avec le pool par défaut (10) et 16 classes
+`@SpringBootTest`, MySQL 8 (`max_connections` = 151 par défaut, y compris
+en CI) était saturé (« Too many connections »). Aucun test métier
+existant modifié.
+
+Tests ajoutés (51) :
+`EnrollmentServiceTests` (17, Mockito, `Clock.fixed(2026-06-15)` :
+profil inconnu / archivé, classe inconnue / chaîne archivée, unicité
+année (pré-contrôle), `start_date` par défaut = horloge et fournie,
+`transfer` sur inscription non active / même classe / `effectiveDate` <
+`start_date` / inscription ACTIVE dans l'année cible / cas nominal —
+ancienne → TRANSFERRED + `end_date`, nouvelle ACTIVE liée + deux
+événements —, `close` non active / statut invalide / date invalide /
+COMPLETED nominal + événement, tri hors liste blanche) ;
+`StudentProfileServiceTests` (7, Mockito — compte inconnu / archivé /
+sans rôle `STUDENT`, numéro dupliqué, profil déjà existant, création +
+`companyName` trimé + événement, tri hors liste blanche) ;
+`EnrollmentConstraintsTests` (12, `@DataJpaTest` — deuxième inscription
+ACTIVE même année rejetée, collision reconnue par
+`EnrollmentPersistence.isActiveEnrollmentUniqueViolation` et violation
+`public_id` **non** reconnue, clôture qui libère le créneau, année
+distincte acceptée, unicités `user_id` / `student_number` /
+`public_id`, `CHECK` de période, FK `RESTRICT` `student_profile` /
+`class_group` / `previous_enrollment_id` via
+`org.hibernate.exception.ConstraintViolationException` ; chaîne
+académique insérée en SQL natif) ;
+`ClassGroupDirectoryTests` (3, `@SpringBootTest` — résolution
+publicId → codes formation / année + `openForEnrollment`, faux après
+archivage de la classe, identifiant inconnu / `null` → `Optional.empty`) ;
+`EnrollmentIntegrationTests` (9, `@SpringBootTest` `RANDOM_PORT` — cycle
+profil → inscription → changement de classe (ancienne consultable en
+TRANSFERRED + nouvelle liée) → clôture, audit `STUDENT_PROFILE_CREATED`
+/ `ENROLLMENT_CREATED` / `_TRANSFERRED` / `_CLOSED` ; doublon
+d'inscription ACTIVE → 409 ; **deux créations concurrentes (pool 2
+threads) → exactement un 201 et un 409** ; transfert vers la même
+classe → 400 `ENR_SAME_CLASS` ; profil sur compte non `STUDENT` → 422 ;
+numéro étudiant dupliqué → 409 ; inscription sous classe archivée → 409
+`ENR_ARCHIVED_PARENT` ; profil inconnu → 404 ; tri hors liste blanche →
+400 `ENR_INVALID_SORT` ; DTO sans identifiant SQL) ;
+`EnrollmentSecurityTests` (3, `@SpringBootTest` — 401 anonyme ;
+`STUDENT` / `TEACHER` / `PEDAGOGICAL_MANAGER` → 403 en lecture comme en
+écriture ; `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` → 200 en
+lecture).
+
+Fichiers back-end ajoutés : migration `V7` ; nouveau module
+`com.esic.connect.enrollment` (package racine : `EnrollmentChangeEvent`
++ enums `EnrollmentResourceType` / `EnrollmentChangeAction`,
+`package-info` ; `enrollment.internal` : `StudentProfile`(+`Status`),
+`Enrollment`(+`EnrollmentStatus`, `EnrollmentSource`), leurs
+repositories, `StudentProfileService` / `EnrollmentService`,
+`StudentProfileController` / `EnrollmentController`, `*Requests` /
+`*Response`, `EnrollmentChangePublisher`, `EnrollmentException`(+
+`Handler`), `EnrollmentPersistence`, `EnrollmentWeb`,
+`EnrollmentQuerySupport`, `EnrollmentSpecifications`, `PageResponse`
+local) ; `academic.ClassGroupDirectory` (port public) +
+`academic.internal.DefaultClassGroupDirectory` (implémentation) ;
+`audit.internal.EnrollmentAuditListener`. Fichiers modifiés :
+`academic/package-info.java` (mention du port `ClassGroupDirectory`) ;
+`src/test/resources/application-test.yml` (pool HikariCP plafonné).
+`.env`, `compose.yaml`, `V1`–`V6`, `SecurityConfig`, `pom.xml`,
+`docs/03`, `docs/04` et le workflow CI inchangés. Aucun profil, aucune
+inscription fictive insérés. Aucun commit, aucun push.
 
 ## Règle de mise à jour
 

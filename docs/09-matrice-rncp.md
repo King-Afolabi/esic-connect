@@ -145,6 +145,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-017 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | `organization`, `identity`, `audit` | `Organization*Tests`, `CidrValidatorTests` | `./mvnw test` (V4 appliquée) | BC02/BC03 |
 | TR-018 | Référentiel académique (formation/niveau/année/promotion/classe) | `academic`, `organization`, `identity`, `audit` | `Academic*Tests` | `./mvnw clean test` (V5 appliquée) | BC02/BC03 |
 | TR-019 | Périmètre pédagogique (affectation responsable → formation, contrôle d'accès sur formation/niveau/promotion/classe) | `academic`, `identity`, `audit` | `PedagogicalAssignment*Tests`, `PedagogicalScopeIntegrationTests`, `PedagogicalAssignmentIntegrationTests` | `./mvnw clean test` (V6 appliquée) | BC02/BC03 |
+| TR-020 | Inscriptions historiques (profil apprenant, inscription apprenant → classe/année, changement de classe conservant l'historique) | `enrollment`, `academic`, `identity`, `audit` | `EnrollmentServiceTests`, `StudentProfileServiceTests`, `EnrollmentConstraintsTests`, `EnrollmentIntegrationTests`, `EnrollmentSecurityTests`, `ClassGroupDirectoryTests` | `./mvnw clean test` (V7 appliquée) | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -368,17 +369,67 @@ Une exigence décrite n’est pas automatiquement réalisée.
   clôture, éligibilité, **deux créations concurrentes → un 201 + un
   409**, matrice d'autorisation), `ModularityTests`.
 
+- **TR-020 (Inscriptions historiques)** : `IMPLÉMENTÉ` et `TESTÉ` —
+  nouveau module `enrollment` (docs/03 §7.3) + migration Flyway `V7`
+  (`student_profile`, `enrollment` ; schéma en version 7). Profil
+  apprenant (`user_id` valeur technique via `identity.UserDirectory`,
+  unique ; `student_number` unique) et inscription d'un apprenant dans
+  une classe pour une année scolaire, `class_group_id` /
+  `academic_year_id` résolus via le **nouveau port public**
+  `academic.ClassGroupDirectory` (n'expose ni `ClassGroup` ni
+  repository ; `openForEnrollment` faux si la classe ou un maillon de sa
+  chaîne — promotion, formation, année — est archivé). Règle RG-012 /
+  docs/04 §13.3 : au plus une inscription `ACTIVE` par apprenant et par
+  année scolaire — pré-contrôle applicatif
+  (`ENR_ACTIVE_ENROLLMENT_EXISTS`, 409) **et** contrainte SQL
+  `uq_enrollment_active_per_year` (deux colonnes générées `VIRTUAL`) ;
+  la collision concurrente est retraduite en 409 ciblé par
+  `EnrollmentExceptionHandler` (jamais un 500 générique ; aucun
+  `catch (Exception)`). Changement de classe
+  (`POST /api/v1/enrollments/{id}/transfer`, docs/04 §13.2) : ancienne
+  inscription clôturée en `TRANSFERRED` (`end_date`, **historique
+  conservé et consultable — AC-006**), nouvelle inscription `ACTIVE`
+  liée par `previous_enrollment_id`. Clôture explicite
+  (`COMPLETED`/`WITHDRAWN`, motif obligatoire, horloge injectée).
+  Routes en `public_id` sous `/api/v1/student-profiles` et
+  `/api/v1/enrollments` (liste filtrée + tri liste blanche + pagination
+  max 100, détail, création, `transfer`, `close`), `@PreAuthorize`
+  `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` (cahier §6.4, §10.1 ;
+  `PEDAGOGICAL_MANAGER` reporté à un port de périmètre pédagogique
+  public ; `TEACHER`/`STUDENT` exclus). Aucun `PATCH`, aucun `DELETE`,
+  aucune suppression physique. DTO sans identifiant SQL interne. Audit
+  `STUDENT_PROFILE_CREATED` / `ENROLLMENT_CREATED` / `_TRANSFERRED` /
+  `_CLOSED` (catégorie `ENROLLMENT`, transaction `REQUIRES_NEW`, motif
+  non sensible — codes classe/année/statut —, jamais de numéro étudiant,
+  de nom ni d'adresse) via `enrollment.EnrollmentChangeEvent` →
+  `audit.internal.EnrollmentAuditListener`. Tests :
+  `EnrollmentServiceTests` (17, Mockito, `Clock.fixed`),
+  `StudentProfileServiceTests` (7, Mockito),
+  `EnrollmentConstraintsTests` (12, `@DataJpaTest` — unicités + FK
+  `RESTRICT` + `CHECK` de période + reconnaissance ciblée de la
+  collision), `ClassGroupDirectoryTests` (3, `@SpringBootTest`),
+  `EnrollmentIntegrationTests` (9, `@SpringBootTest` — cycle complet,
+  audit, **deux créations concurrentes → un 201 + un 409**, refus sous
+  classe archivée, matrice d'autorisation), `EnrollmentSecurityTests`
+  (3), `ModularityTests`. `application-test.yml` : pool HikariCP
+  plafonné (`maximum-pool-size: 6`) — un contexte Spring (et un pool)
+  étant mis en cache par classe `@SpringBootTest`, MySQL saturait
+  (« Too many connections ») ; aucun test métier existant modifié.
+  `docs/03` et `docs/04` non modifiés.
+
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,
 `backend/src/test/java/com/esic/connect/audit/`,
 `backend/src/test/java/com/esic/connect/organization/`,
-`backend/src/test/java/com/esic/connect/academic/`, exécution réelle
-de `./mvnw clean test` (**263/263**, `BUILD SUCCESS`, lancé deux fois
-après la deuxième passe corrective du périmètre pédagogique — isolation
-transactionnelle de la collision + injection de `Clock` ; **214/214** au
-lot académique précédent) — voir `docs/CURRENT-STATE.md`. Émetteur JWT
-vérifié explicitement (`JwtValidators`), jeton à émetteur incorrect
-refusé (401 nu, aucun détail de validation exposé).
+`backend/src/test/java/com/esic/connect/academic/`,
+`backend/src/test/java/com/esic/connect/enrollment/`, exécution réelle
+de `./mvnw clean test` (**314/314**, `BUILD SUCCESS`, lancé deux fois
+après le lot inscriptions historiques ; **263/263** au lot périmètre
+pédagogique précédent — isolation transactionnelle de la collision +
+injection de `Clock` ; **214/214** au lot académique) — voir
+`docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
+(`JwtValidators`), jeton à émetteur incorrect refusé (401 nu, aucun
+détail de validation exposé).
 
 ---
 
