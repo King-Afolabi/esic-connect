@@ -59,6 +59,17 @@ describe('application routes (guard wiring)', () => {
     location = TestBed.inject(Location);
   });
 
+  it('still declares the guarded placeholder routes so they stay directly addressable', () => {
+    const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+    const childPaths = (shell?.children ?? []).map((c) => c.path);
+    expect(childPaths).toContain('administration');
+    expect(childPaths).toContain('students');
+    for (const path of ['administration', 'students']) {
+      const route = shell?.children?.find((c) => c.path === path);
+      expect(route?.canActivate?.length).toBeGreaterThan(0);
+    }
+  });
+
   it('redirects an anonymous user from a protected route to /login', async () => {
     await router.navigateByUrl('/administration');
     expect(location.path()).toContain('/login');

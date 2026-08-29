@@ -74,11 +74,6 @@
   background: color-mix(in srgb, var(--mat-sys-on-primary) 20%, transparent);
 }
 
-.shell__badge {
-  font: var(--mat-sys-label-small);
-  opacity: 0.7;
-}
-
 .shell__main {
   display: block;
   padding: 1.5rem;

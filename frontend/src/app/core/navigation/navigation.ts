@@ -10,15 +10,24 @@ export interface NavItem {
    * authentifié.
    */
   roles?: readonly Role[];
-  /** Fonctionnalité non encore livrée (entrée informative). */
-  upcoming?: boolean;
+  /**
+   * Route protégée dont l'écran métier n'est pas encore livré : elle
+   * reste directement adressable (utile pour les tests d'autorisation) et
+   * gardée par rôle, mais n'est **jamais** rendue dans la navigation
+   * principale ni dans les accès rapides tant que ce drapeau est vrai
+   * ({@link visibleNavItems} l'exclut).
+   */
+  placeholder?: boolean;
 }
 
 /**
  * Matrice de navigation dérivée de la matrice d'autorisation du back-end
  * (docs/02-cahier-des-charges.md §6 ; `UserAccountController`,
- * `EnrollmentWeb.MANAGE_ROLES`). Toute entrée pointant vers un futur
- * écran est marquée `upcoming`.
+ * `EnrollmentWeb.MANAGE_ROLES`).
+ *
+ * Les entrées `placeholder` sont conservées ici pour tracer le lien
+ * rôle → route protégée, mais elles ne sont pas affichées : seuls les
+ * écrans réellement utilisables apparaissent dans la navigation.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   {
@@ -31,20 +40,27 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/administration',
     icon: 'admin_panel_settings',
     roles: ['ADMIN', 'SUPER_ADMIN'],
-    upcoming: true,
+    placeholder: true,
   },
   {
     label: 'Apprenants',
     path: '/students',
     icon: 'groups',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
-    upcoming: true,
+    placeholder: true,
   },
 ];
 
+/**
+ * Entrées effectivement affichables : écran métier livré
+ * (`placeholder` faux/absent) **et** rôle compatible.
+ */
 export function visibleNavItems(
   items: readonly NavItem[],
   heldRoles: readonly Role[],
 ): NavItem[] {
-  return items.filter((item) => !item.roles || item.roles.some((r) => heldRoles.includes(r)));
+  return items.filter(
+    (item) =>
+      !item.placeholder && (!item.roles || item.roles.some((r) => heldRoles.includes(r))),
+  );
 }

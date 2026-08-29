@@ -2,7 +2,7 @@
 
 @if (session(); as currentSession) {
   <p class="dashboard__intro">
-    Bienvenue. Votre session est active — l'appel d'API authentifié fonctionne.
+    Bienvenue. Votre session locale est active (établie après votre connexion).
   </p>
 
   <div class="dashboard__grid">
@@ -59,9 +59,6 @@
               <a mat-list-item [routerLink]="link.path">
                 <mat-icon matListItemIcon aria-hidden="true">{{ link.icon }}</mat-icon>
                 <span matListItemTitle>{{ link.label }}</span>
-                @if (link.upcoming) {
-                  <span matListItemLine>À venir</span>
-                }
               </a>
             }
           </mat-nav-list>

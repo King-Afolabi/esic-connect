@@ -36,10 +36,16 @@ describe('Dashboard', () => {
 
   const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
 
-  it('confirms the active session and shows the account identity', () => {
-    expect(text()).toContain("l'appel d'API authentifié fonctionne");
+  it('reports a local active session and shows the account identity', () => {
+    expect(text()).toContain('Votre session locale est active');
     expect(text()).toContain('admin@esic.test');
     expect(text()).toContain('public-77');
+  });
+
+  it('does not claim that a second authenticated API call was verified', () => {
+    expect(text()).not.toContain("appel d'API");
+    expect(text()).not.toContain('API authentifié');
+    expect(text()).not.toContain('/auth/me');
   });
 
   it('lists the held roles as chips', () => {
@@ -54,11 +60,19 @@ describe('Dashboard', () => {
     expect(text()).toContain("Aucun rôle actif n'est associé à votre compte");
   });
 
-  it('filters quick links by role (SCHOOL_ADMINISTRATION sees Apprenants, not Administration)', () => {
+  it('never exposes placeholder routes as quick links, whatever the role', () => {
+    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION'], ['TEACHER']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('a[href="/administration"]')).toBeNull();
+      expect(root.querySelector('a[href="/students"]')).toBeNull();
+    }
+  });
+
+  it('shows the quick-links empty state for a role whose only routes are placeholders', () => {
     roles.set(['SCHOOL_ADMINISTRATION']);
     fixture.detectChanges();
-    const links = fixture.nativeElement as HTMLElement;
-    expect(links.querySelector('a[href="/students"]')).not.toBeNull();
-    expect(links.querySelector('a[href="/administration"]')).toBeNull();
+    expect(text()).toContain("Aucun autre écran n'est disponible");
   });
 });

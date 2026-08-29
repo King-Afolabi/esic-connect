@@ -36,6 +36,8 @@ describe('AppShell', () => {
   });
 
   const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+  const navLinks = () =>
+    Array.from(fixture.nativeElement.querySelectorAll('nav a')) as HTMLAnchorElement[];
 
   it('shows the brand, the current user email and a logout control', () => {
     expect(text()).toContain('ESIC Connect');
@@ -43,17 +45,23 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders navigation entries permitted for the held roles', () => {
+  it('renders only usable screens in the main navigation (currently the dashboard)', () => {
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
     expect(text()).toContain('Tableau de bord');
-    expect(text()).toContain('Administration');
   });
 
-  it('hides role-restricted entries for a role that lacks them', () => {
-    roles.set(['TEACHER']);
-    fixture.detectChanges();
-    expect(text()).toContain('Tableau de bord');
+  it('does not show the guarded placeholder routes in the navigation, even for an ADMIN', () => {
+    const hrefs = navLinks().map((a) => a.getAttribute('href'));
+    expect(hrefs).not.toContain('/administration');
+    expect(hrefs).not.toContain('/students');
     expect(text()).not.toContain('Administration');
     expect(text()).not.toContain('Apprenants');
+  });
+
+  it('keeps the navigation limited to the dashboard for a role with no extra screens', () => {
+    roles.set(['TEACHER']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
   });
 
   it('calls AuthService.logout when the logout control is used', () => {
