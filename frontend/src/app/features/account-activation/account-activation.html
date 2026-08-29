@@ -1,0 +1,124 @@
+<main class="activation" id="main-content">
+  <section class="activation__card" aria-labelledby="activation-title">
+    <header class="activation__header">
+      <h1 id="activation-title" class="activation__title">ESIC Connect</h1>
+      <p class="activation__subtitle">Activation de votre compte</p>
+    </header>
+
+    @switch (view().kind) {
+      @case ('validating') {
+        <div class="activation__status" role="status">
+          <mat-progress-spinner
+            mode="indeterminate"
+            diameter="40"
+            aria-label="Vérification du lien d'activation en cours"
+          ></mat-progress-spinner>
+          <p>Vérification de votre lien d'activation…</p>
+        </div>
+      }
+
+      @case ('form') {
+        <p class="activation__intro">
+          Choisissez un mot de passe pour activer votre compte, puis connectez-vous.
+        </p>
+
+        @if (submitting()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Activation en cours"></mat-progress-bar>
+        }
+
+        <form class="activation__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <mat-form-field appearance="outline">
+            <mat-label>Nouveau mot de passe</mat-label>
+            <input
+              matInput
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              autocomplete="new-password"
+              [attr.minlength]="minLength"
+              [attr.maxlength]="maxLength"
+              required
+            />
+            <button
+              matSuffix
+              mat-icon-button
+              type="button"
+              class="activation__toggle"
+              (click)="togglePassword()"
+              [attr.aria-label]="
+                showPassword() ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
+              "
+              [attr.aria-pressed]="showPassword()"
+            >
+              <mat-icon aria-hidden="true">{{
+                showPassword() ? 'visibility_off' : 'visibility'
+              }}</mat-icon>
+            </button>
+            <mat-hint>Entre {{ minLength }} et {{ maxLength }} caractères.</mat-hint>
+            @if (form.controls.password.touched && form.controls.password.hasError('required')) {
+              <mat-error>Le mot de passe est obligatoire.</mat-error>
+            }
+            @if (form.controls.password.touched && form.controls.password.hasError('minlength')) {
+              <mat-error>Le mot de passe doit contenir au moins {{ minLength }} caractères.</mat-error>
+            }
+            @if (form.controls.password.touched && form.controls.password.hasError('maxlength')) {
+              <mat-error>Le mot de passe ne doit pas dépasser {{ maxLength }} caractères.</mat-error>
+            }
+          </mat-form-field>
+
+          <p class="activation__error" role="alert" aria-live="assertive">
+            @if (submitError()) {
+              <mat-icon aria-hidden="true">error</mat-icon>
+              <span>{{ submitError() }}</span>
+            }
+          </p>
+
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            class="activation__submit"
+            [disabled]="submitting() || form.invalid"
+            [attr.aria-busy]="submitting()"
+          >
+            {{ submitting() ? 'Activation…' : 'Activer mon compte' }}
+          </button>
+        </form>
+      }
+
+      @case ('invalid-link') {
+        <p class="activation__message" role="alert">
+          Ce lien d'activation n'est pas valide. Il est peut-être inconnu, expiré ou déjà utilisé.
+          Demandez un nouveau lien à votre administrateur.
+        </p>
+        <a mat-stroked-button routerLink="/login" class="activation__action">Aller à la connexion</a>
+      }
+
+      @case ('validation-error') {
+        <p class="activation__message" role="alert">
+          Impossible de vérifier votre lien d'activation pour le moment.
+        </p>
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          class="activation__action"
+          (click)="retryValidation()"
+        >
+          Réessayer
+        </button>
+      }
+
+      @case ('success') {
+        <div class="activation__status" role="status">
+          <mat-icon class="activation__success-icon" aria-hidden="true">check_circle</mat-icon>
+          <p class="activation__message">
+            Votre compte est activé. Vous pouvez maintenant vous connecter.
+          </p>
+        </div>
+        <a mat-flat-button color="primary" routerLink="/login" class="activation__action">
+          Se connecter
+        </a>
+      }
+    }
+  </section>
+</main>

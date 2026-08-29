@@ -41,10 +41,23 @@ src/app/
     notifications/
   shared/       composants réutilisables
   features/
-    auth/login/ écran de connexion
-    dashboard/  premier écran authentifié
-    errors/     403 / 404
+    auth/login/          écran de connexion
+    account-activation/  parcours public `/activation?token=…` (validation + définition du mot de passe)
+    dashboard/           premier écran authentifié
+    errors/              403 / 404
 ```
+
+## Activation de compte
+
+`/activation?token=<jeton>` est une route **publique sans garde** atteinte
+via le lien d'invitation du back-end. Le jeton est lu une fois depuis la
+query string puis retiré de la barre d'adresse (`Location.replaceState`,
+sans rechargement), gardé en mémoire du composant, jamais journalisé ni
+stocké, et transmis uniquement à
+`GET /api/v1/account-invitations/validate` et
+`POST /api/v1/account-invitations/activate` (jamais en jeton porteur).
+L'activation réussie (`204`) ne connecte pas : elle affiche un succès et
+un lien vers `/login`.
 
 ## Authentification / session
 

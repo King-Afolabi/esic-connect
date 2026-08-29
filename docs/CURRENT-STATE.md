@@ -15,11 +15,115 @@
 ## Phase actuelle
 
 ```text
-Socle front-end Angular — branche `feature/frontend-foundation`, PR #11
-ouverte contre `main`, NON fusionnée. Première tranche verticale
-authentifiée : connexion → tableau de bord (rapport d'un **état de
-session local** établi après connexion réussie). Aucun module métier
-back-end ajouté ; migrations V1–V7 inchangées ; docs/01–04 inchangés.
+Activation de compte (front-end) — branche
+`feature/frontend-account-activation`, PR ouverte contre `main`, NON
+fusionnée. Deuxième tranche verticale front-end : parcours public
+`/activation?token=<jeton>` atteint via le lien d'invitation généré par
+le back-end. Le socle front-end (PR #11) est fusionné sur `main`
+(commit `6fa341f`). Aucun fichier back-end, migration V1–V7 ou docs/01–04
+modifié ; autorisation et CORS back-end inchangés.
+- Route `/activation` — **publique, sans aucune garde** (ni `authGuard`,
+  ni `roleGuard`, ni `guestGuard`) : le jeton d'invitation fait foi,
+  indépendamment d'une éventuelle session en mémoire (docs silencieux sur
+  le cas d'un utilisateur déjà connecté activant un autre compte).
+  N'apparaît pas dans la navigation authentifiée. Les routes `/login`,
+  `/dashboard`, placeholders, gardes et navigation existantes sont
+  inchangées.
+- Endpoints consommés **exactement** (contrat existant, rien d'inventé) :
+  * `GET /api/v1/account-invitations/validate?token=<jeton>` (jeton en
+    paramètre de requête) → toujours `200` avec `{ "valid": boolean }`
+    (aucune donnée personnelle, aucun motif) ;
+  * `POST /api/v1/account-invitations/activate`, corps
+    `{ "token": string, "password": string }` → succès `204 No Content`,
+    corps vide, **aucun identifiant de session renvoyé**.
+- Traitement du jeton : lu une seule fois depuis `?token=` via
+  `ActivatedRoute.snapshot`, puis retiré de la barre d'adresse dès
+  `NavigationEnd` par `Location.replaceState` (pas de rechargement, pas
+  d'entrée d'historique) ; conservé uniquement dans un champ privé du
+  composant (effacé à la destruction) ; jamais journalisé, affiché, mis
+  en `localStorage` / `sessionStorage` / IndexedDB, ajouté à une autre
+  URL, ni envoyé comme jeton porteur.
+- Formulaire de mot de passe (Angular reactive form) : champ `password`
+  seul — le contrat back-end est `{ token, password }` avec
+  `@Size(min = 12, max = 200)`, sans règle de complexité ni champ de
+  confirmation ; aucune de ces contraintes n'est renforcée côté client
+  au-delà de `required` + `minLength(12)` + `maxLength(200)`. Bascule
+  afficher/masquer accessible (bouton, `aria-label` explicite,
+  `aria-pressed`), `autocomplete="new-password"`. Envoi désactivé tant
+  que le formulaire est invalide ou en cours ; double envoi empêché ;
+  champs marqués « touchés » à une soumission invalide ; mot de passe
+  effacé du formulaire après succès, après échec terminal, et à la
+  destruction du composant.
+- États de l'interface (dérivés des codes back-end réels) :
+  `validating` → `form` (invitation valide) → `success` (lien vers
+  `/login`, **aucune connexion automatique**, aucun JWT fabriqué) ;
+  `invalid-link` (jeton absent / illisible, `{ valid: false }`, ou
+  `400 INVITATION_INVALID` à l'envoi) — **état terminal unique** : le
+  back-end renvoie un seul code pour un lien inconnu / expiré / révoqué /
+  déjà utilisé, aucune distinction n'est inventée ; `validation-error`
+  (réseau ou `5xx` pendant la validation, bouton « Réessayer ») ;
+  `submitting` ; message d'erreur en ligne pour `400 VALIDATION_ERROR`
+  (« 12 à 200 caractères », formulaire conservé), pour le réseau
+  (statut 0) et pour un `5xx` (message générique sûr, renvoi possible).
+  Aucune trace serveur, message d'exception, requête SQL, valeur de jeton
+  ni détail de compte n'est affiché.
+- Intercepteurs ajustés (plus petit changement sûr) : `authTokenInterceptor`
+  et `apiErrorInterceptor` excluent tous deux
+  `/account-invitations/validate` et `/account-invitations/activate`
+  (`isPublicInvitationRequest`) → aucun en-tête `Authorization` sur ces
+  appels publics, et un `401` / `5xx` venant d'eux ne purge jamais la
+  session en mémoire ni ne déclenche le bandeau global. Le `POST
+  /account-invitations` protégé (émission) reçoit toujours le jeton
+  porteur.
+- Stratégie de session inchangée : jeton d'accès en mémoire uniquement,
+  ni `localStorage` ni `sessionStorage` ni cookie JS (docs/07 §6,
+  RG-085) ; un rechargement de page perd la session et renvoie vers
+  `/login` ; une vraie session persistante exige le futur cookie
+  `HttpOnly` + refresh token côté back-end. Le jeton d'invitation est
+  distinct du jeton d'accès.
+- Accessibilité : `<main>` sémantique, labels associés, `role="status"`
+  pour la validation asynchrone, `role="alert"` pour les échecs, focus
+  visible, navigation clavier, aucun indicateur d'état par la seule
+  couleur, libellés de boutons explicites, page responsive cohérente avec
+  l'écran de connexion.
+- Tests front : **69 → 85** (16 nouveaux, 0 échec). `AccountActivationApiService`
+  (méthode / chemin / placement du jeton en paramètre ; corps
+  `{ token, password }` ; `204` géré ; aucun `Authorization`),
+  `authTokenInterceptor` (aucun bearer sur validate/activate ; bearer
+  conservé sur l'émission protégée), `apiErrorInterceptor` (un `401` /
+  `5xx` public d'activation ne purge pas la session et ne notifie pas ;
+  l'erreur est toujours relayée), `app.routes` (`/activation` déclarée
+  sans garde ; joignable anonyme et authentifié), `AccountActivation`
+  via `RouterTestingHarness` (navigation réelle) : jeton absent → état
+  terminal sans requête ; jeton lu et retiré de l'URL visible ;
+  formulaire pour invitation valide avec `autocomplete="new-password"` ;
+  `{ valid: false }` → terminal ; « Réessayer » après échec de
+  validation ; règles 12/200 ; bouton désactivé si invalide ; charge
+  utile exacte + double envoi empêché ; succès + lien `/login` + aucune
+  connexion + mot de passe effacé ; `INVITATION_INVALID` terminal ;
+  `VALIDATION_ERROR` en ligne ; échec réseau récupérable ; jeton absent
+  du DOM rendu et de tout stockage navigateur. `makeJwt` déplacé de
+  `jwt.spec.ts` vers `jwt.testing.ts` (plus aucun spec n'en importe un
+  autre ; `*.testing.ts` exclu du build).
+- Aucune dépendance ajoutée (`@angular/material` fournit déjà le
+  `progress-spinner`) : `package.json` et `package-lock.json` inchangés.
+  Vérifs locales le 29 août 2026 (Node 24.13.0), depuis `frontend/` :
+  `rm -rf node_modules && npm ci` → 0 vulnérabilité ;
+  `npm test -- --watch=false` → 16 fichiers, 85 tests, 0 échec ;
+  `npm run build` → bundle initial 410,57 kB brut / 106,54 kB transféré,
+  0 alerte de budget ; `npm run lint` → « All files pass linting ».
+- Ambiguïtés documentaires signalées (aucune règle inventée) : aucun
+  document n'impose de champ de **confirmation** du mot de passe pour
+  l'activation (docs/02 §8.3 étape 6 = simple « définition du mot de
+  passe ») → champ omis ; l'accès invité à `/activation` est laissé sans
+  garde car le jeton d'invitation est l'autorité de cet endpoint public
+  (docs silencieux) ; le back-end renvoyant un unique `INVITATION_INVALID`,
+  l'interface ne distingue pas expiré / consommé / révoqué.
+
+Socle front-end Angular — **fusionné sur `main` via PR #11**
+(commit `6fa341f`). Première tranche verticale authentifiée : connexion →
+tableau de bord (rapport d'un **état de session local** établi après
+connexion réussie).
 - Application créée avec `ng new` sous `frontend/` (docs/03 §9.1) :
   Angular **21.2** (paquets framework / CLI / build résolus en 21.2.22 ;
   Material + CDK en 21.2.14 — même ligne mineure 21.2, versionnement
@@ -122,12 +226,12 @@ back-end ajouté ; migrations V1–V7 inchangées ; docs/01–04 inchangés.
 - Limites connues : pas de restauration de session au rechargement — un
   rechargement de page perd la session et renvoie vers `/login` ; une
   vraie session persistante exige le futur cookie `HttpOnly` + refresh
-  token côté back-end ; pas d'écran d'activation de compte
-  (`/activation`, pointé par `app.activation.base-url`, renverra 404 dans
-  la SPA — **prochaine tranche front-end prioritaire**) ; pas de contexte
-  de rôle sélectionnable (docs/02 §6.1) ; `/administration` et
-  `/students` sont des routes gardées sans contenu métier, volontairement
-  masquées de la navigation ; PWA, notifications, SSE non abordés.
+  token côté back-end ; l'écran `/activation` exige un `?token=` valide
+  dans le lien (aucun renvoi d'invitation en libre-service dans la SPA) ;
+  pas de contexte de rôle sélectionnable (docs/02 §6.1) ;
+  `/administration` et `/students` sont des routes gardées sans contenu
+  métier, volontairement masquées de la navigation ; PWA, notifications,
+  SSE non abordés.
 - Correction de revue (2ᵉ commit sur la PR) : formulation du tableau de
   bord rendue exacte (« session locale » au lieu de « appel d'API
   authentifié fonctionne ») ; routes placeholder retirées de la
@@ -566,7 +670,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | IMPLEMENTED (socle `frontend/`, branche `feature/frontend-foundation`, PR #11 ouverte non fusionnée — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/dashboard`, `/administration`, `/students`, `/forbidden`, `**` — `/administration` et `/students` gardées par rôle mais masquées de la navigation ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs ; jeton **en mémoire uniquement** (docs/07 §6, RG-085) ; le tableau de bord rapporte un état de session **local** (pas de second appel d'API vérifié) ; 69 tests Vitest verts, `npm ci` / `npm run build` / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
+| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = commit `6fa341f` ; activation de compte sur branche `feature/frontend-account-activation`, PR ouverte non fusionnée — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, `/administration`, `/students`, `/forbidden`, `**` — `/administration` et `/students` gardées par rôle mais masquées de la navigation ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs, endpoints publics d'activation exclus (pas de bearer, pas de purge de session) ; jeton d'accès **en mémoire uniquement** (docs/07 §6, RG-085) ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL (`Location.replaceState`), jamais journalisé / affiché / stocké / envoyé en bearer ; activation `POST …/activate` → `204`, **aucune connexion automatique** ; le tableau de bord rapporte un état de session **local** (pas de second appel d'API vérifié) ; 85 tests Vitest verts, `npm ci` / `npm run build` / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment` — migrations appliquées et vérifiées, schéma en version 7) |
@@ -599,17 +703,16 @@ Les référentiels organisationnel (module `organization`, V4), académique
 minimal (module `academic`, V5), le périmètre pédagogique (module
 `academic`, V6) et les inscriptions historiques (module `enrollment`,
 V7 : `student_profile` + `enrollment` + changement de classe conservant
-l'historique) sont en place. Le socle front-end Angular
-(`feature/frontend-foundation`, PR #11 ouverte) fournit connexion +
-tableau de bord (état de session local) + gardes de route par rôle ;
-la navigation principale ne montre que les écrans livrés.
+l'historique) sont en place. Le socle front-end Angular est fusionné sur
+`main` (PR #11, commit `6fa341f`) : connexion + tableau de bord (état de
+session local) + gardes de route par rôle. Le parcours public
+d'activation de compte (`/activation`,
+`GET/POST /api/v1/account-invitations/validate|activate`) est implémenté
+sur `feature/frontend-account-activation` (PR ouverte, non fusionnée).
 Prochaines étapes :
-- front-end (prioritaire) : brancher l'écran d'activation de compte
-  (`/activation`, `GET/POST /api/v1/account-invitations/validate|activate`)
-  — le back-end génère déjà des liens vers `/activation`, non encore
-  implémenté dans la SPA ; puis sélecteur de contexte de rôle
-  (docs/02 §6.1) ; premiers écrans de liste (formations, apprenants) une
-  fois la PR socle fusionnée ;
+- front-end : sélecteur de contexte de rôle (docs/02 §6.1) ; premiers
+  écrans de liste (formations, apprenants) une fois la PR d'activation
+  fusionnée ;
 - rythmes d'alternance minimaux (T-J1-033 / US-060 à 062) : module
   `alternation` — `work_study_pattern`, `class_work_study_pattern`,
   `student_schedule_exception` (docs/04 §14) ;
@@ -1211,11 +1314,10 @@ inscription fictive insérés. **PR #10 fusionnée sur `main`** (commit
 
 ## Socle front-end Angular — 29 août 2026 (corrigé après revue de PR #11)
 
-Branche `feature/frontend-foundation` (créée depuis `main` à `495c2bf`),
-PR #11 ouverte contre `main`, **non fusionnée**. Aucun fichier back-end
-modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`, `SecurityConfig`,
-`backend/**` et `backend-ci.yml` inchangés. Autorisation et CORS
-back-end inchangés.
+Branche `feature/frontend-foundation`, **fusionnée sur `main` via PR #11**
+(commit `6fa341f`). Aucun fichier back-end modifié : `docs/01`–`docs/04`,
+migrations `V1`–`V7`, `SecurityConfig`, `backend/**` et `backend-ci.yml`
+inchangés. Autorisation et CORS back-end inchangés.
 
 Application créée avec `ng new` sous `frontend/`. **Angular 21.2**,
 politique de version cohérente dans `package.json` (`^21.2.x` pour tous
@@ -1301,16 +1403,89 @@ Limites connues :
   page perd la session et renvoie vers `/login` ; une vraie session
   persistante exige le futur cookie `HttpOnly` + refresh token côté
   back-end ;
-- pas d'écran d'activation de compte : `app.activation.base-url` pointe
-  vers `/activation`, non implémenté dans la SPA (404) — **prochaine
-  tranche front-end prioritaire**, aucune fausse page ni faux endpoint
-  d'activation ajoutés ici ;
 - pas de sélecteur de contexte de rôle (docs/02 §6.1) ;
 - `/administration` et `/students` sont des routes gardées sans contenu
   métier, volontairement masquées de la navigation ;
 - PWA, notifications, SSE non abordés ;
 - tests front en TestBed/Vitest uniquement, pas de tests e2e Angular →
   Spring Boot.
+
+---
+
+## Activation de compte (front-end) — 29 août 2026
+
+Branche `feature/frontend-account-activation` (créée depuis `main` à
+`6fa341f`), PR ouverte contre `main`, **non fusionnée**. Aucun fichier
+back-end modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`,
+`SecurityConfig`, `backend/**`, `backend-ci.yml`, autorisation et CORS
+back-end inchangés. Aucune dépendance ajoutée → `package.json` /
+`package-lock.json` inchangés.
+
+Parcours public `/activation` atteint via le lien d'invitation généré
+par le back-end (`JavaMailSenderInvitationMailer` :
+`${app.activation.base-url}?token=<jeton URL-encodé>`).
+
+Contrat back-end consommé **tel quel** (`AccountInvitationController`,
+`ActivateAccountRequest`, `InvitationValidationResponse`,
+`InvitationExceptionHandler`) — rien inventé :
+- `GET /api/v1/account-invitations/validate` — **public** (SecurityConfig
+  `PUBLIC_PATHS`), jeton en **paramètre de requête** `token` ; toujours
+  `200` avec `{ "valid": boolean }` (aucun code d'erreur, aucune donnée
+  personnelle) ;
+- `POST /api/v1/account-invitations/activate` — **public** ; corps
+  `{ "token": string, "password": string }` ; succès `204 No Content`,
+  corps vide, **aucun identifiant de session** ; erreurs :
+  `400 VALIDATION_ERROR` (`@NotBlank` / `@Size(min = 12, max = 200)` sur
+  `token` / `password`, via `GlobalExceptionHandler`) et
+  `400 INVITATION_INVALID` (message « Lien d'activation invalide ou
+  expire. ») — **code unique** pour jeton inconnu / expiré / révoqué /
+  déjà consommé / cible non `PENDING_ACTIVATION`. Les autres `Kind`
+  (`TARGET_NOT_FOUND` 404, `TARGET_NOT_PENDING` 409, `ROLE_INVALID` 422)
+  ne sont atteignables que depuis l'émission protégée, jamais `/activate`.
+
+Contraintes de mot de passe côté client, alignées exactement :
+`required` + `minLength(12)` + `maxLength(200)`. Pas de règle de
+complexité (absente du DTO), **pas de champ de confirmation** (absent du
+contrat et des docs — docs/02 §8.3 étape 6 = simple « définition du mot
+de passe »). Bascule afficher/masquer accessible ; `autocomplete="new-password"`.
+
+Fichiers ajoutés : `frontend/src/app/features/account-activation/`
+(`account-activation.models.ts`, `account-activation-api.service.ts`
+(+ `.spec`), `account-activation.ts` / `.html` / `.scss` (+ `.spec`)),
+`frontend/src/app/core/auth/jwt.testing.ts` (extraction de `makeJwt`
+hors de `jwt.spec.ts`).
+Fichiers modifiés : `app.routes.ts` (route `/activation` publique sans
+garde), `core/http/auth-token.interceptor.ts` +
+`core/http/api-error.interceptor.ts` (helper `isPublicInvitationRequest`
+excluant `/account-invitations/validate|activate` — pas de bearer, pas
+de purge de session sur `401`, pas de bandeau sur `5xx`),
+`jwt.spec.ts` + `auth.service.spec.ts` (import depuis `jwt.testing`),
+`app.routes.spec.ts` / `auth-token.interceptor.spec.ts` /
+`api-error.interceptor.spec.ts` (tests ajoutés),
+`tsconfig.spec.json` / `tsconfig.app.json` (`*.testing.ts`).
+
+Vérifications exécutées avec succès en local le 29 août 2026 (Node
+24.13.0), depuis `frontend/` :
+
+```text
+rm -rf node_modules && npm ci   # 0 vulnérabilité
+npm test -- --watch=false        # 16 fichiers, 85 tests, 0 échec (Vitest + jsdom)
+npm run build                    # bundle initial 410,57 kB brut / 106,54 kB transféré, 0 alerte de budget
+npm run lint                     # angular-eslint, « All files pass linting »
+```
+
+`cd backend && ./mvnw clean test` non ré-exécuté : aucun fichier
+back-end modifié (CI back-end `backend-ci.yml` inchangée).
+
+Limites connues (activation) :
+- l'écran exige un `?token=` valide dans le lien : pas de renvoi
+  d'invitation en libre-service dans la SPA ;
+- le back-end renvoyant un unique `INVITATION_INVALID`, l'interface
+  affiche un seul état terminal « lien invalide ou expiré » (pas d'écran
+  distinct expiré / consommé / révoqué — choix délibéré) ;
+- pas de champ de confirmation du mot de passe (hors contrat back-end) ;
+- l'activation ne connecte pas automatiquement (le `204` ne renvoie
+  aucun identifiant) : écran de succès + lien explicite vers `/login`.
 
 ## Règle de mise à jour
 

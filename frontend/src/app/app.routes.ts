@@ -16,6 +16,15 @@ export const routes: Routes = [
       import('./features/auth/login/login').then((m) => m.Login),
   },
   {
+    // Parcours PUBLIC atteint via le lien d'invitation du back-end
+    // (`/activation?token=…`). Aucune garde : le jeton d'invitation fait
+    // foi, indépendamment d'une éventuelle session en mémoire.
+    path: 'activation',
+    title: `Activation du compte — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/account-activation/account-activation').then((m) => m.AccountActivation),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authGuard],
