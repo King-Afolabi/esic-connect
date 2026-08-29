@@ -11,13 +11,21 @@ spring:
       # Chaque classe @SpringBootTest déclare sa propre @TestConfiguration
       # imbriquée : Spring met donc en cache un contexte (et un pool
       # HikariCP) distinct par classe. Avec le pool par défaut (10) et une
-      # quinzaine de contextes cumulés, MySQL 8 (`max_connections` = 151
+      # vingtaine de contextes cumulés, MySQL 8 (`max_connections` = 151
       # par défaut, y compris en CI) est saturé (« Too many connections »).
       # Un pool réduit garde assez de connexions pour les transactions
       # imbriquées (REQUIRES_NEW de l'audit) et les cas concurrents tout
       # en restant très en dessous de la limite serveur.
-      maximum-pool-size: 6
-      minimum-idle: 1
+      #
+      # `minimum-idle: 0` + `idle-timeout` court : un contexte mis en cache
+      # dont les tests sont terminés relâche ses connexions au lieu de les
+      # accumuler pendant toute la durée de la suite — c'est cette
+      # accumulation (et non le pic d'un seul contexte) qui approchait la
+      # limite serveur au fur et à mesure que la suite grandit.
+      maximum-pool-size: 4
+      minimum-idle: 0
+      idle-timeout: 15000
+      keepalive-time: 30000
   data:
     redis:
       host: ${REDIS_HOST:localhost}
