@@ -1,0 +1,150 @@
+<p class="account__back">
+  <a routerLink="/administration">
+    <mat-icon aria-hidden="true">arrow_back</mat-icon>
+    Retour à la liste des comptes
+  </a>
+</p>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement de la fiche du compte"></mat-progress-bar>
+    <p class="account__status" role="status">Chargement de la fiche…</p>
+  }
+
+  @case ('not-found') {
+    <div class="account__panel" role="alert">
+      <mat-icon aria-hidden="true">person_off</mat-icon>
+      <p>Aucun compte ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/administration">Retour à la liste</a>
+    </div>
+  }
+
+  @case ('forbidden') {
+    <div class="account__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter cette fiche.</p>
+      <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="account__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+
+  @case ('ready') {
+    @if (user(); as currentUser) {
+      <h1 class="account__title">{{ currentUser.firstName }} {{ currentUser.lastName }}</h1>
+
+      <mat-card appearance="outlined" class="account__card">
+        <mat-card-header>
+          <mat-card-title>Compte</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <dl class="account__facts">
+            <div>
+              <dt>Adresse électronique</dt>
+              <dd>{{ currentUser.email }}</dd>
+            </div>
+            <div>
+              <dt>Téléphone</dt>
+              <dd>{{ currentUser.phone || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Statut</dt>
+              <dd>{{ statusLabel(currentUser.status) }}</dd>
+            </div>
+            <div>
+              <dt>Adresse vérifiée le</dt>
+              <dd>
+                {{
+                  currentUser.emailVerifiedAt
+                    ? (currentUser.emailVerifiedAt | date: 'dd/MM/yyyy HH:mm')
+                    : '—'
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>Dernière connexion</dt>
+              <dd>
+                {{
+                  currentUser.lastLoginAt
+                    ? (currentUser.lastLoginAt | date: 'dd/MM/yyyy HH:mm')
+                    : '—'
+                }}
+              </dd>
+            </div>
+            @if (currentUser.suspendedAt) {
+              <div>
+                <dt>Suspendu le</dt>
+                <dd>{{ currentUser.suspendedAt | date: 'dd/MM/yyyy HH:mm' }}</dd>
+              </div>
+              <div>
+                <dt>Motif de suspension</dt>
+                <dd>{{ currentUser.suspensionReason || '—' }}</dd>
+              </div>
+            }
+            @if (currentUser.archivedAt) {
+              <div>
+                <dt>Archivé le</dt>
+                <dd>{{ currentUser.archivedAt | date: 'dd/MM/yyyy HH:mm' }}</dd>
+              </div>
+            }
+            <div>
+              <dt>Créé le</dt>
+              <dd>{{ currentUser.createdAt | date: 'dd/MM/yyyy HH:mm' }}</dd>
+            </div>
+            <div>
+              <dt>Dernière modification</dt>
+              <dd>{{ currentUser.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</dd>
+            </div>
+          </dl>
+        </mat-card-content>
+      </mat-card>
+
+      <section class="account__history" aria-labelledby="roles-heading">
+        <h2 id="roles-heading" class="account__section-title">Historique des rôles</h2>
+
+        @if (currentUser.roleAssignments.length === 0) {
+          <p class="account__status" role="status">
+            Aucun rôle n'a jamais été attribué à ce compte.
+          </p>
+        } @else {
+          <div class="account__table-wrapper">
+            <table mat-table [dataSource]="currentUser.roleAssignments">
+              <ng-container matColumnDef="role">
+                <th mat-header-cell *matHeaderCellDef>Rôle</th>
+                <td mat-cell *matCellDef="let row">{{ roleLabel(row.role) }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="active">
+                <th mat-header-cell *matHeaderCellDef>État</th>
+                <td mat-cell *matCellDef="let row">{{ row.active ? 'Actif' : 'Clôturé' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="validFrom">
+                <th mat-header-cell *matHeaderCellDef>Attribué le</th>
+                <td mat-cell *matCellDef="let row">
+                  {{ row.validFrom | date: 'dd/MM/yyyy HH:mm' }}
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="validUntil">
+                <th mat-header-cell *matHeaderCellDef>Clôturé le</th>
+                <td mat-cell *matCellDef="let row">
+                  {{ row.validUntil ? (row.validUntil | date: 'dd/MM/yyyy HH:mm') : '—' }}
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="roleColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: roleColumns"></tr>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  }
+}

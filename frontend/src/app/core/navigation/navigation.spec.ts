@@ -1,10 +1,11 @@
-import { ROLES } from '../models/role';
 import { NAV_ITEMS, visibleNavItems } from './navigation';
 
 describe('NAV_ITEMS', () => {
-  it('keeps /administration as a guarded placeholder (screen not built yet)', () => {
+  it('exposes /administration as a real screen gated on UserAccountController READ_ROLES', () => {
     const admin = NAV_ITEMS.find((i) => i.path === '/administration');
-    expect(admin).toMatchObject({ placeholder: true, roles: ['ADMIN', 'SUPER_ADMIN'] });
+    expect(admin).toBeDefined();
+    expect(admin?.placeholder).toBeUndefined();
+    expect(admin?.roles).toEqual(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION']);
   });
 
   it('exposes /students as a real screen gated on EnrollmentWeb.MANAGE_ROLES', () => {
@@ -32,12 +33,21 @@ describe('visibleNavItems', () => {
     expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard']);
   });
 
-  it('never returns the /administration placeholder entry, for any combination of roles', () => {
-    const everyRoleCombo = [[], ...ROLES.map((r) => [r]), [...ROLES]];
-    for (const held of everyRoleCombo) {
-      const paths = visibleNavItems(NAV_ITEMS, held).map((i) => i.path);
-      expect(paths).not.toContain('/administration');
+  it('shows /administration for the roles that back UserAccountController READ_ROLES, and hides it otherwise', () => {
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/administration');
     }
+    for (const role of ['PEDAGOGICAL_MANAGER', 'TEACHER', 'STUDENT'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/administration');
+    }
+  });
+
+  it('never returns an entry flagged as a placeholder (mechanism kept for future routes)', () => {
+    const items = [
+      { label: 'Real', path: '/real', icon: '' },
+      { label: 'Soon', path: '/soon', icon: '', placeholder: true },
+    ];
+    expect(visibleNavItems(items, []).map((i) => i.path)).toEqual(['/real']);
   });
 
   it('shows /students for the roles that back EnrollmentWeb.MANAGE_ROLES, and hides it otherwise', () => {

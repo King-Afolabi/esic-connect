@@ -62,19 +62,32 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
+        // Administration des comptes utilisateurs et de leurs rôles, en
+        // LECTURE SEULE : liste → fiche → historique des rôles. Périmètre
+        // de rôles aligné **à l'identique** sur le `@PreAuthorize` de
+        // `UserAccountController` (`READ_ROLES` =
+        // `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`). Le
+        // `roleGuard` ne fait que masquer la navigation : Spring Security
+        // reste l'autorité (un `403` API est rendu « accès refusé »).
         path: 'administration',
-        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
-        title: `Administration — ${APP_NAME}`,
-        data: {
-          pageTitle: 'Administration',
-          pageDescription:
-            "Gestion des comptes, des rôles et des référentiels. Écran à venir dans un prochain lot.",
-          docReference: 'docs/02-cahier-des-charges.md §6.3, §9',
-        },
-        loadComponent: () =>
-          import('./shared/components/module-placeholder/module-placeholder').then(
-            (m) => m.ModulePlaceholder,
-          ),
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+        canActivateChild: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+        title: `Administration des comptes — ${APP_NAME}`,
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/administration/user-list/user-list').then((m) => m.UserList),
+          },
+          {
+            path: ':publicId',
+            title: `Fiche compte — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/administration/user-detail/user-detail').then(
+                (m) => m.UserDetail,
+              ),
+          },
+        ],
       },
       {
         // Périmètre de rôles aligné sur `EnrollmentWeb.MANAGE_ROLES`

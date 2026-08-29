@@ -9,178 +9,181 @@
 ## Dernier commit stable
 
 ```text
-1678399 — feat(frontend): student list, profile and enrollment history (#14), sur main
+b47cfa3 — feat(frontend): read-only academic reference browser (/academic) (#15), sur main
 ```
 
 ## Phase actuelle
 
 ```text
-Référentiels académiques (front-end) — branche
-`feature/frontend-academic-reference`, PR ouverte contre `main`, NON
-fusionnée. Cinquième tranche verticale front-end, EN LECTURE SEULE :
-consultation des référentiels académiques existants (années scolaires →
-formations → niveaux → promotions → classes). Le socle front-end
-(PR #11, `6fa341f`), le parcours public d'activation (PR #12, `2ff7aa8`),
-le sélecteur de contexte de rôle (PR #13, `810c8a2`) et l'espace
-Apprenants (PR #14, `1678399`) sont fusionnés sur `main`. Aucun fichier
-back-end, migration V1–V7 ou docs/01–04 modifié ; autorisation, CORS et
+Administration des comptes utilisateurs (front-end) — branche
+`feature/frontend-user-administration`, PR ouverte contre `main`, NON
+fusionnée. Sixième tranche verticale front-end, EN LECTURE SEULE :
+consultation des comptes utilisateurs et de leurs rôles
+(liste → fiche → historique des rôles). Le socle front-end (PR #11,
+`6fa341f`), l'activation publique (PR #12, `2ff7aa8`), le sélecteur de
+contexte de rôle (PR #13, `810c8a2`), l'espace Apprenants (PR #14,
+`1678399`) et la consultation des référentiels académiques (PR #15,
+`b47cfa3`) sont fusionnés sur `main`. Aucun fichier back-end, migration
+V1–V7 ou docs/01–04 modifié ; `SecurityConfig`, autorisations, CORS et
 endpoints back-end inchangés ; aucune dépendance npm ajoutée
 (`package.json` / `package-lock.json` inchangés).
 
-Contrat back-end consommé **tel quel** (module `academic`, rien
-d'inventé ; lecture réservée côté serveur à `ADMIN` / `SUPER_ADMIN` /
-`SCHOOL_ADMINISTRATION` / `PEDAGOGICAL_MANAGER` — `AcademicWeb.READ_ROLES`,
-un `PEDAGOGICAL_MANAGER` étant en plus filtré par `AcademicScopeGuard`) :
-- `GET /api/v1/academic-years` → `PageResponse<AcademicYearResponse>` :
-  `q` (sous-chaîne code **ou** nom), `status` (`ACTIVE`|`ARCHIVED`, sinon
-  400 `ACAD_INVALID_FILTER`), `sort` (liste blanche
-  `code|name|startDate|endDate|createdAt|updatedAt`, sinon 400
-  `ACAD_INVALID_SORT` ; défaut `code,asc`), `page`, `size` (≤ 100).
-- `GET /api/v1/programs` → `PageResponse<ProgramResponse>` : `q`,
-  `status`, `sort` (liste blanche `code|name|createdAt|updatedAt` ;
-  défaut `code,asc`), `page`, `size`. `ProgramResponse.programType` ∈
-  `BTS|BACHELOR|MASTER|OTHER`.
-- `GET /api/v1/programs/{programPublicId}/levels` →
-  `PageResponse<ProgramLevelResponse>` (liste nichée ; identifiant de
-  formation inconnu → 404 `PROGRAM_NOT_FOUND`). `sort` liste blanche
-  `code|name|sequenceNumber|createdAt|updatedAt` ; défaut
-  `sequenceNumber,asc`.
-- `GET /api/v1/promotions` → `PageResponse<PromotionResponse>` : filtres
-  `program` / `academicYear` (par `public_id` ; inconnu → 404
-  `PROGRAM_NOT_FOUND` / `ACADEMIC_YEAR_NOT_FOUND`), `q`, `status`, `sort`
-  (`code|name|createdAt|updatedAt` ; défaut `code,asc`).
-  `startDate` / `endDate` sont nullables.
-- `GET /api/v1/class-groups` → `PageResponse<ClassGroupResponse>` :
-  filtres `promotion` / `programLevel` (404 si inconnu) / `site` (400
-  `ACAD_SITE_NOT_FOUND`), `q`, `status`, `sort`
-  (`code|name|createdAt|updatedAt` ; défaut `code,asc`).
-  `ClassGroupResponse.sitePublicId` et `capacity` sont nullables.
-- `GET /api/v1/academic-years/{publicId}` · `/programs/{publicId}` ·
-  `/program-levels/{publicId}` · `/promotions/{publicId}` ·
-  `/class-groups/{publicId}` → la ressource ; identifiant inconnu /
-  non-UUID → 404 `*_NOT_FOUND` ; hors périmètre d'un
-  `PEDAGOGICAL_MANAGER` → 403 `ACAD_FORBIDDEN`.
+Contrat back-end consommé **tel quel** (module `identity`,
+`UserAccountController` ; rien d'inventé ; **lecture seule**). Toutes ces
+routes sont réservées côté serveur à
+`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+(`UserAccountController.READ_ROLES` — le même périmètre que `LIFECYCLE_ROLES`
+pour suspend/restore ; `ADMIN`/`SUPER_ADMIN` seuls pour archive/roles) :
+- `GET /api/v1/users` → `PageResponse<UserSummaryResponse>` : `q`
+  (sous-chaîne insensible à la casse sur **email OU prénom OU nom**,
+  `LIKE` échappé, bornée à 100 caractères), `status`
+  (`PENDING_ACTIVATION`|`ACTIVE`|`SUSPENDED`|`LOCKED`|`ARCHIVED`, sinon
+  400 `USER_INVALID_FILTER`), `role` (code `RoleCode` ; filtre sur une
+  affectation **active** ; valeur inconnue → 400 `USER_INVALID_FILTER`),
+  `sort` (liste blanche stricte `createdAt|lastLoginAt|email|lastName` ;
+  champ ou direction hors liste → 400 `USER_INVALID_SORT` ; défaut
+  `createdAt,desc`), `page` (défaut 0), `size` (≤ 0 → défaut 20 ; borné à
+  100). `UserSummaryResponse` = `{ publicId, email, firstName, lastName,
+  status, roles (codes des rôles actifs), createdAt, lastLoginAt|null }`.
+- `GET /api/v1/users/{publicId}` → `UserDetailResponse` ; identifiant
+  inconnu **ou mal formé** → 404 `USER_NOT_FOUND`. `UserDetailResponse` =
+  `{ publicId, email, firstName, lastName, phone|null, status,
+  emailVerifiedAt|null, lastLoginAt|null, suspendedAt|null,
+  suspensionReason|null, archivedAt|null, createdAt, updatedAt,
+  roleAssignments: [{ role, active, validFrom, validUntil|null }] }` —
+  historique **complet** des rôles (actifs et clôturés), trié du plus
+  récent au plus ancien côté serveur.
+Aucune écriture consommée : `POST …/{id}/suspend` · `/restore` ·
+`/archive` · `/roles` · `/roles/{roleCode}/revoke` **ne sont pas
+appelés** (tranche lecture seule — voir « Décisions »).
 Tous les `PageResponse<T>` = `{ content, page, size, totalElements,
-totalPages }`. Aucune écriture consommée : les `POST` create /
-`{id}/archive` / `{id}/restore` et `PATCH` update du module `academic`
-ne sont **pas** appelés (tranche lecture seule).
+totalPages }`.
 
-- Route `/academic` : nouveau parent gardé
-  (`roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER'])`
-  + `canActivateChild` identique — aligné sur `AcademicWeb.READ_ROLES`),
-  `''` → redirige vers `academic-years`. Enfants : `academic-years`,
-  `programs`, `promotions`, `class-groups` (listes autonomes) +
-  `academic-years/:publicId`, `programs/:publicId`,
-  `program-levels/:publicId`, `promotions/:publicId`,
-  `class-groups/:publicId` (fiches). Chaque route porte
-  `data.resource`. `/login`, `/activation`, `/dashboard`, `/students`,
-  `/administration` (placeholder inchangé, périmètre `ADMIN`/`SUPER_ADMIN`
-  distinct de la lecture académique), le sélecteur de contexte : inchangés.
-- `NAV_ITEMS` : nouvelle entrée « Référentiels » (`/academic`, rôles
-  `AcademicWeb.READ_ROLES`), visible dans `AppShell` et les accès rapides
-  du tableau de bord pour ces quatre rôles, filtrée en plus par le
-  contexte de rôle actif (`effectiveRoles`) — sans jamais élargir un droit.
-- `AcademicApiService` (nouveau, `providedIn: 'root'`, lecture seule) :
-  10 méthodes GET (5 listes + 5 fiches, dont la liste nichée des
-  niveaux). `HttpParams` construits en omettant toute clé absente (aucun
-  filtre vide envoyé). Appels via les intercepteurs existants (jeton
-  porteur en mémoire ; `401` → purge + `/login` ; `5xx` → bandeau
-  générique) — aucun intercepteur modifié.
-- `AcademicReferenceList` (`app-academic-reference-list`) : générique,
-  piloté par `data.resource` via une configuration
-  (`academic.config.ts` : colonnes, liste blanche de tri, tri par
-  défaut, sous-listes). `mat-table` + `mat-sort` (en-têtes triables =
-  liste blanche du service ; un tri hors liste retombe sur le défaut
-  **avant** l'appel, jamais un 400) + `mat-paginator` francisé
-  (`MatPaginatorIntl` fourni au composant ; options 10/20/50/100).
-  Filtres : recherche « Code ou nom » (`q`, trim) + sélecteur de statut ;
+- Route `/administration` : l'ancien **placeholder est remplacé** par un
+  écran réel. Devient un parent gardé
+  (`roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])` +
+  `canActivateChild` identique — repris **à l'identique** de
+  `UserAccountController.READ_ROLES`). Enfants : `''` → `UserList`,
+  `:publicId` → `UserDetail`. `/login`, `/activation`, `/dashboard`,
+  `/students`, `/academic` et le sélecteur de contexte : inchangés. Le
+  périmètre du guard passe de `['ADMIN','SUPER_ADMIN']` (placeholder) à
+  `+ 'SCHOOL_ADMINISTRATION'` pour coller au `@PreAuthorize` réel — c'est
+  un alignement du guard front sur le back, aucun droit élargi.
+- `NAV_ITEMS` : l'entrée « Administration » perd son drapeau
+  `placeholder` ; ses `roles` deviennent
+  `['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION']`. Elle apparaît donc
+  dans la navigation de `AppShell` et dans les accès rapides du tableau
+  de bord pour ces trois rôles, filtrée en plus par le contexte de rôle
+  actif (`effectiveRoles`) — sans jamais élargir un droit. Le mécanisme
+  `NavItem.placeholder` + `visibleNavItems` est conservé (plus aucune
+  route ne l'utilise ; testé via des entrées fabriquées). Le composant
+  `shared/components/module-placeholder` n'est plus référencé mais est
+  laissé en place (infrastructure réutilisable pour une future route
+  gardée sans écran).
+- `AdministrationApiService` (nouveau, `providedIn: 'root'`, lecture
+  seule) : 2 méthodes GET (`listUsers`, `getUser`). `HttpParams`
+  construits en omettant toute clé absente (aucun filtre vide envoyé).
+  Appels via les intercepteurs existants (jeton porteur en mémoire ;
+  `401` → purge + `/login` par `apiErrorInterceptor` — **traitement
+  transversal de session inchangé** ; `5xx` → bandeau générique) — aucun
+  intercepteur modifié.
+- `UserList` (`app-user-list`) : `mat-table` + `mat-sort` (en-têtes
+  triables = liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` ;
+  un tri hors liste retombe sur `createdAt,desc` **avant** l'appel,
+  jamais un 400) + `mat-paginator` francisé (`MatPaginatorIntl` fourni au
+  composant ; options 10/20/50/100). Filtres : recherche « Nom ou
+  adresse électronique » (`q`, trim), sélecteur de statut, sélecteur de
+  rôle actif (les 6 `RoleCode`, libellés FR via `roleLabel`) ;
   « Filtrer » remet à la page 0 ; « Réinitialiser » vide les filtres.
-  Onglets Années scolaires / Formations / Promotions / Classes. Action =
-  lien `Consulter` (focusable, `aria-label` explicite) vers
-  `/academic/{resource}/{publicId}` ; aucune ligne cliquable sans
-  équivalent clavier. États : `loading`, `ready` vide, `ready` peuplé,
-  `error` (+ « Réessayer »), `forbidden` (403 API → panneau + retour
-  tableau de bord).
-- `AcademicReferenceDetail` (`app-academic-reference-detail`) : générique,
-  piloté par `data.resource`. Lit `:publicId` depuis
-  `ActivatedRoute.snapshot`. Charge la ressource, puis (indépendamment)
-  chaque sous-liste d'enfants directs via un filtre **réellement
-  exposé** : promotions d'une année / d'une formation, niveaux d'une
-  formation (liste nichée), classes d'une promotion / d'un niveau. Carte
-  de faits (`<dl>`) + liens vers les fiches parentes (formation, année,
-  promotion, niveau). États fiche : `loading`, `ready`, `not-found`
-  (404), `forbidden` (403), `error` (+ « Réessayer »). États de chaque
-  section enfant indépendants : `loading`, `ready` (vide → message
-  dédié), `error` (+ « Réessayer » ne recharge que cette section).
+  Colonnes : email, nom (prénom + nom), rôles actifs (libellés joints),
+  statut, créé le, dernière connexion, action. Action = lien `Consulter`
+  (focusable, `aria-label` explicite) vers `/administration/{publicId}` ;
+  aucune ligne cliquable sans équivalent clavier. États : `loading`,
+  `ready` vide, `ready` peuplé, `error` (+ « Réessayer »), `forbidden`
+  (403 API → panneau + retour tableau de bord).
+- `UserDetail` (`app-user-detail`) : lit `:publicId` depuis
+  `ActivatedRoute.snapshot`. Charge le compte, puis rend une carte de
+  faits (`<dl>` : email, téléphone, statut, adresse vérifiée le,
+  dernière connexion, suspendu le + motif si présent, archivé le si
+  présent, créé le, modifié le) + section « Historique des rôles »
+  (`mat-table` : rôle, état actif/clôturé, attribué le, clôturé le|`—`).
+  États : `loading`, `ready`, `not-found` (404), `forbidden` (403),
+  `error` (+ « Réessayer »). Lien de retour « ← Retour à la liste des
+  comptes ».
 - Sécurité / confidentialité : JWT et contexte de rôle restent **en
   mémoire seule** (docs/07 §6, RG-085) ; aucun accès `localStorage` /
-  `sessionStorage` (asserté en test). Aucun message d'exception, trace,
-  requête SQL, `correlationId` ni identifiant SQL interne affiché (les
-  DTO back-end n'exposent pas d'`id` SQL ; les `5xx` sont neutralisés par
-  `normalizeHttpError`). Les identifiants publics (UUID) des parents ne
-  sont pas affichés bruts : ils ne servent que de cibles de liens
-  « Voir la formation / l'année / la promotion / le niveau ». Le
-  `sitePublicId` d'une classe est rendu « Rattachée à un site » /
-  « Non renseigné » (aucun endpoint de résolution de site dans le
-  périmètre du module `academic`). Les gardes de route ne remplacent pas
-  Spring Security : un `403` de l'API est rendu comme un état « accès
-  refusé » explicite.
-- Tests front : **131 → 167** (0 échec). Nouveaux :
-  `academic-api.service.spec.ts` (11 : URL / méthode / params inclus
-  seulement si renseignés, pour les 5 listes + 5 fiches + liste nichée
-  des niveaux + filtres `program` / `academicYear` / `promotion` /
-  `programLevel`). `academic-reference-list.spec.ts` (10 : 1re page +
-  tri par défaut de la ressource + état de chargement ; une ligne par
-  enregistrement + colonne « Type » pour les formations + lien clavier ;
-  état vide ; panneau 403 ; erreur générique + « Réessayer » ; filtres
-  `q` (trim) + `status` remettant à la page 0 ; tri toujours dans la
-  liste blanche de la ressource, repli sur le défaut ; pagination
-  transmet `page`/`size` ; rien en storage). `academic-reference-detail.spec.ts`
-  (8 : chargement → faits ; chaque sous-liste demandée avec son filtre
-  réel + rendu ; sous-liste vide → message dédié ; 404 → panneau
-  introuvable sans appel enfant ; 403 → panneau accès refusé ;
-  « Réessayer » sur une section enfant ; ressource feuille
-  (`class-groups`) rendue avec liens parents et sans appel enfant ; rien
-  en storage). Specs mis à jour : `navigation.spec.ts`,
-  `app-shell.spec.ts`, `dashboard.spec.ts` (l'entrée « Référentiels » est
-  un écran livré, visible pour les rôles de `AcademicWeb.READ_ROLES`),
-  `app.routes.spec.ts` (`/academic` = parent gardé, `''` →
-  `academic-years`, enfants listes + fiches ; `TEACHER` → `/forbidden` ;
-  `PEDAGOGICAL_MANAGER` atteint `/academic/programs` mais pas
-  `/students` ; `SCHOOL_ADMINISTRATION` ouvre une fiche via
+  `sessionStorage` (asserté en test). Les DTO back-end n'exposent ni
+  `id` SQL, ni `password_hash`, ni jeton ; aucun message d'exception,
+  trace, requête SQL ou `correlationId` affiché (les `5xx` sont
+  neutralisés par `normalizeHttpError`). Les gardes de route ne
+  remplacent pas Spring Security : un `403` de l'API est rendu comme un
+  état « accès refusé » explicite. Un `401` continue de passer par le
+  traitement transversal de session existant (`apiErrorInterceptor` →
+  `AuthService.handleUnauthorized`).
+- Tests front : **167 → 190** (0 échec). Nouveaux :
+  `administration-api.service.spec.ts` (4 : URL / méthode / params inclus
+  seulement si renseignés pour `listUsers` (`q`/`status`/`role`/`sort`/
+  `page`/`size`) et `getUser` ; aucune requête `POST`/`PATCH`/`DELETE`).
+  `user-list.spec.ts` (10 : 1re page + tri par défaut `createdAt,desc` +
+  état de chargement ; une ligne par compte + libellés de rôles joints +
+  lien clavier ; état vide ; panneau 403 ; erreur générique +
+  « Réessayer » ; filtres `q` (trim) + `status` + `role` remettant à la
+  page 0 ; tri toujours dans la liste blanche, repli sur le défaut ;
+  pagination transmet `page`/`size` ; rien en storage).
+  `user-detail.spec.ts` (7 : chargement → faits ; historique complet
+  actifs + clôturés ; historique vide → message dédié ; 404 → panneau
+  introuvable sans autre appel ; 403 → panneau accès refusé ;
+  « Réessayer » ; aucune requête d'écriture + rien en storage). Specs
+  mis à jour : `navigation.spec.ts`, `app-shell.spec.ts`,
+  `dashboard.spec.ts` (l'entrée « Administration » est un écran livré,
+  visible pour `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`),
+  `app.routes.spec.ts` (`/administration` = parent gardé avec enfants
+  `''` et `:publicId` ; `SCHOOL_ADMINISTRATION` ouvre liste + détail ;
+  `TEACHER` et `PEDAGOGICAL_MANAGER` → `/forbidden` via
   `canActivateChild`).
 - Vérifs locales le 29 août 2026 (Node 24.13.0), depuis `frontend/` :
-  `npm test -- --watch=false` → 24 fichiers, 167 tests, 0 échec ;
-  `npm run build` → bundle initial 478,71 kB brut / 123,43 kB transféré
-  (+1,29 kB vs 477,42 kB ; les composants académiques sont en chunks
-  paresseux — `academic-reference-list` 10,76 kB brut,
-  `academic-reference-detail` 10,08 kB brut — hors budget « initial »),
+  `npm test -- --watch=false` → 27 fichiers, 190 tests, 0 échec ;
+  `npm run build` → bundle initial 477,81 kB brut / 121,63 kB transféré
+  (−0,90 kB vs 478,71 kB ; `user-list` 11,05 kB brut et `user-detail`
+  8,48 kB brut sont des chunks paresseux, hors budget « initial »),
   0 alerte de budget (seuil d'avertissement 500 kB) ; `npm run lint` →
   « All files pass linting ». `cd backend && ./mvnw test` non
   ré-exécuté : aucun fichier back-end modifié.
-- Décisions / ambiguïtés documentaires (aucune règle inventée) :
+- Décisions / ambiguïtés (aucune règle inventée) :
   * tranche **strictement en lecture seule** — les endpoints d'écriture
-    du module `academic` existent (`POST` create / `PATCH` update /
-    `POST {id}/archive` / `{id}/restore`) mais ne sont pas consommés :
-    leur parcours complet exige des dépendances hors périmètre de ce lot
-    (référencer un site pour créer une classe — le module `academic`
-    n'expose aucune liste de sites — validations croisées de période,
-    etc.) ; livrer un formulaire complet « sans approximation » n'est pas
-    possible ici.
-  * le placeholder `/administration` **n'est pas remplacé** : son
-    périmètre (`ADMIN` / `SUPER_ADMIN`) ne recouvre pas celui de la
-    lecture académique (`+ SCHOOL_ADMINISTRATION` / `PEDAGOGICAL_MANAGER`).
-    Un nouvel espace dédié `/academic` respecte exactement les
-    `@PreAuthorize` du back-end.
-  * recherche `q` = code **ou** nom (spécification back-end
-    `matchesCodeOrName`) — le libellé du champ le précise.
-  * les niveaux (`program_level`) n'ont pas de route de liste autonome
-    côté API (uniquement la liste nichée sous une formation) : ils sont
-    consultables via la fiche d'une formation puis leur fiche
-    `program-levels/:publicId`.
-  * sous-listes d'une fiche bornées à `size=100` (référentiel de
-    démonstration très en dessous), sans pagination.
+    du module `identity` existent et sont pleinement spécifiés, mais leur
+    parcours complet (gardes fines côté serveur : protection
+    `SUPER_ADMIN`, auto-action interdite, dernier rôle actif protégé,
+    rôle `SUPER_ADMIN` réservé à un appelant `SUPER_ADMIN` ; plus un
+    formulaire d'attribution de rôle et des confirmations) représente une
+    surface qui sera livrée sans approximation dans un lot dédié. Les
+    trois tranches d'administration front précédentes (Apprenants,
+    référentiels académiques) sont elles aussi en lecture seule.
+  * le placeholder `/administration` **est remplacé** : « administration
+    des comptes, des rôles et des référentiels » décrivait exactement cet
+    écran. Le guard de route est aligné sur le `@PreAuthorize` réel
+    (`+ SCHOOL_ADMINISTRATION`), ce qui n'élargit aucun droit (Spring
+    Security reste l'autorité).
+  * recherche `q` = email **ou** prénom **ou** nom (spécification
+    back-end `UserAdminSpecifications.matchesText`) — le libellé du champ
+    le précise.
+  * filtre `role` = les 6 `RoleCode` ; le back-end filtre sur une
+    affectation **active** — aucun sous-ensemble arbitraire.
+  * historique des rôles non paginé (le détail renvoie la liste complète
+    dans `roleAssignments`).
 ```
+
+CONTEXTE ANTÉRIEUR (référentiels académiques, PR #15 fusionnée sur `main`,
+commit `b47cfa3`) : consultation **en lecture seule** à `/academic`
+(années scolaires → formations → niveaux → promotions → classes) ;
+`AcademicApiService` (10 GET) ; composants génériques
+`AcademicReferenceList` + `AcademicReferenceDetail` pilotés par
+`data.resource` ; recherche `q` (code ou nom), filtre `status`, tri liste
+blanche par ressource, pagination ≤ 100 — strictement l'API ; sous-listes
+d'enfants via filtres réels `program`/`academicYear`/`promotion`/
+`programLevel` ; aucune écriture consommée ; 403 (dont `ACAD_FORBIDDEN`)
+rendu « accès refusé », 404 « introuvable ». 131 → 167 tests.
+
 
 CONTEXTE ANTÉRIEUR (espace Apprenants, PR #14 fusionnée) :
 
@@ -961,7 +964,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; **consultation des référentiels académiques (lecture seule) sur branche `feature/frontend-academic-reference`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, `/administration` (placeholder gardé, masqué, périmètre `ADMIN`/`SUPER_ADMIN` inchangé), `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), **`/academic` (nouveau parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` — `AcademicWeb.READ_ROLES` ; `''` → `academic-years` ; enfants listes `academic-years`/`programs`/`promotions`/`class-groups` + fiches `…/:publicId` et `program-levels/:publicId` ; chaque route porte `data.resource`)**, `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` (identité civile facultative) ; **référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) consommant `GET /api/v1/academic-years`·`/programs`·`/promotions`·`/class-groups` (recherche `q` = code ou nom, filtre `status`, tri liste blanche par ressource, pagination ≤ 100 — strictement l'API), la liste nichée `GET /api/v1/programs/{id}/levels`, et les fiches `GET .../{publicId}` ; sous-listes d'enfants via filtres réels `program`/`academicYear`/`promotion`/`programLevel` ; composants génériques `AcademicReferenceList` + `AcademicReferenceDetail` pilotés par `data.resource` (config `academic.config.ts`) ; états chargement / vide / erreur+Réessayer / accès refusé (403 API, dont `ACAD_FORBIDDEN`) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; onglets années/formations/promotions/classes ; liens vers fiches parentes ; aucune écriture consommée, aucun endpoint ni champ inventé** ; 167 tests Vitest verts, `npm test` / `npm run build` (initial 478,71 kB brut / 123,43 kB transféré, < seuil 500 kB ; composants académiques en chunks paresseux) / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
+| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; consultation des référentiels académiques (lecture seule) via PR #15 = `b47cfa3` ; **administration des comptes utilisateurs (lecture seule) sur branche `feature/frontend-user-administration`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, **`/administration` (placeholder REMPLACÉ par un écran réel : parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController.READ_ROLES` ; `''` → `UserList`, `:publicId` → `UserDetail`)**, `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), `/academic` (parent gardé `AcademicWeb.READ_ROLES` → `AcademicReferenceList`/`AcademicReferenceDetail`, `data.resource`), `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` ; référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) ; **administration des comptes : `AdministrationApiService` (lecture seule, 2 GET) consommant `GET /api/v1/users` (recherche `q` = email ou prénom ou nom, filtres `status` (`AccountStatus`) + `role` (affectation active, `RoleCode`), tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le défaut —, pagination ≤ 100, strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles actifs et clôturés) ; `UserList` + `UserDetail` ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; aucune écriture consommée (`POST …/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{code}/revoke` reportés), aucun endpoint ni champ inventé ; aucun `id` SQL / hash / jeton / trace affiché, `5xx` masqués par `normalizeHttpError`** ; 190 tests Vitest verts, `npm test` / `npm run build` (initial 477,81 kB brut / 121,63 kB transféré, < seuil 500 kB ; `user-list`/`user-detail` en chunks paresseux) / `npm run lint` verts en local le 29 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment` — migrations appliquées et vérifiées, schéma en version 7) |
@@ -1005,10 +1008,18 @@ sur `main` (PR #12, commit `2ff7aa8`). Le sélecteur de contexte de rôle
 `/students/:publicId` + historique d'inscriptions) est fusionné sur
 `main` (PR #14, commit `1678399`). La consultation front-end des
 référentiels académiques (lecture seule : `/academic` → années scolaires
-→ formations → niveaux → promotions → classes, consommant les `GET` des
-modules `academic` sans aucune écriture) est implémentée sur
-`feature/frontend-academic-reference` (PR ouverte, non fusionnée).
+→ formations → niveaux → promotions → classes) est fusionnée sur `main`
+(PR #15, commit `b47cfa3`). L'administration front-end des comptes
+utilisateurs (lecture seule : liste `/administration` + fiche
+`/administration/:publicId` + historique des rôles, consommant
+`GET /api/v1/users` et `GET /api/v1/users/{publicId}` sans aucune
+écriture ; remplace le placeholder `/administration`) est implémentée sur
+`feature/frontend-user-administration` (PR ouverte, non fusionnée).
 Prochaines étapes :
+- front-end : parcours d'écriture de l'administration des comptes
+  (suspension / réactivation / archivage ; attribution / retrait de
+  rôle avec formulaire), en respectant les gardes fines serveur
+  (protection `SUPER_ADMIN`, auto-action, dernier rôle actif) ;
 - front-end : formulaires de création / modification / archivage du
   référentiel académique, lorsque les dépendances manquantes seront
   disponibles (liste des sites pour rattacher une classe, etc.) ;
@@ -1879,6 +1890,117 @@ Limites connues (Apprenants) :
 - pas de tri interactif sur l'historique (fixé `startDate,desc`) ;
 - l'identité civile dépend d'un second appel facultatif ; sans lui, la
   fiche n'affiche que le numéro étudiant et le statut ;
+- écran non démontré de bout en bout avec le back-end en marche ;
+- pas de tests e2e Angular → Spring Boot (TestBed / Vitest uniquement).
+
+---
+
+## Administration des comptes utilisateurs (front-end) — 29 août 2026
+
+Branche `feature/frontend-user-administration` (créée depuis `main` à
+`b47cfa3`), PR ouverte contre `main`, **non fusionnée**. Aucun fichier
+back-end modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`,
+`SecurityConfig`, `backend/**`, `backend-ci.yml`, autorisations et CORS
+back-end inchangés. Aucune dépendance ajoutée → `package.json` /
+`package-lock.json` inchangés.
+
+Liste des comptes → fiche d'un compte → historique de ses rôles. Lecture
+seule : aucun `POST` du module `identity` (`suspend` / `restore` /
+`archive` / `roles` / `roles/{code}/revoke`) n'est consommé.
+
+Contrat back-end consommé **tel quel** (`UserAccountController`,
+`UserManagementService`, `UserAdminSpecifications`, `UserManagementExceptionHandler` ;
+rien d'inventé) :
+
+| Endpoint | Usage front | Points du contrat respectés |
+|---|---|---|
+| `GET /api/v1/users` | liste `/administration` | `q` (sous-chaîne insensible à la casse sur **email OU prénom OU nom** — `UserAdminSpecifications.matchesText` ; `LIKE` échappé, bornée à 100 car.), `status` (`PENDING_ACTIVATION`/`ACTIVE`/`SUSPENDED`/`LOCKED`/`ARCHIVED`, sinon 400 `USER_INVALID_FILTER`), `role` (code `RoleCode`, filtre sur affectation **active**, sinon 400 `USER_INVALID_FILTER`), `sort` (liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` ; champ **ou** direction hors liste → 400 `USER_INVALID_SORT` ; défaut `createdAt,desc`), `page`, `size` (≤ 0 → 20 ; borné à 100). `PageResponse<UserSummaryResponse>` = `{ publicId, email, firstName, lastName, status, roles (codes actifs), createdAt, lastLoginAt\|null }`. |
+| `GET /api/v1/users/{publicId}` | fiche | identifiant inconnu **ou mal formé** → 404 `USER_NOT_FOUND` → état « introuvable ». `UserDetailResponse` = `{ publicId, email, firstName, lastName, phone\|null, status, emailVerifiedAt\|null, lastLoginAt\|null, suspendedAt\|null, suspensionReason\|null, archivedAt\|null, createdAt, updatedAt, roleAssignments: [{ role, active, validFrom, validUntil\|null }] }` (historique complet, du plus récent au plus ancien côté serveur). |
+
+Toutes deux réservées côté serveur à
+`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+(`UserAccountController.READ_ROLES`). Distinction lecture / écriture du
+back-end : la **lecture** (les deux `GET` ci-dessus) est ouverte à ces
+trois rôles ; l'**écriture** ne l'est pas et n'est pas touchée —
+suspend/restore = mêmes trois rôles, archive + roles + revoke =
+`ADMIN`/`SUPER_ADMIN` seuls, avec en plus des gardes fines dans
+`UserManagementService` (protection `SUPER_ADMIN`, auto-action interdite,
+dernier rôle actif protégé, rôle `SUPER_ADMIN` réservé à un appelant
+`SUPER_ADMIN`).
+
+Fichiers ajoutés : `frontend/src/app/features/administration/`
+(`administration.models.ts`, `administration-api.service.ts` (+ `.spec`),
+`user-list/user-list.ts` / `.html` / `.scss` (+ `.spec`),
+`user-detail/user-detail.ts` / `.html` / `.scss` (+ `.spec`)).
+Fichiers modifiés : `app.routes.ts` (`/administration` : placeholder →
+parent gardé `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])`
++ `canActivateChild` identique, enfants `''` → `UserList` et
+`:publicId` → `UserDetail`) ; `core/navigation/navigation.ts` (l'entrée
+« Administration » perd `placeholder` ; ses `roles` deviennent les trois
+`READ_ROLES`) ; specs `navigation.spec.ts`, `app-shell.spec.ts`,
+`dashboard.spec.ts`, `app.routes.spec.ts` mis à jour. `/login`,
+`/activation`, `/dashboard`, `/students`, `/academic`, le sélecteur de
+contexte, les intercepteurs, `AuthService`, `jwt.ts`, les gardes :
+inchangés. Le composant `shared/components/module-placeholder` n'est plus
+référencé par aucune route (plus aucun placeholder) ; il est laissé en
+place, avec le mécanisme `NavItem.placeholder` + `visibleNavItems`
+(toujours testé via des entrées fabriquées), pour une future route
+gardée sans écran.
+
+Décisions :
+- **Lecture seule** : les endpoints d'écriture existent et sont
+  spécifiés, mais leur parcours complet (gardes fines serveur ci-dessus,
+  formulaire d'attribution de rôle, confirmations d'action
+  irréversible) sera livré sans approximation dans un lot dédié —
+  cohérent avec les tranches Apprenants et référentiels académiques,
+  elles aussi en lecture seule.
+- **Placeholder `/administration` remplacé** : « administration des
+  comptes, des rôles et des référentiels » décrivait exactement cet
+  écran. Le guard de route est **aligné** sur le `@PreAuthorize` réel
+  (`+ SCHOOL_ADMINISTRATION`, la lecture y est ouverte) ; cela n'élargit
+  aucun droit — Spring Security reste l'autorité, un `403` de l'API est
+  rendu « accès refusé ».
+- **Recherche `q`** = email / prénom / nom (le libellé du champ le
+  précise). **Filtre `role`** = les 6 `RoleCode` (le back-end filtre sur
+  une affectation active). **Tri** = en-têtes triables limités à la liste
+  blanche back-end ; une colonne hors liste retombe sur `createdAt,desc`
+  **avant** l'appel, jamais un 400. **Historique des rôles** non paginé
+  (le détail renvoie la liste complète).
+
+Accessibilité : `<h1>` par écran, libellés de formulaire associés
+(Material), `role="status"` sur les chargements asynchrones,
+`role="alert"` sur les panneaux d'erreur / accès refusé / introuvable,
+action « Consulter » = lien focalisable avec `aria-label` explicite
+(aucune ligne cliquable sans équivalent clavier), `mat-paginator`
+francisé (`MatPaginatorIntl`), tables défilables horizontalement
+(`overflow-x: auto`).
+
+Confidentialité : JWT et contexte de rôle **en mémoire seule** (docs/07
+§6, RG-085) ; aucun accès `localStorage` / `sessionStorage` (asserté).
+Les DTO back-end n'exposent ni `id` SQL, ni `password_hash`, ni jeton ;
+aucun identifiant SQL interne, `correlationId`, message d'exception,
+trace ou requête SQL affiché ; les `5xx` sont neutralisés en message
+générique par `normalizeHttpError` (le bandeau global de
+`apiErrorInterceptor` reste la voie transverse pour `0` / `5xx`, et un
+`401` continue de purger la session via `AuthService.handleUnauthorized`).
+
+Vérifications exécutées avec succès en local le 29 août 2026 (Node
+24.13.0), depuis `frontend/` :
+
+```text
+npm test -- --watch=false   # 27 fichiers, 190 tests, 0 échec (167 → 190)
+npm run build               # bundle initial 477,81 kB brut / 121,63 kB transféré, 0 alerte (seuil 500 kB)
+npm run lint                # angular-eslint, « All files pass linting »
+```
+
+`cd backend && ./mvnw test` non ré-exécuté : aucun fichier back-end
+modifié (CI back-end inchangée).
+
+Limites connues (Administration) :
+- lecture seule : aucune action de suspension / réactivation / archivage
+  / gestion de rôle (reportée) ;
+- pas de tri interactif sur l'historique des rôles (ordre serveur, du
+  plus récent au plus ancien) ;
 - écran non démontré de bout en bout avec le back-end en marche ;
 - pas de tests e2e Angular → Spring Boot (TestBed / Vitest uniquement).
 

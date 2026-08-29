@@ -68,9 +68,9 @@ Une exigence décrite n’est pas automatiquement réalisée.
 |---|---|---|---|
 | Choisir une méthode | Scrum/Kanban | Roadmap et backlog | CONÇU |
 | Choisir les technologies | Stack | Architecture | CONÇU |
-| Concevoir l’UX | Angular Material, coquille responsive, accessibilité (labels, focus, repères, `aria-live`, `aria-current`, `aria-haspopup`, table `mat-table` + `mat-paginator` francisé), états chargement / vide / erreur / accès refusé / introuvable | `frontend/` : `AppShell`, écran de connexion, tableau de bord, activation, sélecteur de contexte de rôle, liste des apprenants + fiche + historique d'inscriptions, **consultation lecture seule des référentiels académiques (années → formations → niveaux → promotions → classes)** | PARTIEL (socle + activation + contexte de rôle + espace Apprenants fusionnés ; référentiels académiques sur `feature/frontend-academic-reference`) |
+| Concevoir l’UX | Angular Material, coquille responsive, accessibilité (labels, focus, repères, `aria-live`, `aria-current`, `aria-haspopup`, table `mat-table` + `mat-paginator` francisé), états chargement / vide / erreur / accès refusé / introuvable | `frontend/` : `AppShell`, écran de connexion, tableau de bord, activation, sélecteur de contexte de rôle, liste des apprenants + fiche + historique d'inscriptions, consultation lecture seule des référentiels académiques, **consultation lecture seule des comptes utilisateurs + historique des rôles (`/administration`)** | PARTIEL (socle + activation + contexte de rôle + espace Apprenants + référentiels académiques fusionnés ; administration des comptes sur `feature/frontend-user-administration`) |
 | Développer le back-end | Spring Boot | Code et tests | À FAIRE |
-| Développer le front-end | Angular 21.2 (standalone, signaux, lazy routes), `authGuard`/`guestGuard`/`roleGuard`, intercepteurs, `RoleContextService` (contexte de rôle en mémoire seule), tests Vitest | socle `frontend/` fusionné (PR #11, `6fa341f`) ; activation fusionnée (PR #12, `2ff7aa8`) ; contexte de rôle fusionné (PR #13, `810c8a2`) ; espace Apprenants fusionné (PR #14, `1678399`) ; **référentiels académiques sur `feature/frontend-academic-reference` (PR ouverte)** ; `npm ci` / `npm test` (167) / `npm run build` (initial 478,71 kB brut, < seuil 500 kB) / `npm run lint` verts | IMPLÉMENTÉ (connexion → tableau de bord ; gardes de route par rôle ; navigation limitée aux écrans livrés ; parcours public `/activation` ; sélecteur de contexte de rôle (docs/02 §6.1) ; espace Apprenants `/students` ; **référentiels académiques — `/academic` (parent gardé `AcademicWeb.READ_ROLES` : `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`) en LECTURE SEULE : `AcademicReferenceList` + `AcademicReferenceDetail` génériques pilotés par `data.resource`, consommant `GET /api/v1/academic-years`·`/programs`·`/promotions`·`/class-groups`·`/programs/{id}/levels` et les fiches `GET .../{publicId}` (recherche `q` code ou nom / filtre `status` / tri liste blanche par ressource / pagination ≤ 100, strictement l'API ; sous-listes d'enfants via filtres réels `program`/`academicYear`/`promotion`/`programLevel`) ; aucune écriture consommée ; 403 API (dont `ACAD_FORBIDDEN`) rendu « accès refusé », 404 rendu « introuvable » ; placeholder `/administration` inchangé (périmètre distinct) ; JWT et contexte en mémoire seule**) |
+| Développer le front-end | Angular 21.2 (standalone, signaux, lazy routes), `authGuard`/`guestGuard`/`roleGuard`, intercepteurs, `RoleContextService` (contexte de rôle en mémoire seule), tests Vitest | socle `frontend/` fusionné (PR #11, `6fa341f`) ; activation fusionnée (PR #12, `2ff7aa8`) ; contexte de rôle fusionné (PR #13, `810c8a2`) ; espace Apprenants fusionné (PR #14, `1678399`) ; référentiels académiques fusionnés (PR #15, `b47cfa3`) ; **administration des comptes (lecture seule) sur `feature/frontend-user-administration` (PR ouverte)** ; `npm ci` / `npm test` (190) / `npm run build` (initial 477,81 kB brut, < seuil 500 kB) / `npm run lint` verts | IMPLÉMENTÉ (connexion → tableau de bord ; gardes de route par rôle ; navigation limitée aux écrans livrés ; parcours public `/activation` ; sélecteur de contexte de rôle (docs/02 §6.1) ; espace Apprenants `/students` ; référentiels académiques `/academic` en LECTURE SEULE ; **administration des comptes — `/administration` (parent gardé `UserAccountController` `READ_ROLES` : `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`) en LECTURE SEULE : `UserList` + `UserDetail`, consommant `GET /api/v1/users` (recherche `q` email/prénom/nom, filtres `status` + `role` sur affectation active, tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName`, pagination ≤ 100 — strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles) ; aucune écriture consommée (suspension / restauration / archivage / attribution / retrait de rôle reportés) ; 403 API rendu « accès refusé », 404 rendu « introuvable », `5xx` masqués par `normalizeHttpError` ; remplace l'ancien placeholder `/administration` ; JWT et contexte en mémoire seule, rien en `localStorage`/`sessionStorage`**) |
 | Concevoir la base | MySQL | Modèle de données | CONÇU |
 | Utiliser Redis | Cache et QR | Tests | À FAIRE |
 | Importer les données | CSV/XLSX | Démonstration | À FAIRE |
@@ -235,6 +235,33 @@ Une exigence décrite n’est pas automatiquement réalisée.
   implémenté. Tests : `UserManagementServiceTests` (unitaires),
   `UserManagementIntegrationTests`, `UserManagementSecurityTests`,
   `ModularityTests`.
+  Côté front-end (branche `feature/frontend-user-administration`, PR
+  ouverte) : consultation **en lecture seule** à `/administration`
+  (parent gardé `roleGuard` + `canActivateChild` sur
+  `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`, repris à l'identique
+  de `UserAccountController` `READ_ROLES`), remplaçant l'ancien
+  placeholder. `UserList` consomme `GET /api/v1/users` (recherche `q`
+  email/prénom/nom, filtres `status` (`AccountStatus`) et `role`
+  (affectation active, `RoleCode`), tri restreint à la liste blanche
+  `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le
+  défaut avant l'appel —, pagination bornée à 100) ; `UserDetail`
+  consomme `GET /api/v1/users/{publicId}` (fiche + historique complet des
+  affectations de rôle, actives et clôturées). **Aucune écriture n'est
+  consommée** : `POST …/{id}/suspend` · `/restore` · `/archive` ·
+  `/roles` · `/roles/{roleCode}/revoke` restent hors périmètre de ce lot
+  (le parcours d'écriture, avec ses gardes fines `SUPER_ADMIN` /
+  auto-action / dernier rôle actif et un formulaire d'attribution de
+  rôle, sera livré séparément). Un `403` de l'API est rendu « accès
+  refusé », un `404` « introuvable », les `5xx` sont masqués par
+  `normalizeHttpError` ; aucun identifiant SQL, hash, jeton ni trace
+  affiché ; JWT et contexte de rôle en mémoire seule, rien en
+  `localStorage` / `sessionStorage` (asserté en test). Tests front
+  ajoutés : `administration-api.service.spec.ts`, `user-list.spec.ts`,
+  `user-detail.spec.ts` ; specs mis à jour `navigation.spec.ts`,
+  `app-shell.spec.ts`, `dashboard.spec.ts`, `app.routes.spec.ts`
+  (`/administration` = écran livré et non plus placeholder). `npm test`
+  190 verts, `npm run build` (initial 477,81 kB brut) et `npm run lint`
+  verts.
 - **TR-017 (Référentiel organisationnel)** : `IMPLÉMENTÉ` et `TESTÉ` —
   nouveau module `organization` (élargit et remplace le module `room`
   prévu par l'architecture, docs/03 §7.6) + migration Flyway `V4`

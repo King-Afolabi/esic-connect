@@ -45,10 +45,42 @@ src/app/
     auth/login/          écran de connexion
     account-activation/  parcours public `/activation?token=…` (validation + définition du mot de passe)
     dashboard/           premier écran authentifié
+    administration/      consultation (lecture seule) des comptes utilisateurs + historique des rôles
     students/            liste des apprenants + fiche + historique d'inscriptions
     academic/            consultation (lecture seule) du référentiel académique
     errors/              403 / 404
 ```
+
+## Administration des comptes (`/administration`)
+
+Consultation **en lecture seule** des comptes utilisateurs et de leurs
+rôles (module back-end `identity`, `UserAccountController`). Réservé côté
+serveur à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` (`READ_ROLES`).
+Le `roleGuard` reprend ce périmètre pour masquer la navigation ; il ne
+remplace pas Spring Security — un `403` de l'API est rendu comme un état
+« accès refusé » explicite.
+
+- `/administration` — liste paginée des comptes (`GET /api/v1/users`).
+  Recherche `q` (sous-chaîne **email / prénom / nom**), filtre `status`
+  (`AccountStatus`), filtre `role` (affectation **active**, `RoleCode`),
+  tri sur `createdAt` / `lastLoginAt` / `email` / `lastName` (toute autre
+  colonne retombe sur `createdAt,desc` avant l'appel, jamais un 400),
+  pagination bornée à 100.
+- `/administration/:publicId` — fiche d'un compte
+  (`GET /api/v1/users/{publicId}`) : identité, statut, dates, motif de
+  suspension le cas échéant, puis **historique complet des rôles**
+  (attribués et clôturés, docs/02 §9.7).
+
+Aucune écriture n'est consommée : les routes `POST …/{id}/suspend` ·
+`/restore` · `/archive` · `/roles` · `/roles/{roleCode}/revoke` existent
+côté back-end mais restent hors de cette tranche (suspension /
+archivage / gestion des rôles reportés à un lot ultérieur). Aucun
+endpoint ni champ inventé. États chargement, vide, erreur (avec
+« Réessayer »), accès refusé (403) et introuvable (404) couverts. Aucun
+identifiant SQL, hash, jeton ni trace affiché ; les `5xx` sont
+neutralisés par `normalizeHttpError`. Aucune donnée écrite dans
+`localStorage` / `sessionStorage`. Cet écran **remplace** l'ancien
+placeholder `/administration`.
 
 ## Apprenants (`/students`)
 
@@ -104,10 +136,7 @@ pour un `PEDAGOGICAL_MANAGER` hors périmètre) est rendu comme un état
 Aucune écriture (`POST` / `PATCH` create·update·archive·restore n'est
 appelé), aucun endpoint ni champ inventé. États chargement, vide, erreur
 (avec « Réessayer »), accès refusé (403) et introuvable (404) couverts.
-Aucune donnée écrite dans `localStorage` / `sessionStorage`. Le
-placeholder `/administration` est **inchangé** : son périmètre
-(`ADMIN` / `SUPER_ADMIN`) ne correspond pas à celui de la lecture
-académique.
+Aucune donnée écrite dans `localStorage` / `sessionStorage`.
 
 ## Activation de compte
 
