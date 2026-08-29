@@ -73,18 +73,34 @@ describe('Dashboard', () => {
     expect(text()).toContain("Aucun rôle actif n'est associé à votre compte");
   });
 
-  it('never exposes placeholder routes as quick links, whatever the role', () => {
+  it('never exposes the /administration placeholder route as a quick link, whatever the role', () => {
     for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION'], ['TEACHER']] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelector('a[href="/administration"]')).toBeNull();
-      expect(root.querySelector('a[href="/students"]')).toBeNull();
     }
   });
 
-  it('shows the quick-links empty state for a role whose only routes are placeholders', () => {
-    roles.set(['SCHOOL_ADMINISTRATION']);
+  it('offers Apprenants as a quick link only for the roles behind EnrollmentWeb.MANAGE_ROLES', () => {
+    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
+      ).not.toBeNull();
+    }
+    for (const held of [['TEACHER'], ['PEDAGOGICAL_MANAGER'], ['STUDENT']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
+      ).toBeNull();
+    }
+  });
+
+  it('shows the quick-links empty state for a role with no delivered secondary screen', () => {
+    roles.set(['TEACHER']);
     fixture.detectChanges();
     expect(text()).toContain("Aucun autre écran n'est disponible");
   });

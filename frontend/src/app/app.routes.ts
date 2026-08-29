@@ -53,19 +53,29 @@ export const routes: Routes = [
           ),
       },
       {
+        // Périmètre de rôles aligné sur `EnrollmentWeb.MANAGE_ROLES`
+        // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`).
+        // Le garde ne fait que masquer la navigation : Spring Security
+        // reste l'autorité (un 403 API est rendu comme « accès refusé »).
         path: 'students',
         canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+        canActivateChild: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
         title: `Apprenants — ${APP_NAME}`,
-        data: {
-          pageTitle: 'Apprenants',
-          pageDescription:
-            'Profils apprenants et inscriptions historiques. Écran à venir dans un prochain lot.',
-          docReference: 'docs/02-cahier-des-charges.md §7.6, §10',
-        },
-        loadComponent: () =>
-          import('./shared/components/module-placeholder/module-placeholder').then(
-            (m) => m.ModulePlaceholder,
-          ),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/students/student-list/student-list').then((m) => m.StudentList),
+          },
+          {
+            path: ':publicId',
+            title: `Fiche apprenant — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/students/student-profile/student-profile').then(
+                (m) => m.StudentProfile,
+              ),
+          },
+        ],
       },
     ],
   },

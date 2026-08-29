@@ -45,8 +45,34 @@ src/app/
     auth/login/          écran de connexion
     account-activation/  parcours public `/activation?token=…` (validation + définition du mot de passe)
     dashboard/           premier écran authentifié
+    students/            liste des apprenants + fiche + historique d'inscriptions
     errors/              403 / 404
 ```
+
+## Apprenants (`/students`)
+
+Écran réservé, côté serveur, à `ADMIN` / `SUPER_ADMIN` /
+`SCHOOL_ADMINISTRATION` (`EnrollmentWeb.MANAGE_ROLES`). Le `roleGuard` de
+la route reprend ce périmètre pour masquer la navigation ; il ne
+remplace pas Spring Security — un `403` renvoyé par l'API est rendu comme
+un état « accès refusé » explicite.
+
+- `/students` — liste paginée des profils apprenants
+  (`GET /api/v1/student-profiles`). Recherche, filtre, tri et pagination
+  reflètent **exactement** l'API : recherche `q` sur le seul
+  **numéro étudiant** (le nom n'est pas interrogeable), filtre `status`
+  (`ACTIVE` / `ARCHIVED`), tri sur `studentNumber` ou `createdAt`,
+  pagination bornée à 100.
+- `/students/:publicId` — fiche apprenant
+  (`GET /api/v1/student-profiles/{publicId}`) + historique des
+  inscriptions (`GET /api/v1/enrollments?student={publicId}&sort=startDate,desc`).
+  L'identité civile (nom, e-mail) est complétée de façon **facultative**
+  par `GET /api/v1/users/{userPublicId}` — le profil apprenant n'exposant
+  que `userPublicId` ; l'échec de cet appel n'empêche pas l'affichage.
+
+Aucun endpoint ni champ n'est inventé. Les états chargement, vide,
+erreur (avec « Réessayer »), accès refusé et succès sont couverts. Aucune
+donnée n'est écrite dans `localStorage` / `sessionStorage`.
 
 ## Activation de compte
 
