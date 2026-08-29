@@ -21,7 +21,8 @@ import java.util.UUID;
         ProgramController.class,
         ProgramLevelController.class,
         PromotionController.class,
-        ClassGroupController.class
+        ClassGroupController.class,
+        PedagogicalAssignmentController.class
 })
 class AcademicExceptionHandler {
 
@@ -116,6 +117,42 @@ class AcademicExceptionHandler {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ACAD_INVALID_SORT";
                 message = "Champ ou direction de tri non autorisé.";
+            }
+            case OUT_OF_SCOPE -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ACAD_FORBIDDEN";
+                message = "Cette formation est hors de votre périmètre pédagogique.";
+            }
+            case PEDAGOGICAL_ASSIGNMENT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ACAD_ASSIGNMENT_NOT_FOUND";
+                message = "Aucune affectation de responsable pédagogique ne correspond à cet identifiant.";
+            }
+            case INVALID_ASSIGNMENT_ROLE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ACAD_INVALID_ASSIGNMENT_ROLE";
+                message = "Rôle d'affectation invalide (PRIMARY_MANAGER ou DELEGATE attendu).";
+            }
+            case ASSIGNMENT_TARGET_NOT_ELIGIBLE -> {
+                status = HttpStatus.UNPROCESSABLE_ENTITY;
+                code = "ACAD_TARGET_NOT_ELIGIBLE";
+                message = "Le compte ciblé doit exister, être actif et porter le rôle responsable pédagogique.";
+            }
+            case PRIMARY_MANAGER_ALREADY_ASSIGNED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ACAD_PRIMARY_MANAGER_EXISTS";
+                message = "Cette formation a déjà un responsable pédagogique principal actif ; "
+                        + "clôturez l'affectation existante d'abord.";
+            }
+            case ASSIGNMENT_ALREADY_CLOSED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ACAD_ASSIGNMENT_ALREADY_CLOSED";
+                message = "Cette affectation est déjà clôturée.";
+            }
+            case ASSIGNMENT_DATE_INVALID -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ACAD_ASSIGNMENT_DATE_INVALID";
+                message = "Date d'affectation invalide : la fin de validité doit être postérieure ou égale au début.";
             }
             default -> {
                 status = HttpStatus.BAD_REQUEST;

@@ -21,6 +21,11 @@ import java.util.UUID;
  * archivage logique et restauration ; aucune suppression physique.
  * {@code code} immuable après création. L'archivage est refusé tant que
  * des niveaux ou des promotions actifs la référencent.
+ *
+ * <p>Contrôle de périmètre pédagogique délégué à {@link AcademicScopeGuard} :
+ * lecture filtrée aux formations visibles, écriture (hors création,
+ * réservée à {@code ADMIN}/{@code SUPER_ADMIN}) refusée hors périmètre
+ * (403 {@code ACAD_FORBIDDEN}).
  */
 @Service
 @Transactional
@@ -32,31 +37,43 @@ class ProgramService {
     private final ProgramRepository programRepository;
     private final ProgramLevelRepository programLevelRepository;
     private final PromotionRepository promotionRepository;
+    private final AcademicScopeGuard scopeGuard;
     private final AcademicChangePublisher changePublisher;
 
     ProgramService(ProgramRepository programRepository, ProgramLevelRepository programLevelRepository,
-                   PromotionRepository promotionRepository, AcademicChangePublisher changePublisher) {
+                   PromotionRepository promotionRepository, AcademicScopeGuard scopeGuard,
+                   AcademicChangePublisher changePublisher) {
         this.programRepository = programRepository;
         this.programLevelRepository = programLevelRepository;
         this.promotionRepository = promotionRepository;
+        this.scopeGuard = scopeGuard;
         this.changePublisher = changePublisher;
     }
 
     @Transactional(readOnly = true)
     PageResponse<ProgramResponse> list(String statusFilter, String textFilter, int page, int size, String sort) {
         Pageable pageable = AcademicQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
+        Set<Long> visible = scopeGuard.visibleProgramIds();
+        if (visible != null && visible.isEmpty()) {
+            return PageResponse.of(Page.<Program>empty(pageable), ProgramResponse::from);
+        }
         List<Specification<Program>> specs = new ArrayList<>();
         AcademicQuerySupport.parseStatus(statusFilter)
                 .ifPresent(status -> specs.add(AcademicSpecifications.hasStatus(status)));
         AcademicQuerySupport.normalizeText(textFilter)
                 .ifPresent(text -> specs.add(AcademicSpecifications.matchesCodeOrName(text)));
+        if (visible != null) {
+            specs.add(AcademicSpecifications.programIdIn(visible));
+        }
         Page<Program> result = programRepository.findAll(Specification.allOf(specs), pageable);
         return PageResponse.of(result, ProgramResponse::from);
     }
 
     @Transactional(readOnly = true)
     ProgramResponse get(UUID publicId) {
-        return ProgramResponse.from(require(publicId));
+        Program program = require(publicId);
+        scopeGuard.requireProgramInScope(program);
+        return ProgramResponse.from(program);
     }
 
     ProgramResponse create(ProgramRequests.Create request, String callerSubject) {
@@ -77,6 +94,7 @@ class ProgramService {
 
     ProgramResponse update(UUID publicId, ProgramRequests.Update request, String callerSubject) {
         Program program = require(publicId);
+        scopeGuard.requireProgramInScope(program);
         if (program.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ENTITY_ARCHIVED);
         }
@@ -91,6 +109,7 @@ class ProgramService {
 
     void archive(UUID publicId, String reason, String callerSubject) {
         Program program = require(publicId);
+        scopeGuard.requireProgramInScope(program);
         if (program.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }
@@ -108,6 +127,7 @@ class ProgramService {
 
     void restore(UUID publicId, String callerSubject) {
         Program program = require(publicId);
+        scopeGuard.requireProgramInScope(program);
         if (!program.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }

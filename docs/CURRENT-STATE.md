@@ -15,6 +15,131 @@
 ## Phase actuelle
 
 ```text
+Périmètre pédagogique ajouté (branche feature/pedagogical-scope, non
+fusionnée, non committée) — table `pedagogical_assignment` via migration
+V6 (réécrite tant qu'elle est non committée ; état Flyway local V6 remis
+à zéro — table + ligne d'historique — V1 à V5 jamais touchées ; schéma
+de nouveau en version 6, appliquée et vérifiée). Affecte un responsable
+pédagogique à une formation (RG-004, RG-010, RG-011) et branche le
+contrôle d'accès par périmètre sur TOUT le référentiel académique
+(formation, niveau, promotion, classe). Ne traite ni les inscriptions,
+ni les matières, ni Angular.
+- Entité `academic.internal.PedagogicalAssignment` : relation
+  intra-module vers `Program` ; `manager_user_id` et `delegated_by_id`
+  = valeurs techniques (FK SQL vers `user_account`, aucune relation JPA
+  inter-module, résolues via le nouveau port `identity.UserDirectory`).
+  Enums `PedagogicalAssignmentRole` (PRIMARY_MANAGER | DELEGATE) et
+  `PedagogicalAssignmentStatus` (ACTIVE | CLOSED). Validité en
+  **`LocalDate` / `DATE`** (jour civil, bornes inclusives), colonnes
+  `reason` (motif d'affectation) et `close_reason` (motif de clôture).
+  Conventions techniques complètes ; aucun DELETE physique ;
+  rattachements, rôle et `valid_from` immuables, seule la clôture fait
+  évoluer l'entité.
+- Modèle : un seul PRIMARY_MANAGER ACTIF par formation via colonne
+  générée `active_primary_key` (UNIQUE) + pré-contrôle applicatif
+  (409 `ACAD_PRIMARY_MANAGER_EXISTS`). Gestion de la course entre deux
+  créations : `saveAndFlush` isolé dans un bean dédié `AssignmentPersister`
+  (`@Transactional(propagation = REQUIRES_NEW)`) — la transaction
+  d'insertion échoue et est annulée sans contaminer l'appelant, qui n'est
+  **pas** transactionnel (`PedagogicalAssignmentService.create` : lectures
+  en transactions implicites, insertion déléguée, audit dans sa propre
+  transaction). La `DataIntegrityViolationException` est donc capturée
+  **hors** de toute transaction en échec et n'est retraduite en 409 que
+  si la contrainte violée est `uq_pedagogical_assignment_active_primary`
+  (recherche du nom de contrainte Hibernate **et** du message SQL, avec
+  sémantique de doublon) — **toute autre** violation (FK, `CHECK`,
+  `NOT NULL`, longueur, unicité de `public_id`...) est relancée
+  telle quelle, jamais mappée sur ce code. DELEGATE multiples et
+  chevauchements autorisés,
+  toujours sur toute la formation. La période détermine l'accès
+  effectif ; le créneau du PRIMARY_MANAGER n'est libéré que par une
+  clôture explicite (status=CLOSED), même période expirée. `CHECK
+  (valid_until IS NULL OR valid_until >= valid_from)`. Cible : doit
+  exister, ne pas être archivée, porter un rôle actif PEDAGOGICAL_MANAGER
+  — sinon **422 `ACAD_TARGET_NOT_ELIGIBLE`**. Création refusée sous une
+  formation archivée (409 `ACAD_ARCHIVED_PARENT`).
+- Routes `/api/v1/pedagogical-assignments` (réservées ADMIN/SUPER_ADMIN) :
+  GET liste — filtres **`program`, `user`, `type`, `status`, `activeOn`**
+  (`activeOn` en `LocalDate`, validité inclusive `validFrom <= activeOn
+  <= validUntil`), tri liste blanche stricte `validFrom`/`validUntil`/
+  `createdAt` (sinon 400 `ACAD_INVALID_SORT`), pagination max 100 ; GET
+  détail ; POST création (`type` validé `@Pattern`) ; POST `{id}/close`
+  — corps `{reason (obligatoire), effectiveDate? (LocalDate, défaut
+  aujourd'hui)}`, exige `effectiveDate >= validFrom` sinon 400
+  `ACAD_ASSIGNMENT_DATE_INVALID`, persiste `validUntil = effectiveDate`.
+  Aucune route nichée, aucun PATCH, aucun DELETE. DTO sans id SQL ni
+  `programId`/`managerUserId`/`delegatedById`.
+- Contrôle de périmètre centralisé — nouveau `AcademicScopeGuard`
+  (unique point de décision, lit le contexte Spring Security, jamais un
+  paramètre client) :
+  * accès **global** (aucun filtrage) = autorité `ROLE_ADMIN`,
+    `ROLE_SUPER_ADMIN` **ou `ROLE_SCHOOL_ADMINISTRATION`** ; un
+    PEDAGOGICAL_MANAGER cumulé avec l'un de ces rôles est donc global,
+    cumulé seulement avec TEACHER il reste limité ;
+  * sinon, lecture des listes `programs`/`programs/{id}/levels`/
+    `promotions`/`class-groups` filtrée aux formations du périmètre
+    effectif (sous-requête `IN` sur l'ensemble des `program_id` visibles,
+    affectation ACTIVE dont la période couvre le jour courant) ;
+  * détail et toute opération create/update/archive/restore hors
+    périmètre → **403 `ACAD_FORBIDDEN`** (formation, niveau, promotion,
+    classe).
+  Écriture ouverte au PEDAGOGICAL_MANAGER via `SCOPED_WRITE_ROLES`
+  (update/archive/restore de la formation + toutes les écritures niveau/
+  promotion/classe), puis restreinte au périmètre par le service. La
+  **création d'une formation** reste réservée à ADMIN/SUPER_ADMIN
+  (`WRITE_ROLES`). AcademicYear reste global et inchangé.
+- Codes d'erreur alignés : `ACAD_FORBIDDEN`, `ACAD_ASSIGNMENT_NOT_FOUND`,
+  `ACAD_TARGET_NOT_ELIGIBLE`, `ACAD_PRIMARY_MANAGER_EXISTS`,
+  `ACAD_ASSIGNMENT_ALREADY_CLOSED`, `ACAD_ASSIGNMENT_DATE_INVALID`
+  (+ `ACAD_INVALID_ASSIGNMENT_ROLE` défensif).
+- Horloge : `java.time.Clock` injectable (bean `shared.config.ClockConfig`,
+  `@ConditionalOnMissingBean` pour permettre une horloge figée en test).
+  `AcademicScopeGuard` et `PedagogicalAssignmentService` l'utilisent
+  (`LocalDate.now(clock)`) au lieu de `LocalDate.now()` — dates de
+  validité par défaut et décision de périmètre testables avec
+  `Clock.fixed(...)`.
+- Port `identity.UserDirectory` (impl `identity.internal.
+  DefaultUserDirectory`, confinée) : `UserRef(internalId, publicId,
+  archived, activeRoles)` — types standard uniquement, n'expose ni
+  `UserAccount`, ni repository. Complète `CurrentUserResolver`.
+  `ModularityTests` reste vert.
+- Audit : `AcademicChangeEvent` étendu (type `PEDAGOGICAL_ASSIGNMENT`,
+  action `CLOSED`) → `audit.internal.AcademicAuditListener` inchangé,
+  produit `PEDAGOGICAL_ASSIGNMENT_CREATED` / `_CLOSED` (catégorie
+  ACADEMIC, motif non sensible `program=<code>;type=<type>`, jamais de
+  donnée personnelle).
+- docs/03 et docs/04 non modifiés. Aucune affectation fictive en V6.
+- Tests ajoutés / mis à jour (49) :
+  `PedagogicalAssignmentServiceTests` (16, Mockito — persister mocké,
+  horloge figée ; dont **traduction d'une collision `active_primary` en
+  409** avec message SQL réaliste, **relance inchangée d'une violation
+  FK sans objet**, `validFrom` par défaut lu sur l'horloge injectée,
+  clôture avant `validFrom`, clôture par défaut sur l'horloge injectée) ;
+  `AcademicScopeGuardTests` (7, Mockito + `SecurityContextHolder` +
+  `Clock.fixed` — global admin/super-admin/school-admin, manager+teacher
+  limité et **requêtes de périmètre datées par l'horloge injectée**,
+  appelant non résolu → rien de visible, `requireProgramInScope` OK /
+  403, contexte anonyme non global) ;
+  `PedagogicalAssignmentConstraintsTests` (11, @DataJpaTest — unicité
+  `active_primary` (autre formation acceptée), DELEGATE non limités,
+  créneau libéré par clôture, `CHECK` période + validité un seul jour
+  acceptée, `public_id` unique, FK `RESTRICT` `program`/`manager`/
+  `delegated_by` via `org.hibernate.exception.ConstraintViolationException`
+  précise, **`isActivePrimaryUniqueViolation` reconnaît une vraie
+  exception de collision et rejette une violation `public_id`**) ;
+  `PedagogicalScopeIntegrationTests` (4, @SpringBootTest — scope sur
+  formation/niveau/promotion/classe, manager+teacher limité,
+  manager+administrator global, school-admin lecture globale sans gestion
+  d'affectations) ;
+  `PedagogicalAssignmentIntegrationTests` (11, @SpringBootTest — cycle
+  create/list/close + audit, filtres `activeOn` (dates inclusives) et
+  `type`, clôture par défaut à aujourd'hui, clôture avant `validFrom`
+  refusée, éligibilité de la cible → 422, doublon PRIMARY_MANAGER → 409,
+  **deux créations concurrentes (pool 2 threads) → exactement un 201 et
+  un 409**, `type` invalide → 400, tri hors liste blanche, matrice
+  401/403/200). `AcademicServiceTests` : constructeurs des 4 services
+  académiques (+`AcademicScopeGuard` mock).
+
 Référentiel académique minimal ajouté (branche feature/academic-foundation,
 non fusionnée, non committée) — nouveau module `academic` + migration V5
 `academic_year` / `program` / `program_level` / `promotion` / `class_group`
@@ -207,12 +332,13 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Angular | TODO |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
-| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group` — migrations appliquées et vérifiées, schéma en version 5) |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment` — migrations appliquées et vérifiées, schéma en version 6) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
 | Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; attribués via `user_role` à l'émission d'une invitation ; API d'attribution / retrait dédiée — voir « Gestion des comptes / rôles ») |
 | Gestion des comptes / rôles | TESTED (`GET /api/v1/users` paginé/filtré/trié, `GET /api/v1/users/{public_id}`, `POST …/{public_id}/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{roleCode}/revoke` ; `@PreAuthorize` + contrôles sensibles dans `UserManagementService` (protection SUPER_ADMIN, auto-action interdite, dernier rôle actif protégé) ; archivage = clôture transactionnelle des rôles actifs, ARCHIVED irréversible ; DTO sans id SQL / `password_hash` / jeton ; audit `ACCOUNT_SUSPENDED`/`ACCOUNT_REACTIVATED`/`ACCOUNT_ARCHIVED`/`ROLE_ASSIGNED`/`ROLE_REVOKED` ; aucune migration V4 ; `PEDAGOGICAL_MANAGER` exclu jusqu'au périmètre pédagogique) |
 | Invitation / activation | TESTED (`POST /api/v1/account-invitations` protégé par rôle, `GET …/validate` et `POST …/activate` publics ; migration V3 `account_invitation` ; jeton SecureRandom 32 o Base64URL, empreinte SHA-256 unique stockée, TTL configurable strictement positif, révocation des invitations PENDING antérieures, jeton à usage unique ; validation publique strictement générique ; email d'activation via Mailpit ; audit `ACCOUNT_INVITATION_ISSUED`/`ACCOUNT_ACTIVATED` sans jeton) |
 | Notification (email) | TESTED (module `notification` : écouteur `AFTER_COMMIT` sur `AccountInvitationIssuedEvent`, envoi SMTP `SimpleMailMessage` via Mailpit ; échec d'envoi avalé, invitation conservée, log sans jeton/email/lien ; pas de file persistante — dette technique) |
+| Périmètre pédagogique (pedagogical_assignment) | TESTED (module `academic`, migration V6 réécrite ; entité `PedagogicalAssignment` reliant un responsable (`manager_user_id`) + `delegated_by_id` — valeurs techniques via port `identity.UserDirectory` — à une formation ; rôles PRIMARY_MANAGER/DELEGATE, statut ACTIVE/CLOSED ; validité en `LocalDate`/`DATE` bornes inclusives, colonnes `reason`/`close_reason` ; un seul PRIMARY_MANAGER actif par formation (colonne générée `active_primary_key` + pré-contrôle 409 + collision de contrainte retraduite en 409, jamais 500), DELEGATE multiples ; `CHECK (valid_until IS NULL OR valid_until >= valid_from)`, créneau libéré uniquement par clôture explicite ; cible = compte existant, non archivé, rôle actif PEDAGOGICAL_MANAGER sinon 422 `ACAD_TARGET_NOT_ELIGIBLE` ; routes `/api/v1/pedagogical-assignments` GET liste (filtres `program`/`user`/`type`/`status`/`activeOn` inclusif, tri liste blanche stricte `validFrom`/`validUntil`/`createdAt`) + GET détail + POST création + POST `{id}/close` (`reason` obligatoire, `effectiveDate` défaut aujourd'hui, `>= validFrom` sinon 400 `ACAD_ASSIGNMENT_DATE_INVALID`, persiste `validUntil`), réservées ADMIN/SUPER_ADMIN, aucun PATCH/DELETE/route nichée ; contrôle de périmètre centralisé (`AcademicScopeGuard`) sur formation + niveau + promotion + classe : listes filtrées, détail/écriture hors périmètre → 403 `ACAD_FORBIDDEN` ; accès global = `ROLE_ADMIN`/`ROLE_SUPER_ADMIN`/`ROLE_SCHOOL_ADMINISTRATION` (déduit des autorités Spring Security), écriture ouverte au PEDAGOGICAL_MANAGER dans son périmètre via `SCOPED_WRITE_ROLES`, création de formation toujours ADMIN/SUPER_ADMIN, AcademicYear inchangé ; DTO sans id SQL ; audit `PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED` catégorie ACADEMIC). |
 | Référentiels pédagogiques (formation/niveau/année/promotion/classe) | TESTED (module `academic`, migration V5 ; CRUD + archivage/restauration des 5 entités, aucun DELETE physique ; hiérarchie formation → promotion → classe/groupe ; routes en public_id sous `/api/v1/academic-years`, `/api/v1/programs`, `/api/v1/programs/{id}/levels` + `/api/v1/program-levels/{id}`, `/api/v1/promotions`, `/api/v1/class-groups` ; pagination max 100 + tri liste blanche ; unicités academic_year.code / program.code / (program,code) / (program,academicYear,code) / (promotion,code) ; période année (end>start), période promotion incluse dans l'année, program_level d'une classe = même formation que sa promotion, refus parent archivé, archivage bloqué si enfants actifs, code + rattachements immuables ; `class_group.site_id` = valeur technique via port public `organization.SiteDirectory` (aucun import de `organization.internal`, aucune relation JPA inter-module) ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN ; DTO sans id SQL ; audit `ACADEMIC_YEAR_*`/`PROGRAM_*`/`PROGRAM_LEVEL_*`/`PROMOTION_*`/`CLASS_GROUP_*` catégorie ACADEMIC). Inscriptions, apprenants, formateurs, matières : hors périmètre de ce lot. |
 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | TESTED (module `organization`, migration V4 ; CRUD + archivage/restauration site·bâtiment·salle, création + activation/désactivation plages réseau, aucun DELETE physique ; routes en public_id sous `/api/v1/sites`, `/api/v1/buildings/{id}`, `/api/v1/rooms/{id}`, `/api/v1/network-ranges/{id}` ; pagination max 100 + tri liste blanche ; unicités site.code / (site,code) / (site,cidr) active ; refus parent archivé, room.site=building.site, archivage bloqué si enfants actifs, code immuable ; ZoneId + ISO 3166-1 + CIDR IPv4/IPv6 validés ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN, plages réseau SUPER_ADMIN pour toute opération ; DTO sans id SQL ; audit `SITE_*`/`BUILDING_*`/`ROOM_*`/`SITE_NETWORK_RANGE_*` catégorie ORGANIZATION ; port public `identity.CurrentUserResolver` pour l'auteur des écritures) |
 | Import apprenants | TODO |
@@ -220,7 +346,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Séances | TODO |
 | Émargement | TODO |
 | Rapports | TODO |
-| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe, catégorie `ACADEMIC` — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
+| Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe **et affectations de responsable pédagogique (`PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED`)**, catégorie `ACADEMIC` — jamais de jeton, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
 | MQTT | TODO |
 | Raspberry Pi | TODO |
@@ -231,17 +357,20 @@ n'existe pas encore de file persistante ni de reprise garantie
 ## Prochaine priorité
 
 ```text
-Les référentiels organisationnel (module `organization`, V4) et académique
-minimal (module `academic`, V5 : formation → promotion → classe/groupe,
-+ année scolaire et niveau comme support de FK) sont en place. Prochaines
-étapes :
-- contrôle d'accès par périmètre pédagogique (T-J1-023) : restreindre la
-  lecture/écriture académique d'un PEDAGOGICAL_MANAGER à ses formations,
-  puis ouvrir l'écriture académique à ce rôle dans son périmètre ;
+Les référentiels organisationnel (module `organization`, V4), académique
+minimal (module `academic`, V5) et le périmètre pédagogique (module
+`academic`, V6 : `pedagogical_assignment` + `AcademicScopeGuard`
+restreignant lecture et écriture d'un PEDAGOGICAL_MANAGER à ses
+formations sur formation/niveau/promotion/classe) sont en place.
+Prochaines étapes :
+- exposer éventuellement une route de consultation de ses propres
+  affectations pour le PEDAGOGICAL_MANAGER (les 4 routes actuelles sont
+  ADMIN/SUPER_ADMIN uniquement) ;
+- affectation d'un responsable pédagogique principal à une formation au
+  fil de l'eau depuis les écrans d'administration (aujourd'hui via
+  `POST /api/v1/pedagogical-assignments`) ;
 - inscriptions historiques et rythmes d'alternance minimaux
-  (T-J1-032, T-J1-033), puis import des apprenants ;
-- affectation d'un responsable pédagogique principal à une formation
-  (pedagogical_assignment, RG-010), non traitée dans ce lot.
+  (T-J1-032, T-J1-033), puis import des apprenants.
 /auth/logout et la révocation de session restent à évaluer (jeton
 stateless sans état serveur pour l'instant).
 
@@ -530,6 +659,122 @@ entités `AcademicYear`/`Program`/`ProgramLevel`/`Promotion`/`ClassGroup`
 `audit.internal.AcademicAuditListener`. `.env`, `compose.yaml`, `V1`–`V4`,
 `SecurityConfig`, `pom.xml` et le workflow CI inchangés. Aucune formation,
 promotion ni classe fictive insérée. Aucun commit, aucun push.
+
+Périmètre pédagogique vérifié le 29 août 2026, sur la branche
+`feature/pedagogical-scope` (non fusionnée, non committée), après **deux**
+passes correctives (revues « NOT READY TO COMMIT ») — la seconde portant
+sur l'isolation transactionnelle de la collision `PRIMARY_MANAGER` et
+l'injection de `Clock` :
+`./mvnw clean test` (`JAVA_HOME` OpenJDK 21,
+`set -a && source ../.env`) → `BUILD SUCCESS`, **263 tests** exécutés,
+0 échec, 0 erreur, 0 ignoré, **exécuté deux fois** de suite après tous
+les changements code + docs (résultats identiques), dont `ModularityTests`
+vert (ports `identity.UserDirectory`, bean `shared.config.ClockConfig`,
+table `pedagogical_assignment` et bean `AssignmentPersister` dans le
+module `academic` — frontières respectées, aucun cycle).
+
+État Flyway local : `V6` inchangée depuis la première passe corrective
+(déjà réécrite + réappliquée alors ; table `pedagogical_assignment` +
+ligne d'historique `version = "6"` supprimées puis recréées). `V1`–`V5`
+jamais touchées ; aucun `flyway clean`. Cette passe-ci ne modifie pas de
+migration.
+
+Isolation de la collision concurrente : `PedagogicalAssignmentService`
+n'est plus `@Transactional` au niveau classe ; `create` n'ouvre aucune
+transaction et délègue l'`INSERT` à `AssignmentPersister.persist`
+(`@Transactional(propagation = REQUIRES_NEW)`). Une violation de
+`uq_pedagogical_assignment_active_primary` annule cette transaction
+interne, puis `create` reçoit la `DataIntegrityViolationException` hors
+de toute transaction en échec et ne la mappe sur
+`ACAD_PRIMARY_MANAGER_EXISTS` (409) que si le nom de contrainte / le
+message SQL désigne bien cette contrainte-là ; toute autre violation
+(FK, `CHECK`, `NOT NULL`, longueur, `uq_pedagogical_assignment_public_id`)
+est relancée intacte. `close` reste `@Transactional`.
+
+Horloge : bean `java.time.Clock` (`shared.config.ClockConfig`,
+`@ConditionalOnMissingBean`) injecté dans `AcademicScopeGuard` et
+`PedagogicalAssignmentService` ; tous les `LocalDate.now()` deviennent
+`LocalDate.now(clock)`.
+
+Tests ajoutés / mis à jour :
+`PedagogicalAssignmentServiceTests` (16, Mockito — persister mocké,
+`Clock.fixed(2026-06-15)` : formation inconnue / archivée, `type`
+invalide, cible non éligible → `ASSIGNMENT_TARGET_NOT_ELIGIBLE`,
+`validUntil < validFrom`, deuxième PRIMARY_MANAGER refusé par
+pré-contrôle, **collision `active_primary` (message SQL réaliste)
+retraduite en `PRIMARY_MANAGER_ALREADY_ASSIGNED` sans publier
+d'événement**, **violation FK sans objet relancée à l'identique**,
+DELEGATE autorisé + `reason` trimé + `delegatedById`, `validFrom` par
+défaut = date de l'horloge injectée, clôture déjà clôturée, clôture
+avant `validFrom`, clôture par défaut = date de l'horloge injectée + événement,
+tri hors liste blanche) ;
+`AcademicScopeGuardTests` (7, Mockito + `SecurityContextHolder` +
+`Clock.fixed` — accès global admin / super-admin / school-admin, cumul
+manager+teacher limité avec **requêtes de périmètre datées par l'horloge
+injectée**, appelant non résolu → rien de visible,
+`requireProgramInScope` OK vs 403 `OUT_OF_SCOPE`, contexte anonyme non
+global) ;
+`PedagogicalAssignmentConstraintsTests` (11, `@DataJpaTest` — unicité
+`active_primary` (autre formation acceptée), DELEGATE non limités,
+créneau libéré après clôture, `CHECK` de période + validité d'un seul
+jour acceptée, `public_id` unique, FK `RESTRICT` `program` /
+`manager_user_id` / `delegated_by_id` via
+`org.hibernate.exception.ConstraintViolationException` précise,
+**`PedagogicalAssignmentService.isActivePrimaryUniqueViolation`
+reconnaît une vraie exception de collision et rejette une violation
+`public_id`**) ;
+`PedagogicalScopeIntegrationTests` (4, `@SpringBootTest` `RANDOM_PORT` —
+scope descendant sur formation / niveau / promotion / classe : listes
+filtrées et 403 `ACAD_FORBIDDEN` en lecture détail comme en création /
+modification / archivage-restauration hors périmètre ;
+`PEDAGOGICAL_MANAGER + TEACHER` reste limité ; `PEDAGOGICAL_MANAGER +
+ADMIN` est global ; `SCHOOL_ADMINISTRATION` lit globalement mais ne gère
+pas les affectations (403)) ;
+`PedagogicalAssignmentIntegrationTests` (11, `@SpringBootTest`
+`RANDOM_PORT` — cycle create/list/close + audit
+`PEDAGOGICAL_ASSIGNMENT_CREATED` / `_CLOSED` ; filtres `activeOn` (bornes
+`LocalDate` inclusives : `2026-09-01` et `2026-09-30` → 1, `2026-08-31`
+et `2026-10-01` → 0) et `type` ; clôture par défaut à aujourd'hui,
+clôture `effectiveDate < validFrom` → 400 `ACAD_ASSIGNMENT_DATE_INVALID` ;
+cible inconnue / non responsable → 422 `ACAD_TARGET_NOT_ELIGIBLE` ;
+doublon PRIMARY_MANAGER → 409 `ACAD_PRIMARY_MANAGER_EXISTS` ; **deux
+créations concurrentes (pool 2 threads) → exactement un 201 et un 409** ;
+`type` invalide → 400 ; tri hors liste blanche → 400 `ACAD_INVALID_SORT` ;
+matrice 401 anonyme / 403 STUDENT·TEACHER·SCHOOL_ADMINISTRATION·
+PEDAGOGICAL_MANAGER / 200 ADMIN).
+`AcademicServiceTests` : les quatre fabriques de services
+(`Program`/`ProgramLevel`/`Promotion`/`ClassGroup`) reçoivent un mock
+`AcademicScopeGuard` ; les appels `ProgramService.archive` reviennent à
+la signature à trois arguments.
+
+Migration Flyway `V6` réécrite (`pedagogical_assignment` : `public_id`
+unique, `valid_from`/`valid_until` en `DATE`, `reason` /
+`close_reason` / `delegated_by_id`, FK `RESTRICT` vers `program.id` et
+vers `user_account.id` pour `manager_user_id`, `delegated_by_id` et les
+colonnes auteur, `version`, colonne générée `active_primary_key`
+(VIRTUAL) + `UNIQUE`, `CHECK (valid_until IS NULL OR valid_until >=
+valid_from)`). Fichiers back-end ajoutés : `academic.internal`
+(`PedagogicalAssignment`, `PedagogicalAssignmentRole`,
+`PedagogicalAssignmentStatus`, `PedagogicalAssignmentRepository`,
+`PedagogicalAssignmentService`, `PedagogicalAssignmentController`,
+`PedagogicalAssignmentRequests`, `PedagogicalAssignmentResponse`,
+`AcademicScopeGuard`, `AssignmentPersister`) ; `identity.UserDirectory`
+(port public) + `identity.internal.DefaultUserDirectory` ;
+`shared.config.ClockConfig` (bean `Clock`). Fichiers modifiés :
+`academic.AcademicResourceType` (+`PEDAGOGICAL_ASSIGNMENT`),
+`academic.AcademicChangeAction` (+`CLOSED`), `academic.package-info`,
+`academic.internal` (`AcademicException`(+`Handler`) — codes alignés
+`ACAD_FORBIDDEN` / `ACAD_ASSIGNMENT_NOT_FOUND` / `ACAD_TARGET_NOT_ELIGIBLE`
+/ `ACAD_PRIMARY_MANAGER_EXISTS` / `ACAD_ASSIGNMENT_ALREADY_CLOSED` /
+`ACAD_ASSIGNMENT_DATE_INVALID` ; `AcademicSpecifications` — specs `IN`
+de périmètre + `assignmentHasType` / `assignmentActiveOn` ; `AcademicWeb`
+— `SCOPED_WRITE_ROLES` / `ASSIGNMENT_ROLES` ; `AcademicScopeGuard` et
+`PedagogicalAssignmentService` — `Clock` injectée + isolation de
+l'`INSERT` via `AssignmentPersister` ; les cinq services académiques
+(hors `AcademicYear`) et leurs contrôleurs — branchement du
+`AcademicScopeGuard`). `.env`, `compose.yaml`, `V1`–`V6`,
+`SecurityConfig`, `pom.xml`, `docs/03`, `docs/04` et le workflow CI
+inchangés. Aucune affectation fictive insérée. Aucun commit, aucun push.
 
 ## Règle de mise à jour
 

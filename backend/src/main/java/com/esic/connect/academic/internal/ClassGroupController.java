@@ -50,7 +50,7 @@ class ClassGroupController {
     }
 
     @PostMapping
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.CREATED)
     ClassGroupResponse create(@Valid @RequestBody ClassGroupRequests.Create request,
                               @AuthenticationPrincipal Jwt caller) {
@@ -58,7 +58,7 @@ class ClassGroupController {
     }
 
     @PatchMapping("/{publicId}")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     ClassGroupResponse update(@PathVariable String publicId,
                               @Valid @RequestBody ClassGroupRequests.Update request,
                               @AuthenticationPrincipal Jwt caller) {
@@ -67,7 +67,7 @@ class ClassGroupController {
     }
 
     @PostMapping("/{publicId}/archive")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void archive(@PathVariable String publicId,
                  @Valid @RequestBody ArchiveRequest request,
@@ -77,7 +77,7 @@ class ClassGroupController {
     }
 
     @PostMapping("/{publicId}/restore")
-    @PreAuthorize(AcademicWeb.WRITE_ROLES)
+    @PreAuthorize(AcademicWeb.SCOPED_WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void restore(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
         service.restore(AcademicWeb.parseUuid(publicId, AcademicException.Kind.CLASS_GROUP_NOT_FOUND),

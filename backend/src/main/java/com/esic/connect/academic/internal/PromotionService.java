@@ -36,15 +36,17 @@ class PromotionService {
     private final ProgramRepository programRepository;
     private final AcademicYearRepository academicYearRepository;
     private final ClassGroupRepository classGroupRepository;
+    private final AcademicScopeGuard scopeGuard;
     private final AcademicChangePublisher changePublisher;
 
     PromotionService(PromotionRepository promotionRepository, ProgramRepository programRepository,
                      AcademicYearRepository academicYearRepository, ClassGroupRepository classGroupRepository,
-                     AcademicChangePublisher changePublisher) {
+                     AcademicScopeGuard scopeGuard, AcademicChangePublisher changePublisher) {
         this.promotionRepository = promotionRepository;
         this.programRepository = programRepository;
         this.academicYearRepository = academicYearRepository;
         this.classGroupRepository = classGroupRepository;
+        this.scopeGuard = scopeGuard;
         this.changePublisher = changePublisher;
     }
 
@@ -52,7 +54,14 @@ class PromotionService {
     PageResponse<PromotionResponse> list(String programPublicId, String academicYearPublicId, String statusFilter,
                                          String textFilter, int page, int size, String sort) {
         Pageable pageable = AcademicQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
+        Set<Long> visible = scopeGuard.visibleProgramIds();
+        if (visible != null && visible.isEmpty()) {
+            return PageResponse.of(Page.<Promotion>empty(pageable), PromotionResponse::from);
+        }
         List<Specification<Promotion>> specs = new ArrayList<>();
+        if (visible != null) {
+            specs.add(AcademicSpecifications.promotionProgramIdIn(visible));
+        }
         if (programPublicId != null && !programPublicId.isBlank()) {
             specs.add(AcademicSpecifications.promotionHasProgram(requireProgram(parseUuid(programPublicId,
                     AcademicException.Kind.PROGRAM_NOT_FOUND)).getId()));
@@ -71,12 +80,15 @@ class PromotionService {
 
     @Transactional(readOnly = true)
     PromotionResponse get(UUID publicId) {
-        return PromotionResponse.from(require(publicId));
+        Promotion promotion = require(publicId);
+        scopeGuard.requireProgramInScope(promotion.getProgram());
+        return PromotionResponse.from(promotion);
     }
 
     PromotionResponse create(PromotionRequests.Create request, String callerSubject) {
         Program program = requireProgram(parseUuid(request.programPublicId(),
                 AcademicException.Kind.PROGRAM_NOT_FOUND));
+        scopeGuard.requireProgramInScope(program);
         if (program.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ARCHIVED_PARENT);
         }
@@ -102,6 +114,7 @@ class PromotionService {
 
     PromotionResponse update(UUID publicId, PromotionRequests.Update request, String callerSubject) {
         Promotion promotion = require(publicId);
+        scopeGuard.requireProgramInScope(promotion.getProgram());
         if (promotion.isArchived()) {
             throw new AcademicException(AcademicException.Kind.ENTITY_ARCHIVED);
         }
@@ -115,6 +128,7 @@ class PromotionService {
 
     void archive(UUID publicId, String reason, String callerSubject) {
         Promotion promotion = require(publicId);
+        scopeGuard.requireProgramInScope(promotion.getProgram());
         if (promotion.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }
@@ -129,6 +143,7 @@ class PromotionService {
 
     void restore(UUID publicId, String callerSubject) {
         Promotion promotion = require(publicId);
+        scopeGuard.requireProgramInScope(promotion.getProgram());
         if (!promotion.isArchived()) {
             throw new AcademicException(AcademicException.Kind.INVALID_STATE);
         }

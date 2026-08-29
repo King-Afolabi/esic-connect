@@ -144,6 +144,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-016 | Administration des comptes et des rôles | `identity`, `audit` | `UserManagement*Tests` | `./mvnw test` | BC02/BC03 |
 | TR-017 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | `organization`, `identity`, `audit` | `Organization*Tests`, `CidrValidatorTests` | `./mvnw test` (V4 appliquée) | BC02/BC03 |
 | TR-018 | Référentiel académique (formation/niveau/année/promotion/classe) | `academic`, `organization`, `identity`, `audit` | `Academic*Tests` | `./mvnw clean test` (V5 appliquée) | BC02/BC03 |
+| TR-019 | Périmètre pédagogique (affectation responsable → formation, contrôle d'accès sur formation/niveau/promotion/classe) | `academic`, `identity`, `audit` | `PedagogicalAssignment*Tests`, `PedagogicalScopeIntegrationTests`, `PedagogicalAssignmentIntegrationTests` | `./mvnw clean test` (V6 appliquée) | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -306,15 +307,78 @@ Une exigence décrite n’est pas automatiquement réalisée.
   capacité), `AcademicIntegrationTests`, `AcademicSecurityTests`,
   `ModularityTests` (frontières du nouveau module respectées).
 
+- **TR-019 (Périmètre pédagogique)** : `IMPLÉMENTÉ` et `TESTÉ` — table
+  `pedagogical_assignment` (migration Flyway `V6`, réécrite tant qu'elle
+  était non committée ; état Flyway local V6 remis à zéro, `V1`–`V5`
+  intactes ; schéma de nouveau en version 6). Entité
+  `academic.internal.PedagogicalAssignment` reliant un compte porteur du
+  rôle `PEDAGOGICAL_MANAGER` à une formation ; rôles `PRIMARY_MANAGER`
+  (un seul actif par formation via colonne générée `active_primary_key` +
+  pré-contrôle applicatif `ACAD_PRIMARY_MANAGER_EXISTS` ; la course
+  concurrente est gérée par un `INSERT` isolé dans
+  `AssignmentPersister` (`@Transactional REQUIRES_NEW`), la
+  `DataIntegrityViolationException` étant reçue **hors** transaction en
+  échec et retraduite en 409 **uniquement** si la contrainte violée est
+  `uq_pedagogical_assignment_active_primary` — toute autre violation
+  (FK, `CHECK`, `NOT NULL`, `public_id`) est relancée intacte) /
+  `DELEGATE` (multiples), statuts `ACTIVE` / `CLOSED`, validité en `LocalDate` /
+  `DATE` bornes inclusives (`CHECK valid_until >= valid_from`), colonnes
+  `reason` / `close_reason` / `delegated_by_id` — le créneau du
+  responsable principal n'est libéré que par une clôture explicite. Cible
+  contrôlée via le port `identity.UserDirectory` (compte existant, non
+  archivé, rôle actif `PEDAGOGICAL_MANAGER`, sinon 422
+  `ACAD_TARGET_NOT_ELIGIBLE`). Routes minimales
+  `/api/v1/pedagogical-assignments` (GET liste — filtres `program` /
+  `user` / `type` / `status` / `activeOn` en dates inclusives, tri liste
+  blanche stricte —, GET détail, POST création, POST `{id}/close` —
+  `reason` obligatoire, `effectiveDate` par défaut aujourd'hui, `>=
+  validFrom` sinon 400 `ACAD_ASSIGNMENT_DATE_INVALID`, persiste
+  `validUntil`), réservées `ADMIN`/`SUPER_ADMIN` ; aucun `PATCH`, aucun
+  `DELETE`, aucune route nichée.
+  Contrôle d'accès par périmètre **centralisé** dans
+  `AcademicScopeGuard` et branché sur **formation, niveau, promotion,
+  classe** : accès global = autorité `ROLE_ADMIN` / `ROLE_SUPER_ADMIN` /
+  `ROLE_SCHOOL_ADMINISTRATION` (déduit du contexte Spring Security,
+  jamais d'un paramètre client) ; sinon lecture des listes filtrée par
+  sous-requête `IN` sur les formations du périmètre effectif (affectation
+  `ACTIVE` couvrant le jour courant), et détail comme
+  create/update/archive/restore hors périmètre → `403 ACAD_FORBIDDEN`.
+  Écriture ouverte au `PEDAGOGICAL_MANAGER` dans son périmètre
+  (`SCOPED_WRITE_ROLES`) ; création d'une formation réservée à
+  `ADMIN`/`SUPER_ADMIN` ; `AcademicYear` inchangé et global. Audit
+  `PEDAGOGICAL_ASSIGNMENT_CREATED` / `_CLOSED` (catégorie `ACADEMIC`,
+  motif `program=<code>;type=<type>`) via `AcademicChangeEvent` →
+  `audit.internal.AcademicAuditListener` (inchangé). Horloge
+  `java.time.Clock` injectée (`shared.config.ClockConfig`) dans
+  `AcademicScopeGuard` et `PedagogicalAssignmentService` en lieu et place
+  de `LocalDate.now()`. `docs/03` et `docs/04` non modifiés. Tests :
+  `PedagogicalAssignmentServiceTests` (Mockito — persister mocké, horloge
+  figée ; retraduction de collision `active_primary` avec message SQL
+  réaliste, relance intacte d'une violation FK, dates par défaut sur
+  l'horloge, clôture avant `validFrom`),
+  `AcademicScopeGuardTests` (Mockito + `SecurityContextHolder` +
+  `Clock.fixed` — global/limité, requêtes de périmètre datées par
+  l'horloge injectée), `PedagogicalAssignmentConstraintsTests`
+  (`@DataJpaTest`, exceptions de persistance précises —
+  `ConstraintViolationException` pour les FK `RESTRICT` ; reconnaissance
+  d'une vraie collision `active_primary` et rejet d'une violation
+  `public_id`), `PedagogicalScopeIntegrationTests` (`@SpringBootTest` —
+  scope sur les quatre entités, cumuls de rôles, school-admin),
+  `PedagogicalAssignmentIntegrationTests` (`@SpringBootTest` — filtres,
+  clôture, éligibilité, **deux créations concurrentes → un 201 + un
+  409**, matrice d'autorisation), `ModularityTests`.
+
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,
 `backend/src/test/java/com/esic/connect/audit/`,
 `backend/src/test/java/com/esic/connect/organization/`,
 `backend/src/test/java/com/esic/connect/academic/`, exécution réelle
-de `./mvnw clean test` (**214/214**, `BUILD SUCCESS`, lancé trois fois) —
-voir `docs/CURRENT-STATE.md`. Émetteur JWT vérifié explicitement
-(`JwtValidators`), jeton à émetteur incorrect refusé (401 nu, aucun
-détail de validation exposé).
+de `./mvnw clean test` (**263/263**, `BUILD SUCCESS`, lancé deux fois
+après la deuxième passe corrective du périmètre pédagogique — isolation
+transactionnelle de la collision + injection de `Clock` ; **214/214** au
+lot académique précédent) — voir `docs/CURRENT-STATE.md`. Émetteur JWT
+vérifié explicitement (`JwtValidators`), jeton à émetteur incorrect
+refusé (401 nu, aucun détail de validation exposé).
 
 ---
 

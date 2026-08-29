@@ -6,5 +6,6 @@ public enum AcademicResourceType {
     PROGRAM,
     PROGRAM_LEVEL,
     PROMOTION,
-    CLASS_GROUP
+    CLASS_GROUP,
+    PEDAGOGICAL_ASSIGNMENT
 }

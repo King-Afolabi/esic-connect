@@ -51,6 +51,57 @@ final class AcademicSpecifications {
         return (root, query, cb) -> cb.equal(root.get("siteId"), siteId);
     }
 
+    static Specification<PedagogicalAssignment> assignmentHasProgram(Long programId) {
+        return (root, query, cb) -> cb.equal(root.get("program").get("id"), programId);
+    }
+
+    static Specification<PedagogicalAssignment> assignmentHasManager(long managerUserId) {
+        return (root, query, cb) -> cb.equal(root.get("managerUserId"), managerUserId);
+    }
+
+    static Specification<PedagogicalAssignment> assignmentHasStatus(PedagogicalAssignmentStatus status) {
+        return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    static Specification<PedagogicalAssignment> assignmentHasType(PedagogicalAssignmentRole type) {
+        return (root, query, cb) -> cb.equal(root.get("assignmentRole"), type);
+    }
+
+    /**
+     * Affectations effectives à la date {@code on} : {@code validFrom <=
+     * on <= validUntil} (bornes inclusives, {@code validUntil} nul =
+     * ouvert). Ne filtre pas sur le statut.
+     */
+    static Specification<PedagogicalAssignment> assignmentActiveOn(java.time.LocalDate on) {
+        return (root, query, cb) -> cb.and(
+                cb.lessThanOrEqualTo(root.<java.time.LocalDate>get("validFrom"), on),
+                cb.or(cb.isNull(root.get("validUntil")),
+                        cb.greaterThanOrEqualTo(root.<java.time.LocalDate>get("validUntil"), on)));
+    }
+
+    /** Spécification impossible à satisfaire (aucun résultat) — sans requête inutile. */
+    static <T> Specification<T> matchesNothing() {
+        return (root, query, cb) -> cb.disjunction();
+    }
+
+    // --- Filtres de périmètre pédagogique (ensemble de formations visibles) ---
+
+    static Specification<Program> programIdIn(java.util.Collection<Long> programIds) {
+        return (root, query, cb) -> root.get("id").in(programIds);
+    }
+
+    static Specification<ProgramLevel> levelProgramIdIn(java.util.Collection<Long> programIds) {
+        return (root, query, cb) -> root.get("program").get("id").in(programIds);
+    }
+
+    static Specification<Promotion> promotionProgramIdIn(java.util.Collection<Long> programIds) {
+        return (root, query, cb) -> root.get("program").get("id").in(programIds);
+    }
+
+    static Specification<ClassGroup> classGroupProgramIdIn(java.util.Collection<Long> programIds) {
+        return (root, query, cb) -> root.get("promotion").get("program").get("id").in(programIds);
+    }
+
     private static String likePattern(String normalizedQuery) {
         return "%" + escapeLike(normalizedQuery) + "%";
     }
