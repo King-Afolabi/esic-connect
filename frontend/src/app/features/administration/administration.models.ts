@@ -3,19 +3,23 @@
  * rôles**, strictement alignés sur le contrat du module back-end
  * `identity` (`com.esic.connect.identity.internal`) :
  *
- * - `GET /api/v1/users`            → `PageResponse<UserSummaryResponse>`
- * - `GET /api/v1/users/{publicId}` → `UserDetailResponse`
+ * - `GET  /api/v1/users`                            → `PageResponse<UserSummaryResponse>`
+ * - `GET  /api/v1/users/{publicId}`                 → `UserDetailResponse`
+ * - `POST /api/v1/users/{publicId}/suspend`         ← `AccountActionRequest`  → 204
+ * - `POST /api/v1/users/{publicId}/restore`         ← `AccountActionRequest`  → 204
+ * - `POST /api/v1/users/{publicId}/archive`         ← `AccountActionRequest`  → 204
+ * - `POST /api/v1/users/{publicId}/roles`           ← `AssignRoleRequest`     → 204
+ * - `POST /api/v1/users/{publicId}/roles/{roleCode}/revoke` ← `AccountActionRequest` → 204
  *
  * Aucun champ n'est inventé : chaque propriété correspond à un composant
- * du `record` Java associé. Ces routes de **lecture** sont réservées
+ * du `record` Java associé. Les routes de **lecture** sont réservées
  * côté serveur à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
- * (`UserAccountController` `READ_ROLES`).
- *
- * Les routes d'écriture existent côté back-end
- * (`POST …/{id}/suspend` · `/restore` · `/archive` · `/roles` ·
- * `/roles/{roleCode}/revoke`) mais **ne sont pas consommées** par cette
- * tranche : elle est strictement en lecture seule (liste → fiche →
- * historique des rôles).
+ * (`UserAccountController` `READ_ROLES`) ; la suspension et la
+ * réactivation partagent ce périmètre, l'archivage et la gestion de
+ * rôle sont limités à `ADMIN` / `SUPER_ADMIN`. Le back-end applique en
+ * plus des gardes fines (protection `SUPER_ADMIN`, auto-action,
+ * dernier rôle actif) : le front n'anticipe que les cas manifestement
+ * inutiles et laisse Spring Security décider.
  */
 
 import { Role } from '../../core/models/role';
@@ -116,6 +120,31 @@ export type SortDirection = 'asc' | 'desc';
  * source unique `Role` du cœur applicatif — aucune valeur inventée.
  */
 export type UserRoleFilter = Role;
+
+/**
+ * Longueur maximale du motif d'une opération de cycle de vie ou de
+ * retrait de rôle (`AccountActionRequest` — `@Size(max = 500)`).
+ */
+export const ACTION_REASON_MAX_LENGTH = 500;
+
+/**
+ * Corps commun des mutations de cycle de vie (suspension, réactivation,
+ * archivage) et du retrait d'un rôle — `AccountActionRequest`. Le motif
+ * est obligatoire (`@NotBlank`) et alimente la piste d'audit.
+ */
+export interface AccountActionRequest {
+  reason: string;
+}
+
+/**
+ * Corps d'une attribution de rôle — `AssignRoleRequest`. `role` et
+ * `reason` sont tous deux obligatoires (`@NotBlank`) ; un code de rôle
+ * inconnu produit `400 USER_ROLE_UNKNOWN` côté serveur.
+ */
+export interface AssignRoleRequest {
+  role: Role;
+  reason: string;
+}
 
 /** Paramètres de `GET /api/v1/users` réellement exposés. */
 export interface UserListQuery {

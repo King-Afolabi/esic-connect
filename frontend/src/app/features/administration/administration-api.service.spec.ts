@@ -63,7 +63,70 @@ describe('AdministrationApiService', () => {
     req.flush({});
   });
 
-  it('never issues a write request (read-only slice)', () => {
+  describe('lifecycle mutations', () => {
+    it('suspendUser POSTs /suspend with the exact { reason } body and completes on 204', () => {
+      let completed = false;
+      service.suspendUser('abc 123', { reason: 'inactif' }).subscribe({ complete: () => (completed = true) });
+
+      const req = http.expectOne('/api/v1/users/abc%20123/suspend');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ reason: 'inactif' });
+      expect(Object.keys(req.request.body as object)).toEqual(['reason']);
+      req.flush(null, { status: 204, statusText: 'No Content' });
+      expect(completed).toBe(true);
+    });
+
+    it('restoreUser POSTs /restore with the { reason } body', () => {
+      service.restoreUser('u-1', { reason: 'retour' }).subscribe();
+      const req = http.expectOne('/api/v1/users/u-1/restore');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ reason: 'retour' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
+    it('archiveUser POSTs /archive with the { reason } body', () => {
+      service.archiveUser('u-1', { reason: 'départ' }).subscribe();
+      const req = http.expectOne('/api/v1/users/u-1/archive');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ reason: 'départ' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+  });
+
+  describe('role mutations', () => {
+    it('assignRole POSTs /roles with the exact { role, reason } body', () => {
+      service.assignRole('u-1', { role: 'TEACHER', reason: 'affectation' }).subscribe();
+      const req = http.expectOne('/api/v1/users/u-1/roles');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ role: 'TEACHER', reason: 'affectation' });
+      expect(Object.keys(req.request.body as object).sort()).toEqual(['reason', 'role']);
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
+    it('revokeRole POSTs /roles/{roleCode}/revoke, encoding the code, with the { reason } body', () => {
+      service.revokeRole('u/1', 'SCHOOL_ADMINISTRATION', { reason: 'fin de mission' }).subscribe();
+      const req = http.expectOne('/api/v1/users/u%2F1/roles/SCHOOL_ADMINISTRATION/revoke');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ reason: 'fin de mission' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
+    it('propagates a mutation error to the caller instead of swallowing it', () => {
+      let status = 0;
+      service.assignRole('u-1', { role: 'STUDENT', reason: 'x' }).subscribe({
+        error: (err: { status: number }) => (status = err.status),
+      });
+      http
+        .expectOne('/api/v1/users/u-1/roles')
+        .flush(
+          { status: 409, code: 'USER_ROLE_ALREADY_ASSIGNED', message: 'x', path: '', correlationId: null, details: [] },
+          { status: 409, statusText: 'Conflict' },
+        );
+      expect(status).toBe(409);
+    });
+  });
+
+  it('issues no write request on a pure read (list + detail)', () => {
     service.listUsers({}).subscribe();
     http.expectOne((r) => r.url === '/api/v1/users' && r.method === 'GET').flush({
       content: [],
@@ -72,8 +135,10 @@ describe('AdministrationApiService', () => {
       totalElements: 0,
       totalPages: 0,
     });
-    http.expectNone((r) => r.method === 'POST');
+    service.getUser('u-1').subscribe();
+    http.expectOne((r) => r.url === '/api/v1/users/u-1' && r.method === 'GET').flush({});
     http.expectNone((r) => r.method === 'PATCH');
     http.expectNone((r) => r.method === 'DELETE');
+    http.expectNone((r) => r.method === 'PUT');
   });
 });

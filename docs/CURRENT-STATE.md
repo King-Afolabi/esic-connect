@@ -9,191 +9,166 @@
 ## Dernier commit stable
 
 ```text
-60b3cf6 — feat(backend): add alternation pattern and schedule management (#17), sur main
+a79b5bf — feat(frontend): add alternation management UI (#18), sur main
 ```
 
 ## Phase actuelle
 
 ```text
-Gestion de l'alternance (FRONT-END) — branche
-`feature/alternation-management-ui`, PR ouverte contre `main`, NON
-fusionnée. Septième tranche verticale front-end, cette fois avec des
-parcours d'écriture. Couvre l'intégralité du module back-end
-`alternation` (`com.esic.connect.alternation`, migration V8, PR #17
-fusionnée) : modèles de rythme, affectations de rythme aux classes,
-exceptions individuelles de calendrier, résolution du contexte
-SCHOOL / COMPANY / UNKNOWN. Aucun fichier back-end, migration V1–V8 ou
-docs/01–04 modifié ; `SecurityConfig`, autorisations, CORS et endpoints
-back-end inchangés ; aucune dépendance npm ajoutée (`package.json` /
-`package-lock.json` inchangés).
+Administration des comptes utilisateurs — PARCOURS D'ÉCRITURE
+(FRONT-END) — branche `feature/frontend-user-administration-write`
+(créée depuis `main` synchronisé avec `origin/main`, HEAD `a79b5bf`),
+PR ouverte contre `main`, NON fusionnée, aucun auto-merge. Huitième
+tranche verticale front-end. Complète l'écran de lecture seule livré par
+la PR #16 (`/administration`) avec les cinq mutations réellement
+exposées par `identity` (`UserAccountController`) : suspension,
+réactivation, archivage, attribution et retrait de rôle. Aucun fichier
+back-end, migration V1–V8 ou docs/01–04 modifié ; `SecurityConfig`,
+autorisations, CORS et endpoints back-end inchangés ; aucune dépendance
+npm ajoutée (`package.json` / `package-lock.json` inchangés) ; aucune
+route ni entrée de navigation modifiée (les actions vivent dans la fiche
+`/administration/:publicId` déjà routée).
 
-Route parente gardée `/alternation`
-(`roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER'])`
-+ `canActivateChild` identique — repris de
-`AlternationWeb.PATTERN_READ_ROLES` / `SCOPED_ROLES`). Enfants :
-- `''` → redirige vers `patterns` ;
-- `patterns` → `PatternList` (liste + filtres `q` / `status` / `type` +
-  tri liste blanche `code|name|createdAt|updatedAt` + pagination ≤ 100 ;
-  bouton « Nouveau modèle » visible seulement pour les rôles d'écriture) ;
-- `patterns/new` → `PatternForm` (mode création), **garde de route
-  supplémentaire** `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])`
-  alignée sur `AlternationWeb.PATTERN_WRITE_ROLES` ;
-- `patterns/:publicId` → `PatternDetail` (faits + prévisualisation du
-  cycle + actions d'écriture : modifier, archiver avec motif, restaurer —
-  panneaux de confirmation en ligne) ;
-- `patterns/:publicId/edit` → `PatternForm` (mode édition, `code` et
-  `type` figés), même garde d'écriture ;
-- `classes` → `ClassPicker` (recherche de classe via
-  `GET /api/v1/class-groups`, module `academic`) ;
-- `classes/:classPublicId` → `ClassAlternation` (historique des
-  affectations `GET .../classes/{id}/assignments` + tri liste blanche
-  `validFrom|validUntil|createdAt`, formulaire d'affectation
-  `POST .../class-assignments`, clôture `POST .../{id}/close` avec motif
-  obligatoire + date effective facultative, sonde de contexte de classe
-  `GET .../classes/{id}/context?date=`) ;
-- `enrollments` → `EnrollmentPicker` (recherche de classe → liste de ses
-  inscriptions `GET /api/v1/enrollments?classGroup=` + champ de saisie
-  directe d'un identifiant d'inscription) ;
-- `enrollments/:enrollmentPublicId` → `EnrollmentAlternation` (liste des
-  exceptions `GET .../enrollments/{id}/exceptions` + tri liste blanche
-  `startAt|endAt|createdAt`, création `POST .../student-exceptions`,
-  annulation `POST .../{id}/cancel` avec motif obligatoire, sonde de
-  contexte effectif `GET .../enrollments/{id}/context?date=`).
+Contrat back-end consommé **tel quel** (rien d'inventé ; toutes en
+`public_id`, corps JSON, réponse `204` sans corps) :
+- `POST /api/v1/users/{publicId}/suspend` — `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`
+  (`LIFECYCLE_ROLES`), corps `{ reason }` (`AccountActionRequest`,
+  `@NotBlank @Size(max = 500)`) ;
+- `POST .../restore` — mêmes rôles, corps `{ reason }` ;
+- `POST .../archive` — `ADMIN`/`SUPER_ADMIN` (`ADMIN_ROLES`), corps
+  `{ reason }` ;
+- `POST .../roles` — `ADMIN`/`SUPER_ADMIN`, corps `{ role, reason }`
+  (`AssignRoleRequest`, tous deux `@NotBlank`) ;
+- `POST .../roles/{roleCode}/revoke` — `ADMIN`/`SUPER_ADMIN`, corps
+  `{ reason }` ;
+- `GET /api/v1/users/{publicId}` est ré-appelé après chaque mutation
+  réussie pour recharger la fiche + l'historique des rôles.
+Aucun endpoint de recherche ou de catalogue de rôles n'est ajouté : le
+choix des rôles proposés est dérivé de l'enum contractuelle `RoleCode`
+(source `ROLES` du cœur applicatif), pas d'une liste inventée.
 
-Nav item « Alternance » ajouté (`NAV_ITEMS`, icône `sync_alt`, mêmes 4
-rôles) : apparaît dans `AppShell` et les accès rapides du tableau de bord,
-filtré en plus par le contexte de rôle actif.
+Fichiers touchés sous `frontend/src/app/features/administration/` :
+- `administration.models.ts` : +`AccountActionRequest`,
+  +`AssignRoleRequest`, +`ACTION_REASON_MAX_LENGTH` (500) ; en-tête de
+  fichier remis à jour (n'est plus « lecture seule ») ;
+- `administration-api.service.ts` : +`suspendUser`, `restoreUser`,
+  `archiveUser`, `assignRole`, `revokeRole` (une méthode par endpoint
+  réel ; `encodeURIComponent` sur `publicId` **et** `roleCode` ; corps
+  exact sans propriété superflue) ;
+- `administration-errors.ts` (nouveau) : `toAdministrationError` —
+  s'appuie sur `normalizeHttpError` (messages `USER_*` du back-end déjà
+  sûrs), expose `{ status, code (USER_* ou null), message, field }` ;
+  seul `USER_ROLE_UNKNOWN` cible le champ `role`, tout le reste est un
+  message global ; `5xx` / code inconnu → message générique, `code`
+  `null` ;
+- `user-detail/` (`.ts` / `.html` / `.scss`) : la fiche gagne une
+  section « Actions sur le compte » (boutons Suspendre / Réactiver /
+  Archiver / Attribuer un rôle) et une colonne « actions » dans le
+  tableau d'historique (bouton « Retirer » sur chaque affectation
+  **active**). Confirmations **en ligne** (pas de dialogue) : motif
+  obligatoire (`textarea`, `maxlength=500`, compteur), description de
+  l'effet, avertissement explicite « l'archivage clôture tous les rôles
+  actifs », contrôles `disabled` pendant l'appel, double soumission
+  empêchée (`submitting()` + garde dans `confirm()`), bandeau succès
+  (`NotificationService.info`) puis rechargement de la fiche ; en cas
+  d'échec le message métier contrôlé s'affiche en ligne sans faux succès
+  ni rechargement, `USER_ROLE_UNKNOWN` étant rattaché au champ rôle.
 
-Nouveaux fichiers sous `frontend/src/app/features/alternation/` :
-`alternation.models.ts` (types + enums + libellés FR + helpers de
-formatage — noms JSON, types, nullabilité, formats de date/heure et
-pagination exactement alignés sur les `record` back-end),
-`alternation-api.service.ts` (client HTTP, une méthode par endpoint
-réel ; `HttpParams` omettant toute clé absente ; aucun paramètre
-d'élargissement de périmètre), `alternation-errors.ts` (traduction des
-codes `ALT_*` via `normalizeHttpError` — messages serveur déjà sûrs ;
-403 → « accès refusé », 404 → « introuvable » ; `ALT_DUPLICATE_CODE` /
-`ALT_INVALID_TIME_ZONE` / `ALT_INVALID_CONFIGURATION` rattachables à un
-champ ; code inconnu → message générique), `alternation-paginator.ts`
-(`MatPaginatorIntl` francisé, factorisé), `pattern-config.ts`
-(assemblage **pur** de la `configuration` par type + erreurs
-ergonomiques + forme canonique de prévisualisation ; round-trip
-`formValueFromCanonical` pour l'édition), `zoned-time.ts` (encodage
-heure locale + fuseau IANA → instant absolu via `Intl.DateTimeFormat` ;
-`null` si fuseau inconnu — jamais de repli UTC ; le `timeZoneId` choisi
-est transmis tel quel), `shared/cycle-preview/` (grille semaine × jour
-accessible : `<table>` + `<caption>` + légende, libellé texte par
-cellule, jamais la couleur seule), et les huit composants
-`patterns/pattern-list`, `patterns/pattern-detail`,
-`patterns/pattern-form`, `class-alternation/class-picker`,
-`class-alternation/class-alternation`,
-`enrollment-alternation/enrollment-picker`,
-`enrollment-alternation/enrollment-alternation`.
+Visibilité des actions (ergonomie seule — le back-end reste l'autorité) :
+- pilotée par `RoleContextService.effectiveRoles()` (contexte de rôle
+  actif, toujours un sous-ensemble des rôles du JWT : il peut
+  **restreindre** l'affichage, jamais l'**élargir**) ;
+- Suspendre : `ACTIVE` + contexte ∈ `LIFECYCLE_ROLES` ; Réactiver :
+  `SUSPENDED` + mêmes rôles ; Archiver et gestion de rôle : contexte ∈
+  `{ADMIN, SUPER_ADMIN}` ;
+- cible `ARCHIVED` : aucune action, seulement une note « état terminal
+  dans ce lot » ;
+- auto-action : si `AuthService.session()?.subject` correspond de façon
+  fiable au `publicId` de la cible, Suspendre / Réactiver / Archiver /
+  Retirer sont masqués (le back-end renvoie `USER_SELF_ACTION_FORBIDDEN`)
+  — l'**attribution** d'un rôle à soi-même **n'est pas** masquée car le
+  back-end ne l'interdit pas ;
+- attribution : `SUPER_ADMIN` proposé seulement à un contexte
+  `SUPER_ADMIN` ; les rôles déjà actifs sur la cible sont retirés de la
+  liste (aide ergonomique, `USER_ROLE_ALREADY_ASSIGNED` reste géré) ;
+- retrait de `SUPER_ADMIN` masqué hors contexte `SUPER_ADMIN` ;
+- un `effect()` ferme un panneau de confirmation ouvert dès que l'action
+  n'est plus proposée (changement de contexte de rôle, passage self) —
+  jamais de formulaire sensible orphelin ;
+- même masquée, chaque action reste traitée côté erreur : un `403`
+  (`USER_SUPER_ADMIN_PROTECTED`, `USER_OPERATION_FORBIDDEN`) est rendu
+  comme un message d'erreur en ligne, jamais comme un succès.
 
-Décisions / limites documentées (aucune règle métier inventée) :
-- **prévisualisation du cycle = représentation de la configuration**, pas
-  une résolution : elle n'utilise ni ancre, ni date, ni modulo ; le
-  contexte réel d'une date vient uniquement des endpoints de contexte ;
-- **contexte (classe et inscription) affiché tel que renvoyé par le
-  serveur** (`SCHOOL` / `COMPANY` / `UNKNOWN`, `source`,
-  `coveringExceptionTypes`, `cycleWeekIndex`, `dayOfWeek`) — jamais
-  reconstruit côté client ;
-- **encodage de l'instant d'une exception** : le contrat impose des
-  `Instant` absolus + un `timeZoneId` séparé ; le formulaire recueille
-  une heure de mur + un fuseau et calcule l'instant sans conversion vers
-  un autre fuseau ni repli UTC ; aux minutes exactes d'un changement
-  d'heure le résultat suit la règle standard « offset avant transition »
-  (limite documentée) ;
-- **les règles strictes des requêtes clientes ne sont pas relâchées** :
-  `schoolDays` / `companyDays` ne sont envoyés que lorsqu'ils sont
-  pertinents ; `companyDays` est transmis explicitement même vide pour un
-  rythme `CUSTOM` (le back-end l'accepte et la forme canonique le
-  conserve) ; l'affichage de la configuration canonique (avec
-  `schoolDays` / `companyDays` vides possibles) se fait sans
-  transformation silencieuse ;
-- **`PEDAGOGICAL_MANAGER` et parcours d'inscription** : les endpoints
-  d'alternance acceptent ce rôle (restreint au périmètre côté serveur),
-  mais `GET /api/v1/enrollments` et `GET /api/v1/student-profiles`
-  restent réservés à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
-  (`EnrollmentWeb.MANAGE_ROLES`). Un `PEDAGOGICAL_MANAGER` ne peut donc
-  pas *parcourir* les inscriptions depuis `EnrollmentPicker` : un `403`
-  y affiche un panneau « accès refusé » explicite et un champ de saisie
-  directe de l'identifiant d'inscription lui reste disponible. Limite
-  back-end connue (cf. « créer un port de périmètre pédagogique
-  public ») — non contournée, documentée ;
-- **le front n'est pas une autorité de sécurité** : gardes de route et
-  boutons masqués sont de l'ergonomie ; un `403 ALT_FORBIDDEN` est rendu
-  « accès refusé », Spring Security reste l'autorité. La garantie contre
-  les chevauchements concurrents d'affectations bornées et l'unicité des
-  exceptions concurrentes de même type restent des limites back-end
-  documentées (les contrôles front servent l'UX, pas la garantie) ;
-- confidentialité : JWT et contexte de rôle **en mémoire seule**
-  (docs/07 §6, RG-085) ; aucun accès `localStorage` / `sessionStorage`
-  (asserté) ; aucun identifiant SQL, `correlationId`, trace, message
-  d'exception ou requête SQL affiché ; `5xx` neutralisés par
-  `normalizeHttpError`.
+Codes `USER_*` traités (via `toAdministrationError` + message serveur
+contrôlé) : `USER_NOT_FOUND` (404, état « introuvable »),
+`USER_INVALID_STATE`, `USER_ROLE_ALREADY_ASSIGNED`,
+`USER_ROLE_NOT_ASSIGNED`, `USER_LAST_ACTIVE_ROLE`,
+`USER_SELF_ACTION_FORBIDDEN` (409), `USER_SUPER_ADMIN_PROTECTED`,
+`USER_OPERATION_FORBIDDEN` (403), `USER_ROLE_UNKNOWN` (400, rattaché au
+champ rôle), `USER_INVALID_SORT` / `USER_INVALID_FILTER` (400, hérités de
+la liste). Un `409` n'est jamais transformé en succès visuel ;
+`correlationId`, trace, requête SQL et identifiant interne ne sont jamais
+affichés ; `5xx` neutralisé par `normalizeHttpError`.
 
-Tests front : **190 → 291** (0 échec ; 12 nouveaux fichiers de spec).
-Nouveaux : `alternation-api.service.spec.ts` (URL / méthode / path params
-/ query params / corps / pagination pour chaque méthode ; aucun
-paramètre d'élargissement de périmètre) ; `pattern-config.spec.ts`
-(assemblage des 4 types ; `CUSTOM` ; `companyDays` vide ; intersections /
-jours non classifiés ; cycle non positif ; round-trip canonique des 4
-types incluant `schoolDays` / `companyDays` vides ; classification de
-cellule identique à la règle serveur ; grille de prévisualisation) ;
-`zoned-time.spec.ts` (Europe/Paris hiver/été, UTC tel quel, fuseau
-inconnu → `null` sans repli UTC, saisie mal formée → `null`, deux
-fuseaux → instants différents) ; `alternation-errors.spec.ts`
-(403/404/code/détails/`5xx` masqué ; rattachement à un champ) ;
-`cycle-preview.spec.ts` (une ligne par semaine, libellé texte par
-cellule, `<caption>` explicite, légende `aria-label`) ;
-`pattern-list.spec.ts` (1re page + tri par défaut + chargement ; lignes
-+ lien détail ; bouton « Nouveau modèle » visible/masqué selon le rôle ;
-vide ; 403 ; erreur + « Réessayer » ; filtres `q`/`status`/`type`
-remettant à la page 0 ; tri toujours dans la liste blanche ;
-pagination) ; `pattern-detail.spec.ts` (faits + prévisualisation ; 404 ;
-actions masquées en lecture seule ; archivage avec motif obligatoire +
-rechargement ; restauration) ; `pattern-form.spec.ts` (création : corps
-`POST` exact pour 3j/2j sans `cycleLengthWeeks`, navigation vers la
-fiche ; `CUSTOM` avec `companyDays` vide explicitement envoyé ; erreur
-client bloque l'envoi ; `ALT_DUPLICATE_CODE` → erreur sur le champ
-`code` ; double envoi empêché ; édition : chargement, `code` + `type`
-figés, corps `PATCH` sans `code`/`type` ; 404) ; `class-picker.spec.ts`
-(liste via l'endpoint `academic` ; lien vers l'écran de classe ; vide ;
-403 ; filtre `q` remettant à la page 0) ; `class-alternation.spec.ts`
-(historique par classe ; affectation — corps exact + rafraîchissement ;
-double envoi empêché ; clôture + message de conflit `409` ; contexte
-serveur affiché sans recalcul ; tri toujours dans la liste blanche) ;
-`enrollment-picker.spec.ts` (recherche de classe → inscriptions ; `403`
-sur les inscriptions → panneau + saisie directe ; navigation depuis le
-champ manuel) ; `enrollment-alternation.spec.ts` (sémantique
-`[début, fin)` affichée ; liste ; création — encodage de l'heure de mur
-dans le fuseau choisi + corps `POST` exact + rafraîchissement ; blocage
-si `endAt <= startAt` ; blocage + pas de repli UTC si fuseau inconnu ;
-annulation avec motif obligatoire ; contexte effectif serveur affiché
-sans recalcul ; tri toujours dans la liste blanche). Specs existants mis
-à jour : `navigation.spec.ts`, `app-shell.spec.ts`, `dashboard.spec.ts`,
-`app.routes.spec.ts` (entrée « Alternance » livrée pour les 4 rôles de
-lecture ; route parente gardée avec enfants ; garde d'écriture
-supplémentaire sur `patterns/new` et `patterns/:publicId/edit` ;
-`TEACHER` → `/forbidden` ; `PEDAGOGICAL_MANAGER` parcourt mais n'atteint
-pas les routes d'écriture des modèles).
+Confidentialité : JWT et contexte de rôle **en mémoire seule** (docs/07
+§6, RG-085) ; aucun accès `localStorage` / `sessionStorage` (asserté).
+
+Accessibilité : chaque confirmation a un `<h3>` + `role="group"` +
+`aria-label`, labels Material associés, `mat-error` reliée au champ
+motif, boutons « Confirmer » / « Annuler » distincts et nommés,
+`disabled` réel pendant l'appel, `role="alert"` sur les erreurs en
+ligne, `role="note"` sur l'avertissement d'archivage et la note d'état
+terminal ; aucune information portée par la seule couleur ; tableau
+d'historique défilable (`overflow-x: auto`) ; formulaires utilisables sur
+petit écran (`flex-wrap`).
+
+Tests front : **291 → 323** (0 échec ; +32). Nouveaux :
+`administration-errors.spec.ts` (5 : message serveur sûr conservé + code
+`USER_*` ; auto-action / `SUPER_ADMIN` = message global ;
+`USER_ROLE_UNKNOWN` → champ `role` ; `5xx` masqué, aucun code métier ;
+code inconnu → vue générique). `administration-api.service.spec.ts` (+8 :
+`suspend` / `restore` / `archive` / `roles` / `roles/{code}/revoke` —
+URL exacte, `POST`, corps exact sans clé superflue, encodage de
+`publicId` **et** `roleCode`, complétion sur `204`, propagation d'une
+erreur ; une lecture pure n'émet aucun `POST`/`PATCH`/`PUT`/`DELETE`).
+`user-detail.spec.ts` (7 → 28 : lecture non-régression conservée ;
+Suspendre visible pour `ACTIVE` / Réactiver pour `SUSPENDED` ; archivage
++ attribution réservés à `ADMIN`/`SUPER_ADMIN`, `SCHOOL_ADMINISTRATION`
+suspend/réactive mais n'archive pas ; `ARCHIVED` → aucune `form`, note
+terminale ; motif requis + `maxlength=500` + corps exact + rechargement ;
+avertissement de clôture des rôles à l'archivage ; double soumission
+empêchée ; `USER_INVALID_STATE` / `USER_SUPER_ADMIN_PROTECTED` /
+`USER_OPERATION_FORBIDDEN` affichés sans faux succès ni rechargement ;
+liste exacte des rôles d'attribution, rôles actifs exclus, `SUPER_ADMIN`
+selon le contexte ; `USER_ROLE_ALREADY_ASSIGNED` global vs
+`USER_ROLE_UNKNOWN` sur le champ ; attribution à soi-même non masquée ;
+« Retirer » seulement sur les affectations actives et pour
+`ADMIN`/`SUPER_ADMIN` ; `USER_LAST_ACTIVE_ROLE` sans faux succès ;
+retrait de `SUPER_ADMIN` masqué hors contexte `SUPER_ADMIN` ;
+auto-actions masquées quand le `subject` correspond ; un contexte non
+admin n'ouvre aucune action ; un panneau ouvert se ferme au changement de
+contexte ; `403` traité même bouton initialement visible ; rien en
+storage).
 
 Vérifs locales le 30 août 2026 (Node 24.13.0), depuis `frontend/` :
-`rm -rf node_modules && npm ci` → 582 paquets, 0 vulnérabilité ;
-`npm test -- --watch=false` → **39 fichiers, 291 tests, 0 échec** ;
+`npm ci` → 149 paquets suivis, 0 vulnérabilité ;
+`npm test -- --watch=false` → **40 fichiers, 323 tests, 0 échec** ;
+`npm run lint` → « All files pass linting » ;
 `npm run build` → bundle initial **479,35 kB brut / 122,11 kB
-transféré** (0 alerte de budget, seuil d'avertissement 500 kB ; les
-écrans d'alternance sont des chunks paresseux hors budget « initial ») ;
-`npm run lint` → « All files pass linting » ; `git diff --check` → propre.
-`cd backend && ./mvnw test` non ré-exécuté : aucun fichier back-end
-modifié.
+transféré** (inchangé — `user-detail` est un chunk paresseux : 8,48 kB →
+21,82 kB brut, hors budget « initial » ; 0 alerte, seuil 500 kB) ;
+`git diff --check` → propre. Aucun script `format` réel dans
+`frontend/package.json` (bloc `prettier` présent mais aucune dépendance
+ni commande). `cd backend && ./mvnw test` non ré-exécuté : aucun fichier
+back-end modifié.
 
-Éléments non réalisés / partiels : parcours de parcours des inscriptions
-pour le `PEDAGOGICAL_MANAGER` (limite back-end `EnrollmentWeb.MANAGE_ROLES` —
-saisie directe d'identifiant en repli) ; pas de tri interactif sur les
-sondes de contexte (résultat ponctuel) ; écrans non démontrés de bout en
-bout avec le back-end en marche ; pas de tests e2e Angular → Spring Boot
+Éléments PARTIELS / limites : le front n'est pas une autorité de sécurité
+(gardes de route, boutons masqués et `effect()` de fermeture = ergonomie ;
+Spring Security décide, un `403` est rendu « accès refusé ») ; la
+détection d'auto-action dépend d'un `subject` JWT fiable — si absent,
+l'action est proposée et le back-end renvoie
+`USER_SELF_ACTION_FORBIDDEN` ; écrans non démontrés de bout en bout avec
+le back-end en marche ; pas de tests e2e Angular → Spring Boot
 (TestBed / Vitest uniquement).
 ```
 
@@ -1467,7 +1442,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; consultation des référentiels académiques (lecture seule) via PR #15 = `b47cfa3` ; **administration des comptes utilisateurs (lecture seule) sur branche `feature/frontend-user-administration`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, **`/administration` (placeholder REMPLACÉ par un écran réel : parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController.READ_ROLES` ; `''` → `UserList`, `:publicId` → `UserDetail`)**, `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), `/academic` (parent gardé `AcademicWeb.READ_ROLES` → `AcademicReferenceList`/`AcademicReferenceDetail`, `data.resource`), `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` ; référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) ; **administration des comptes : `AdministrationApiService` (lecture seule, 2 GET) consommant `GET /api/v1/users` (recherche `q` = email ou prénom ou nom, filtres `status` (`AccountStatus`) + `role` (affectation active, `RoleCode`), tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le défaut —, pagination ≤ 100, strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles actifs et clôturés) ; `UserList` + `UserDetail` ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; aucune écriture consommée (`POST …/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{code}/revoke` reportés), aucun endpoint ni champ inventé ; aucun `id` SQL / hash / jeton / trace affiché, `5xx` masqués par `normalizeHttpError`** ; **gestion de l'alternance (`/alternation`) sur branche `feature/alternation-management-ui`, PR ouverte non fusionnée — première tranche front-end avec écriture : parent gardé `roleGuard` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` (`AlternationWeb` lecture), garde d'écriture supplémentaire `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` sur `patterns/new` et `patterns/:publicId/edit` ; `AlternationApiService` (une méthode par endpoint réel des modèles de rythme, affectations de classe et exceptions individuelles) ; `PatternList`/`PatternForm` (création + édition, `code`/`type` figés en édition, `configuration` assemblée localement par type via `pattern-config.ts` — `companyDays` explicite même vide pour `CUSTOM` — validation finale serveur `ALT_INVALID_CONFIGURATION`)/`PatternDetail` (faits + `app-cycle-preview` accessible représentant la config, jamais une résolution de date + archiver/restaurer avec confirmation en ligne) ; `ClassPicker`/`ClassAlternation` (historique des affectations, affectation, clôture avec motif, sonde `GET .../classes/{id}/context` affichée telle quelle) ; `EnrollmentPicker`/`EnrollmentAlternation` (exceptions, création avec encodage heure locale + fuseau IANA → instant via `Intl` sans repli UTC ni conversion de fuseau, sémantique `[startAt, endAt)` affichée, annulation, sonde `GET .../enrollments/{id}/context`) ; limite back-end : `GET /api/v1/enrollments` fermé au `PEDAGOGICAL_MANAGER` → `EnrollmentPicker` propose une saisie directe d'identifiant en repli ; nav item « Alternance » (`sync_alt`) ; aucune écriture ni endpoint inventé ; 403 `ALT_FORBIDDEN` rendu « accès refusé »** ; 291 tests Vitest verts, `npm test` / `npm run build` (initial 479,35 kB brut / 122,11 kB transféré, < seuil 500 kB ; écrans d'alternance en chunks paresseux) / `npm run lint` verts en local le 30 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
+| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; consultation des référentiels académiques (lecture seule) via PR #15 = `b47cfa3` ; administration des comptes utilisateurs (lecture seule) via PR #16 = `5d5e51d` ; gestion de l'alternance via PR #18 = `a79b5bf` ; **parcours d'écriture de l'administration des comptes (suspension / réactivation / archivage / attribution / retrait de rôle) sur branche `feature/frontend-user-administration-write`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, **`/administration` (placeholder REMPLACÉ par un écran réel : parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController.READ_ROLES` ; `''` → `UserList`, `:publicId` → `UserDetail`)**, `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), `/academic` (parent gardé `AcademicWeb.READ_ROLES` → `AcademicReferenceList`/`AcademicReferenceDetail`, `data.resource`), `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` ; référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) ; **administration des comptes : `AdministrationApiService` (lecture seule, 2 GET) consommant `GET /api/v1/users` (recherche `q` = email ou prénom ou nom, filtres `status` (`AccountStatus`) + `role` (affectation active, `RoleCode`), tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le défaut —, pagination ≤ 100, strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles actifs et clôturés) ; `UserList` + `UserDetail` ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; aucun endpoint ni champ inventé ; aucun `id` SQL / hash / jeton / trace affiché, `5xx` masqués par `normalizeHttpError`. **Parcours d'écriture (branche `feature/frontend-user-administration-write`, non fusionnée)** : `AdministrationApiService` gagne `suspendUser` / `restoreUser` / `archiveUser` / `assignRole` / `revokeRole` (une méthode par `POST` réel, corps exact `{ reason }` ou `{ role, reason }`, `encodeURIComponent` sur `publicId` et `roleCode`, `204`) ; `UserDetail` gagne une section « Actions sur le compte » (Suspendre `ACTIVE` / Réactiver `SUSPENDED` / Archiver / Attribuer un rôle) et un bouton « Retirer » sur chaque affectation active — confirmations **en ligne**, motif obligatoire (≤ 500), avertissement de clôture des rôles à l'archivage, `disabled` pendant l'appel, double soumission bloquée, `NotificationService.info` puis rechargement `GET /api/v1/users/{publicId}`, échec métier affiché en ligne sans faux succès ; visibilité pilotée par `RoleContextService.effectiveRoles()` (restreint, jamais n'élargit le JWT) + masquage des auto-actions si `subject` JWT = cible (sauf attribution, non interdite côté back-end) ; `ARCHIVED` = état terminal (note, aucune action) ; `SUPER_ADMIN` proposé/révocable seulement en contexte `SUPER_ADMIN` ; `effect()` fermant un panneau devenu indisponible ; `administration-errors.ts` (`toAdministrationError`) traduit `USER_NOT_FOUND` / `USER_INVALID_STATE` / `USER_ROLE_ALREADY_ASSIGNED` / `USER_ROLE_NOT_ASSIGNED` / `USER_LAST_ACTIVE_ROLE` / `USER_SELF_ACTION_FORBIDDEN` / `USER_SUPER_ADMIN_PROTECTED` / `USER_OPERATION_FORBIDDEN` / `USER_ROLE_UNKNOWN` (→ champ rôle) ; JWT et contexte en mémoire seule, rien en `localStorage` / `sessionStorage`** ; **gestion de l'alternance (`/alternation`) via PR #18 = `a79b5bf` — première tranche front-end avec écriture : parent gardé `roleGuard` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` (`AlternationWeb` lecture), garde d'écriture supplémentaire `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` sur `patterns/new` et `patterns/:publicId/edit` ; `AlternationApiService` (une méthode par endpoint réel des modèles de rythme, affectations de classe et exceptions individuelles) ; `PatternList`/`PatternForm` (création + édition, `code`/`type` figés en édition, `configuration` assemblée localement par type via `pattern-config.ts` — `companyDays` explicite même vide pour `CUSTOM` — validation finale serveur `ALT_INVALID_CONFIGURATION`)/`PatternDetail` (faits + `app-cycle-preview` accessible représentant la config, jamais une résolution de date + archiver/restaurer avec confirmation en ligne) ; `ClassPicker`/`ClassAlternation` (historique des affectations, affectation, clôture avec motif, sonde `GET .../classes/{id}/context` affichée telle quelle) ; `EnrollmentPicker`/`EnrollmentAlternation` (exceptions, création avec encodage heure locale + fuseau IANA → instant via `Intl` sans repli UTC ni conversion de fuseau, sémantique `[startAt, endAt)` affichée, annulation, sonde `GET .../enrollments/{id}/context`) ; limite back-end : `GET /api/v1/enrollments` fermé au `PEDAGOGICAL_MANAGER` → `EnrollmentPicker` propose une saisie directe d'identifiant en repli ; nav item « Alternance » (`sync_alt`) ; aucune écriture ni endpoint inventé ; 403 `ALT_FORBIDDEN` rendu « accès refusé »** ; 323 tests Vitest verts, `npm test` / `npm run build` (initial 479,35 kB brut / 122,11 kB transféré, < seuil 500 kB ; `user-detail` et les écrans d'alternance en chunks paresseux) / `npm run lint` verts en local le 30 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment`, V8 tables `work_study_pattern`/`class_work_study_pattern`/`student_schedule_exception` — migrations appliquées et vérifiées, schéma en version 8) |
@@ -1518,22 +1493,27 @@ sur `main` (PR #12, commit `2ff7aa8`). Le sélecteur de contexte de rôle
 référentiels académiques (lecture seule : `/academic` → années scolaires
 → formations → niveaux → promotions → classes) est fusionnée sur `main`
 (PR #15, commit `b47cfa3`). L'administration front-end des comptes
-utilisateurs (lecture seule : liste `/administration` + fiche
+utilisateurs en **lecture seule** (liste `/administration` + fiche
 `/administration/:publicId` + historique des rôles, consommant
-`GET /api/v1/users` et `GET /api/v1/users/{publicId}` sans aucune
-écriture ; remplace le placeholder `/administration`) est implémentée sur
-`feature/frontend-user-administration` (PR ouverte, non fusionnée). La
-gestion front-end de l'alternance (`/alternation` : modèles de rythme
-avec création / édition / archivage, affectations de rythme aux classes
-avec clôture, exceptions individuelles de calendrier avec annulation,
-sondes de contexte classe et inscription) est implémentée sur
-`feature/alternation-management-ui` (PR ouverte, non fusionnée) — elle
-consomme l'intégralité du module back-end `alternation` (PR #17).
+`GET /api/v1/users` et `GET /api/v1/users/{publicId}` ; remplace le
+placeholder `/administration`) est fusionnée sur `main` (PR #16, commit
+`5d5e51d`). La gestion front-end de l'alternance (`/alternation` :
+modèles de rythme avec création / édition / archivage, affectations de
+rythme aux classes avec clôture, exceptions individuelles de calendrier
+avec annulation, sondes de contexte classe et inscription) est fusionnée
+sur `main` (PR #18, commit `a79b5bf`) — elle consomme l'intégralité du
+module back-end `alternation` (PR #17). Le **parcours d'écriture** de
+l'administration des comptes (suspension / réactivation / archivage ;
+attribution / retrait de rôle, confirmations en ligne avec motif
+obligatoire) est implémenté sur
+`feature/frontend-user-administration-write` (PR ouverte, non fusionnée) :
+il consomme les cinq `POST` de `UserAccountController`, dérive la
+visibilité des actions de `RoleContextService.effectiveRoles()` sans
+jamais élargir le JWT, masque les auto-actions (hors attribution) et
+laisse Spring Security appliquer les gardes fines (`SUPER_ADMIN`,
+auto-action, dernier rôle actif), rendues en ligne à partir des codes
+`USER_*`.
 Prochaines étapes :
-- front-end : parcours d'écriture de l'administration des comptes
-  (suspension / réactivation / archivage ; attribution / retrait de
-  rôle avec formulaire), en respectant les gardes fines serveur
-  (protection `SUPER_ADMIN`, auto-action, dernier rôle actif) ;
 - front-end : formulaires de création / modification / archivage du
   référentiel académique, lorsque les dépendances manquantes seront
   disponibles (liste des sites pour rattacher une classe, etc.) ;
@@ -2423,12 +2403,17 @@ Limites connues (Apprenants) :
 
 ## Administration des comptes utilisateurs (front-end) — 29 août 2026
 
-Branche `feature/frontend-user-administration` (créée depuis `main` à
-`b47cfa3`), PR ouverte contre `main`, **non fusionnée**. Aucun fichier
-back-end modifié : `docs/01`–`docs/04`, migrations `V1`–`V7`,
-`SecurityConfig`, `backend/**`, `backend-ci.yml`, autorisations et CORS
-back-end inchangés. Aucune dépendance ajoutée → `package.json` /
+Branche `feature/frontend-user-administration`, **fusionnée sur `main`
+via PR #16** (commit `5d5e51d`). Aucun fichier back-end modifié :
+`docs/01`–`docs/04`, migrations `V1`–`V7`, `SecurityConfig`,
+`backend/**`, `backend-ci.yml`, autorisations et CORS back-end
+inchangés. Aucune dépendance ajoutée → `package.json` /
 `package-lock.json` inchangés.
+
+> Le **parcours d'écriture** (suspension, réactivation, archivage,
+> attribution et retrait de rôle) est livré séparément sur la branche
+> `feature/frontend-user-administration-write` (PR ouverte, non
+> fusionnée) — détail complet dans « Phase actuelle » ci-dessus.
 
 Liste des comptes → fiche d'un compte → historique de ses rôles. Lecture
 seule : aucun `POST` du module `identity` (`suspend` / `restore` /
@@ -2534,12 +2519,11 @@ Limites connues (Administration) :
 
 ## Gestion de l'alternance (front-end) — 30 août 2026
 
-Branche `feature/alternation-management-ui` (créée depuis `main` à
-`60b3cf6`), PR ouverte contre `main`, **non fusionnée**. Aucun fichier
-back-end, migration V1–V8 ou docs/01–04 modifié ; `SecurityConfig`,
-`backend/**`, `backend-ci.yml`, autorisations et CORS back-end inchangés.
-Aucune dépendance ajoutée → `package.json` / `package-lock.json`
-inchangés.
+Branche `feature/alternation-management-ui`, **fusionnée sur `main` via
+PR #18** (commit `a79b5bf`). Aucun fichier back-end, migration V1–V8 ou
+docs/01–04 modifié ; `SecurityConfig`, `backend/**`, `backend-ci.yml`,
+autorisations et CORS back-end inchangés. Aucune dépendance ajoutée →
+`package.json` / `package-lock.json` inchangés.
 
 Septième tranche verticale front-end, première **avec écriture**. Elle
 consomme l'intégralité du module back-end `alternation`
