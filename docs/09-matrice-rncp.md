@@ -72,7 +72,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | Développer le back-end | Spring Boot | Code et tests | À FAIRE |
 | Développer le front-end | Angular 21.2 (standalone, signaux, lazy routes, formulaires réactifs), `authGuard`/`guestGuard`/`roleGuard`, intercepteurs, `RoleContextService` (contexte de rôle en mémoire seule), tests Vitest | socle `frontend/` fusionné (PR #11, `6fa341f`) ; activation fusionnée (PR #12, `2ff7aa8`) ; contexte de rôle fusionné (PR #13, `810c8a2`) ; espace Apprenants fusionné (PR #14, `1678399`) ; référentiels académiques fusionnés (PR #15, `b47cfa3`) ; administration des comptes (lecture seule) fusionnée (PR #16, `5d5e51d`) ; gestion de l'alternance fusionnée (PR #18, `a79b5bf`) ; **parcours d'écriture de l'administration des comptes sur `feature/frontend-user-administration-write` (PR ouverte)** ; `npm ci` / `npm test` (336) / `npm run build` (initial 479,36 kB brut, < seuil 500 kB) / `npm run lint` / `git diff --check` verts | IMPLÉMENTÉ (connexion → tableau de bord ; gardes de route par rôle ; navigation limitée aux écrans livrés ; parcours public `/activation` ; sélecteur de contexte de rôle (docs/02 §6.1) ; espace Apprenants `/students` ; référentiels académiques `/academic` en LECTURE SEULE ; administration des comptes `/administration` en LECTURE SEULE + **parcours d'écriture de la fiche compte (suspension / réactivation / archivage / attribution / retrait de rôle ; visibilité dérivée de `RoleContextService.effectiveRoles()` sans élargir le JWT ; auto-actions masquées ; codes `USER_*` rendus en ligne ; Spring Security reste l'autorité) sur `feature/frontend-user-administration-write`** ; **gestion de l'alternance — `/alternation` (parent gardé `AlternationWeb` lecture : `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` ; garde d'écriture supplémentaire `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` sur la création/édition de modèle) : `AlternationApiService` (une méthode par endpoint réel des modèles de rythme, affectations de classe et exceptions individuelles ; aucun paramètre d'élargissement de périmètre) ; `PatternList` / `PatternForm` (création + édition, `code`/`type` figés en édition ; `configuration` assemblée par type via `pattern-config.ts`, `companyDays` explicite même vide pour `CUSTOM` ; validation finale serveur `ALT_INVALID_CONFIGURATION`) / `PatternDetail` (+ `app-cycle-preview` accessible = représentation de la config, jamais une résolution de date ; archiver / restaurer avec confirmation en ligne) ; `ClassPicker` / `ClassAlternation` (historique, affectation, clôture avec motif, sonde `GET .../classes/{id}/context` affichée telle quelle) ; `EnrollmentPicker` / `EnrollmentAlternation` (exceptions, création avec encodage heure locale + fuseau IANA → instant via `Intl` sans repli UTC ni conversion, sémantique `[startAt, endAt)` affichée, annulation, sonde `GET .../enrollments/{id}/context`) ; limite back-end : `GET /api/v1/enrollments` fermé au `PEDAGOGICAL_MANAGER` → repli par saisie directe d'identifiant ; 403 `ALT_FORBIDDEN` rendu « accès refusé » ; JWT et contexte en mémoire seule, rien en `localStorage`/`sessionStorage`**) |
 | Concevoir la base | MySQL | Modèle de données | CONÇU |
-| Utiliser Redis | Cache et QR | Tests | À FAIRE |
+| Utiliser Redis | Jetons d'émargement (jeton opaque + code court, TTL court, rotation, purge à la fermeture) — module `attendance` | `AttendanceTokenServiceTests`, `AttendanceIntegrationTests` ; démonstration locale (503 `ATT_TOKEN_BACKEND_UNAVAILABLE` quand Redis est arrêté) | IMPLÉMENTÉ et TESTÉ (voir TR-022) |
 | Importer les données | CSV/XLSX | Démonstration | À FAIRE |
 | Produire des rapports | CSV/Excel | Exports | À FAIRE |
 | Utiliser l’IA | Mapping intelligent | FastAPI et scores | À FAIRE |
@@ -131,7 +131,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-003 | Import apprenants | `enrollment` | TI-001 à 012 | Vidéo | BC02 |
 | TR-004 | Import planning | `planning` | TI-013 à 017 | Capture | BC02 |
 | TR-005 | Publication | `planning` | Intégration | Séances créées | BC02 |
-| TR-006 | QR | `attendance` | TE-001 à 007 | Démo | BC02/BC03 |
+| TR-006 | QR / émargement (jeton dynamique opaque + code court, séance exceptionnelle, un point de contrôle) | `coursesession`, `attendance` | `CourseSession*Tests`, `Attendance*Tests` | `./mvnw clean test` (V9 appliquée) + démonstration locale API/UI | BC02/BC03 (voir TR-022) |
 | TR-007 | WebAuthn | `identity` | TA-008 | Démo | BC02/BC03 |
 | TR-008 | Rapports | `reporting` | REC-004 | Export | BC02 |
 | TR-009 | Audit | `audit` | Contrôle DB | Écran | BC03 |
@@ -147,6 +147,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-019 | Périmètre pédagogique (affectation responsable → formation, contrôle d'accès sur formation/niveau/promotion/classe) | `academic`, `identity`, `audit` | `PedagogicalAssignment*Tests`, `PedagogicalScopeIntegrationTests`, `PedagogicalAssignmentIntegrationTests` | `./mvnw clean test` (V6 appliquée) | BC02/BC03 |
 | TR-020 | Inscriptions historiques (profil apprenant, inscription apprenant → classe/année, changement de classe conservant l'historique) | `enrollment`, `academic`, `identity`, `audit` | `EnrollmentServiceTests`, `StudentProfileServiceTests`, `EnrollmentConstraintsTests`, `EnrollmentIntegrationTests`, `EnrollmentSecurityTests`, `ClassGroupDirectoryTests` | `./mvnw clean test` (V7 appliquée) | BC02/BC03 |
 | TR-021 | Rythmes d'alternance (modèles de rythme, affectation historisée à une classe, exceptions individuelles de calendrier, résolution du contexte SCHOOL / COMPANY / UNKNOWN) | `alternation`, `academic`, `enrollment`, `identity`, `audit` | `AlternationConfigParserTests`, `AlternationResolverTests`, `AlternationConstraintsTests`, `WorkStudyPatternServiceTests`, `ClassWorkStudyPatternServiceTests`, `StudentScheduleExceptionServiceTests`, `AlternationContextServiceTests`, `AlternationIntegrationTests`, `AlternationSecurityTests`, `EnrollmentDirectoryTests`, `AcademicScopeDirectoryTests` | `./mvnw clean test` (V8 appliquée) | BC02/BC03 |
+| TR-022 | Parcours d'émargement démontrable (séance exceptionnelle, cycle `PLANNED→OPEN→CLOSED`, jeton dynamique opaque + code court dans Redis, validation par un apprenant inscrit, anti-double présence par contrainte SQL, consultation des présences, interfaces formateur & apprenant, amorçage `demo`) | `coursesession`, `attendance`, `bootstrap`, `identity`, `academic`, `enrollment`, `audit`, `frontend` | `CourseSessionConstraintsTests`, `CourseSessionIntegrationTests`, `AttendanceRecordConstraintsTests`, `AttendanceTokenServiceTests`, `AttendanceIntegrationTests`, `AttendanceSecurityTests`, `DefaultDemoAccountProvisionerTests`, `DemoDataInitializerTests` ; front : `sessions-api.service`, `session-errors`, `qr-display`, `session-list`, `session-form`, `session-detail`, `attendance-check-in` | `./mvnw clean test` (V9 appliquée, **488**) + `npm test` (**407**) + démonstration locale API (statuts HTTP relevés) + `scripts/seed-demo.sh` + `docs/11-guide-demonstration.md` | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -700,6 +701,125 @@ Une exigence décrite n’est pas automatiquement réalisée.
     affectations de classe, exceptions individuelles, sondes de contexte)
     est implémenté sur `feature/alternation-management-ui` (PR ouverte,
     non fusionnée) — voir `docs/CURRENT-STATE.md`.
+
+- **TR-022 (Parcours d'émargement démontrable)** : `IMPLÉMENTÉ` et
+  `TESTÉ`, `DÉMONTRÉ` localement (API). Deux nouveaux modules Spring
+  Modulith (`coursesession`, `attendance`) + module d'amorçage
+  `bootstrap` + migration Flyway `V9` (`course_session`, `session_class`,
+  `attendance_checkpoint`, `attendance_record` ; schéma en version 9).
+  Périmètre volontairement réduit (décisions de la tranche) : séance
+  **exceptionnelle** créée manuellement (motif obligatoire, formateur =
+  compte `TEACHER` actif, ≥ 1 classe), **un seul** point de contrôle
+  d'émargement, parcours apprenant fiable = **code court** (le scan
+  caméra n'est pas livré). Hors périmètre : planning, présence manuelle,
+  correction, justificatif, calcul de demi-journée, export CSV, QR fixe
+  de salle, contrôle réseau, WebAuthn.
+  * **Cycle de vie** `PLANNED → OPEN → CLOSED` (aucune réouverture, aucune
+    modification structurante après ouverture) ; transitions interdites
+    testées (`CourseSessionIntegrationTests`, `SESSION_INVALID_STATE`).
+    Ouverture / fermeture réservées à
+    `ADMIN`/`SUPER_ADMIN`/`PEDAGOGICAL_MANAGER` (périmètre) et au
+    `TEACHER` affecté ; `SCHOOL_ADMINISTRATION` lecture seule ;
+    `STUDENT` aucun accès (`CourseSessionWeb`, `CourseSessionAccessGuard`
+    lisant le contexte Spring Security — jamais un paramètre client).
+  * **Jetons Redis** (`AttendanceTokenService`) : jeton **opaque**
+    (`SecureRandom` 32 octets, URL-safe sans padding) + **code court**
+    (8 caractères d'un alphabet sans `0/O/1/I/L`), stockés
+    **uniquement dans Redis** avec un TTL court configurable
+    (`app.attendance.token-ttl`, défaut `PT30S`, strictement positif).
+    Rotation = invalidation immédiate du couple précédent ; fermeture de
+    séance → purge Redis (écouteur de `CourseSessionChangeEvent` d'action
+    `CLOSED`). Jamais de jeton en base MySQL, dans une URL ou dans les
+    logs. **Redis indisponible → `503 ATT_TOKEN_BACKEND_UNAVAILABLE`**,
+    jamais de validation dégradée (unitaire `AttendanceTokenServiceTests`
+    avec `StringRedisTemplate` mocké ; **vérifié en démonstration locale**
+    en mettant en pause le conteneur Redis).
+  * **Validation d'une présence** (`POST /api/v1/attendance/validate`,
+    `STUDENT` uniquement) : le serveur résout l'apprenant à partir du
+    **seul JWT** (jamais d'identifiant d'apprenant ou d'inscription
+    transmis), exige une inscription `ACTIVE` dont la classe est
+    rattachée à la séance (0 ou > 1 correspondance → refus), séance
+    `OPEN`, point de contrôle ouvert, compte non archivé. **Anti-double
+    présence** garanti par la contrainte SQL
+    `uq_attendance_record_checkpoint_enrollment` — une violation
+    concurrente est retraduite en `409 ATT_ALREADY_RECORDED`
+    (`AttendanceRecordPersister` `REQUIRES_NEW`), jamais en 500
+    (`AttendanceIntegrationTests` : deux validations simultanées → 1×200
+    / 1×409 / 0×5xx, une seule ligne persistée).
+  * **Consultation des présences** (`GET /api/v1/sessions/{id}/attendance`)
+    : effectif attendu + présents + lignes (numéro étudiant, prénom /
+    nom, heure, canal `DYNAMIC_QR` / `SHORT_CODE`), sans adresse
+    électronique ni identifiant SQL.
+  * **Interfaces Angular** : espace `/sessions` (liste, création,
+    détail avec ouverture / fermeture en confirmation en ligne, panneau
+    QR — `QrDisplay` encode la seule chaîne opaque, jamais affichée en
+    texte ; jeton renouvelé avant expiration ; rotation et polling des
+    présences arrêtés à la destruction / fermeture / perte du droit /
+    changement de contexte de rôle) et `/attendance` (saisie du code
+    court, normalisation identique au serveur, erreurs `ATT_*`
+    contrôlées, code inconnu / 5xx → message générique, rien en URL ni en
+    storage). Nav items « Séances » (5 rôles) et « Émargement »
+    (`STUDENT`). Dépendance ajoutée : `angularx-qrcode@21.0.5` (MIT) ;
+    aucune dépendance de scan caméra.
+  * **Amorçage de démonstration** : module `bootstrap` +
+    `DemoDataInitializer` (`@Profile("demo")`, idempotent) crée 4 comptes
+    fictifs (domaine `example.test`) via le port public
+    `identity.DemoAccountProvisioner` (implémentation elle-même
+    `@Profile("demo")`) ; mot de passe via `ESIC_DEMO_PASSWORD`
+    (obligatoire, ≥ 12 caractères, jamais commité, jamais journalisé).
+    `application-demo.yml` s'appuie sur l'infrastructure locale, ne
+    désactive pas la sécurité, n'utilise pas `ddl-auto=create` et ne
+    contient aucun secret. Le reste du jeu de données (référentiel
+    académique, 2 profils, 2 inscriptions, 1 séance `PLANNED`) est produit
+    par `scripts/seed-demo.sh` (idempotent) via les API REST réelles.
+    Aucune donnée de démonstration dans une migration Flyway.
+  * **Audit** : `SESSION_CREATED` / `_OPENED` / `_CLOSED` (catégorie
+    `COURSE_SESSION`), `ATTENDANCE_RECORDED` (catégorie `ATTENDANCE`),
+    via `CourseSessionChangeEvent` / `AttendanceChangeEvent` →
+    `CourseSessionAuditListener` / `AttendanceAuditListener` — jamais de
+    jeton, de numéro étudiant ni de nom. Même **dette transactionnelle
+    connue** que les autres listeners (`@EventListener` + `REQUIRES_NEW`,
+    non résolue par cette PR).
+  * **Ports inter-modules** : `identity.TeacherDirectory` (formateurs
+    éligibles, sans élargir `GET /api/v1/users`), `identity.UserDirectory`
+    étendu (`findName`), `identity.DemoAccountProvisioner`,
+    `enrollment.EnrollmentDirectory` étendu
+    (`findActiveEnrollmentsForUserOn`, `describeAttendee`,
+    `countActiveEnrollmentsInClasses`),
+    `coursesession.CourseSessionDirectory` (résolution + contrôle d'accès
+    de lecture / gestion + `findForAttendance` sans contrôle d'accès,
+    réservé à `attendance` après validation d'un jeton).
+    `ModularityTests` reste vert.
+  * **Tests** (`./mvnw clean test` : 449 → **488**, 0 échec, exécuté deux
+    fois ; front `npm test` : 350 → **407**, 0 échec ; `npm run lint` /
+    `npm run build` verts, initial 480,61 kB brut < 500 kB) :
+    `CourseSessionConstraintsTests` (7, `@DataJpaTest`),
+    `CourseSessionIntegrationTests` (6, `@SpringBootTest`),
+    `AttendanceRecordConstraintsTests` (4, `@DataJpaTest`),
+    `AttendanceTokenServiceTests` (11, Redis mocké),
+    `AttendanceIntegrationTests` (7, dont concurrence),
+    `AttendanceSecurityTests` (4, matrice des 6 rôles),
+    `DefaultDemoAccountProvisionerTests` (2), `DemoDataInitializerTests`
+    (2) ; front : `sessions-api.service.spec` (11), `session-errors.spec`
+    (7), `qr-display.spec` (2), `session-list.spec` (10),
+    `session-form.spec` (7), `session-detail.spec` (10, fake timers),
+    `attendance-check-in.spec` (13).
+  * **Démonstration locale (API, statuts HTTP relevés le 30 août 2026,
+    profil `demo`, sans afficher jeton / mot de passe / donnée
+    personnelle)** : ADMIN lit la séance `200` → TEACHER l'ouvre `204` →
+    TEACHER émet un jeton + code court `200` (code de 8 caractères, TTL
+    30 s) → apprenant 1 valide par code court `200` (`SHORT_CODE`) →
+    seconde validation du même apprenant `409 ATT_ALREADY_RECORDED` →
+    apprenant 2 valide par jeton opaque `200` (`DYNAMIC_QR`) → présences
+    `200` (2/2 présents) → apprenant 1 sur `GET /sessions` `403` →
+    TEACHER ferme `204` → validation ultérieure `409 ATT_TOKEN_INVALID`
+    (jeton purgé de Redis) → émission de jeton `409 ATT_SESSION_CLOSED` ;
+    Redis mis en pause → émission `503 ATT_TOKEN_BACKEND_UNAVAILABLE` →
+    Redis relancé → émission `200`.
+  * **Non réalisé / limites** : scan caméra (non livré) ; planning (non
+    livré) ; un seul point de contrôle par séance ; pas de rapport ni
+    d'export ; pas de tests e2e Angular → Spring Boot ; démonstration UI
+    de bout en bout non exécutée automatiquement (parcours API vérifié).
 
 Preuve : `backend/src/test/java/com/esic/connect/identity/`,
 `backend/src/test/java/com/esic/connect/notification/`,

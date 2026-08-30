@@ -45,9 +45,12 @@ src/app/
     auth/login/          écran de connexion
     account-activation/  parcours public `/activation?token=…` (validation + définition du mot de passe)
     dashboard/           premier écran authentifié
-    administration/      consultation (lecture seule) des comptes utilisateurs + historique des rôles
+    administration/      comptes utilisateurs : consultation + actions (suspension / réactivation / archivage / rôles)
     students/            liste des apprenants + fiche + historique d'inscriptions
     academic/            consultation (lecture seule) du référentiel académique
+    alternation/         rythmes d'alternance (modèles, affectations, exceptions)
+    sessions/            séances : liste / création / détail (ouverture, fermeture, QR + code court, présences)
+    attendance-check-in/ écran d'émargement de l'apprenant (`/attendance`)
     errors/              403 / 404
 ```
 
@@ -71,16 +74,51 @@ remplace pas Spring Security — un `403` de l'API est rendu comme un état
   suspension le cas échéant, puis **historique complet des rôles**
   (attribués et clôturés, docs/02 §9.7).
 
-Aucune écriture n'est consommée : les routes `POST …/{id}/suspend` ·
-`/restore` · `/archive` · `/roles` · `/roles/{roleCode}/revoke` existent
-côté back-end mais restent hors de cette tranche (suspension /
-archivage / gestion des rôles reportés à un lot ultérieur). Aucun
-endpoint ni champ inventé. États chargement, vide, erreur (avec
-« Réessayer »), accès refusé (403) et introuvable (404) couverts. Aucun
-identifiant SQL, hash, jeton ni trace affiché ; les `5xx` sont
-neutralisés par `normalizeHttpError`. Aucune donnée écrite dans
-`localStorage` / `sessionStorage`. Cet écran **remplace** l'ancien
-placeholder `/administration`.
+La fiche compte consomme aussi les cinq mutations de
+`UserAccountController` (`POST …/{id}/suspend` · `/restore` · `/archive` ·
+`/roles` · `/roles/{roleCode}/revoke`) — suspension, réactivation,
+archivage, attribution et retrait de rôle — via des confirmations **en
+ligne** avec motif obligatoire. La visibilité des actions est dérivée de
+`RoleContextService.effectiveRoles()` (qui restreint mais n'élargit
+jamais le JWT) ; les auto-actions sont masquées ; Spring Security reste
+l'autorité (un `403` / `USER_*` est rendu en ligne). Aucun endpoint ni
+champ inventé. États chargement, vide, erreur (avec « Réessayer »), accès
+refusé (403) et introuvable (404) couverts. Aucun identifiant SQL, hash,
+jeton ni trace affiché ; les `5xx` sont neutralisés par
+`normalizeHttpError`. Aucune donnée écrite dans `localStorage` /
+`sessionStorage`. Cet écran **remplace** l'ancien placeholder
+`/administration`.
+
+## Séances et émargement (`/sessions`, `/attendance`)
+
+Espace consommant les modules back-end `coursesession` et `attendance`.
+
+- `/sessions` (`roleGuard` READ =
+  `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` /
+  `PEDAGOGICAL_MANAGER` / `TEACHER`) — liste des séances (filtre
+  `status`, tri `startsAt` / `createdAt`). Un `TEACHER` ne voit que ses
+  séances, un `PEDAGOGICAL_MANAGER` que son périmètre — **décidé côté
+  serveur**.
+- `/sessions/new` (`roleGuard` CREATE =
+  `ADMIN` / `SUPER_ADMIN` / `PEDAGOGICAL_MANAGER`) — création d'une
+  séance **exceptionnelle** : formateur (`GET /api/v1/sessions/teachers`),
+  classes (`GET /api/v1/class-groups`), date + heures locales + fuseau
+  IANA, **motif obligatoire**.
+- `/sessions/:publicId` — fiche : ouverture / fermeture (confirmation en
+  ligne), panneau QR (le composant `QrDisplay` — `angularx-qrcode` —
+  encode la seule chaîne opaque fournie par le serveur, jamais affichée
+  en texte ; code court affiché ; jeton renouvelé avant expiration ;
+  rotation et polling des présences arrêtés à la destruction / fermeture
+  / perte du droit / changement de contexte de rôle), tableau des
+  présences avec rafraîchissement manuel.
+- `/attendance` (`roleGuard` `STUDENT`) — saisie du **code court**
+  affiché par le formateur (le scan caméra n'est pas livré) ;
+  normalisation identique au serveur ; erreurs `ATT_*` contrôlées ; code
+  inconnu / `5xx` → message générique ; rien en URL ni en storage.
+
+`SessionsApiService` : une méthode par endpoint réel ; le jeton
+d'émargement ne transite que dans le corps HTTPS des réponses, jamais
+dans une URL. Nav items « Séances » et « Émargement ».
 
 ## Apprenants (`/students`)
 
