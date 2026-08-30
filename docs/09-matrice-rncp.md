@@ -147,7 +147,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-019 | Périmètre pédagogique (affectation responsable → formation, contrôle d'accès sur formation/niveau/promotion/classe) | `academic`, `identity`, `audit` | `PedagogicalAssignment*Tests`, `PedagogicalScopeIntegrationTests`, `PedagogicalAssignmentIntegrationTests` | `./mvnw clean test` (V6 appliquée) | BC02/BC03 |
 | TR-020 | Inscriptions historiques (profil apprenant, inscription apprenant → classe/année, changement de classe conservant l'historique) | `enrollment`, `academic`, `identity`, `audit` | `EnrollmentServiceTests`, `StudentProfileServiceTests`, `EnrollmentConstraintsTests`, `EnrollmentIntegrationTests`, `EnrollmentSecurityTests`, `ClassGroupDirectoryTests` | `./mvnw clean test` (V7 appliquée) | BC02/BC03 |
 | TR-021 | Rythmes d'alternance (modèles de rythme, affectation historisée à une classe, exceptions individuelles de calendrier, résolution du contexte SCHOOL / COMPANY / UNKNOWN) | `alternation`, `academic`, `enrollment`, `identity`, `audit` | `AlternationConfigParserTests`, `AlternationResolverTests`, `AlternationConstraintsTests`, `WorkStudyPatternServiceTests`, `ClassWorkStudyPatternServiceTests`, `StudentScheduleExceptionServiceTests`, `AlternationContextServiceTests`, `AlternationIntegrationTests`, `AlternationSecurityTests`, `EnrollmentDirectoryTests`, `AcademicScopeDirectoryTests` | `./mvnw clean test` (V8 appliquée) | BC02/BC03 |
-| TR-022 | Parcours d'émargement démontrable (séance exceptionnelle, cycle `PLANNED→OPEN→CLOSED`, jeton dynamique opaque + code court dans Redis, validation par un apprenant inscrit, anti-double présence par contrainte SQL, consultation des présences, interfaces formateur & apprenant, amorçage `demo`) | `coursesession`, `attendance`, `bootstrap`, `identity`, `academic`, `enrollment`, `audit`, `frontend` | `CourseSessionConstraintsTests`, `CourseSessionIntegrationTests`, `AttendanceRecordConstraintsTests`, `AttendanceTokenServiceTests`, `AttendanceIntegrationTests`, `AttendanceSecurityTests`, `DefaultDemoAccountProvisionerTests`, `DemoDataInitializerTests` ; front : `sessions-api.service`, `session-errors`, `qr-display`, `session-list`, `session-form`, `session-detail`, `attendance-check-in` | `./mvnw clean test` (V9 appliquée, **488**) + `npm test` (**407**) + démonstration locale API (statuts HTTP relevés) + `scripts/seed-demo.sh` + `docs/11-guide-demonstration.md` | BC02/BC03 |
+| TR-022 | Parcours d'émargement démontrable (séance exceptionnelle, cycle `PLANNED→OPEN→CLOSED`, jeton dynamique opaque + code court dans Redis, validation par un apprenant inscrit, anti-double présence par contrainte SQL, consultation des présences, interfaces formateur & apprenant, amorçage `demo`) | `coursesession`, `attendance`, `bootstrap`, `identity`, `academic`, `enrollment`, `audit`, `frontend` | `CourseSessionConstraintsTests`, `CourseSessionIntegrationTests`, `AttendanceRecordConstraintsTests`, `AttendanceTokenServiceTests`, `AttendanceIntegrationTests`, `AttendanceSecurityTests`, `DefaultDemoAccountProvisionerTests`, `DemoDataInitializerTests` ; front : `sessions-api.service`, `session-errors`, `qr-display`, `session-list`, `session-form`, `session-detail`, `attendance-check-in` | `./mvnw clean test` (V9 appliquée, **499**) + `npm test -- --watch=false` (**416**) + `bash scripts/test/test-seed-demo.sh` + démonstration locale API (statuts HTTP relevés) + `scripts/seed-demo.sh` + `docs/11-guide-demonstration.md` | BC02/BC03 |
 
 ## Avancement vérifié — 28 août 2026
 
@@ -790,20 +790,27 @@ Une exigence décrite n’est pas automatiquement réalisée.
     de lecture / gestion + `findForAttendance` sans contrôle d'accès,
     réservé à `attendance` après validation d'un jeton).
     `ModularityTests` reste vert.
-  * **Tests** (`./mvnw clean test` : 449 → **488**, 0 échec, exécuté deux
-    fois ; front `npm test` : 350 → **407**, 0 échec ; `npm run lint` /
-    `npm run build` verts, initial 480,61 kB brut < 500 kB) :
+  * **Tests** (`./mvnw clean test` : origine `main` 449 → **499**, 0 échec ;
+    front `npm test -- --watch=false` : origine `main` 336 → **416**, 0 échec ;
+    `npm run lint` / `npm run build` verts, initial < 500 kB) :
     `CourseSessionConstraintsTests` (7, `@DataJpaTest`),
     `CourseSessionIntegrationTests` (6, `@SpringBootTest`),
     `AttendanceRecordConstraintsTests` (4, `@DataJpaTest`),
-    `AttendanceTokenServiceTests` (11, Redis mocké),
+    `AttendanceTokenServiceTests` (**18**, Redis mocké — dont l'invariant du
+    pointeur courant : clé `token -> session` résiduelle refusée après
+    rotation),
     `AttendanceIntegrationTests` (7, dont concurrence),
     `AttendanceSecurityTests` (4, matrice des 6 rôles),
     `DefaultDemoAccountProvisionerTests` (2), `DemoDataInitializerTests`
     (2) ; front : `sessions-api.service.spec` (11), `session-errors.spec`
-    (7), `qr-display.spec` (2), `session-list.spec` (10),
-    `session-form.spec` (7), `session-detail.spec` (10, fake timers),
-    `attendance-check-in.spec` (13).
+    (7), `qr-display.spec` (2), `session-list.spec` (**11**),
+    `session-form.spec` (**9**), `session-detail.spec` (**12**, fake timers),
+    `attendance-check-in.spec` (**18**) — dont, dans les quatre écrans, la
+    prise en compte du **contexte de rôle actif** (masquage du bouton de
+    création, formulaire neutralisé, arrêt du polling, réponse tardive
+    ignorée, émargement hors contexte `STUDENT` refusé).
+    Preuve seed : `scripts/test/test-seed-demo.sh` (faux `curl`, hors
+    total `npm test`).
   * **Démonstration locale (API, statuts HTTP relevés le 30 août 2026,
     profil `demo`, sans afficher jeton / mot de passe / donnée
     personnelle)** : ADMIN lit la séance `200` → TEACHER l'ouvre `204` →

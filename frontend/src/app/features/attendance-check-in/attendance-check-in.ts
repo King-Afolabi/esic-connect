@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 
+import { RoleContextService } from '../../core/auth/role-context.service';
 import { SessionsApiService } from '../sessions/sessions-api.service';
 import { toSessionError } from '../sessions/session-errors';
 import { AttendanceRecordResponse, formatInstantUtc } from '../sessions/sessions.models';
@@ -28,6 +29,12 @@ type CheckInState =
  * identifiant d'apprenant ni d'inscription n'est transmis. Rien n'est
  * conservé (ni `localStorage`, ni paramètre d'URL) ; le formulaire reste
  * réutilisable après une erreur.
+ *
+ * Saisie et soumission ne sont possibles que dans un **contexte de rôle
+ * `STUDENT` effectif**. Quitter ce contexte efface immédiatement le code,
+ * le récépissé et les erreurs métier, et bloque toute requête (y compris
+ * une réponse arrivée tardivement). Revenir au contexte `STUDENT` rend le
+ * formulaire à nouveau utilisable, sans rechargement.
  */
 @Component({
   selector: 'app-attendance-check-in',
@@ -45,6 +52,7 @@ type CheckInState =
 })
 export class AttendanceCheckIn {
   private readonly api = inject(SessionsApiService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
   protected readonly shortCodeMaxLength = SHORT_CODE_MAX_LENGTH;
@@ -59,6 +67,9 @@ export class AttendanceCheckIn {
 
   protected readonly state = signal<CheckInState>({ kind: 'idle' });
 
+  /** L'émargement n'est possible qu'en contexte de rôle `STUDENT` effectif. */
+  protected readonly canCheckIn = computed(() => this.roleContext.effectiveRoles().includes('STUDENT'));
+
   protected readonly submitting = computed(() => this.state().kind === 'submitting');
   protected readonly successRecord = computed(() => {
     const current = this.state();
@@ -69,7 +80,20 @@ export class AttendanceCheckIn {
     return current.kind === 'error' ? current.message : null;
   });
 
+  constructor() {
+    // Sortie du contexte STUDENT : on efface code, récépissé et erreurs.
+    effect(() => {
+      if (!this.canCheckIn()) {
+        this.state.set({ kind: 'idle' });
+        this.form.reset({ shortCode: '' });
+      }
+    });
+  }
+
   protected submit(): void {
+    if (!this.canCheckIn()) {
+      return;
+    }
     if (this.form.invalid || this.submitting()) {
       this.form.markAllAsTouched();
       return;
@@ -84,10 +108,17 @@ export class AttendanceCheckIn {
     this.state.set({ kind: 'submitting' });
     this.api.validateAttendance({ shortCode }).subscribe({
       next: (record) => {
+        // Réponse tardive après une sortie du contexte STUDENT : ignorée.
+        if (!this.canCheckIn()) {
+          return;
+        }
         this.state.set({ kind: 'success', record });
         this.form.reset({ shortCode: '' });
       },
       error: (error: unknown) => {
+        if (!this.canCheckIn()) {
+          return;
+        }
         this.state.set({ kind: 'error', message: toSessionError(error).message });
       },
     });

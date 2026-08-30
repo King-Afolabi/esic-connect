@@ -16,16 +16,18 @@ import { toSessionError } from '../session-errors';
 import {
   AttendanceTokenResponse,
   CourseSessionResponse,
+  SESSION_MANAGE_ROLES,
+  SESSION_READ_ROLES,
   SessionAttendanceResponse,
   attendanceSourceLabel,
   classCodes,
   formatInstantUtc,
+  holdsAnySessionRole,
   sessionStatusLabel,
   teacherName,
 } from '../sessions.models';
 
-/** Rôles autorisés à ouvrir / fermer / émettre un jeton (`CourseSessionWeb.MANAGE_ROLES`). */
-export const SESSION_MANAGE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER', 'TEACHER'] as const;
+export { SESSION_MANAGE_ROLES } from '../sessions.models';
 
 /** Rafraîchissement automatique modéré des présences pendant qu'une séance est ouverte. */
 const ATTENDANCE_POLL_MS = 15_000;
@@ -116,9 +118,11 @@ export class SessionDetail {
 
   /** Rôles de gestion pris dans le contexte actif (jamais un élargissement du JWT). */
   protected readonly canManage = computed(() =>
-    this.roleContext
-      .effectiveRoles()
-      .some((role) => (SESSION_MANAGE_ROLES as readonly string[]).includes(role)),
+    holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_MANAGE_ROLES),
+  );
+  /** Le contexte actif permet-il encore de lire la fiche ? Pilote le polling. */
+  protected readonly canRead = computed(() =>
+    holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_READ_ROLES),
   );
   /** Le QR n'est proposé que si la séance est ouverte et l'appelant gestionnaire. */
   protected readonly canShowQr = computed(() => this.isOpen() && this.canManage());
@@ -195,6 +199,12 @@ export class SessionDetail {
     this.api.issueAttendanceToken(this.publicId).subscribe({
       next: (token) => {
         this.tokenLoading.set(false);
+        // Réponse d'une émission déjà en vol : ignorée si, entre-temps,
+        // la séance a été fermée ou le contexte de rôle a retiré le droit
+        // de gestion. On ne programme alors aucun renouvellement.
+        if (!this.canShowQr() || token.sessionPublicId !== this.publicId) {
+          return;
+        }
         this.attendanceToken.set(token);
         this.scheduleRenewal(token.ttlSeconds);
       },
@@ -202,6 +212,9 @@ export class SessionDetail {
         this.tokenLoading.set(false);
         this.stopTokenRenewal();
         this.attendanceToken.set(null);
+        if (!this.canShowQr()) {
+          return;
+        }
         this.tokenError.set(toSessionError(error).message);
       },
     });
@@ -283,8 +296,8 @@ export class SessionDetail {
   /**
    * Rafraîchissement automatique modéré des présences — uniquement tant
    * que le composant vit ; l'appel est ignoré si la séance n'est pas
-   * ouverte ou si le contexte de rôle ne permet plus la lecture. Nettoyé
-   * par {@link takeUntilDestroyed}.
+   * ouverte ou si le contexte de rôle actif ne permet plus la lecture de
+   * la page. Nettoyé par {@link takeUntilDestroyed}.
    */
   private maybeStartPolling(): void {
     if (this.pollSubscribed) {
@@ -294,7 +307,7 @@ export class SessionDetail {
     interval(ATTENDANCE_POLL_MS)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
-        if (this.isOpen() && this.attendance().kind !== 'loading') {
+        if (this.canRead() && this.isOpen() && this.attendance().kind !== 'loading') {
           this.api.getSessionAttendance(this.publicId).subscribe({
             next: (data) => this.attendance.set({ kind: 'ready', data }),
             error: () => {

@@ -93,28 +93,45 @@ jeton ni trace affiché ; les `5xx` sont neutralisés par
 
 Espace consommant les modules back-end `coursesession` et `attendance`.
 
+Le **contexte de rôle actif** (`RoleContextService.effectiveRoles`, qui
+restreint sans jamais élargir le JWT) pilote l'affichage dans les quatre
+écrans ; Spring Security reste l'autorité (un `403` est rendu « accès
+refusé »).
+
 - `/sessions` (`roleGuard` READ =
   `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` /
   `PEDAGOGICAL_MANAGER` / `TEACHER`) — liste des séances (filtre
   `status`, tri `startsAt` / `createdAt`). Un `TEACHER` ne voit que ses
   séances, un `PEDAGOGICAL_MANAGER` que son périmètre — **décidé côté
-  serveur**.
+  serveur**. Le bouton « Nouvelle séance » est calculé sur le **contexte
+  de rôle actif** : basculer vers un contexte sans droit de création le
+  masque immédiatement.
 - `/sessions/new` (`roleGuard` CREATE =
   `ADMIN` / `SUPER_ADMIN` / `PEDAGOGICAL_MANAGER`) — création d'une
   séance **exceptionnelle** : formateur (`GET /api/v1/sessions/teachers`),
   classes (`GET /api/v1/class-groups`), date + heures locales + fuseau
-  IANA, **motif obligatoire**.
+  IANA, **motif obligatoire**. Si le contexte actif perd le droit de
+  création, le formulaire est **neutralisé** (désactivé, panneau
+  « permission perdue ») et aucune requête de création ne part — une
+  réponse arrivée tardivement est ignorée.
 - `/sessions/:publicId` — fiche : ouverture / fermeture (confirmation en
   ligne), panneau QR (le composant `QrDisplay` — `angularx-qrcode` —
   encode la seule chaîne opaque fournie par le serveur, jamais affichée
-  en texte ; code court affiché ; jeton renouvelé avant expiration ;
-  rotation et polling des présences arrêtés à la destruction / fermeture
-  / perte du droit / changement de contexte de rôle), tableau des
-  présences avec rafraîchissement manuel.
+  en texte ; code court affiché ; jeton renouvelé avant expiration).
+  Perte du droit de **gestion** dans le contexte actif → QR effacé et
+  renouvellement arrêté aussitôt ; une émission de jeton déjà en vol est
+  ignorée si l'état a changé (aucun renouvellement programmé sur une
+  réponse obsolète). Le **polling** des présences ne part plus dès que le
+  contexte actif ne permet plus la lecture de la page (et à la
+  destruction / fermeture).
 - `/attendance` (`roleGuard` `STUDENT`) — saisie du **code court**
   affiché par le formateur (le scan caméra n'est pas livré) ;
   normalisation identique au serveur ; erreurs `ATT_*` contrôlées ; code
   inconnu / `5xx` → message générique ; rien en URL ni en storage.
+  Saisie et soumission ne sont possibles que dans un **contexte
+  `STUDENT` effectif** : en sortir efface code, récépissé et erreurs et
+  bloque toute requête (réponse tardive ignorée) ; y revenir rend le
+  formulaire utilisable sans rechargement.
 
 `SessionsApiService` : une méthode par endpoint réel ; le jeton
 d'émargement ne transite que dans le corps HTTPS des réponses, jamais

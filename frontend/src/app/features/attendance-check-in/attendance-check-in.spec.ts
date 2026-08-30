@@ -1,9 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormGroup } from '@angular/forms';
 import { provideRouter } from '@angular/router';
 
+import { Role } from '../../core/models/role';
+import { RoleContextService } from '../../core/auth/role-context.service';
 import { AttendanceCheckIn } from './attendance-check-in';
 
 const URL = '/api/v1/attendance/validate';
@@ -14,18 +17,24 @@ interface CheckInInternals {
   reset: () => void;
 }
 
-function setup() {
+function setup(roles: Role[] = ['STUDENT']) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
+  const effectiveRoles: WritableSignal<Role[]> = signal(roles);
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    providers: [
+      provideRouter([]),
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      { provide: RoleContextService, useValue: { effectiveRoles } },
+    ],
   });
   const fixture = TestBed.createComponent(AttendanceCheckIn);
   const http = TestBed.inject(HttpTestingController);
   const internals = fixture.componentInstance as unknown as CheckInInternals;
   fixture.detectChanges();
-  return { fixture, http, internals };
+  return { fixture, http, internals, effectiveRoles };
 }
 
 const RECORD = {
@@ -151,6 +160,65 @@ describe('AttendanceCheckIn', () => {
     http.expectOne(URL).flush(RECORD);
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it('refuses input and submission outside an effective STUDENT context', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    fixture.detectChanges();
+    expect(text()).toContain('Sélectionnez le contexte « apprenant »');
+    expect((fixture.nativeElement as HTMLElement).querySelector('form')).toBeNull();
+
+    internals.form.controls['shortCode'].setValue('ABCD2345');
+    internals.submit();
+    http.expectNone(URL);
+  });
+
+  it('clears the code, the receipt and business errors when the STUDENT context is lost', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['STUDENT']));
+    internals.form.controls['shortCode'].setValue('ABCD2345');
+    internals.submit();
+    http.expectOne(URL).flush(RECORD);
+    fixture.detectChanges();
+    expect(text()).toContain('Présence enregistrée');
+
+    effectiveRoles.set(['TEACHER']);
+    fixture.detectChanges();
+    expect(text()).not.toContain('Présence enregistrée');
+    expect(text()).not.toContain('Rattrapage');
+    expect(internals.form.getRawValue().shortCode).toBe('');
+  });
+
+  it('ignores a validate response that arrives after the STUDENT context was lost', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['STUDENT']));
+    internals.form.controls['shortCode'].setValue('ABCD2345');
+    internals.submit();
+    const req = http.expectOne(URL);
+
+    effectiveRoles.set(['TEACHER']);
+    fixture.detectChanges();
+
+    req.flush(RECORD);
+    fixture.detectChanges();
+    expect(text()).not.toContain('Présence enregistrée');
+  });
+
+  it('becomes usable again when the STUDENT context is restored, without a reload', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['TEACHER']));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('form')).toBeNull();
+
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('form')).not.toBeNull();
+
+    internals.form.controls['shortCode'].setValue('ABCD2345');
+    internals.submit();
+    http.expectOne(URL).flush(RECORD);
+    fixture.detectChanges();
+    expect(text()).toContain('Présence enregistrée');
   });
 });
 

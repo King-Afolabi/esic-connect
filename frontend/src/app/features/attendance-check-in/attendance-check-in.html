@@ -4,7 +4,15 @@
     Saisissez le code court affiché par votre formateur pour confirmer votre présence.
   </p>
 
-  @if (successRecord(); as record) {
+  @if (!canCheckIn()) {
+    <div class="checkin__panel" role="note">
+      <mat-icon aria-hidden="true">badge</mat-icon>
+      <p>
+        Sélectionnez le contexte « apprenant » pour émarger. L'émargement n'est disponible que
+        sous ce rôle.
+      </p>
+    </div>
+  } @else if (successRecord(); as record) {
     <div class="checkin__panel checkin__panel--success" role="status">
       <mat-icon aria-hidden="true">check_circle</mat-icon>
       <div>

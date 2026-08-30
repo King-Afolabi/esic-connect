@@ -1,9 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormGroup } from '@angular/forms';
 import { Router, provideRouter } from '@angular/router';
 
+import { Role } from '../../../core/models/role';
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { SessionForm } from './session-form';
 
@@ -19,17 +22,19 @@ const TEACHERS_URL = '/api/v1/sessions/teachers';
 const CLASSES_URL = '/api/v1/class-groups';
 const CREATE_URL = '/api/v1/sessions';
 
-function setup() {
+function setup(roles: Role[] = ['ADMIN']) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
   const navigate = vi.fn().mockResolvedValue(true);
+  const effectiveRoles: WritableSignal<Role[]> = signal(roles);
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: NotificationService, useValue: { info: vi.fn(), error: vi.fn() } },
+      { provide: RoleContextService, useValue: { effectiveRoles } },
     ],
   });
   const router = TestBed.inject(Router);
@@ -38,7 +43,7 @@ function setup() {
   const http = TestBed.inject(HttpTestingController);
   const internals = fixture.componentInstance as unknown as FormInternals;
   fixture.detectChanges();
-  return { fixture, http, internals, navigate };
+  return { fixture, http, internals, navigate, effectiveRoles };
 }
 
 function loadReady(http: HttpTestingController): void {
@@ -169,5 +174,39 @@ describe('SessionForm', () => {
     );
     fixture.detectChanges();
     expect(text()).toContain("Vous n'êtes pas autorisé à créer une séance");
+  });
+
+  it('neutralizes the form and refuses submission when the active context loses the create role', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    loadReady(http);
+    fillValid(internals);
+    fixture.detectChanges();
+
+    effectiveRoles.set(['TEACHER']);
+    fixture.detectChanges();
+
+    expect(text()).toContain('ne permet plus de créer une séance');
+    expect(internals.form.disabled).toBe(true);
+
+    internals.submit();
+    http.expectNone(CREATE_URL);
+  });
+
+  it('ignores a create response that arrives after the context lost the create role', () => {
+    let navigate!: ReturnType<typeof vi.fn>;
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, navigate, effectiveRoles } = setup(['ADMIN']));
+    loadReady(http);
+    fillValid(internals);
+    internals.submit();
+    const req = http.expectOne(CREATE_URL);
+
+    // La permission est perdue pendant que la requête est en vol.
+    effectiveRoles.set(['TEACHER']);
+    fixture.detectChanges();
+
+    req.flush({ publicId: 's-9' });
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

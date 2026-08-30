@@ -81,11 +81,29 @@ class AttendanceTokenService {
     /**
      * Émet un nouveau couple (jeton opaque, code court) pour la séance,
      * en invalidant le couple précédent le cas échéant.
+     *
+     * <p>Ordre volontaire : on écrit d'abord le nouveau couple, puis on
+     * bascule le pointeur courant {@code session -> token\ncode}, puis
+     * seulement on supprime les clés de l'ancien couple. Le pointeur est
+     * l'unique référence d'autorité ({@link #resolveSession} n'accepte que
+     * le jeton exactement égal au jeton pointé) : dès qu'il bascule, un
+     * ancien jeton résiduel devient inutilisable, même si sa suppression
+     * échoue ou tarde.
      */
     IssuedAttendanceToken issue(UUID sessionPublicId) {
         try {
             String sessionKey = SESSION_KEY_PREFIX + sessionPublicId;
             String previous = redis.opsForValue().get(sessionKey);
+
+            String token = newToken();
+            String shortCode = newShortCode();
+            String payload = sessionPublicId.toString();
+            redis.opsForValue().set(TOKEN_KEY_PREFIX + token, payload, ttl);
+            redis.opsForValue().set(CODE_KEY_PREFIX + shortCode, token, ttl);
+            // Bascule du pointeur courant : à partir d'ici l'ancien couple
+            // n'est plus « courant » et sera refusé à la résolution.
+            redis.opsForValue().set(sessionKey, token + "\n" + shortCode, ttl);
+
             if (previous != null) {
                 String[] parts = previous.split("\n", 2);
                 if (parts.length == 2) {
@@ -93,13 +111,6 @@ class AttendanceTokenService {
                     redis.delete(CODE_KEY_PREFIX + parts[1]);
                 }
             }
-
-            String token = newToken();
-            String shortCode = newShortCode();
-            String payload = sessionPublicId.toString();
-            redis.opsForValue().set(TOKEN_KEY_PREFIX + token, payload, ttl);
-            redis.opsForValue().set(CODE_KEY_PREFIX + shortCode, token, ttl);
-            redis.opsForValue().set(sessionKey, token + "\n" + shortCode, ttl);
 
             Instant expiresAt = clock.instant().plus(ttl);
             return new IssuedAttendanceToken(token, shortCode, expiresAt, sessionPublicId);
@@ -111,26 +122,65 @@ class AttendanceTokenService {
     /**
      * Résout un jeton opaque <em>ou</em> un code court en identifiant
      * public de séance. {@link Optional#empty()} = inconnu / expiré /
-     * invalidé.
+     * invalidé / <strong>plus courant</strong>.
+     *
+     * <p>Invariant : la clé {@code token -> session} ne suffit jamais à
+     * elle seule. Une clé résiduelle (rotation concurrente ou partiellement
+     * échouée) doit être refusée. La preuve n'est acceptée que si le
+     * pointeur courant de la séance ({@code session -> token\ncode})
+     * <em>existe</em>, est <em>cohérent</em> (exactement deux segments) et
+     * <em>désigne exactement</em> le jeton résolu (et, si un code court a
+     * été présenté, exactement ce code court). Pointeur absent, illisible,
+     * incohérent ou divergent ⇒ {@link Optional#empty()}.
      */
     Optional<UUID> resolveSession(String token, String shortCode) {
         try {
+            // 1. token -> session (directement, ou via le code court).
             String effectiveToken = token;
-            if (effectiveToken == null && shortCode != null) {
-                effectiveToken = redis.opsForValue().get(CODE_KEY_PREFIX + shortCode);
-            }
             if (effectiveToken == null) {
-                return Optional.empty();
+                if (shortCode == null) {
+                    return Optional.empty();
+                }
+                effectiveToken = redis.opsForValue().get(CODE_KEY_PREFIX + shortCode);
+                if (effectiveToken == null) {
+                    return Optional.empty();
+                }
             }
             String payload = redis.opsForValue().get(TOKEN_KEY_PREFIX + effectiveToken);
             if (payload == null) {
                 return Optional.empty();
             }
+            UUID sessionPublicId;
             try {
-                return Optional.of(UUID.fromString(payload));
+                sessionPublicId = UUID.fromString(payload);
             } catch (IllegalArgumentException corrupted) {
                 return Optional.empty();
             }
+
+            // 2. Le pointeur courant de la séance fait autorité.
+            String current = redis.opsForValue().get(SESSION_KEY_PREFIX + sessionPublicId);
+            if (current == null) {
+                return Optional.empty();
+            }
+            String[] parts = current.split("\n", 2);
+            if (parts.length != 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
+                return Optional.empty();
+            }
+            String currentToken = parts[0];
+            String currentShortCode = parts[1];
+
+            // 3. Le jeton résolu doit être exactement le jeton courant ;
+            //    un code court présenté doit être exactement le code courant.
+            if (!currentToken.equals(effectiveToken)) {
+                return Optional.empty();
+            }
+            if (token != null && !currentToken.equals(token)) {
+                return Optional.empty();
+            }
+            if (shortCode != null && !currentShortCode.equals(shortCode)) {
+                return Optional.empty();
+            }
+            return Optional.of(sessionPublicId);
         } catch (DataAccessException redisDown) {
             throw new AttendanceException(AttendanceException.Kind.TOKEN_BACKEND_UNAVAILABLE);
         }

@@ -96,6 +96,22 @@ profils apprenants, deux inscriptions et **une séance `PLANNED`**. Une
 seconde exécution affiche les mêmes identifiants et « séance … (déjà
 présente, PLANNED) ».
 
+Chaque appel logique n'émet **qu'une seule requête POST** : le helper
+`http_post` effectue une requête unique (corps dans un fichier temporaire
+nettoyé par `trap`, statut capturé séparément) et refuse tout `HTTP >= 400`
+par défaut ; seul un `409` est toléré dans les fonctions `ensure_*`, qui
+retrouvent alors la ressource exacte par son code et échouent si elle
+reste introuvable. La séance de démonstration n'ayant pas de contrainte
+d'unicité, elle n'est POSTée qu'après un `GET` confirmant son absence.
+Non-régression : `bash scripts/test/test-seed-demo.sh` (faux `curl`
+déterministe) vérifie « un appel logique = un POST » et « une seconde
+exécution ne crée ni séance ni inscription supplémentaire ».
+
+Vérification locale du 30 août 2026 sur une base MySQL vierge dédiée
+(`esic_demo_verify`, supprimée ensuite ; `esic_connect` non touchée) :
+`course_session` = 0 avant, **1** après le 1ᵉʳ seed, **1** après le 2ᵈ
+(mêmes `public_id`).
+
 ### 4.4 Front-end
 
 ```bash
@@ -179,6 +195,12 @@ guide : `demo-password-1234`).
 | STUDENT valide après fermeture | `POST /api/v1/attendance/validate` | `409 ATT_TOKEN_INVALID` |
 | TEACHER émet un jeton après fermeture | `POST /api/v1/sessions/{id}/attendance-token` | `409 ATT_SESSION_CLOSED` |
 | (Redis en pause) TEACHER émet un jeton | idem | `503 ATT_TOKEN_BACKEND_UNAVAILABLE` |
+
+Invariant de rotation Redis (relevé le 30 août 2026 sur `esic_demo_verify`) :
+après deux émissions successives sur une séance ouverte, une validation
+avec **l'ancien** code court → `409` (il n'est plus le couple courant
+désigné par le pointeur `session -> token\ncode`) ; avec le **code
+courant** → `200`.
 
 ---
 

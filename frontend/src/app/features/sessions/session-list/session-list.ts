@@ -10,13 +10,14 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { RouterLink } from '@angular/router';
 
-import { AuthService } from '../../../core/auth/auth.service';
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { frenchPaginatorIntl } from '../../alternation/alternation-paginator';
 import { SessionsApiService } from '../sessions-api.service';
 import { toSessionError } from '../session-errors';
 import {
   CourseSessionResponse,
   PageResponse,
+  SESSION_CREATE_ROLES,
   SESSION_SORT_FIELDS,
   SESSION_STATUSES,
   SessionSortField,
@@ -27,9 +28,6 @@ import {
   sessionStatusLabel,
   teacherName,
 } from '../sessions.models';
-
-/** Rôles autorisés à créer une séance (`CourseSessionWeb.CREATE_ROLES`). */
-export const SESSION_CREATE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'] as const;
 
 type ListState =
   | { kind: 'loading' }
@@ -48,7 +46,10 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
  * pagination bornée à 100 : strictement ce que l'API expose. Un
  * `TEACHER` ne voit que ses séances, un `PEDAGOGICAL_MANAGER` que son
  * périmètre — décidé **côté serveur**. Le bouton « Nouvelle séance »
- * n'apparaît que pour les rôles de création ; l'autorisation réelle reste
+ * n'apparaît que si le **contexte de rôle actif**
+ * ({@link RoleContextService.effectiveRoles}) contient un rôle de
+ * création : sélectionner un contexte plus restreint le masque
+ * immédiatement, sans jamais élargir le JWT. L'autorisation réelle reste
  * côté Spring Security (un `403` API est rendu « accès refusé »).
  */
 @Component({
@@ -72,7 +73,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 })
 export class SessionList {
   private readonly api = inject(SessionsApiService);
-  private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
   protected readonly statuses = SESSION_STATUSES;
@@ -89,7 +90,11 @@ export class SessionList {
     'actions',
   ] as const;
 
-  protected readonly canCreate = this.auth.hasAnyRole([...SESSION_CREATE_ROLES]);
+  protected readonly canCreate = computed(() =>
+    this.roleContext
+      .effectiveRoles()
+      .some((role) => (SESSION_CREATE_ROLES as readonly string[]).includes(role)),
+  );
 
   protected readonly filters = this.formBuilder.group({
     status: this.formBuilder.control<SessionStatus | ''>(''),

@@ -180,6 +180,31 @@ export interface ValidateAttendanceRequest {
 export const SESSION_SORT_FIELDS = ['startsAt', 'createdAt'] as const;
 export type SessionSortField = (typeof SESSION_SORT_FIELDS)[number];
 
+/** Rôles autorisés à créer une séance (`CourseSessionWeb.CREATE_ROLES`). */
+export const SESSION_CREATE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'] as const;
+
+/** Rôles autorisés à lire la fiche d'une séance (`CourseSessionWeb.READ_ROLES`). */
+export const SESSION_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+
+/** Rôles autorisés à ouvrir / fermer / émettre un jeton (`CourseSessionWeb.MANAGE_ROLES`). */
+export const SESSION_MANAGE_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+
+/** Vrai si `roles` contient au moins un des rôles requis. */
+export function holdsAnySessionRole(roles: readonly string[], required: readonly string[]): boolean {
+  return roles.some((role) => required.includes(role));
+}
+
 export interface SessionListQuery {
   status?: SessionStatus | null;
   /** `teacher` — `public_id` d'un compte formateur. */

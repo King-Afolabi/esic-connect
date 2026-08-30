@@ -1,9 +1,11 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import { AuthService } from '../../../core/auth/auth.service';
+import { Role } from '../../../core/models/role';
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { CourseSessionResponse, PageResponse } from '../sessions.models';
 import { SessionList } from './session-list';
 
@@ -44,19 +46,22 @@ function setup(canCreate: boolean) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
+  const effectiveRoles: WritableSignal<Role[]> = signal(
+    canCreate ? (['ADMIN'] as Role[]) : (['TEACHER'] as Role[]),
+  );
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
       provideHttpClient(),
       provideHttpClientTesting(),
-      { provide: AuthService, useValue: { hasAnyRole: () => canCreate } },
+      { provide: RoleContextService, useValue: { effectiveRoles } },
     ],
   });
   const fixture = TestBed.createComponent(SessionList);
   const http = TestBed.inject(HttpTestingController);
   const internals = fixture.componentInstance as unknown as ListInternals;
   fixture.detectChanges();
-  return { fixture, http, internals };
+  return { fixture, http, internals, effectiveRoles };
 }
 
 describe('SessionList', () => {
@@ -168,5 +173,22 @@ describe('SessionList', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions/new"]'),
     ).not.toBeNull();
+  });
+
+  it('hides the create link when the active role context drops the create role', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(true));
+    expectList().flush(page([SESSION]));
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions/new"]'),
+    ).not.toBeNull();
+
+    // L'utilisateur cumule ADMIN + TEACHER mais bascule sur le contexte TEACHER.
+    effectiveRoles.set(['TEACHER']);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions/new"]'),
+    ).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -12,15 +12,22 @@ import { forkJoin } from 'rxjs';
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
 import { COMMON_TIME_ZONES, zonedWallTimeToInstant } from '../../alternation/zoned-time';
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { SessionsApiService } from '../sessions-api.service';
 import { toSessionError } from '../session-errors';
-import { TeacherOptionResponse, teacherName } from '../sessions.models';
+import {
+  SESSION_CREATE_ROLES,
+  TeacherOptionResponse,
+  holdsAnySessionRole,
+  teacherName,
+} from '../sessions.models';
 
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'forbidden' }
+  | { kind: 'permission-lost' }
   | { kind: 'ready' };
 
 /** Motif d'une séance exceptionnelle — `@NotBlank @Size(max = 500)`. */
@@ -37,6 +44,11 @@ const TITLE_MAX_LENGTH = 191;
  * catalogue inventé, aucune saisie d'identifiant SQL. Le motif est
  * obligatoire. La validation temporelle locale est indicative ; le
  * back-end reste l'autorité.
+ *
+ * Si le **contexte de rôle actif** cesse de permettre la création (l'utilisateur
+ * bascule vers un contexte plus restreint), le formulaire est neutralisé
+ * immédiatement (désactivé, panneau « permission perdue ») et toute
+ * soumission — y compris une réponse arrivée tardivement — est ignorée.
  */
 @Component({
   selector: 'app-session-form',
@@ -59,7 +71,13 @@ export class SessionForm {
   private readonly academic = inject(AcademicApiService);
   private readonly router = inject(Router);
   private readonly notifications = inject(NotificationService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+
+  /** Le contexte de rôle actif autorise-t-il encore la création ? */
+  protected readonly canCreate = computed(() =>
+    holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_CREATE_ROLES),
+  );
 
   protected readonly timeZones = COMMON_TIME_ZONES;
   protected readonly teacherName = teacherName;
@@ -91,6 +109,18 @@ export class SessionForm {
 
   constructor() {
     this.load();
+
+    // Perte de permission via le contexte de rôle : neutralise le
+    // formulaire sensible et bloque toute nouvelle soumission.
+    effect(() => {
+      if (!this.canCreate()) {
+        this.form.disable({ emitEvent: false });
+        this.submitting.set(false);
+        this.submitError.set(null);
+        this.timeError.set(null);
+        this.loadState.set({ kind: 'permission-lost' });
+      }
+    });
   }
 
   protected retry(): void {
@@ -100,6 +130,10 @@ export class SessionForm {
   protected submit(): void {
     this.submitError.set(null);
     this.timeError.set(null);
+    // Le contexte de rôle actif ne permet plus la création : aucune requête.
+    if (!this.canCreate()) {
+      return;
+    }
     if (this.form.invalid || this.submitting()) {
       this.form.markAllAsTouched();
       return;
@@ -130,11 +164,18 @@ export class SessionForm {
       .subscribe({
         next: (session) => {
           this.submitting.set(false);
+          // Réponse tardive après une perte de permission : on l'ignore.
+          if (!this.canCreate()) {
+            return;
+          }
           this.notifications.info('Séance créée.');
           void this.router.navigate(['/sessions', session.publicId]);
         },
         error: (error: unknown) => {
           this.submitting.set(false);
+          if (!this.canCreate()) {
+            return;
+          }
           this.submitError.set(toSessionError(error).message);
         },
       });

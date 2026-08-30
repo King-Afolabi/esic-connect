@@ -1,6 +1,6 @@
 <div class="sessions__header">
   <h1 class="sessions__title">Séances</h1>
-  @if (canCreate) {
+  @if (canCreate()) {
     <a mat-flat-button routerLink="/sessions/new">
       <mat-icon aria-hidden="true">add</mat-icon>
       Nouvelle séance

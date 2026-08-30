@@ -22,6 +22,17 @@
     </div>
   }
 
+  @case ('permission-lost') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>
+        Le contexte de rôle actif ne permet plus de créer une séance. Le formulaire a été
+        neutralisé. Revenez à un contexte autorisé pour recommencer.
+      </p>
+      <a mat-stroked-button routerLink="/sessions">Retour à la liste des séances</a>
+    </div>
+  }
+
   @case ('error') {
     <div class="sessions__panel" role="alert">
       <mat-icon aria-hidden="true">error_outline</mat-icon>

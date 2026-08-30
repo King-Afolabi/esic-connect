@@ -242,6 +242,46 @@ describe('SessionDetail', () => {
     http.expectNone(ATTENDANCE_URL);
   });
 
+  it('stops issuing poll requests once the active role context loses the read right', () => {
+    vi.useFakeTimers();
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+
+    // Un tick de polling tant que le contexte permet la lecture.
+    vi.advanceTimersByTime(15_000);
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+
+    // Bascule vers un contexte sans droit de lecture de la page.
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+
+    vi.advanceTimersByTime(60_000);
+    http.expectNone(ATTENDANCE_URL);
+  });
+
+  it('ignores a token emission response that lands after the manage right was lost', () => {
+    vi.useFakeTimers();
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+
+    internals.refreshToken();
+    const req = http.expectOne(TOKEN_URL);
+
+    // Le contexte retire le droit de gestion pendant que l'émission est en vol.
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+
+    req.flush(TOKEN);
+    fixture.detectChanges();
+
+    // La réponse obsolète n'affiche pas de QR et ne programme aucun renouvellement.
+    expect((fixture.nativeElement as HTMLElement).querySelector('qrcode')).toBeNull();
+    vi.advanceTimersByTime(60_000);
+    http.expectNone(TOKEN_URL);
+  });
+
   it('renders a not-found panel on a 404 and a forbidden panel on a 403', () => {
     ({ fixture, http, internals } = setup(['ADMIN']));
     http.expectOne(GET_URL).flush(
