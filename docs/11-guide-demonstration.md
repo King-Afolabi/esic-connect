@@ -247,17 +247,81 @@ courant** → `200`.
 
 ---
 
-## 10. Limites de cette tranche
+## 10. Tranche V10 — gestion de l'assiduité et reporting
 
-- **Scan caméra : non livré.** Le parcours apprenant fiable est la saisie
-  du **code court** affiché par le formateur ; le QR prépare un futur
-  scan mobile et sert à la démonstration visuelle.
-- La séance est **exceptionnelle** : créée manuellement, sans module
-  planning.
-- **Un seul point de contrôle** d'émargement par séance.
-- Pas de présence manuelle, pas de correction, pas de justificatif, pas
-  de calcul de demi-journée, pas de rapport ni d'export CSV.
-- Pas de contrôle réseau, pas de QR fixe de salle, pas de WebAuthn.
-- Pas de test e2e automatisé Angular → Spring Boot ; la démonstration UI
-  de bout en bout est manuelle (le scénario **API** ci-dessus a été
-  exécuté et ses statuts relevés).
+La tranche `feature/attendance-management-and-reporting` ajoute, au-dessus
+du parcours d'émargement ci-dessus :
+
+### 10.1 Nouveaux parcours démontrables
+
+1. **Plusieurs points de contrôle par séance.** Sur la fiche séance
+   (`/sessions/:id`), section « Points de contrôle » : le point `START`
+   (« Arrivée ») est créé et ouvert avec la séance ; « Ajouter » crée un
+   point `CUSTOM` / `END` ; chaque point s'ouvre / se ferme / s'annule
+   (motif en confirmation en ligne). Le QR cible le point de contrôle
+   **ouvert sélectionné** ; le jeton est émis par point de contrôle
+   (`POST /api/v1/sessions/{id}/checkpoints/{cpId}/attendance-token`).
+2. **Présence manuelle** (`POST .../attendance/manual`) : bouton
+   « Saisie manuelle » — identifiant public d'inscription + statut
+   (`PRESENT` / `LATE` / `ABSENT`) + motif obligatoire. L'effectif
+   nominatif n'étant pas exposé au formateur, l'identifiant d'inscription
+   est saisi directement (repli documenté).
+3. **Correction / annulation logique** (`POST .../attendance/{aid}/correct`
+   `|/cancel`) : sur chaque ligne de présence, motif obligatoire,
+   confirmation en ligne ; la ligne est conservée (`CANCELLED`).
+   « Historique » (`GET .../attendance/{aid}/history`) affiche l'append-only
+   `attendance_correction`.
+4. **Justificatif métier SANS fichier** — apprenant : `/my-attendance`
+   (« Mes présences ») ; sur une absence d'un point de contrôle fermé,
+   « Déposer un justificatif » (catégorie / référence externe /
+   commentaire ; `POST /api/v1/me/attendance/justifications`). Détail
+   `/my-attendance/:id` : historique + modification tant que `PENDING`.
+5. **Examen des justificatifs** — gestion : `/attendance-management/justifications`,
+   « Examiner » → accepter (présence `ABSENT → EXCUSED_ABSENCE`) ou
+   refuser (motif obligatoire ; présence reste `ABSENT`).
+   `POST /api/v1/attendance/justifications/{id}/review`.
+6. **Rapports + synthèse** — `/attendance-management` : cartes de synthèse
+   (taux de présence en demi-journées, retards, absences injustifiées /
+   justifiées, demi-journées en contexte d'alternance `COMPANY` exclues,
+   `UNKNOWN` signalées, justificatifs en attente) ; rapports par séance /
+   classe / apprenant, filtres `from` / `to` / `classGroup` /
+   `studentProfile`, pagination serveur.
+7. **Export CSV** — bouton « Exporter (CSV) » sur chaque rapport :
+   `GET /api/v1/attendance/reports/{sessions|classes|students}/export`
+   → `text/csv` (UTF-8 + BOM, séparateur `;`), **neutralisation
+   d'injection de formule** (une cellule débutant par `=` `+` `-` `@` est
+   préfixée d'une apostrophe), aucun email, aucun identifiant SQL.
+
+### 10.2 Vérifications relevées (30 août 2026)
+
+- Back-end `./mvnw clean test` (MySQL 8.4, Redis 7) → **532 tests, 0
+  échec**, `ModularityTests` vert, migration `V10` appliquée (schéma en
+  version 10).
+- Front-end `npm test -- --watch=false` → **444 tests, 0 échec** ;
+  `npm run lint` « All files pass linting » ; `npm run build` bundle
+  initial **482,24 kB** brut / **122,59 kB** transféré (seuil 500 kB).
+- Scénario **API** V10 relevé en statuts HTTP (profil `demo`) : création
+  d'un second point de contrôle `201`, ouverture `204`, émission de jeton
+  du point de contrôle `200`, émargement `200`, présence manuelle `201`,
+  correction `200`, annulation `200`, historique `200` (3 entrées),
+  dépôt de justificatif `201`, doublon actif `409`, examen `ACCEPTED`
+  `200` (présence → `EXCUSED_ABSENCE`), rapports `200`, export CSV `200`
+  (BOM + cellule `'=` neutralisée vérifiée), formateur sur `review`
+  `403`, `STUDENT` sur `/me/attendance` `200` et non-`STUDENT` `403`.
+
+### 10.3 Limites de la tranche V10
+
+- **Scan caméra : non livré** (le parcours fiable reste le code court).
+- La séance est **exceptionnelle** (sans module planning).
+- **Contexte d'alternance `UNKNOWN`** (aucun rythme affecté à la classe) :
+  une demi-journée non émargée est comptée en `unknownHalfDays`,
+  **jamais** en `absentHalfDays` — un rapport « utile » suppose un
+  rythme d'alternance affecté à la classe.
+- **Effectif nominatif non exposé au formateur** : la présence manuelle
+  se fait par identifiant public d'inscription (repli, cf.
+  `EnrollmentPicker` de l'alternance).
+- **`TEACHER` exclu des rapports agrégés** (il consulte les présences de
+  ses séances via `GET /sessions/{id}/attendance`).
+- **Justificatif = métadonnée métier**, aucune pièce jointe.
+- Pas de contrôle réseau, pas de QR fixe de salle, pas de WebAuthn, pas
+  de test e2e automatisé Angular → Spring Boot.

@@ -983,6 +983,20 @@ Personas :
 
 ## EP-10 — Émargement et assiduité
 
+> **Avancement (tranche V10, branche `feature/attendance-management-and-reporting`,
+> non fusionnée).** Livré et testé : plusieurs points de contrôle par
+> séance et jeton d'émargement par point de contrôle (US-090/US-091
+> étendues) ; calcul des retards ; présence manuelle et correction avec
+> historique append-only et motif obligatoire ; justificatif **métier
+> sans fichier** (dépôt / modification / examen — `ABSENT →
+> EXCUSED_ABSENCE` à l'acceptation) ; calcul de demi-journées (contexte
+> d'alternance `COMPANY` exclu, `UNKNOWN` signalé) ; rapports séance /
+> classe / apprenant + synthèse et **export CSV** (neutralisation
+> d'injection de formule) ; écrans Angular `/sessions` enrichi,
+> `/my-attendance`, `/attendance-management`. Non livré ici : QR fixe de
+> salle (US-092), contrôle réseau, WebAuthn, scan caméra, mise en page
+> officielle des rapports, pièce jointe de justificatif.
+
 ### US-090 — Ouvrir et clôturer une séance
 
 | Champ | Valeur |

@@ -1021,3 +1021,25 @@ loading / empty / error / 403 / 404, accessibilité élémentaire
   STUDENT-only.
 - **`spotless` absent** : aucun formateur automatique côté backend ;
   s'en tenir aux conventions du dépôt.
+
+---
+
+## 10. Livraison réelle — écarts au plan de conception
+
+Consignés au fil de l'implémentation (checkpoints 1–11) :
+
+| Sujet | Plan (§ ci-dessus) | Livré | Raison |
+|---|---|---|---|
+| Valeurs par défaut SQL des nouvelles colonnes `NOT NULL` | `DROP DEFAULT` après backfill | **DEFAULT SQL conservé** (`label`/`type`/`order`/`status`/`required` de `attendance_checkpoint`, `status` de `attendance_record`) | Les fixtures de test V9 insèrent en SQL natif sans ces colonnes ; le `DEFAULT` garde la compatibilité ascendante et n'est jamais utilisé par l'entité JPA (qui les renseigne toujours). |
+| `DROP INDEX uq_attendance_checkpoint_session` | direct | **`CREATE INDEX idx_attendance_checkpoint_session` d'abord**, puis `DROP INDEX` | InnoDB refuse de retirer le dernier index couvrant une colonne de FK (`fk_attendance_checkpoint_session`). |
+| Jeton d'émargement | per-checkpoint avec un set Redis `session-checkpoints` | **payload du jeton = `sessionPublicId\ncheckpointPublicId`**, pointeur courant toujours indexé par **séance** (`session -> token\ncode\ncheckpointId`) — un seul point de contrôle actif à l'émargement à la fois | Modèle plus simple, réutilise l'invariant de rotation existant ; `invalidateCheckpoint(sessionId, cpId)` ne purge que si le pointeur courant vise ce point de contrôle ; `invalidateSession` inchangée. |
+| Contexte d'alternance `UNKNOWN` dans le calcul de demi-journée | comptée dans `expected` ; absence non « certaine » | **demi-journée `UNKNOWN` non satisfaite → bucket `unknown` seul** (hors `expected`, `present`, `absent`) ; une demi-journée `UNKNOWN` **satisfaite** est comptée `expected + present` (et `unknown` en superposition) | Évite d'inventer une absence là où aucune règle d'alternance ne s'applique ; `absentHalfDays = expected − present − excused` reste cohérent. Conséquence : un rapport « utile » suppose un rythme d'alternance affecté à la classe. |
+| Rapports pour `TEACHER` | `REPORT_ROLES` incluait `TEACHER` (limité à ses séances) | **`TEACHER` exclu des routes `/attendance/reports/**`** | `AcademicScopeDirectory` ne donne aucun périmètre à un `TEACHER` seul ; filtrer les séances par formateur aurait demandé un port supplémentaire. Un `TEACHER` consulte `GET /sessions/{id}/attendance` (déjà le sien). |
+| Présence manuelle : choix de l'apprenant | picker nominatif | **saisie directe de l'identifiant public d'inscription** | `GET /api/v1/enrollments` (module `enrollment`) est réservé à `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — un `TEACHER` ne peut pas lister l'effectif. Repli identique au `EnrollmentPicker` de l'écran d'alternance (déjà dans le dépôt). |
+| CSV au niveau d'une séance (fiche séance) | bouton d'export dans `SessionDetail` | **non livré dans `SessionDetail`** ; l'export CSV vit dans `/attendance-management` (rapports séance / classe / apprenant) | Aucun endpoint d'export scoping « une séance » ; l'utilisateur exporte le rapport « par séance » filtré par dates / classe. |
+| Nouveau port `alternation.AlternationDirectory` | `resolveEnrollmentContext` + `Axis` | livré tel quel (+ `resolveEnrollmentContextUnchecked` extrait de `AlternationContextService`, sans contrôle de périmètre) | Conforme. |
+| Ports `CourseSessionDirectory` | `findSessionsForClasses`, `findSessionByCheckpointPublicId` | + **`findSessionsInRange(from, to)`** (rapports globaux) et **`findCheckpointForAttendance`** | Nécessaires au calcul des rapports pour un rôle à accès global et à la validation d'un émargement ciblant un point de contrôle précis. |
+
+Aucune fonctionnalité hors périmètre n'a été ajoutée ; aucune règle
+métier importante inventée ; aucun secret commité ; migrations V1–V9
+inchangées.
