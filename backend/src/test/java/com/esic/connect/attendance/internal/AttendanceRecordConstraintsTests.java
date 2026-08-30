@@ -10,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -80,6 +81,43 @@ class AttendanceRecordConstraintsTests {
         AttendanceRecord clash = record(enrollmentBId);
         ReflectionTestUtils.setField(clash, "publicId", first.getPublicId());
         assertThrows(DataIntegrityViolationException.class, () -> recordRepository.saveAndFlush(clash));
+    }
+
+    @Test
+    void manualSourceAndBusinessStatusAreAccepted() {
+        // V10 : source MANUAL + statut ABSENT + acteur de saisie.
+        AttendanceRecord manual = new AttendanceRecord(checkpointId, enrollmentAId, studentUserId, studentUserId,
+                Instant.parse("2026-09-10T09:05:00Z"), AttendanceRecordSource.MANUAL,
+                com.esic.connect.attendance.AttendanceStatus.ABSENT, null, "absent constaté");
+        AttendanceRecord saved = recordRepository.saveAndFlush(manual);
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getStatus()).isEqualTo(com.esic.connect.attendance.AttendanceStatus.ABSENT);
+    }
+
+    @Test
+    void negativeLateMinutesIsRejected() {
+        AttendanceRecord invalid = new AttendanceRecord(checkpointId, enrollmentAId, studentUserId, null,
+                Instant.parse("2026-09-10T09:05:00Z"), AttendanceRecordSource.SHORT_CODE,
+                com.esic.connect.attendance.AttendanceStatus.LATE, -3, null);
+        // chk_attendance_record_late : une violation de CHECK MySQL remonte
+        // en DataAccessException (JpaSystemException), pas en
+        // DataIntegrityViolationException (réservée aux FK / unicité).
+        assertThrows(DataAccessException.class, () -> recordRepository.saveAndFlush(invalid));
+    }
+
+    @Test
+    void unknownStatusIsRejectedByCheck() {
+        assertThrows(org.hibernate.exception.GenericJDBCException.class, () ->
+                entityManager.getEntityManager().createNativeQuery("""
+                        INSERT INTO attendance_record (public_id, attendance_checkpoint_id, enrollment_id,
+                                student_user_id, recorded_at, source, status, created_at, updated_at, version)
+                        VALUES (UNHEX(REPLACE(UUID(), '-', '')), :cp, :enr, :usr,
+                                UTC_TIMESTAMP(6), 'SHORT_CODE', 'PARTIAL', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)
+                        """)
+                        .setParameter("cp", checkpointId)
+                        .setParameter("enr", enrollmentBId)
+                        .setParameter("usr", studentUserId)
+                        .executeUpdate());
     }
 
     @Test
