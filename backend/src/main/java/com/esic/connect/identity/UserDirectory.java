@@ -36,6 +36,20 @@ public interface UserDirectory {
     Optional<UserRef> findByInternalId(long userInternalId);
 
     /**
+     * Identité civile d'un compte (prénom, nom) — strictement suffisante
+     * pour afficher un formateur de séance ou une ligne de présence, sans
+     * exposer l'adresse électronique ni l'identifiant interne.
+     *
+     * @param userInternalId identifiant interne du compte
+     * @return le nom si le compte existe, {@link Optional#empty()} sinon
+     */
+    Optional<PersonName> findName(long userInternalId);
+
+    /** Prénom / nom d'un compte, pour affichage. */
+    record PersonName(String firstName, String lastName) {
+    }
+
+    /**
      * Référence technique d'un compte, strictement suffisante pour qu'un
      * autre module stocke la clé étrangère {@code manager_user_id},
      * réaffiche l'identifiant public et contrôle l'éligibilité d'une

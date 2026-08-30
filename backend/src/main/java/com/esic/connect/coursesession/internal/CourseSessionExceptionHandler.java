@@ -1,0 +1,98 @@
+package com.esic.connect.coursesession.internal;
+
+import com.esic.connect.shared.web.ApiError;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Traduit {@link CourseSessionException} en réponse {@link ApiError}
+ * homogène (codes {@code SESSION_*}). Aligné sur
+ * {@code alternation.internal.AlternationExceptionHandler}.
+ */
+@RestControllerAdvice(assignableTypes = CourseSessionController.class)
+class CourseSessionExceptionHandler {
+
+    @ExceptionHandler(CourseSessionException.class)
+    ResponseEntity<ApiError> handle(CourseSessionException ex, HttpServletRequest request) {
+        HttpStatus status;
+        String code;
+        String message;
+        switch (ex.kind()) {
+            case SESSION_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SESSION_NOT_FOUND";
+                message = "Aucune séance ne correspond à cet identifiant.";
+            }
+            case INVALID_STATE -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_INVALID_STATE";
+                message = "L'état actuel de la séance ne permet pas cette opération.";
+            }
+            case INVALID_PERIOD -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_INVALID_PERIOD";
+                message = "La fin de la séance doit être postérieure à son début.";
+            }
+            case INVALID_TIME_ZONE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_INVALID_TIME_ZONE";
+                message = "Fuseau horaire inconnu (identifiant IANA attendu, ex. Europe/Paris).";
+            }
+            case NO_CLASS -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_NO_CLASS";
+                message = "Une séance doit cibler au moins une classe.";
+            }
+            case INVALID_SORT -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_INVALID_SORT";
+                message = "Champ ou direction de tri non autorisé.";
+            }
+            case TEACHER_NOT_FOUND -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_TEACHER_NOT_FOUND";
+                message = "Le formateur indiqué est introuvable.";
+            }
+            case TEACHER_NOT_ELIGIBLE -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_TEACHER_NOT_ELIGIBLE";
+                message = "Ce compte n'est pas un formateur actif : il ne peut pas animer une séance.";
+            }
+            case CLASS_NOT_FOUND -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_CLASS_NOT_FOUND";
+                message = "Une des classes indiquées est introuvable.";
+            }
+            case CLASS_INACTIVE -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_CLASS_INACTIVE";
+                message = "Une des classes indiquées (ou un élément parent) est archivée.";
+            }
+            case SCOPE_FORBIDDEN -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "SESSION_SCOPE_FORBIDDEN";
+                message = "Cette classe est hors de votre périmètre pédagogique.";
+            }
+            case OPERATION_FORBIDDEN -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "SESSION_OPERATION_FORBIDDEN";
+                message = "Vous n'êtes pas autorisé à effectuer cette opération sur cette séance.";
+            }
+            default -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_INVALID_FILTER";
+                message = "Valeur de filtre invalide.";
+            }
+        }
+        ApiError body = new ApiError(Instant.now(), status.value(), code, message,
+                request.getRequestURI(), UUID.randomUUID().toString(), List.of());
+        return ResponseEntity.status(status).body(body);
+    }
+}
