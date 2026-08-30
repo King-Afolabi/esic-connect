@@ -17,10 +17,17 @@ Le **parcours d'émargement démontrable** (modules `coursesession` +
 amorçage `demo` + `scripts/seed-demo.sh` + `docs/11-guide-demonstration.md`)
 est désormais **fusionné sur `main`** via la PR #20 (commit de fusion
 `5874f5a` ; dernier commit fonctionnel de la branche `2036277`). Sa
-validation manuelle locale (parcours API, profil `demo`) est **réussie**.
+validation manuelle locale du parcours fonctionnel frontend et API, sous
+le profil `demo`, est **réussie** (connexion formateur et apprenants,
+ouverture de séance, QR / code court, enregistrement des deux présences,
+anti-double présence, consultation du tableau, fermeture et refus de
+l'ancien code) ; les changements de contexte de rôle étaient non
+applicables manuellement, les comptes de démonstration utilisés étant
+mono-rôle — ces cas restent couverts par les tests automatisés.
 La branche `feature/attendance-qr-demonstration` n'est donc **plus une PR
-ouverte**. Le texte détaillé de « Phase actuelle » ci-dessous est conservé
-comme description du lot ; il ne représente plus un travail en cours.
+ouverte**. Le texte détaillé du « Dernier lot fonctionnel livré »
+ci-dessous est conservé comme description du lot ; il ne représente plus
+un travail en cours.
 
 Le **parcours d'écriture de l'administration des comptes** (suspension /
 réactivation / archivage / attribution / retrait de rôle sur la fiche
@@ -28,14 +35,20 @@ réactivation / archivage / attribution / retrait de rôle sur la fiche
 PR #19 (commit `317753a`). L'administration front-end n'est donc **plus
 en lecture seule**.
 
-## Phase actuelle
+## Dernier lot fonctionnel livré
 
 ```text
 PARCOURS D'ÉMARGEMENT DÉMONTRABLE (BACK-END + FRONT-END) — branche
 `feature/attendance-qr-demonstration` (créée depuis `main` synchronisé
 avec `origin/main`, HEAD `317753a`), **fusionnée sur `main` via la PR #20**
 (commit de fusion `5874f5a`, dernier commit fonctionnel `2036277`) ;
-validation manuelle locale (parcours API, profil `demo`) **réussie**.
+validation manuelle locale du parcours fonctionnel frontend et API, sous
+le profil `demo`, **réussie** (connexion formateur et apprenants,
+ouverture, QR / code court, enregistrement des deux présences,
+anti-double présence, consultation du tableau, fermeture et refus de
+l'ancien code) ; les changements de contexte de rôle étaient non
+applicables manuellement, les comptes de démonstration utilisés étant
+mono-rôle — ces cas restent couverts par les tests automatisés.
 Grande tranche verticale : deux nouveaux
 modules Spring Modulith (`coursesession`, `attendance`), un module
 d'amorçage `bootstrap`, la migration Flyway `V9` (schéma en version 9),
@@ -1925,7 +1938,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | IMPLEMENTED et TESTED — fusionné sur `main` via la PR #20 (`5874f5a`) (module `coursesession`, V9 ; séance **exceptionnelle** créée manuellement, motif obligatoire, formateur = compte `TEACHER` actif via port `identity.TeacherDirectory`, ≥ 1 classe ; cycle strict `PLANNED → OPEN → CLOSED` sans réouverture ; API `/api/v1/sessions` liste filtrée par périmètre + `/teachers` + détail + création + `/open` + `/close` ; contrôle fin `CourseSessionAccessGuard` (contexte Spring Security) : `ADMIN`/`SUPER_ADMIN` global, `SCHOOL_ADMINISTRATION` lecture seule, `PEDAGOGICAL_MANAGER` limité au périmètre, `TEACHER` seulement ses séances, `STUDENT` aucun accès ; audit `SESSION_CREATED`/`_OPENED`/`_CLOSED` ; port public `coursesession.CourseSessionDirectory`. `CourseSessionConstraintsTests` (7), `CourseSessionIntegrationTests` (6). Un seul point de contrôle par séance ; planning non livré) |
-| Émargement | IMPLEMENTED, TESTED et DÉMONTRÉ localement (API) — fusionné sur `main` via la PR #20 (`5874f5a`), validation manuelle locale (API, profil `demo`) réussie (module `attendance`, V9 ; jeton dynamique **opaque** `SecureRandom` + **code court** dans **Redis** avec TTL court, rotation, purge à la fermeture ; QR encodant uniquement le jeton opaque ; `POST /api/v1/sessions/{id}/attendance-token` (formateur/gestionnaire, séance `OPEN`) ; `POST /api/v1/attendance/validate` (**`STUDENT` uniquement** ; apprenant résolu depuis le seul JWT ; inscription `ACTIVE` dans une classe de la séance, 0 ou >1 → refus) ; **anti-double présence par contrainte SQL `uq_attendance_record_checkpoint_enrollment`** (violation concurrente → `409 ATT_ALREADY_RECORDED`, jamais 500) ; `GET /api/v1/sessions/{id}/attendance` (effectif attendu + présents + lignes sans email ni id SQL) ; Redis KO → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` ; audit `ATTENDANCE_RECORDED` sans jeton/numéro/nom. **Revue PR #20** : `resolveSession` applique l'invariant du pointeur courant (`session -> token\ncode`) — une clé `token -> session` résiduelle n'est plus acceptée après rotation ou invalidation. `AttendanceRecordConstraintsTests` (4), `AttendanceTokenServiceTests` (18), `AttendanceIntegrationTests` (7 dont concurrence), `AttendanceSecurityTests` (4). **Scan caméra NON RÉALISÉ** ; parcours fiable = code court ; pas de présence manuelle, correction, justificatif, demi-journée, export) |
+| Émargement | IMPLEMENTED, TESTED et DÉMONTRÉ localement (API) — fusionné sur `main` via la PR #20 (`5874f5a`), validation manuelle locale du parcours fonctionnel frontend et API, sous le profil `demo`, réussie (connexion formateur et apprenants, ouverture, QR / code court, enregistrement des deux présences, anti-double présence, consultation du tableau, fermeture et refus de l'ancien code ; changements de contexte de rôle non applicables manuellement — comptes de démonstration mono-rôle —, couverts par les tests automatisés) (module `attendance`, V9 ; jeton dynamique **opaque** `SecureRandom` + **code court** dans **Redis** avec TTL court, rotation, purge à la fermeture ; QR encodant uniquement le jeton opaque ; `POST /api/v1/sessions/{id}/attendance-token` (formateur/gestionnaire, séance `OPEN`) ; `POST /api/v1/attendance/validate` (**`STUDENT` uniquement** ; apprenant résolu depuis le seul JWT ; inscription `ACTIVE` dans une classe de la séance, 0 ou >1 → refus) ; **anti-double présence par contrainte SQL `uq_attendance_record_checkpoint_enrollment`** (violation concurrente → `409 ATT_ALREADY_RECORDED`, jamais 500) ; `GET /api/v1/sessions/{id}/attendance` (effectif attendu + présents + lignes sans email ni id SQL) ; Redis KO → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` ; audit `ATTENDANCE_RECORDED` sans jeton/numéro/nom. **Revue PR #20** : `resolveSession` applique l'invariant du pointeur courant (`session -> token\ncode`) — une clé `token -> session` résiduelle n'est plus acceptée après rotation ou invalidation. `AttendanceRecordConstraintsTests` (4), `AttendanceTokenServiceTests` (18), `AttendanceIntegrationTests` (7 dont concurrence), `AttendanceSecurityTests` (4). **Scan caméra NON RÉALISÉ** ; parcours fiable = code court ; pas de présence manuelle, correction, justificatif, demi-journée, export) |
 | Rapports | TODO |
 | Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe **et affectations de responsable pédagogique (`PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED`)**, catégorie `ACADEMIC` — **et changements du module inscriptions — `STUDENT_PROFILE_CREATED` / `ENROLLMENT_CREATED` / `_TRANSFERRED` / `_CLOSED`, catégorie `ENROLLMENT`** — **et changements du module alternance — `WORK_STUDY_PATTERN_CREATED` / `_UPDATED` / `_ARCHIVED` / `_RESTORED`, `CLASS_WORK_STUDY_PATTERN_ASSIGNED` / `_CLOSED`, `STUDENT_SCHEDULE_EXCEPTION_CREATED` / `_CANCELLED`, catégorie `ALTERNATION`** — **et changements des séances — `SESSION_CREATED` / `_OPENED` / `_CLOSED`, catégorie `COURSE_SESSION`** — **et émargements — `ATTENDANCE_RECORDED`, catégorie `ATTENDANCE`** — jamais de jeton, de code court, de numéro étudiant, de nom, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
@@ -1942,8 +1955,14 @@ Le PARCOURS D'ÉMARGEMENT DÉMONTRABLE (modules `coursesession` +
 `attendance`, V9 ; espace front `/sessions` + `/attendance` ; amorçage
 `demo` + `scripts/seed-demo.sh` + `docs/11-guide-demonstration.md`) est
 **fusionné sur `main` via la PR #20** (commit de fusion `5874f5a`,
-dernier commit fonctionnel `2036277`) ; sa validation manuelle locale
-(parcours API, profil `demo`) est **réussie**. Le parcours d'écriture de
+dernier commit fonctionnel `2036277`) ; sa validation manuelle locale du
+parcours fonctionnel frontend et API, sous le profil `demo`, est
+**réussie** (connexion formateur et apprenants, ouverture, QR / code
+court, enregistrement des deux présences, anti-double présence,
+consultation du tableau, fermeture et refus de l'ancien code ; les
+changements de contexte de rôle, non applicables manuellement avec des
+comptes de démonstration mono-rôle, restent couverts par les tests
+automatisés). Le parcours d'écriture de
 l'administration des comptes est fusionné sur `main` (PR #19, `317753a`).
 Prochaines étapes possibles : plusieurs points de contrôle par séance et
 calcul de demi-journée ; QR fixe de salle + contrôle réseau ; import CSV
