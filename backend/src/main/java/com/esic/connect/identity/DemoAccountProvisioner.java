@@ -21,9 +21,21 @@ public interface DemoAccountProvisioner {
 
     /**
      * Garantit l'existence d'un compte {@code ACTIVE} pour {@code email},
-     * avec exactement les rôles demandés (actifs). Idempotent : un second
-     * appel avec les mêmes valeurs ne crée pas de doublon et ne modifie
-     * pas le mot de passe existant.
+     * avec au moins les rôles demandés (actifs).
+     *
+     * <p>Idempotent : un second appel ne crée jamais de doublon (compte
+     * ou rôle) et ne supprime aucune dépendance (rôles déjà présents,
+     * profil apprenant, inscriptions, audit...).
+     *
+     * <p><strong>Profil {@code demo} :</strong> comme la base MySQL est
+     * persistante d'un démarrage à l'autre, l'implémentation
+     * <em>resynchronise</em> chaque compte fictif existant sur la valeur
+     * <em>courante</em> de {@code rawPassword} — le hachage est réécrit
+     * seulement s'il ne correspond plus — et ramène le compte à un état
+     * permettant la connexion (statut {@code ACTIVE}, suspension levée).
+     * Fonctionnellement idempotent : avec le même mot de passe qu'au
+     * démarrage précédent, aucun champ n'est réécrit. Ce comportement de
+     * synchronisation n'existe que sous le profil {@code demo}.
      *
      * @param email        adresse (fictive, domaine réservé — ex. {@code example.test})
      * @param firstName    prénom fictif

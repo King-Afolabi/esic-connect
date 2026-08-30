@@ -45,6 +45,29 @@ faux-`curl` ; (3) prise en compte du contexte de rôle actif dans les 4
 `AttendanceCheckIn`) ; (4) totaux de tests et affirmations de commandes
 corrigés. Détails ci-dessous, marqués « (revue PR #20) ».
 
+Passe corrective (validation manuelle, 30 août 2026) : idempotence du
+provisionnement des comptes de démonstration sur **base MySQL
+persistante**. `DefaultDemoAccountProvisioner.ensureActiveAccount`
+n'écrivait le mot de passe que pour un compte **absent** ; un compte
+fictif déjà présent (volume MySQL réutilisé) restait sur son ancien
+hachage et `scripts/seed-demo.sh` échouait alors en `401`. Désormais,
+**sous le profil `demo` uniquement**, un compte existant est
+resynchronisé à chaque amorçage : le hachage est réécrit **seulement si**
+`passwordEncoder.matches(rawPassword, hash)` est faux (idempotent avec le
+même mot de passe — le sel BCrypt diffère sinon à chaque démarrage), et
+le compte est ramené à un état permettant la connexion (statut `ACTIVE`,
+suspension levée) via `UserAccount.ensureUsableForDemo`. Rôles, profil
+apprenant, inscriptions et audit sont conservés ; le mot de passe brut et
+le hachage ne sont jamais journalisés. Le message de démarrage de
+`DemoDataInitializer` annonce désormais « 4 comptes fictifs synchronisés
+— statut ACTIVE et mot de passe aligné sur la valeur courante de
+ESIC_DEMO_PASSWORD » (il n'affirme plus « prêts » sans garantie).
+Fichiers : `DefaultDemoAccountProvisioner`, `UserAccount`
+(+ `ensureUsableForDemo`), `DemoAccountProvisioner` (javadoc),
+`DemoDataInitializer` (log) ; `docs/10-journal-ia.md`,
+`docs/11-guide-demonstration.md` (encadré § 4.2, § 6, dépannage) mis à
+jour.
+
 Migrations historiques V1–V8 inchangées. `SecurityConfig` inchangé
 (`/api/v1/auth/login` et les routes publiques d'activation restent les
 seules ouvertes ; le reste exige un JWT). `docs/01`–`docs/04` non
@@ -218,7 +241,13 @@ Module `bootstrap`, `DemoDataInitializer` (`@Profile("demo")`,
 (implémentation elle aussi `@Profile("demo")`, jamais active en `local` /
 `test` / production). Mot de passe via `ESIC_DEMO_PASSWORD` (obligatoire,
 ≥ 12 caractères, refus de démarrage sinon ; jamais journalisé, jamais
-commité). `application-demo.yml` s'appuie sur l'infrastructure locale, ne
+commité). Comme le volume MySQL est persistant, chaque amorçage
+**resynchronise** un compte fictif déjà présent (profil `demo`
+uniquement) : hachage réécrit seulement si le mot de passe courant ne
+correspond plus (`passwordEncoder.matches`), statut ramené à `ACTIVE`
+(suspension levée) via `UserAccount.ensureUsableForDemo` ; rôles, profil
+apprenant, inscriptions et audit conservés. Fonctionnellement idempotent
+avec le même mot de passe (aucun champ réécrit). `application-demo.yml` s'appuie sur l'infrastructure locale, ne
 désactive pas la sécurité, n'utilise pas `ddl-auto=create`, ne contient
 aucun secret. Aucune donnée de démonstration dans une migration Flyway.
 `scripts/seed-demo.sh` (bash + curl + jq) crée ensuite via
@@ -294,7 +323,7 @@ serveur (`roleGuard` = ergonomie). Les DTO n'exposent ni `id` SQL, ni
 
 --- TESTS ---
 Back-end `./mvnw clean test` (réellement exécuté après corrections) :
-origine `main` **449 → 499**, 0 échec, `ModularityTests` vert, V9
+origine `main` **449 → 502**, 0 échec, `ModularityTests` vert, V9
 appliquée. Nouveaux / étendus :
 `CourseSessionConstraintsTests` (7, `@DataJpaTest`),
 `CourseSessionIntegrationTests` (6, `@SpringBootTest` — cycle de vie +
@@ -318,8 +347,16 @@ ligne**),
 `AttendanceSecurityTests` (4 — anonyme 401, `validate` réservé à
 `STUDENT`, matrice `@PreAuthorize` de `attendance-token` et de la liste
 sur les 6 rôles),
-`DefaultDemoAccountProvisionerTests` (2, `@DataJpaTest` — création
-`ACTIVE` + rôle, idempotence, mot de passe conservé, ajout d'un rôle),
+`DefaultDemoAccountProvisionerTests` (**2 → 5**, `@DataJpaTest` — création
+`ACTIVE` + rôle puis idempotence **fonctionnelle** (même mot de passe →
+hachage inchangé octet pour octet), normalisation d'email + ajout d'un
+rôle manquant, **+ resynchronisation** d'un compte existant sur un
+nouveau mot de passe (hachage remplacé, `matches` neuf OK / ancien KO,
+même `publicId` et même id interne, rôles / statut conservés), **+**
+compte `SUSPENDED` ramené à `ACTIVE` (suspension levée) avec le mot de
+passe courant, **+** garde réflexive : le provisioner porte bien
+`@Profile("demo")` — le comportement de synchronisation ne peut pas
+exister hors du profil `demo`),
 `DemoDataInitializerTests` (2 — mot de passe obligatoire ≥ 12, 4 comptes
 `@example.test`).
 `./mvnw spotless:check` : **non applicable** — aucun plugin Spotless (ni

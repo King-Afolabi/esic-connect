@@ -60,8 +60,9 @@ class DemoDataInitializer implements ApplicationRunner {
                     demoPassword, account.roles());
         }
         // Le mot de passe n'est jamais journalisé.
-        log.info("Amorçage demo : 4 comptes fictifs prêts (admin / formateur / 2 apprenants). "
-                + "Mot de passe fourni par ESIC_DEMO_PASSWORD. "
+        log.info("Amorçage demo : 4 comptes fictifs synchronisés "
+                + "(admin / formateur / 2 apprenants) — statut ACTIVE et mot de passe "
+                + "aligné sur la valeur courante de ESIC_DEMO_PASSWORD. "
                 + "Complétez avec scripts/seed-demo.sh.");
     }
 

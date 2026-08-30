@@ -51,6 +51,21 @@ class DefaultDemoAccountProvisioner implements DemoAccountProvisioner {
             account = new UserAccount(normalizedEmail, firstName, lastName, AccountStatus.PENDING_ACTIVATION);
             account.activateWithPassword(passwordEncoder.encode(rawPassword), Instant.now());
             account = userAccountRepository.saveAndFlush(account);
+        } else {
+            // Profil demo : un compte fictif déjà présent (base MySQL persistante
+            // réutilisée d'un démarrage à l'autre) doit rester utilisable avec la
+            // valeur COURANTE de ESIC_DEMO_PASSWORD. On ne réhache que si le mot
+            // de passe stocké ne correspond plus : un rehachage systématique
+            // romprait l'idempotence fonctionnelle (le sel BCrypt diffère à
+            // chaque appel). Rôles, profil, inscriptions et autres dépendances
+            // ne sont pas touchés ; le mot de passe brut n'est jamais journalisé.
+            boolean passwordUsable = account.getPasswordHash() != null
+                    && passwordEncoder.matches(rawPassword, account.getPasswordHash());
+            if (!passwordUsable) {
+                account.setPasswordHash(passwordEncoder.encode(rawPassword));
+            }
+            account.ensureUsableForDemo(Instant.now());
+            account = userAccountRepository.saveAndFlush(account);
         }
 
         Set<RoleCode> alreadyActive = userRoleRepository.findActiveWithRoleByUserId(account.getId()).stream()

@@ -78,8 +78,21 @@ Au démarrage, `DemoDataInitializer` (actif **uniquement** sous le profil
 `demo`) crée 4 comptes fictifs et journalise :
 
 ```
-Amorçage demo : 4 comptes fictifs prêts (admin / formateur / 2 apprenants). …
+Amorçage demo : 4 comptes fictifs synchronisés (admin / formateur / 2 apprenants)
+— statut ACTIVE et mot de passe aligné sur la valeur courante de ESIC_DEMO_PASSWORD. …
 ```
+
+> **Base MySQL persistante.** Le volume MySQL survit d'un démarrage à
+> l'autre. À **chaque** amorçage sous le profil `demo`, les 4 comptes
+> fictifs sont *resynchronisés* : leur statut est ramené à `ACTIVE`
+> (suspension éventuelle levée) et leur mot de passe est réaligné sur la
+> valeur **courante** de `ESIC_DEMO_PASSWORD` — le hachage n'est réécrit
+> que s'il ne correspond plus (idempotent avec le même mot de passe).
+> Vous pouvez donc changer `ESIC_DEMO_PASSWORD` entre deux démarrages
+> sans recréer la base ni les comptes. Rôles, profils apprenants et
+> inscriptions sont conservés. **Ce comportement de synchronisation
+> n'existe que sous le profil `demo`** ; sous `local`, `test` ou en
+> production, aucun compte n'est créé ni modifié de cette façon.
 
 ### 4.3 Jeu de données de démonstration
 
@@ -137,7 +150,9 @@ npm start        # http://localhost:4200 (proxifie /api vers :8080)
 
 Toutes les adresses sont **fictives** (domaine réservé `example.test`).
 Mot de passe commun : la valeur de `ESIC_DEMO_PASSWORD` (par défaut du
-guide : `demo-password-1234`).
+guide : `demo-password-1234`). Elle est réappliquée aux 4 comptes à
+chaque démarrage sous le profil `demo` (voir l'encadré § 4.2), même sur
+une base MySQL déjà peuplée par une session précédente.
 
 | Rôle | Adresse |
 |---|---|
@@ -224,7 +239,7 @@ courant** → `200`.
 | Back-end refuse de démarrer, `JWT_SECRET doit contenir au moins 32 octets` | `JWT_SECRET` absent / trop court | Refaire l'étape 3 dans le shell qui lance `spring-boot:run`. |
 | Back-end refuse de démarrer, `ESIC_DEMO_PASSWORD … obligatoire` | Variable absente ou < 12 caractères | `export ESIC_DEMO_PASSWORD='…'` (≥ 12 caractères). |
 | `503 ATT_TOKEN_BACKEND_UNAVAILABLE` à l'émission d'un jeton | Redis arrêté / injoignable | `docker compose up -d redis` ; vérifier `docker compose ps`. |
-| `scripts/seed-demo.sh` : « Échec de connexion ADMIN » | Back-end pas en profil `demo`, ou mauvais mot de passe | Vérifier `SPRING_PROFILES_ACTIVE=demo` et la même valeur `ESIC_DEMO_PASSWORD` des deux côtés. |
+| `scripts/seed-demo.sh` : « Échec de connexion ADMIN » | Back-end pas en profil `demo`, `ESIC_DEMO_PASSWORD` différent entre le back-end et le script, ou back-end lancé avant la mise à jour de la variable | Vérifier `SPRING_PROFILES_ACTIVE=demo` et la **même** valeur `ESIC_DEMO_PASSWORD` des deux côtés, puis **redémarrer le back-end** : l'amorçage `demo` réaligne alors les 4 comptes sur cette valeur (base MySQL déjà peuplée incluse). |
 | Back-end : `Too many connections` (MySQL) | Trop de contextes / connexions | `docker compose restart mysql`. |
 | `Le code d'émargement a expiré` | TTL court (30 s) | Le formateur ré-affiche un code (« Renouveler maintenant »). |
 | Émargement refusé : « Vous n'êtes pas inscrit à une classe de cette séance » | Apprenant sans inscription active dans une classe de la séance | Ré-exécuter `scripts/seed-demo.sh` (crée les inscriptions dans `C-DEMO`). |

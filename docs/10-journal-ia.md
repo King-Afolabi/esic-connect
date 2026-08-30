@@ -17,6 +17,7 @@
 | 28/08/2026 | ChatGPT | Cahier des charges | Besoins fictifs | Exigences | Relecture humaine | Retenu |
 | 28/08/2026 | ChatGPT | Architecture | Cahier des charges | Architecture | Relecture humaine | Retenu |
 | 28/08/2026 | ChatGPT | Modèle de données | Architecture | MCD/MLD | Relecture humaine | Retenu |
+| 30/08/2026 | Claude Code | Correction : idempotence du provisionnement des comptes de démonstration sur base MySQL persistante (`DefaultDemoAccountProvisioner`) | Code back-end, aucun secret | Resynchronisation du mot de passe et du statut `ACTIVE` des 4 comptes fictifs à chaque amorçage `demo`, hachage réécrit seulement si nécessaire | `./mvnw clean test` → 502 tests, 0 échec ; 3 tests ajoutés (resync, idempotence fonctionnelle, garde `@Profile("demo")`) | Retenu |
 
 ## Modèle d’entrée
 
