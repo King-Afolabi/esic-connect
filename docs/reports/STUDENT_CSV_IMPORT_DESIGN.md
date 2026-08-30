@@ -8,7 +8,7 @@
 | Migration ajoutée (**prévue**, non créée) | `V11__create_student_import_tables.sql` (additive) |
 | Migrations V1–V10 | **inchangées** |
 | Statut du document | Décisions arrêtées — **Checkpoint 0** ; **aucun code produit** ; implémentation à suivre sur la même branche après validation |
-| Révision | R2 — correction de la conception transactionnelle et de la traçabilité (le mot « Livré » est remplacé partout par « Prévu » / « Conçu » ; aucun code d'import n'existe) |
+| Révision | R2 — correction de la conception transactionnelle et de la traçabilité (le mot « Livré » est remplacé partout par « Prévu » / « Conçu » ; aucun code d'import n'existe). **Correctif R2** : `audit.internal.StudentImportAuditListener` combine `@TransactionalEventListener(phase = AFTER_COMMIT)` **et** `@Transactional(propagation = REQUIRES_NEW)` — la ligne d'audit est persistée dans une transaction dédiée qui ne démarre qu'**après** le commit de la confirmation. |
 
 ---
 
@@ -50,7 +50,7 @@
 | D11 | Données temporaires **minimisées** : colonnes typées explicites sur `student_import_row` (pas de duplicata JSON intégral du CSV) ; seules les cellules en anomalie conservent leur valeur reçue (tronquée). |
 | D12 | Purge **courte configurable** : `SIMULATED`/`CANCELLED`/`EXPIRED` supprimés (CASCADE) après `P7D` **par défaut (décision de prototype)** ; jobs `APPLIED` → agrégats conservés, lignes filles purgées après `P30D` **(décision de prototype)**. |
 | D13 | Rôles : `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` global ; `PEDAGOGICAL_MANAGER` périmètre ; `TEACHER`/`STUDENT` → `403`. |
-| D14 | Audit sans PII ; le listener d'audit du module utilise `@TransactionalEventListener(AFTER_COMMIT)` (aucune trace si la confirmation échoue). |
+| D14 | Audit sans PII ; `audit.internal.StudentImportAuditListener` porte **à la fois** `@TransactionalEventListener(phase = AFTER_COMMIT)` **et** `@Transactional(propagation = REQUIRES_NEW)` : il ne s'exécute qu'**après** le commit réussi de la transaction de confirmation, puis persiste la ligne `audit_event` dans sa **propre** transaction. Rollback de la confirmation ⇒ phase `AFTER_COMMIT` jamais atteinte ⇒ **aucun** événement traité, **aucune** trace. Ce `REQUIRES_NEW` est sûr car strictement postérieur au commit métier (≠ motif legacy `@EventListener` + `REQUIRES_NEW`). |
 
 ### 0.3 Points restant à approuver (ambiguïtés ouvertes)
 
@@ -86,7 +86,7 @@ Détail au §12. Les principaux :
 | **T2** | La **confirmation** s'exécute dans **une seule** transaction (`@Transactional`, propagation `REQUIRED`). Aucune méthode d'application (`identity.*`, `enrollment.*`) n'ouvre de transaction autonome (`REQUIRES_NEW` **interdit** sur ce chemin) ni ne passe par `EnrollmentPersister` (qui est `REQUIRES_NEW`). |
 | **T3** | Toute exception pendant la confirmation → **rollback complet** : aucun `user_account`, `student_profile`, `enrollment`, `user_role`, `account_invitation` ; aucune valeur de séquence de numéro consommée ; le job reste `SIMULATED` (re-confirmable). |
 | **T4** | Aucune **invitation** n'est persistée **ni publiée durablement** si la confirmation échoue : la ligne `account_invitation` est écrite dans la transaction (donc annulée au rollback) ; l'événement `AccountInvitationIssuedEvent` est publié **dans** la transaction et l'e-mail part **uniquement** via `notification.InvitationEmailListener` (`@TransactionalEventListener(AFTER_COMMIT)`) — jamais si la transaction n'est pas committée. |
-| **T5** | Aucun événement synchrone `@EventListener` + `REQUIRES_NEW` n'est déclenché par le chemin d'import : le port `identity` **ne publie pas** `AccountLifecycleEvent` ; le port `enrollment` **ne publie pas** `EnrollmentChangeEvent` ; l'audit du module (`StudentImportChangeEvent`) est consommé en `AFTER_COMMIT`. Une confirmation annulée ne laisse **aucune** ligne d'audit. |
+| **T5** | Aucun événement synchrone `@EventListener` + `REQUIRES_NEW` n'est déclenché par le chemin d'import : le port `identity` **ne publie pas** `AccountLifecycleEvent` ; le port `enrollment` **ne publie pas** `EnrollmentChangeEvent`. L'audit du module (`StudentImportChangeEvent`) est consommé par `audit.internal.StudentImportAuditListener` annoté **à la fois** `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)` **et** `@Transactional(propagation = Propagation.REQUIRES_NEW)` : le listener ne s'exécute qu'**après** le commit réussi de la transaction de confirmation, puis persiste la ligne `audit_event` dans une transaction **dédiée**. Ce `REQUIRES_NEW` est sûr ici — contrairement au motif legacy `@EventListener` + `REQUIRES_NEW` — parce qu'il ne démarre **jamais** avant le commit métier : si la confirmation rollback, la phase `AFTER_COMMIT` n'est pas atteinte, **aucun** événement n'est traité et **aucune** ligne d'audit n'est écrite. Une confirmation annulée ne laisse donc **aucune** trace. |
 | **T6** | La **reconfirmation** est idempotente : verrou pessimiste sur le job ; job `APPLIED` → `200` + bilan mémorisé, aucune ré-écriture. Exactement un ensemble de comptes créés, même en concurrence. |
 
 ---
@@ -169,7 +169,12 @@ ni `EnrollmentService.enroll`, ni `AccountInvitationService.issue`.** Il
 passe par de **nouveaux ports** (§4) qui écrivent en direct (repositories,
 `saveAndFlush`) dans la transaction de l'appelant et **ne publient aucun
 événement synchrone d'audit**. L'audit de l'import est un **unique**
-`StudentImportChangeEvent` consommé en `AFTER_COMMIT`.
+`StudentImportChangeEvent` consommé par
+`audit.internal.StudentImportAuditListener` en
+`@TransactionalEventListener(AFTER_COMMIT)` **+**
+`@Transactional(REQUIRES_NEW)` : la ligne `audit_event` est écrite dans
+une transaction dédiée qui **ne démarre qu'après** le commit de la
+confirmation (aucune trace si elle rollback ; cf. **T5**).
 
 ### 2.3 Autres éléments réutilisés
 
@@ -359,12 +364,27 @@ Principes appliqués :
   **uniquement** par `AccountInvitationIssuedEvent` publié **dans** la
   transaction et consommé en `@TransactionalEventListener(AFTER_COMMIT)`.
 - **P5** — L'audit de l'import est **un seul** `StudentImportChangeEvent`
-  publié **dans** la transaction, consommé par
-  `audit.internal.StudentImportAuditListener` en
-  **`@TransactionalEventListener(AFTER_COMMIT)`** (aucune ligne d'audit si
-  la confirmation échoue). C'est une **déviation volontaire** du motif
-  legacy `@EventListener` + `REQUIRES_NEW` du projet, dans le bon sens ;
-  la migration globale reste une dette séparée.
+  publié **dans** la transaction de confirmation, consommé par
+  `audit.internal.StudentImportAuditListener` annoté **à la fois** :
+  - `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`
+    — le listener n'est invoqué qu'**après** le commit réussi de la
+    transaction de confirmation ;
+  - `@Transactional(propagation = Propagation.REQUIRES_NEW)` — la ligne
+    `audit_event` est persistée dans une transaction **dédiée** (la
+    transaction de confirmation est déjà terminée quand la phase
+    `AFTER_COMMIT` s'exécute ; une transaction neuve est nécessaire pour
+    écrire).
+
+  **Ce `REQUIRES_NEW` est sûr ici**, à la différence du motif legacy
+  `@EventListener` + `REQUIRES_NEW` du projet : il ne démarre **jamais**
+  avant la fin de la transaction métier. Si la confirmation rollback, la
+  phase `AFTER_COMMIT` n'est **pas** atteinte, le listener n'est **pas**
+  invoqué, **aucun** événement n'est traité et **aucune** ligne d'audit
+  n'est écrite. La combinaison `AFTER_COMMIT` + `REQUIRES_NEW` donne donc
+  à la fois l'absence de trace sur rollback (propriété de `AFTER_COMMIT`)
+  et une persistance effective de l'audit après commit (propriété de
+  `REQUIRES_NEW`). C'est une **déviation volontaire** du motif legacy,
+  dans le bon sens ; la migration globale reste une dette séparée.
 
 `ModularityTests` doit rester vert : `studentimport` dépend uniquement de
 `identity` (ports + événement public), `enrollment` (port), `academic`
@@ -526,7 +546,8 @@ confirm(jobPublicId, caller):
     publish(StudentImportChangeEvent(APPLIED, "job=<uuid>;created=NN;updated=NN;moved=NN;invited=NN;ignored=NN"))
     return result
 // COMMIT -> e-mails d'invitation (InvitationEmailListener, AFTER_COMMIT)
-//        -> 1 ligne audit STUDENT_IMPORT_CONFIRMED (StudentImportAuditListener, AFTER_COMMIT)
+//        -> 1 ligne audit STUDENT_IMPORT_CONFIRMED
+//           (StudentImportAuditListener : AFTER_COMMIT + REQUIRES_NEW, transaction dédiée post-commit)
 // TOUTE exception -> ROLLBACK TOTAL : 0 compte / profil / inscription / rôle / invitation ;
 //   séquence de numéro non consommée ; aucun e-mail ; aucune ligne d'audit ; job reste SIMULATED.
 ```
@@ -593,14 +614,14 @@ POST /api/v1/student-imports  (multipart .csv, + programCode?/classCode? de pér
   -> summary { total, valid, warning, error, blocking,
               plannedCreate, plannedUpdate, plannedTransfer, plannedNoop }
      confirmable = (blocking == 0 && error == 0)
-  -> audit STUDENT_IMPORT_SIMULATED  (AFTER_COMMIT ; la simulation commite toujours)
+  -> audit STUDENT_IMPORT_SIMULATED  (AFTER_COMMIT + REQUIRES_NEW ; la simulation commite toujours)
 
   ... revue humaine dans /students/import/:publicId ...
 
 POST /api/v1/student-imports/{publicId}/confirm
   -> §4.4 : UNE transaction, verrou pessimiste, re-validation, application via ports
      REQUIRED, job APPLIED, StudentImportChangeEvent
-  -> COMMIT -> e-mails d'invitation (AFTER_COMMIT) + 1 ligne audit (AFTER_COMMIT)
+  -> COMMIT -> e-mails d'invitation (AFTER_COMMIT) + 1 ligne audit (AFTER_COMMIT + REQUIRES_NEW, tx dédiée)
   -> exception -> ROLLBACK TOTAL, job reste SIMULATED, 409 typé
 ```
 
@@ -773,7 +794,7 @@ Ressource inconnue → `404` ; hors périmètre → `403` (posture
 | Périmètre | `AcademicScopeDirectory` — job (403) / ligne (`ERROR`). |
 | Transaction | confirmation `@Transactional` unique + verrou pessimiste ; rollback total sur échec (invariants **T2**–**T5**). |
 | Idempotence | verrou + garde de statut + `200` idempotent (`APPLIED`). |
-| Audit | `STUDENT_IMPORT_SIMULATED` / `_CONFIRMED` / `_CANCELLED` / `_EXPIRED` — détail `job=<uuid>;created=NN;…`. **Jamais** e-mail, nom, n° étudiant, valeur de cellule, IP. Listener **`AFTER_COMMIT`** (aucune ligne si la confirmation échoue). Les invitations sont **non auditées séparément** par ce chemin (pas d'`AccountLifecycleEvent`) : le bilan `STUDENT_IMPORT_CONFIRMED` porte `invited=NN`. |
+| Audit | `STUDENT_IMPORT_SIMULATED` / `_CONFIRMED` / `_CANCELLED` / `_EXPIRED` — détail `job=<uuid>;created=NN;…`. **Jamais** e-mail, nom, n° étudiant, valeur de cellule, IP. Listener **`@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`** : exécuté seulement après le commit de la confirmation, persistance dans une transaction dédiée ; aucune ligne si la confirmation rollback. Les invitations sont **non auditées séparément** par ce chemin (pas d'`AccountLifecycleEvent`) : le bilan `STUDENT_IMPORT_CONFIRMED` porte `invited=NN`. |
 | Données personnelles | DTO sans `id` SQL / `password_hash` / jeton ; `received_value` **tronqué**, exclu de l'audit ; jeton d'invitation **jamais** hors du module `identity`. |
 | Rétention | `expires_at` + purge `@Scheduled` (§12.C). |
 | Front | fichier transmis brut (`FormData`), jamais parsé côté navigateur ; JWT en mémoire seule ; aucun jeton en URL ; rien en `localStorage`/`sessionStorage`. |
@@ -788,7 +809,7 @@ Ressource inconnue → `404` ; hors périmètre → `403` (posture
 | Confirmation | **T2** — **une** `@Transactional` (`REQUIRED`). Début : `SELECT … FOR UPDATE` sur `student_import_job`. Puis re-validation, application via ports **REQUIRED** (jamais `REQUIRES_NEW`, jamais `EnrollmentPersister`), `APPLIED`. |
 | Toute exception pendant la confirmation | **T3** — **rollback complet** : 0 compte / profil / inscription / rôle / invitation ; séquence de numéro non consommée ; job reste `SIMULATED`. Aucune écriture autonome de statut. |
 | Invitation & e-mail | **T4** — `account_invitation` écrit dans la transaction (annulé au rollback) ; `AccountInvitationIssuedEvent` publié **dans** la transaction ; e-mail via `InvitationEmailListener` **`@TransactionalEventListener(AFTER_COMMIT)`** → **jamais** d'e-mail si rollback. |
-| Audit | **T5** — aucun `@EventListener` + `REQUIRES_NEW` sur ce chemin ; `StudentImportChangeEvent` consommé en `AFTER_COMMIT` → **aucune** ligne d'audit si la confirmation échoue. |
+| Audit | **T5** — aucun `@EventListener` + `REQUIRES_NEW` sur ce chemin. `StudentImportChangeEvent` consommé par `StudentImportAuditListener` en `@TransactionalEventListener(AFTER_COMMIT)` **+** `@Transactional(REQUIRES_NEW)` : le listener ne démarre qu'après le commit de la confirmation et écrit la ligne `audit_event` dans une transaction dédiée. Rollback de la confirmation → phase `AFTER_COMMIT` non atteinte → **aucune** ligne d'audit. Ce `REQUIRES_NEW` est sûr précisément parce qu'il est postérieur au commit métier. |
 | Reconfirmation séquentielle | **T6** — 2ᵉ appel voit `APPLIED` → **`200`** + bilan mémorisé + `alreadyApplied=true`. `CANCELLED`/`EXPIRED` → `409`. |
 | Reconfirmation concurrente | Le verrou pessimiste sérialise ; le perdant relit `APPLIED` → réponse idempotente. Exactement **un** ensemble de comptes créés. |
 | Collision d'unicité pendant l'application | `user_account.email` / `uq_enrollment_active_per_year` / `uq_student_profile_*` → `DataIntegrityViolationException` dans la transaction unique → **abandon** (`409 IMP_STALE_SIMULATION`), rollback total, job re-simulé. Jamais de `500`. |
@@ -923,6 +944,16 @@ dépendance npm ajoutée.
   enregistreur ; **une** ligne d'audit `STUDENT_IMPORT_CONFIRMED`
   (`invited=100`), **aucune** ligne `INVITATION_ISSUED` /
   `ACCOUNT_INVITATION_ISSUED` séparée ; aucune PII dans l'audit.
+- **`StudentImportAuditListener` — transaction métier committée** : une
+  confirmation réussie produit **exactement une** ligne `audit_event`
+  (catégorie `STUDENT_IMPORT`, action `CONFIRMED`), écrite par le
+  listener dans sa **transaction dédiée** (`@TransactionalEventListener(AFTER_COMMIT)`
+  + `@Transactional(REQUIRES_NEW)`). Assertions : la ligne est visible
+  depuis une transaction tierce **après** le retour de l'appel HTTP ; son
+  `id` est postérieur à celui des écritures métier de la confirmation
+  (transaction distincte, ouverte après le commit) ; détail
+  `job=<uuid>;created=NN;…`, aucune PII. Un spy sur le listener confirme
+  **une seule** invocation.
 - **Numéros générés** : fichier 100 lignes **sans** `student_number` →
   100 profils avec `ESIC-{annéeDébut}-00001..00100` ; `student_number_sequence.next_value = 101`.
 - **IMP-STU-03 / TI-002** : colonne `email` absente → `400` /
@@ -968,6 +999,16 @@ dépendance npm ajoutée.
   - **0** ligne `audit_event` de catégorie `STUDENT_IMPORT` action
     `CONFIRMED` ; **0** ligne `INVITATION_ISSUED` ;
   - `student_import_job.status` **toujours `SIMULATED`**.
+- **`StudentImportAuditListener` — transaction métier en rollback** : une
+  confirmation qui échoue (échec injecté sur la dernière ligne) ne
+  déclenche **pas** le listener — la transaction de confirmation ne
+  committe pas, la phase `AFTER_COMMIT` n'est **jamais** atteinte, donc
+  `@Transactional(REQUIRES_NEW)` ne démarre pas. Assertions : `count(audit_event)`
+  de catégorie `STUDENT_IMPORT` **inchangé** (comptage avant / après) ;
+  un spy sur `StudentImportAuditListener` n'enregistre **aucune**
+  invocation ; `StudentImportChangeEvent` a bien été publié dans la
+  transaction (spy sur `ApplicationEventPublisher`) mais reste **sans
+  effet** puisque la transaction rollback.
 - **Garde réflexive** : `DefaultStudentAccountProvisioner.prepareStudentAccountAndInvitation`
   et les méthodes d'application de `DefaultStudentEnrollmentProvisioner`
   portent `@Transactional` **sans** `propagation = REQUIRES_NEW`
@@ -1038,7 +1079,7 @@ dépendance npm ajoutée.
 | **CP4** | Ports : `ClassGroupDirectory.resolveForImport` (+ impl) ; `identity.StudentAccountProvisioner` (+ impl `@Transactional` `REQUIRED`, réutilise `InvitationTokenService` / `AccountInvitationRepository`, publie `AccountInvitationIssuedEvent`, **pas** `AccountLifecycleEvent`) ; `enrollment.StudentEnrollmentProvisioner` (+ impl écriture directe, **pas** de `EnrollmentPersister`, **pas** de `EnrollmentChangeEvent`, allocation de numéro via `student_number_sequence`). | Tests unitaires + `@DataJpaTest` + gardes réflexives §14.4 ; `ModularityTests` vert |
 | **CP5** | `StudentImportSimulationService` + `StudentImportController` (téléversement, get, rows, cancel) + config multipart. Persistance `student_import_*` uniquement (**T1**). | Intégration §14.3 (simulation), sécurité §14.5 |
 | **CP6** | `StudentImportConfirmationService` : **une** transaction, verrou pessimiste, re-validation, idempotence (**T6**), application via ports **REQUIRED**, `StudentImportChangeEvent`. | Intégration §14.3 (confirmation, stale, expiration, TI-012), **rollback §14.4**, concurrence §14.6 |
-| **CP7** | `StudentImportChangeEvent` + `audit.internal.StudentImportAuditListener` (**`@TransactionalEventListener(AFTER_COMMIT)`**) ; purge `@Scheduled` (jobs expirés + lignes filles des jobs `APPLIED`). | Tests audit (aucune ligne sur rollback) + purge |
+| **CP7** | `StudentImportChangeEvent` + `audit.internal.StudentImportAuditListener` (**`@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`**) ; purge `@Scheduled` (jobs expirés + lignes filles des jobs `APPLIED`). | Tests audit : (a) confirmation committée → **une** ligne `audit_event` écrite dans la transaction dédiée du listener (§14.3) ; (b) confirmation en rollback → listener non invoqué, **aucune** ligne (§14.4) ; + tests de purge |
 | **CP8** | Frontend : modèles, `StudentImportApiService`, `student-import-errors`, `StudentImportHome`, `StudentImportReview`, routes, nav. | Specs §14.7, `npm test` / `lint` / `build` verts |
 | **CP9** | Documentation : `docs/CURRENT-STATE.md` (section détaillée), `docs/09-matrice-rncp.md` (EF-IMP-001/002, US-050/051), `docs/11-guide-demonstration.md` (scénario import). | Docs à jour |
 | **CP10** | Vérification globale : `./mvnw clean test` + `npm test` / `lint` / `build` ré-exécutés (baselines relevées), démonstration locale (simulation → revue → confirmation → invitations Mailpit), mesure TP-004, mise à jour de la PR. | Sortie des commandes, statuts HTTP relevés |
@@ -1064,7 +1105,7 @@ sans toucher V1–V10.
 | Numéro étudiant | docs/02 §10.4 : optionnel | Généré `ESIC-{annéeDébut}-{séquence}` si absent | `student_profile.student_number` `NOT NULL` |
 | Création de compte | Aucune API publique existante | Port `identity.StudentAccountProvisioner` (écriture directe, `REQUIRED`) | Nécessaire ; garantie transactionnelle stricte |
 | Chemin d'écriture `enrollment` | Services existants via `EnrollmentPersister` (`REQUIRES_NEW`) + événements | Port dédié écrivant en direct, sans événement synchrone | Atomicité de la confirmation (invariants T2–T5) |
-| Audit du module | Motif projet : `@EventListener` + `REQUIRES_NEW` | `@TransactionalEventListener(AFTER_COMMIT)` | Aucune trace d'audit si la confirmation échoue |
+| Audit du module | Motif projet : `@EventListener` + `REQUIRES_NEW` (peut écrire avant le commit métier) | `@TransactionalEventListener(AFTER_COMMIT)` **+** `@Transactional(REQUIRES_NEW)` (transaction d'audit dédiée, démarrée seulement après le commit métier) | Aucune trace d'audit si la confirmation rollback ; persistance effective de l'audit après commit |
 | Multipart | Non configuré | Ajout `spring.servlet.multipart.*` | Requis pour le téléversement |
 
 ---
