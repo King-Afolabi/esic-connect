@@ -67,3 +67,16 @@ app:
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}
   mail:
     from: ${APP_MAIL_FROM:no-reply@esic-connect.test}
+  import:
+    student:
+      # Import CSV contrôlé des apprenants (docs/02 §10 ; rapport
+      # STUDENT_CSV_IMPORT_DESIGN.md §8, §3.2). Décisions de prototype :
+      # limites conservatrices, rétention courte. Toute valeur invalide
+      # (durée <= 0, largeur hors 1..9, max-rows < 100) fait échouer le
+      # démarrage (StudentImportProperties).
+      max-rows: ${STUDENT_IMPORT_MAX_ROWS:500}
+      max-file-bytes: ${STUDENT_IMPORT_MAX_FILE_BYTES:2097152}
+      simulation-ttl: ${STUDENT_IMPORT_SIMULATION_TTL:P7D}
+      applied-rows-ttl: ${STUDENT_IMPORT_APPLIED_ROWS_TTL:P30D}
+      number-sequence-width: ${STUDENT_IMPORT_NUMBER_SEQUENCE_WIDTH:5}
+      number-alloc-max-retries: ${STUDENT_IMPORT_NUMBER_ALLOC_MAX_RETRIES:5}

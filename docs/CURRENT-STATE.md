@@ -12,11 +12,14 @@
 5874f5a — Merge pull request #20 from King-Afolabi/feature/attendance-qr-demonstration, sur main
 ```
 
-## Tranche en cours — Import CSV contrôlé des apprenants (V11, checkpoint CP1)
+## Tranche en cours — Import CSV contrôlé des apprenants (checkpoints CP2+)
 
 ```text
-Branche `feature/student-csv-import-cp1` (créée depuis `main` = `e8fd16d`,
-PR #23 / CP0 conception fusionnée). NON poussée, aucune PR ouverte.
+Branche `feature/student-csv-import-implementation` (créée depuis `main`,
+HEAD = commit de fusion CP1 `31acb09` / PR #24). NON poussée, aucune PR
+ouverte. CP1 (schéma V11) est fusionné sur `main` via la PR #24.
+Implémentation CP2 → CP10 en cours sur cette branche, un commit par
+checkpoint, aucun push, aucune fusion.
 ```
 
 Conception figée au **Checkpoint 0** (rapport `docs/reports/STUDENT_CSV_IMPORT_DESIGN.md`,
@@ -127,6 +130,69 @@ tout le dépôt (même les tables append-only portent `version`). Nom de
 colonne `row_number` conservé (conception §7.3) mais **cité** en SQL et
 dans `@Column` car réservé en MySQL 8. `csv_separator` / `file_sha256`
 gardent `CHAR(1)` / `CHAR(64)` via `@JdbcTypeCode(SqlTypes.CHAR)`.
+
+### CP2 réalisé — socle interne du module `studentimport`
+
+**Périmètre strict CP2** : uniquement les briques transverses du module,
+aucun parsing CSV, aucune API, aucune logique de simulation ou de
+confirmation, aucun port inter-module, aucun événement, aucun frontend.
+Aucune migration (V11 inchangée, schéma en version 11).
+
+- **`StudentImportWeb`** — constante `MANAGE_ROLES`
+  (`ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`,
+  rapport §8/§9 ; `TEACHER`/`STUDENT` → 403 ; décision fine de périmètre
+  reportée au service) + helpers `parseUuid` (UUID mal formé → ressource
+  introuvable, jamais 500) et `subject(Jwt)`.
+- **`StudentImportException` + `Kind`** — 21 valeurs couvrant le
+  téléversement / la lecture du fichier
+  (`UNSUPPORTED_MEDIA_TYPE`, `FILE_TOO_LARGE`, `ENCODING_INVALID`,
+  `MISSING_COLUMN`, `TOO_MANY_ROWS`, `NO_DATA_ROWS`, `HEADER_UNREADABLE`),
+  la consultation (`JOB_NOT_FOUND`, `JOB_FORBIDDEN`, `INVALID_SORT`,
+  `INVALID_FILTER`, `SCOPE_FORBIDDEN`), le cycle de vie
+  (`NOT_CONFIRMABLE`, `STALE_SIMULATION`, `SIMULATION_EXPIRED`,
+  `JOB_CANCELLED`, `CONFIRM_FORBIDDEN`, `JOB_NOT_CANCELLABLE`) et la
+  génération de numéro (`STUDENT_NUMBER_ALLOC_FAILED`,
+  `STUDENT_NUMBER_EXHAUSTED`) ; porte un `detail` non sensible optionnel
+  (jamais une valeur de cellule).
+- **`StudentImportExceptionHandler`** —
+  `@RestControllerAdvice(basePackageClasses = StudentImportWeb.class)`
+  (portée limitée aux futurs contrôleurs du module, comme
+  `EnrollmentExceptionHandler`). Mappe chaque `Kind` → `ApiError` (code
+  HTTP + code `IMP_*` + `details[]` non sensibles) et retraduit
+  `MaxUploadSizeExceededException` → `413 IMP_FILE_TOO_LARGE`.
+- **`StudentImportIssueCodes`** — constantes `String` des `error_code`
+  d'anomalie persistés (`student_import_job_issue` /
+  `student_import_row_issue`) : structure, champs, résolution classe /
+  année, compte existant. Distinctes des `Kind` (qui déclenchent un code
+  HTTP).
+- **`StudentImportProperties`** (`@ConfigurationProperties(prefix =
+  "app.import.student")` + `@Validated`, record à valeurs par défaut) :
+  `maxRows` (≥ 100, défaut 500), `maxFileBytes` (défaut 2 MiB),
+  `simulationTtl` (P7D), `appliedRowsTtl` (P30D), `numberSequenceWidth`
+  (1..9, défaut 5), `numberAllocMaxRetries` (défaut 5) ; durée nulle ou
+  négative → échec de démarrage (posture du TTL d'invitation) ;
+  `numberSequenceUpperBound()` dérive `10^largeur`. Activé par
+  `StudentImportConfig` (`@EnableConfigurationProperties`, sans
+  `@ConfigurationPropertiesScan` global). Bloc `app.import.student` ajouté
+  à `application.yml` (variables d'environnement `STUDENT_IMPORT_*`,
+  valeurs par défaut = décisions de prototype).
+
+**Tests CP2** : `StudentImportPropertiesTests` (4, purs — défauts, borne
+de séquence, refus de durée non positive), `StudentImportExceptionHandlerTests`
+(3, purs — mapping des 20 `Kind` HTTP-mappés, `details[]`, retraduction
+multipart).
+
+**Vérifications (31 août 2026, OpenJDK 21, MySQL 8.4)** :
+`./mvnw test -Dtest='StudentImportPropertiesTests,StudentImportExceptionHandlerTests,StudentImportSchemaConstraintsTests,ModularityTests'`
+→ **30 tests, 0 échec** ; `EsicConnectApplicationTests` vert (contexte
+complet avec le nouveau `@ConfigurationProperties`). `ModularityTests`
+vert (aucune dépendance inter-module ajoutée).
+
+**Écart avec la conception (CP2)** : `StudentImportProperties` /
+`StudentImportConfig` (typage config) sont créés ici alors que le rapport
+§8 les évoquait au fil des checkpoints API ; le bloc `app.import.student`
+d'`application.yml` est ajouté dès maintenant (la config multipart
+`spring.servlet.multipart.*` reste pour le checkpoint de l'API).
 
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
