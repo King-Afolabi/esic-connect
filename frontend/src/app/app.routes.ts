@@ -21,6 +21,27 @@ const ACADEMIC_READ_ROLES = [
   'PEDAGOGICAL_MANAGER',
 ] as const;
 
+/**
+ * Périmètre de consultation de l'alternance, repris de
+ * `AlternationWeb.PATTERN_READ_ROLES` / `SCOPED_ROLES`. Un
+ * `PEDAGOGICAL_MANAGER` reste restreint à son périmètre **côté serveur**
+ * (`AcademicScopeDirectory`) : un `403 ALT_FORBIDDEN` est rendu « accès
+ * refusé ». L'écriture des modèles de rythme est en plus limitée à
+ * `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` par un garde de route
+ * dédié sur les écrans de création / modification.
+ */
+const ALTERNATION_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+const ALTERNATION_PATTERN_WRITE_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+] as const;
+
 const academicList = () =>
   import('./features/academic/academic-reference-list/academic-reference-list').then(
     (m) => m.AcademicReferenceList,
@@ -175,6 +196,86 @@ export const routes: Routes = [
             title: `Classe — ${APP_NAME}`,
             data: { resource: 'class-groups' },
             loadComponent: academicDetail,
+          },
+        ],
+      },
+      {
+        // Gestion et consultation de l'alternance
+        // (`com.esic.connect.alternation`) : modèles de rythme,
+        // affectations de rythme aux classes, exceptions individuelles et
+        // résolution du contexte SCHOOL / COMPANY / UNKNOWN. Périmètre de
+        // rôles aligné sur `AlternationWeb`. Spring Security reste
+        // l'autorité (un `403 ALT_FORBIDDEN` est rendu « accès refusé »).
+        path: 'alternation',
+        canActivate: [roleGuard([...ALTERNATION_READ_ROLES])],
+        canActivateChild: [roleGuard([...ALTERNATION_READ_ROLES])],
+        title: `Alternance — ${APP_NAME}`,
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'patterns' },
+          {
+            path: 'patterns',
+            loadComponent: () =>
+              import('./features/alternation/patterns/pattern-list/pattern-list').then(
+                (m) => m.PatternList,
+              ),
+          },
+          {
+            path: 'patterns/new',
+            canActivate: [roleGuard([...ALTERNATION_PATTERN_WRITE_ROLES])],
+            data: { mode: 'create' },
+            title: `Nouveau modèle de rythme — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/alternation/patterns/pattern-form/pattern-form').then(
+                (m) => m.PatternForm,
+              ),
+          },
+          {
+            path: 'patterns/:publicId',
+            title: `Modèle de rythme — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/alternation/patterns/pattern-detail/pattern-detail').then(
+                (m) => m.PatternDetail,
+              ),
+          },
+          {
+            path: 'patterns/:publicId/edit',
+            canActivate: [roleGuard([...ALTERNATION_PATTERN_WRITE_ROLES])],
+            data: { mode: 'edit' },
+            title: `Modifier un modèle de rythme — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/alternation/patterns/pattern-form/pattern-form').then(
+                (m) => m.PatternForm,
+              ),
+          },
+          {
+            path: 'classes',
+            loadComponent: () =>
+              import('./features/alternation/class-alternation/class-picker/class-picker').then(
+                (m) => m.ClassPicker,
+              ),
+          },
+          {
+            path: 'classes/:classPublicId',
+            title: `Rythme d'une classe — ${APP_NAME}`,
+            loadComponent: () =>
+              import(
+                './features/alternation/class-alternation/class-alternation/class-alternation'
+              ).then((m) => m.ClassAlternation),
+          },
+          {
+            path: 'enrollments',
+            loadComponent: () =>
+              import(
+                './features/alternation/enrollment-alternation/enrollment-picker/enrollment-picker'
+              ).then((m) => m.EnrollmentPicker),
+          },
+          {
+            path: 'enrollments/:enrollmentPublicId',
+            title: `Exceptions d'une inscription — ${APP_NAME}`,
+            loadComponent: () =>
+              import(
+                './features/alternation/enrollment-alternation/enrollment-alternation/enrollment-alternation'
+              ).then((m) => m.EnrollmentAlternation),
           },
         ],
       },

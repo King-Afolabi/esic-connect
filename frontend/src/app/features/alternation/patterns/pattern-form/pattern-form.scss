@@ -1,0 +1,50 @@
+@use '../../alt-common';
+
+.alt__form-field--wide {
+  width: 100%;
+  max-width: 40rem;
+}
+
+.alt__fieldset {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.alt__fieldset legend {
+  font: var(--mat-sys-title-small);
+  padding: 0 0.5rem;
+}
+
+.alt__hint {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0 0 0.75rem;
+}
+
+.alt__day-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.alt__day-grid mat-form-field {
+  min-width: 9rem;
+}
+
+.alt__optional-days {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.alt__optional-days label {
+  font: var(--mat-sys-body-medium);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}

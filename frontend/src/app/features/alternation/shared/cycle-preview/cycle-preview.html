@@ -1,0 +1,40 @@
+<div class="cycle-preview">
+  <div class="cycle-preview__table-wrapper">
+    <table class="cycle-preview__grid">
+      <caption>
+        Représentation du rythme configuré : <strong>{{ weeks().length }}</strong>
+        semaine(s) de cycle, du lundi au vendredi. Cette grille illustre la configuration
+        enregistrée ; elle ne détermine pas le contexte d'une date réelle (utilisez la
+        résolution de contexte pour cela).
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Semaine</th>
+          @for (header of dayHeaders; track header.day) {
+            <th scope="col">{{ header.label }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (week of weeks(); track week.weekIndex) {
+          <tr>
+            <th scope="row">Semaine {{ week.weekIndex }}</th>
+            @for (cell of week.cells; track cell.day) {
+              <td [class]="'cycle-preview__cell cycle-preview__cell--' + cell.context">
+                {{ contextLabel(cell.context) }}
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <ul class="cycle-preview__legend" aria-label="Légende">
+    <li><span class="cycle-preview__swatch cycle-preview__swatch--SCHOOL"></span> École</li>
+    <li><span class="cycle-preview__swatch cycle-preview__swatch--COMPANY"></span> Entreprise</li>
+    <li>
+      <span class="cycle-preview__swatch cycle-preview__swatch--UNKNOWN"></span> Indéterminé
+    </li>
+  </ul>
+</div>

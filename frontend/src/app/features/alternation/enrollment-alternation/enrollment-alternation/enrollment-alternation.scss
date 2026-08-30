@@ -1,0 +1,34 @@
+@use '../../alt-common';
+
+.alt__back {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font: var(--mat-sys-body-medium);
+}
+
+.alt__muted {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.alt__hint {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0.5rem 0;
+}
+
+.alt__form-field--wide {
+  width: 100%;
+  max-width: 40rem;
+}
+
+.alt__context {
+  font-weight: 600;
+}
+
+.alt__context--SCHOOL {
+  color: var(--mat-sys-primary);
+}
+
+.alt__context--COMPANY {
+  color: var(--mat-sys-tertiary);
+}

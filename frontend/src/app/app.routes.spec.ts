@@ -185,6 +185,70 @@ describe('application routes (guard wiring)', () => {
     });
   });
 
+  describe('alternation routes', () => {
+    it('declares /alternation as a guarded parent redirecting to patterns', () => {
+      const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+      const alternation = shell?.children?.find((c) => c.path === 'alternation');
+      expect(alternation).toBeDefined();
+      expect(alternation?.canActivate?.length).toBeGreaterThan(0);
+      expect(alternation?.canActivateChild?.length).toBeGreaterThan(0);
+      const index = (alternation?.children ?? []).find((c) => c.path === '');
+      expect(index?.redirectTo).toBe('patterns');
+      const childPaths = (alternation?.children ?? []).map((c) => c.path);
+      expect(childPaths).toEqual(
+        expect.arrayContaining([
+          'patterns',
+          'patterns/new',
+          'patterns/:publicId',
+          'patterns/:publicId/edit',
+          'classes',
+          'classes/:classPublicId',
+          'enrollments',
+          'enrollments/:enrollmentPublicId',
+        ]),
+      );
+    });
+
+    it('guards the pattern write routes on ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION only', () => {
+      const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+      const alternation = shell?.children?.find((c) => c.path === 'alternation');
+      for (const path of ['patterns/new', 'patterns/:publicId/edit']) {
+        const route = (alternation?.children ?? []).find((c) => c.path === path);
+        expect(route?.canActivate?.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('routes an authenticated TEACHER to /forbidden on /alternation', async () => {
+      signIn(['TEACHER']);
+      await router.navigateByUrl('/alternation');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('lets a PEDAGOGICAL_MANAGER browse alternation but not the pattern write routes', async () => {
+      signIn(['PEDAGOGICAL_MANAGER']);
+
+      await router.navigateByUrl('/alternation/patterns');
+      expect(location.path()).toBe('/alternation/patterns');
+
+      await router.navigateByUrl('/alternation/classes');
+      expect(location.path()).toBe('/alternation/classes');
+
+      await router.navigateByUrl('/alternation/patterns/new');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('lets SCHOOL_ADMINISTRATION reach the pattern creation route', async () => {
+      signIn(['SCHOOL_ADMINISTRATION']);
+      await router.navigateByUrl('/alternation/patterns/new');
+      expect(location.path()).toBe('/alternation/patterns/new');
+    });
+
+    it('redirects an anonymous user from /alternation to /login', async () => {
+      await router.navigateByUrl('/alternation/patterns');
+      expect(location.path()).toContain('/login');
+    });
+  });
+
   it('keeps an authenticated user away from the guest-only login route', async () => {
     signIn(['STUDENT']);
     await router.navigateByUrl('/login');

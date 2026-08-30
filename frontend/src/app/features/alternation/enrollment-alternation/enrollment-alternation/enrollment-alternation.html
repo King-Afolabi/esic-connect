@@ -1,0 +1,261 @@
+<nav class="alt__tabs" aria-label="Alternance">
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" aria-current="page">Exceptions par inscription</a>
+</nav>
+
+<a class="alt__back" routerLink="/alternation/enrollments">← Retour à la sélection d'inscription</a>
+
+<h1 class="alt__title">Exceptions de l'inscription</h1>
+<p class="alt__intro">
+  Sémantique : une exception couvre l'intervalle <strong>[début, fin)</strong> — le
+  début est <strong>inclus</strong>, la fin est <strong>exclue</strong>.
+</p>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement des exceptions"></mat-progress-bar>
+    <p class="alt__status" role="status">Chargement des exceptions…</p>
+  }
+  @case ('not-found') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucune inscription ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/alternation/enrollments">Retour à la sélection</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Cette inscription est hors de votre périmètre.</p>
+      <a mat-stroked-button routerLink="/alternation/enrollments">Retour à la sélection</a>
+    </div>
+  }
+  @case ('error') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    <section class="alt__section" aria-label="Exceptions enregistrées">
+      <h2 class="alt__subtitle">Exceptions enregistrées</h2>
+      @if (exceptions().length === 0) {
+        <p class="alt__status" role="status">Aucune exception pour cette inscription.</p>
+      } @else {
+        <div class="alt__table-wrapper">
+          <table
+            mat-table
+            [dataSource]="exceptions()"
+            matSort
+            [matSortActive]="sortField()"
+            [matSortDirection]="sortDirection()"
+            matSortDisableClear
+            (matSortChange)="onSortChange($event)"
+          >
+            <ng-container matColumnDef="type">
+              <th mat-header-cell *matHeaderCellDef>Type</th>
+              <td mat-cell *matCellDef="let row">{{ typeLabel(row.type) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="start">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header="startAt">Début (inclus)</th>
+              <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.startAt) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="end">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header="endAt">Fin (exclue)</th>
+              <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.endAt) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="timeZone">
+              <th mat-header-cell *matHeaderCellDef>Fuseau déclaré</th>
+              <td mat-cell *matCellDef="let row">{{ row.timeZoneId }}</td>
+            </ng-container>
+            <ng-container matColumnDef="reason">
+              <th mat-header-cell *matHeaderCellDef>Motif</th>
+              <td mat-cell *matCellDef="let row">{{ row.reason }}</td>
+            </ng-container>
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Statut</th>
+              <td mat-cell *matCellDef="let row">
+                {{ statusLabel(row.status) }}
+                @if (row.status === 'CANCELLED' && row.cancelReason) {
+                  <span class="alt__muted"> — {{ row.cancelReason }}</span>
+                }
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef><span class="alt__sr-only">Actions</span></th>
+              <td mat-cell *matCellDef="let row">
+                @if (row.status === 'ACTIVE') {
+                  <button mat-button type="button" (click)="startCancel(row)">Annuler</button>
+                }
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="columns"></tr>
+            <tr mat-row *matRowDef="let row; columns: columns"></tr>
+          </table>
+        </div>
+      }
+
+      @if (cancellingId(); as target) {
+        <form
+          class="alt__reveal"
+          role="group"
+          aria-label="Annuler l'exception"
+          [formGroup]="cancelForm"
+          (ngSubmit)="submitCancel()"
+        >
+          <p>L'annulation conserve l'historique : l'exception passe au statut « Annulée ».</p>
+          <mat-form-field appearance="outline" class="alt__form-field">
+            <mat-label>Motif d'annulation</mat-label>
+            <input matInput formControlName="reason" maxlength="500" required />
+            @if (cancelForm.controls.reason.touched && cancelForm.controls.reason.invalid) {
+              <mat-error>Le motif est obligatoire.</mat-error>
+            }
+          </mat-form-field>
+          <div class="alt__form-actions">
+            <button mat-flat-button type="submit" [disabled]="cancelSubmitting()">Annuler l'exception</button>
+            <button mat-button type="button" (click)="dismissCancel()" [disabled]="cancelSubmitting()">
+              Fermer
+            </button>
+          </div>
+          @if (cancelError()) {
+            <p class="alt__inline-error" role="alert">{{ cancelError() }}</p>
+          }
+        </form>
+      }
+    </section>
+
+    <section class="alt__section" aria-label="Créer une exception">
+      <h2 class="alt__subtitle">Créer une exception</h2>
+      <form [formGroup]="createForm" (ngSubmit)="submitCreate()" novalidate>
+        <div class="alt__form-row">
+          <mat-form-field appearance="outline" class="alt__form-field">
+            <mat-label>Type</mat-label>
+            <mat-select formControlName="type" required>
+              @for (type of exceptionTypes; track type) {
+                <mat-option [value]="type">{{ typeLabel(type) }}</mat-option>
+              }
+            </mat-select>
+            <mat-hint>{{ typeEffect(createForm.controls.type.value) }}</mat-hint>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="alt__form-field">
+            <mat-label>Fuseau horaire (IANA)</mat-label>
+            <mat-select formControlName="timeZoneId" required>
+              @for (zone of timeZones; track zone) {
+                <mat-option [value]="zone">{{ zone }}</mat-option>
+              }
+            </mat-select>
+            <mat-hint>Transmis tel quel au serveur ; jamais converti.</mat-hint>
+          </mat-form-field>
+        </div>
+
+        <div class="alt__form-row">
+          <mat-form-field appearance="outline" class="alt__form-field">
+            <mat-label>Début (heure locale, inclus)</mat-label>
+            <input matInput type="datetime-local" formControlName="startWall" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="alt__form-field">
+            <mat-label>Fin (heure locale, exclue)</mat-label>
+            <input matInput type="datetime-local" formControlName="endWall" required />
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="alt__form-field alt__form-field--wide">
+          <mat-label>Motif</mat-label>
+          <input matInput formControlName="reason" maxlength="500" required />
+          @if (createForm.controls.reason.touched && createForm.controls.reason.invalid) {
+            <mat-error>Le motif est obligatoire (500 caractères maximum).</mat-error>
+          }
+        </mat-form-field>
+
+        <p class="alt__hint" role="status">
+          Instants transmis :
+          <strong>{{ computedInstants().startAt ? formatInstantUtc(computedInstants().startAt) : '—' }}</strong>
+          →
+          <strong>{{ computedInstants().endAt ? formatInstantUtc(computedInstants().endAt) : '—' }}</strong>
+        </p>
+
+        @if (createBlockingMessage()) {
+          <p class="alt__inline-error" role="alert">{{ createBlockingMessage() }}</p>
+        }
+        @if (createError()) {
+          <p class="alt__inline-error" role="alert">{{ createError() }}</p>
+        }
+
+        <div class="alt__form-actions">
+          <button
+            mat-flat-button
+            type="submit"
+            [disabled]="createSubmitting() || createBlockingMessage() !== null"
+          >
+            Créer l'exception
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+}
+
+<section class="alt__section" aria-label="Contexte effectif à une date">
+  <h2 class="alt__subtitle">Contexte effectif à une date</h2>
+  <p class="alt__hint">
+    Le contexte effectif (rythme + exceptions) est calculé par le serveur ; il n'est
+    jamais reconstruit côté client.
+  </p>
+  <form class="alt__filters" [formGroup]="contextForm" (ngSubmit)="resolveContext()">
+    <mat-form-field appearance="outline" class="alt__form-field">
+      <mat-label>Date</mat-label>
+      <input matInput type="date" formControlName="date" required />
+      @if (contextForm.controls.date.touched && contextForm.controls.date.invalid) {
+        <mat-error>Choisissez une date.</mat-error>
+      }
+    </mat-form-field>
+    <div class="alt__filter-actions">
+      <button mat-flat-button type="submit">Résoudre</button>
+    </div>
+  </form>
+
+  @switch (contextState().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Résolution du contexte"></mat-progress-bar>
+      <p class="alt__status" role="status">Résolution du contexte…</p>
+    }
+    @case ('error') {
+      <div class="alt__panel" role="alert">
+        <mat-icon aria-hidden="true">error_outline</mat-icon>
+        <p>{{ contextError() }}</p>
+        <button mat-stroked-button type="button" (click)="resolveContext()">Réessayer</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (contextResult(); as result) {
+        <dl class="alt__facts" role="status">
+          <div><dt>Date</dt><dd>{{ formatIsoDate(result.date) }}</dd></div>
+          <div><dt>Contexte du rythme</dt><dd>{{ contextLabel(result.patternContext) }}</dd></div>
+          <div>
+            <dt>Contexte effectif</dt>
+            <dd [class]="'alt__context alt__context--' + result.effectiveContext">
+              {{ contextLabel(result.effectiveContext) }}
+            </dd>
+          </div>
+          <div><dt>Origine</dt><dd>{{ sourceLabel(result.source) }}</dd></div>
+          <div>
+            <dt>Exceptions couvrantes</dt>
+            <dd>
+              @if (result.coveringExceptionTypes.length === 0) {
+                Aucune
+              } @else {
+                {{ result.coveringExceptionTypes.length }} :
+                @for (type of result.coveringExceptionTypes; track $index) {
+                  <span>{{ typeLabel(type) }}@if (!$last) {, }</span>
+                }
+              }
+            </dd>
+          </div>
+        </dl>
+      }
+    }
+  }
+</section>

@@ -129,6 +129,28 @@ describe('Dashboard', () => {
     }
   });
 
+  it('offers Alternance as a quick link only for the alternation read roles', () => {
+    for (const held of [
+      ['ADMIN'],
+      ['SUPER_ADMIN'],
+      ['SCHOOL_ADMINISTRATION'],
+      ['PEDAGOGICAL_MANAGER'],
+    ] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
+      ).not.toBeNull();
+    }
+    for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
+      ).toBeNull();
+    }
+  });
+
   it('shows the quick-links empty state for a role with no delivered secondary screen', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();

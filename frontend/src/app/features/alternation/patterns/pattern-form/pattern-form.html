@@ -1,0 +1,221 @@
+<nav class="alt__tabs" aria-label="Alternance">
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
+</nav>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement du modèle"></mat-progress-bar>
+    <p class="alt__status" role="status">Chargement du modèle…</p>
+  }
+  @case ('not-found') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucun modèle de rythme ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/alternation/patterns">Retour à la liste</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à modifier ce modèle.</p>
+      <a mat-stroked-button routerLink="/alternation/patterns">Retour à la liste</a>
+    </div>
+  }
+  @case ('load-error') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ loadErrorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retryLoad()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    <h1 class="alt__title">
+      {{ mode === 'edit' ? 'Modifier le modèle de rythme' : 'Nouveau modèle de rythme' }}
+    </h1>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="alt__form-row">
+        <mat-form-field appearance="outline" class="alt__form-field">
+          <mat-label>Code</mat-label>
+          <input matInput formControlName="code" maxlength="80" required autocomplete="off" />
+          <mat-hint>Immuable après création.</mat-hint>
+          @if (form.controls.code.touched && form.controls.code.hasError('required')) {
+            <mat-error>Le code est obligatoire.</mat-error>
+          }
+          @if (form.controls.code.hasError('server')) {
+            <mat-error>{{ form.controls.code.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="alt__form-field">
+          <mat-label>Nom</mat-label>
+          <input matInput formControlName="name" maxlength="191" required autocomplete="off" />
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <mat-error>Le nom est obligatoire (191 caractères maximum).</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="alt__form-field">
+          <mat-label>Type</mat-label>
+          <mat-select formControlName="type">
+            @for (type of patternTypes; track type) {
+              <mat-option [value]="type">{{ typeLabel(type) }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>Immuable après création.</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field appearance="outline" class="alt__form-field alt__form-field--wide">
+        <mat-label>Description</mat-label>
+        <textarea matInput formControlName="description" maxlength="500" rows="2"></textarea>
+      </mat-form-field>
+
+      <!-- Configuration selon le type -->
+      <fieldset class="alt__fieldset">
+        <legend>Configuration du rythme</legend>
+
+        @switch (selectedType()) {
+          @case ('THREE_DAYS_SCHOOL_TWO_DAYS_COMPANY') {
+            <p class="alt__hint">
+              Classez chaque jour du lundi au vendredi en « école » ou « entreprise ».
+            </p>
+            <div class="alt__day-grid" formGroupName="threeTwo">
+              @for (day of weekdays; track day) {
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ weekdayLabel(day) }}</mat-label>
+                  <mat-select [formControlName]="day">
+                    <mat-option value="SCHOOL">École</mat-option>
+                    <mat-option value="COMPANY">Entreprise</mat-option>
+                  </mat-select>
+                </mat-form-field>
+              }
+            </div>
+          }
+
+          @case ('ONE_WEEK_SCHOOL_OUT_OF_FOUR') {
+            <p class="alt__hint">Cycle de 4 semaines : une seule semaine à l'école.</p>
+            <mat-form-field appearance="outline" class="alt__form-field">
+              <mat-label>Semaine passée à l'école</mat-label>
+              <mat-select formControlName="oneWeekSchoolWeek">
+                @for (week of weekChoices; track week) {
+                  <mat-option [value]="week">Semaine {{ week }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+
+          @case ('TWO_WEEKS_SCHOOL_OUT_OF_FOUR') {
+            <p class="alt__hint">Cycle de 4 semaines : exactement deux semaines à l'école.</p>
+            <mat-form-field appearance="outline" class="alt__form-field">
+              <mat-label>Semaines passées à l'école</mat-label>
+              <mat-select formControlName="twoWeeksSchoolWeeks" multiple>
+                @for (week of weekChoices; track week) {
+                  <mat-option [value]="week">Semaine {{ week }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+
+          @case ('CUSTOM') {
+            <mat-form-field appearance="outline" class="alt__form-field">
+              <mat-label>Longueur du cycle (semaines)</mat-label>
+              <input
+                matInput
+                type="number"
+                min="1"
+                max="52"
+                formControlName="customCycleLengthWeeks"
+                required
+              />
+            </mat-form-field>
+
+            <div class="alt__day-grid" formArrayName="customWeekRoles">
+              @for (ctrl of customWeekRoles.controls; track $index) {
+                <mat-form-field appearance="outline">
+                  <mat-label>Semaine {{ $index + 1 }}</mat-label>
+                  <mat-select [formControlName]="$index">
+                    <mat-option value="SCHOOL">École</mat-option>
+                    <mat-option value="COMPANY">Entreprise</mat-option>
+                    <mat-option value="UNCLASSIFIED">Indéterminé</mat-option>
+                  </mat-select>
+                </mat-form-field>
+              }
+            </div>
+
+            <div class="alt__form-row">
+              <mat-form-field appearance="outline" class="alt__form-field">
+                <mat-label>Jours « école »</mat-label>
+                <mat-select formControlName="customSchoolDays" multiple>
+                  @for (day of weekdays; track day) {
+                    <mat-option [value]="day">{{ weekdayLabel(day) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="alt__form-field">
+                <mat-label>Jours « entreprise » (peut rester vide)</mat-label>
+                <mat-select formControlName="customCompanyDays" multiple>
+                  @for (day of weekdays; track day) {
+                    <mat-option [value]="day">{{ weekdayLabel(day) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+          }
+        }
+
+        @if (
+          selectedType() === 'ONE_WEEK_SCHOOL_OUT_OF_FOUR' ||
+          selectedType() === 'TWO_WEEKS_SCHOOL_OUT_OF_FOUR'
+        ) {
+          <div class="alt__optional-days">
+            <label>
+              <input type="checkbox" formControlName="useCustomWeekDays" />
+              Restreindre les jours « école » (sinon lundi à vendredi)
+            </label>
+            @if (form.controls.useCustomWeekDays.value) {
+              <mat-form-field appearance="outline" class="alt__form-field">
+                <mat-label>Jours « école »</mat-label>
+                <mat-select formControlName="weeksOutOfFourSchoolDays" multiple>
+                  @for (day of weekdays; track day) {
+                    <mat-option [value]="day">{{ weekdayLabel(day) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+          </div>
+        }
+      </fieldset>
+
+      @if (clientErrors().length > 0) {
+        <div class="alt__panel" role="alert">
+          <mat-icon aria-hidden="true">warning</mat-icon>
+          <ul>
+            @for (err of clientErrors(); track err) {
+              <li>{{ err }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <section class="alt__section" aria-label="Aperçu du cycle">
+        <h2 class="alt__subtitle">Aperçu du cycle</h2>
+        <app-cycle-preview [config]="built().preview"></app-cycle-preview>
+      </section>
+
+      @if (submitError()) {
+        <p class="alt__inline-error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="alt__form-actions">
+        <button mat-flat-button type="submit" [disabled]="submitting() || clientErrors().length > 0">
+          {{ mode === 'edit' ? 'Enregistrer' : 'Créer le modèle' }}
+        </button>
+        <a mat-button routerLink="/alternation/patterns">Annuler</a>
+      </div>
+    </form>
+  }
+}

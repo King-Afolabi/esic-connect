@@ -1,0 +1,164 @@
+<h1 class="alt__title">Exceptions individuelles de calendrier</h1>
+<p class="alt__intro">
+  Choisissez une inscription pour consulter et gérer ses exceptions (période en
+  entreprise, présence à l'école requise, suivi à distance autorisé, indisponibilité
+  validée).
+</p>
+
+<nav class="alt__tabs" aria-label="Alternance">
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" aria-current="page">Exceptions par inscription</a>
+</nav>
+
+<section class="alt__section" aria-label="Rechercher une classe">
+  <h2 class="alt__subtitle">1. Rechercher une classe</h2>
+  <form class="alt__filters" [formGroup]="classSearch" (ngSubmit)="searchClasses()">
+    <mat-form-field appearance="outline" class="alt__form-field">
+      <mat-label>Code ou nom de classe</mat-label>
+      <input matInput type="search" formControlName="q" autocomplete="off" />
+    </mat-form-field>
+    <div class="alt__filter-actions">
+      <button mat-flat-button type="submit">
+        <mat-icon aria-hidden="true">search</mat-icon>
+        Rechercher
+      </button>
+    </div>
+  </form>
+
+  @switch (classState().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement des classes"></mat-progress-bar>
+      <p class="alt__status" role="status">Chargement des classes…</p>
+    }
+    @case ('forbidden') {
+      <div class="alt__panel" role="alert">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p>Vous n'êtes pas autorisé à consulter les classes.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="alt__panel" role="alert">
+        <mat-icon aria-hidden="true">error_outline</mat-icon>
+        <p>{{ classError() }}</p>
+        <button mat-stroked-button type="button" (click)="searchClasses()">Réessayer</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (classes().length === 0) {
+        <p class="alt__status" role="status">Aucune classe ne correspond à votre recherche.</p>
+      } @else {
+        <div class="alt__table-wrapper">
+          <table mat-table [dataSource]="classes()">
+            <ng-container matColumnDef="code">
+              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <td mat-cell *matCellDef="let row">{{ row.code }}</td>
+            </ng-container>
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Nom</th>
+              <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef><span class="alt__sr-only">Actions</span></th>
+              <td mat-cell *matCellDef="let row">
+                <button
+                  mat-button
+                  type="button"
+                  (click)="selectClass(row)"
+                  [attr.aria-label]="'Voir les inscriptions de ' + row.code"
+                >
+                  Voir les inscriptions
+                </button>
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="classColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: classColumns"></tr>
+          </table>
+        </div>
+      }
+    }
+  }
+</section>
+
+@if (selectedClass(); as chosen) {
+  <section class="alt__section" aria-label="Inscriptions de la classe">
+    <h2 class="alt__subtitle">2. Inscriptions de {{ chosen.code }}</h2>
+
+    @switch (enrollmentState().kind) {
+      @case ('loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des inscriptions"></mat-progress-bar>
+        <p class="alt__status" role="status">Chargement des inscriptions…</p>
+      }
+      @case ('forbidden') {
+        <div class="alt__panel" role="alert">
+          <mat-icon aria-hidden="true">lock</mat-icon>
+          <p>
+            La liste des inscriptions est réservée à l'administration. Si vous êtes
+            responsable pédagogique, saisissez directement l'identifiant d'une inscription
+            de votre périmètre ci-dessous.
+          </p>
+        </div>
+      }
+      @case ('error') {
+        <div class="alt__panel" role="alert">
+          <mat-icon aria-hidden="true">error_outline</mat-icon>
+          <p>{{ enrollmentError() }}</p>
+          <button mat-stroked-button type="button" (click)="selectClass(chosen)">Réessayer</button>
+        </div>
+      }
+      @case ('ready') {
+        @if (enrollments().length === 0) {
+          <p class="alt__status" role="status">Aucune inscription pour cette classe.</p>
+        } @else {
+          <div class="alt__table-wrapper">
+            <table mat-table [dataSource]="enrollments()">
+              <ng-container matColumnDef="studentNumber">
+                <th mat-header-cell *matHeaderCellDef>Numéro étudiant</th>
+                <td mat-cell *matCellDef="let row">{{ row.studentNumber }}</td>
+              </ng-container>
+              <ng-container matColumnDef="period">
+                <th mat-header-cell *matHeaderCellDef>Période</th>
+                <td mat-cell *matCellDef="let row">{{ formatPeriod(row.startDate, row.endDate) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Statut</th>
+                <td mat-cell *matCellDef="let row">{{ row.status }}</td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef><span class="alt__sr-only">Actions</span></th>
+                <td mat-cell *matCellDef="let row">
+                  <a
+                    mat-button
+                    color="primary"
+                    [routerLink]="['/alternation/enrollments', row.publicId]"
+                    [attr.aria-label]="'Gérer les exceptions de ' + row.studentNumber"
+                  >
+                    Gérer les exceptions
+                  </a>
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="enrollmentColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: enrollmentColumns"></tr>
+            </table>
+          </div>
+        }
+      }
+    }
+  </section>
+}
+
+<section class="alt__section" aria-label="Ouvrir une inscription par identifiant">
+  <h2 class="alt__subtitle">Ouvrir une inscription par identifiant</h2>
+  <form class="alt__filters" [formGroup]="manualForm" (ngSubmit)="openManual()">
+    <mat-form-field appearance="outline" class="alt__form-field">
+      <mat-label>Identifiant public d'inscription</mat-label>
+      <input matInput formControlName="enrollmentPublicId" autocomplete="off" />
+      @if (manualForm.controls.enrollmentPublicId.touched && manualForm.controls.enrollmentPublicId.invalid) {
+        <mat-error>Saisissez un identifiant d'inscription.</mat-error>
+      }
+    </mat-form-field>
+    <div class="alt__filter-actions">
+      <button mat-flat-button type="submit">Ouvrir</button>
+    </div>
+  </form>
+</section>
