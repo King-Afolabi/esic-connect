@@ -1,5 +1,7 @@
 package com.esic.connect.coursesession.internal;
 
+import com.esic.connect.coursesession.AttendanceCheckpointStatus;
+import com.esic.connect.coursesession.AttendanceCheckpointType;
 import com.esic.connect.coursesession.SessionLifecycle;
 
 import java.time.Instant;
@@ -10,21 +12,9 @@ import java.util.UUID;
  * Vue API d'une séance — jamais d'identifiant SQL interne, jamais de
  * jeton d'émargement.
  *
- * @param publicId          identifiant public de la séance
- * @param status            statut du cycle de vie
- * @param title             libellé facultatif
- * @param exceptionReason   motif de la séance exceptionnelle
- * @param teacher           formateur affecté (identité minimale)
- * @param classes           classes rattachées
- * @param startsAt          début planifié
- * @param endsAt            fin planifiée
- * @param timeZoneId        fuseau IANA de saisie
- * @param openedAt          instant d'ouverture ({@code null} tant que PLANNED)
- * @param closedAt          instant de fermeture ({@code null} tant que non CLOSED)
- * @param checkpointPublicId identifiant public du point de contrôle unique
- * @param checkpointOpen    {@code true} si l'émargement est ouvert
- * @param createdAt         horodatage de création
- * @param updatedAt         horodatage de dernière modification
+ * <p>{@code checkpointPublicId} / {@code checkpointOpen} sont conservés
+ * (compat V9) et reflètent le <em>premier</em> point de contrôle
+ * ({@code START}) ; {@code checkpoints} donne la liste complète (V10).
  */
 record CourseSessionResponse(
         UUID publicId,
@@ -40,6 +30,7 @@ record CourseSessionResponse(
         Instant closedAt,
         UUID checkpointPublicId,
         boolean checkpointOpen,
+        List<CheckpointView> checkpoints,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -49,5 +40,23 @@ record CourseSessionResponse(
 
     /** Identité minimale d'une classe rattachée. */
     record SessionClassView(UUID publicId, String code) {
+    }
+
+    /** Vue d'un point de contrôle d'émargement (V10). */
+    record CheckpointView(
+            UUID publicId,
+            String label,
+            AttendanceCheckpointType type,
+            AttendanceCheckpointStatus status,
+            boolean required,
+            int displayOrder,
+            Instant openedAt,
+            Instant closedAt) {
+
+        static CheckpointView from(AttendanceCheckpoint cp) {
+            return new CheckpointView(cp.getPublicId(), cp.getLabel(), cp.getCheckpointType(),
+                    cp.getStatus(), cp.isRequired(), cp.getDisplayOrder(),
+                    cp.getOpenedAt(), cp.getClosedAt());
+        }
     }
 }

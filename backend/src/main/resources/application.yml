@@ -56,6 +56,12 @@ app:
     # le jeton avant l'expiration. Doit rester strictement positive (le
     # démarrage échoue sinon, voir AttendanceTokenService).
     token-ttl: ${ATTENDANCE_TOKEN_TTL:PT30S}
+    # Seuil de tolérance de retard : un émargement effectué au-delà de ce
+    # délai après l'heure de début planifiée de la séance est classé
+    # LATE (docs/02 §17.6, simplifié en un seuil unique dans cette
+    # tranche). Doit rester >= 0 (le démarrage échoue sinon, voir
+    # AttendanceService).
+    late-threshold: ${ATTENDANCE_LATE_THRESHOLD:PT10M}
   activation:
     # Base du lien d'activation inséré dans l'email (front Angular à venir).
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}

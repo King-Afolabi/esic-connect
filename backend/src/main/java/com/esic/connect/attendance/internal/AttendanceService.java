@@ -1,18 +1,24 @@
 package com.esic.connect.attendance.internal;
 
+import com.esic.connect.attendance.AttendanceStatus;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
-import com.esic.connect.coursesession.SessionLifecycle;
+import com.esic.connect.coursesession.CourseSessionDirectory.CheckpointRef;
 import com.esic.connect.enrollment.EnrollmentDirectory;
 import com.esic.connect.identity.UserDirectory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,11 +27,17 @@ import java.util.UUID;
  * {@link AttendanceTokenService}), validation d'une présence et
  * consultation des présences d'une séance.
  *
- * <p>La méthode {@link #validate} n'est volontairement pas
- * {@code @Transactional} : l'écriture est isolée dans
- * {@link AttendanceRecordPersister} ({@code REQUIRES_NEW}) pour retraduire
- * proprement une violation de contrainte concurrente en 409, jamais en
- * 500. Le serveur détermine l'apprenant émargeur à partir du seul JWT.
+ * <p>V10 : le jeton est émis <em>pour un point de contrôle</em> ; la
+ * validation classe la présence {@code PRESENT} ou {@code LATE} selon le
+ * seuil {@code app.attendance.late-threshold} (calcul serveur, horloge
+ * injectée) ; la consultation détaille les présences <em>par point de
+ * contrôle</em>.
+ *
+ * <p>{@link #validate} n'est volontairement pas {@code @Transactional} :
+ * l'écriture est isolée dans {@link AttendanceRecordPersister}
+ * ({@code REQUIRES_NEW}) pour retraduire une violation de contrainte
+ * concurrente en 409, jamais en 500. Le serveur détermine l'apprenant
+ * émargeur à partir du seul JWT.
  */
 @Service
 class AttendanceService {
@@ -38,6 +50,7 @@ class AttendanceService {
     private final UserDirectory userDirectory;
     private final AttendanceChangePublisher changePublisher;
     private final Clock clock;
+    private final Duration lateThreshold;
 
     AttendanceService(AttendanceTokenService tokenService,
                       AttendanceRecordRepository recordRepository,
@@ -46,7 +59,12 @@ class AttendanceService {
                       EnrollmentDirectory enrollmentDirectory,
                       UserDirectory userDirectory,
                       AttendanceChangePublisher changePublisher,
-                      Clock clock) {
+                      Clock clock,
+                      @Value("${app.attendance.late-threshold:PT10M}") Duration lateThreshold) {
+        if (lateThreshold == null || lateThreshold.isNegative()) {
+            throw new IllegalStateException(
+                    "app.attendance.late-threshold doit être une durée non négative.");
+        }
         this.tokenService = tokenService;
         this.recordRepository = recordRepository;
         this.recordPersister = recordPersister;
@@ -55,18 +73,28 @@ class AttendanceService {
         this.userDirectory = userDirectory;
         this.changePublisher = changePublisher;
         this.clock = clock;
+        this.lateThreshold = lateThreshold;
     }
 
     // ------------------------------------------------------------------
     // Émission d'un jeton (formateur / gestionnaire)
     // ------------------------------------------------------------------
 
-    AttendanceTokenResponse issueToken(String sessionPublicId, String callerSubject) {
+    AttendanceTokenResponse issueToken(String sessionPublicId, String checkpointPublicId, String callerSubject) {
         CourseSessionDirectory.SessionRef session = requireManageable(sessionPublicId);
-        if (session.status() != SessionLifecycle.OPEN || !session.checkpointOpen()) {
+        CheckpointRef checkpoint;
+        if (checkpointPublicId != null && !checkpointPublicId.isBlank()) {
+            checkpoint = session.checkpoint(parseUuid(checkpointPublicId,
+                            AttendanceException.Kind.CHECKPOINT_NOT_FOUND))
+                    .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.CHECKPOINT_NOT_FOUND));
+        } else {
+            checkpoint = session.firstOpenCheckpoint()
+                    .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.SESSION_CLOSED));
+        }
+        if (!checkpoint.isOpen()) {
             throw new AttendanceException(AttendanceException.Kind.SESSION_CLOSED);
         }
-        IssuedAttendanceToken issued = tokenService.issue(session.publicId());
+        IssuedAttendanceToken issued = tokenService.issue(session.publicId(), checkpoint.publicId());
         return AttendanceTokenResponse.from(issued, tokenService.ttl().toSeconds());
     }
 
@@ -81,12 +109,15 @@ class AttendanceService {
             throw new AttendanceException(AttendanceException.Kind.INVALID_SUBMISSION);
         }
 
-        UUID sessionPublicId = tokenService.resolveSession(token, shortCode)
+        ResolvedAttendanceToken resolved = tokenService.resolve(token, shortCode)
                 .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.TOKEN_INVALID));
 
-        CourseSessionDirectory.SessionRef session = courseSessionDirectory.findForAttendance(sessionPublicId)
+        CourseSessionDirectory.SessionRef session = courseSessionDirectory
+                .findForAttendance(resolved.sessionPublicId())
                 .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.TOKEN_INVALID));
-        if (session.status() != SessionLifecycle.OPEN || !session.checkpointOpen()) {
+        CheckpointRef checkpoint = session.checkpoint(resolved.checkpointPublicId())
+                .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.TOKEN_INVALID));
+        if (!checkpoint.isOpen()) {
             throw new AttendanceException(AttendanceException.Kind.SESSION_CLOSED);
         }
 
@@ -114,15 +145,22 @@ class AttendanceService {
                 ? AttendanceRecordSource.DYNAMIC_QR
                 : AttendanceRecordSource.SHORT_CODE;
 
-        // Pré-contrôle de confort (message clair) ; la contrainte SQL
-        // reste l'autorité en cas de concurrence.
+        Instant now = clock.instant();
+        Duration delay = Duration.between(session.startsAt(), now);
+        AttendanceStatus status = AttendanceStatus.PRESENT;
+        Integer lateMinutes = null;
+        if (delay.compareTo(lateThreshold) > 0) {
+            status = AttendanceStatus.LATE;
+            lateMinutes = (int) Math.min(Integer.MAX_VALUE, Math.max(0, (delay.toSeconds() + 59) / 60));
+        }
+
         if (recordRepository.existsByAttendanceCheckpointIdAndEnrollmentId(
-                session.checkpointInternalId(), enrollment.internalId())) {
+                checkpoint.internalId(), enrollment.internalId())) {
             throw new AttendanceException(AttendanceException.Kind.ALREADY_RECORDED);
         }
 
-        AttendanceRecord record = new AttendanceRecord(session.checkpointInternalId(), enrollment.internalId(),
-                account.internalId(), clock.instant(), source);
+        AttendanceRecord record = new AttendanceRecord(checkpoint.internalId(), enrollment.internalId(),
+                account.internalId(), null, now, source, status, lateMinutes, null);
         AttendanceRecord saved;
         try {
             saved = recordPersister.persist(record);
@@ -135,9 +173,10 @@ class AttendanceService {
 
         Long actorId = changePublisher.actorId(callerSubject);
         changePublisher.publishRecorded(saved.getPublicId(), actorId,
-                "session=" + sessionPublicId + ";source=" + source.name());
-        return new AttendanceRecordResponse(saved.getPublicId(), sessionPublicId, session.title(),
-                saved.getRecordedAt(), source);
+                "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
+                        + ";source=" + source.name() + ";status=" + status.name());
+        return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
+                session.title(), status, lateMinutes, saved.getRecordedAt(), source);
     }
 
     // ------------------------------------------------------------------
@@ -147,41 +186,81 @@ class AttendanceService {
     @Transactional(readOnly = true)
     SessionAttendanceResponse listForSession(String sessionPublicId, String callerSubject) {
         CourseSessionDirectory.SessionAccess access = courseSessionDirectory.resolve(
-                parseUuid(sessionPublicId), AccessLevel.READ);
+                parseUuid(sessionPublicId, AttendanceException.Kind.SESSION_NOT_FOUND), AccessLevel.READ);
         CourseSessionDirectory.SessionRef session = switch (access.access()) {
             case NOT_FOUND -> throw new AttendanceException(AttendanceException.Kind.SESSION_NOT_FOUND);
             case FORBIDDEN -> throw new AttendanceException(AttendanceException.Kind.OPERATION_FORBIDDEN);
             case GRANTED -> access.session();
         };
 
-        List<SessionAttendanceResponse.Row> rows = recordRepository
-                .findByAttendanceCheckpointIdOrderByRecordedAtAsc(session.checkpointInternalId()).stream()
-                .map(record -> {
-                    EnrollmentDirectory.AttendeeRef attendee = enrollmentDirectory
-                            .describeAttendee(record.getEnrollmentId()).orElse(null);
-                    return new SessionAttendanceResponse.Row(
-                            attendee != null ? attendee.studentProfilePublicId() : null,
-                            attendee != null ? attendee.enrollmentPublicId() : null,
-                            attendee != null ? attendee.studentNumber() : null,
-                            attendee != null ? attendee.firstName() : null,
-                            attendee != null ? attendee.lastName() : null,
-                            record.getRecordedAt(),
-                            record.getSource());
-                })
-                .toList();
-
         long expected = enrollmentDirectory.countActiveEnrollmentsInClasses(session.classGroupPublicIds());
-        return new SessionAttendanceResponse(session.publicId(), session.checkpointPublicId(),
-                expected, rows.size(), rows);
+
+        List<SessionAttendanceResponse.CheckpointAttendance> checkpoints = new ArrayList<>();
+        for (CheckpointRef cp : session.checkpoints()) {
+            List<SessionAttendanceResponse.Row> rows = recordRepository
+                    .findByAttendanceCheckpointIdOrderByRecordedAtAsc(cp.internalId()).stream()
+                    .map(this::toRow)
+                    .toList();
+            int present = 0;
+            int late = 0;
+            int absent = 0;
+            int excused = 0;
+            for (SessionAttendanceResponse.Row row : rows) {
+                switch (row.status()) {
+                    case PRESENT -> present++;
+                    case LATE -> {
+                        present++;
+                        late++;
+                    }
+                    case ABSENT -> absent++;
+                    case EXCUSED_ABSENCE -> excused++;
+                    case CANCELLED -> {
+                        // exclu des compteurs
+                    }
+                }
+            }
+            long accountedFor = present + absent + excused;
+            int derivedAbsent = (int) Math.max(0, expected - accountedFor);
+            checkpoints.add(new SessionAttendanceResponse.CheckpointAttendance(
+                    cp.publicId(), cp.label(), cp.type(), cp.status(), cp.required(),
+                    expected, present, late, absent, excused, derivedAbsent, rows));
+        }
+
+        SessionAttendanceResponse.CheckpointAttendance firstCp =
+                checkpoints.isEmpty() ? null : checkpoints.get(0);
+        return new SessionAttendanceResponse(
+                session.publicId(),
+                firstCp != null ? firstCp.checkpointPublicId() : null,
+                firstCp != null ? firstCp.expectedCount() : expected,
+                firstCp != null ? firstCp.presentCount() : 0,
+                firstCp != null ? firstCp.records() : List.of(),
+                checkpoints);
     }
 
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 
+    private SessionAttendanceResponse.Row toRow(AttendanceRecord record) {
+        EnrollmentDirectory.AttendeeRef attendee = enrollmentDirectory
+                .describeAttendee(record.getEnrollmentId()).orElse(null);
+        return new SessionAttendanceResponse.Row(
+                record.getPublicId(),
+                attendee != null ? attendee.studentProfilePublicId() : null,
+                attendee != null ? attendee.enrollmentPublicId() : null,
+                attendee != null ? attendee.studentNumber() : null,
+                attendee != null ? attendee.firstName() : null,
+                attendee != null ? attendee.lastName() : null,
+                record.getStatus(),
+                record.getLateMinutes(),
+                record.getComment(),
+                record.getRecordedAt(),
+                record.getSource());
+    }
+
     private CourseSessionDirectory.SessionRef requireManageable(String sessionPublicId) {
         CourseSessionDirectory.SessionAccess access = courseSessionDirectory.resolve(
-                parseUuid(sessionPublicId), AccessLevel.MANAGE);
+                parseUuid(sessionPublicId, AttendanceException.Kind.SESSION_NOT_FOUND), AccessLevel.MANAGE);
         return switch (access.access()) {
             case NOT_FOUND -> throw new AttendanceException(AttendanceException.Kind.SESSION_NOT_FOUND);
             case FORBIDDEN -> throw new AttendanceException(AttendanceException.Kind.OPERATION_FORBIDDEN);
@@ -197,12 +276,11 @@ class AttendanceService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /** Normalise un code court : majuscules, sans espaces ni séparateurs. */
     private static String normalizeShortCode(String value) {
         if (value == null) {
             return null;
         }
-        String cleaned = value.trim().toUpperCase(java.util.Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+        String cleaned = value.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
         return cleaned.isEmpty() ? null : cleaned;
     }
 
@@ -212,9 +290,8 @@ class AttendanceService {
                 .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.OPERATION_FORBIDDEN));
     }
 
-    private static UUID parseUuid(String value) {
-        return tryUuid(value)
-                .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.SESSION_NOT_FOUND));
+    private static UUID parseUuid(String value, AttendanceException.Kind kind) {
+        return tryUuid(value).orElseThrow(() -> new AttendanceException(kind));
     }
 
     private static Optional<UUID> tryUuid(String value) {

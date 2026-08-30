@@ -29,6 +29,8 @@ class AttendanceException extends RuntimeException {
         TOKEN_BACKEND_UNAVAILABLE,
         /** Aucune séance pour cet identifiant. */
         SESSION_NOT_FOUND,
+        /** Aucun point de contrôle pour cet identifiant dans la séance résolue. */
+        CHECKPOINT_NOT_FOUND,
         /** L'appelant n'a pas le droit d'effectuer cette opération sur cette séance. */
         OPERATION_FORBIDDEN
     }

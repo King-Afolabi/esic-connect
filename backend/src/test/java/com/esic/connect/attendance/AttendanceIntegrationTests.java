@@ -249,6 +249,54 @@ class AttendanceIntegrationTests {
                 .get("presentCount")).intValue()).isEqualTo(1);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void secondCheckpointHasItsOwnTokenAndAttendanceBreakdown() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 2);
+
+        // Point de contrôle CUSTOM ouvert en plus du START.
+        Map<String, Object> custom = post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints",
+                Map.of("label", "Retour de pause", "type", "CUSTOM"), admin, HttpStatus.CREATED);
+        String customId = (String) custom.get("publicId");
+        post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints/" + customId + "/open", null, admin,
+                HttpStatus.NO_CONTENT);
+
+        // Jeton émis explicitement pour ce point de contrôle.
+        Map<String, Object> issued = post(
+                "/api/v1/sessions/" + fx.sessionId() + "/checkpoints/" + customId + "/attendance-token",
+                null, admin, HttpStatus.OK);
+        assertThat(issued.get("checkpointPublicId")).isEqualTo(customId);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)), HttpStatus.OK);
+        assertThat(record.get("checkpointPublicId")).isEqualTo(customId);
+        assertThat(record.get("status")).isEqualTo("PRESENT");
+
+        Map<String, Object> roster = getMap("/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        List<Map<String, Object>> checkpoints = (List<Map<String, Object>>) roster.get("checkpoints");
+        assertThat(checkpoints).hasSize(2);
+        Map<String, Object> customBlock = checkpoints.stream()
+                .filter(cp -> customId.equals(cp.get("checkpointPublicId"))).findFirst().orElseThrow();
+        assertThat(((Number) customBlock.get("presentCount")).intValue()).isEqualTo(1);
+        assertThat(((Number) customBlock.get("derivedAbsentCount")).intValue()).isEqualTo(1);
+    }
+
+    @Test
+    void lateArrivalIsClassifiedAsLate() {
+        String admin = adminToken();
+        // Séance dont l'heure de début est largement dépassée : émargement
+        // au-delà du seuil app.attendance.late-threshold -> LATE.
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1,
+                "2026-08-01T08:00:00Z", "2026-08-01T12:00:00Z");
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)), HttpStatus.OK);
+        assertThat(record.get("status")).isEqualTo("LATE");
+        assertThat(((Number) record.get("lateMinutes")).intValue()).isPositive();
+    }
+
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
@@ -257,10 +305,19 @@ class AttendanceIntegrationTests {
     }
 
     private Fixture openSessionWithEnrolledStudents(String admin, int studentCount) {
+        return openSessionWithEnrolledStudents(admin, studentCount,
+                "2026-09-10T08:00:00Z", "2026-09-10T12:00:00Z");
+    }
+
+    private Fixture openSessionWithEnrolledStudents(String admin, int studentCount,
+                                                   String startsAt, String endsAt) {
         Chain chain = academicChain(admin);
         Account teacher = accountWithRoles(RoleCode.TEACHER);
-        String sessionId = (String) created("/api/v1/sessions",
-                sessionBody(teacher.publicId(), List.of(chain.classA())), admin).get("publicId");
+        Map<String, Object> body = new java.util.HashMap<>(
+                sessionBody(teacher.publicId(), List.of(chain.classA())));
+        body.put("startsAt", startsAt);
+        body.put("endsAt", endsAt);
+        String sessionId = (String) created("/api/v1/sessions", body, admin).get("publicId");
         post("/api/v1/sessions/" + sessionId + "/open", null, admin, HttpStatus.NO_CONTENT);
 
         java.util.ArrayList<Account> students = new java.util.ArrayList<>();

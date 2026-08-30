@@ -67,6 +67,11 @@ class AttendanceExceptionHandler {
                 code = "SESSION_NOT_FOUND";
                 message = "Aucune séance ne correspond à cet identifiant.";
             }
+            case CHECKPOINT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_CHECKPOINT_NOT_FOUND";
+                message = "Aucun point de contrôle ne correspond à cet identifiant.";
+            }
             default -> {
                 status = HttpStatus.FORBIDDEN;
                 code = "ATT_OPERATION_FORBIDDEN";

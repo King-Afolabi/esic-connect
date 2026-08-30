@@ -34,7 +34,20 @@ class CourseSessionException extends RuntimeException {
         /** La classe visée est hors du périmètre pédagogique de l'appelant. */
         SCOPE_FORBIDDEN,
         /** L'appelant n'a pas le droit d'ouvrir / fermer cette séance. */
-        OPERATION_FORBIDDEN
+        OPERATION_FORBIDDEN,
+        // --- Points de contrôle (V10) ---
+        /** Aucun point de contrôle pour cet identifiant dans cette séance. */
+        CHECKPOINT_NOT_FOUND,
+        /** Transition impossible depuis l'état courant du point de contrôle. */
+        CHECKPOINT_INVALID_STATE,
+        /** Type de point de contrôle hors liste ({@code START}/{@code END}/{@code CUSTOM}). */
+        CHECKPOINT_INVALID_TYPE,
+        /** Un ordre d'affichage identique existe déjà pour cette séance. */
+        CHECKPOINT_ORDER_CONFLICT,
+        /** Motif d'annulation manquant. */
+        CHECKPOINT_REASON_REQUIRED,
+        /** Impossible d'ajouter / ouvrir un point de contrôle : la séance n'est pas ouverte. */
+        CHECKPOINT_SESSION_NOT_OPEN
     }
 
     private final Kind kind;

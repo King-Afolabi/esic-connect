@@ -16,7 +16,7 @@ import java.util.UUID;
  * homogène (codes {@code SESSION_*}). Aligné sur
  * {@code alternation.internal.AlternationExceptionHandler}.
  */
-@RestControllerAdvice(assignableTypes = CourseSessionController.class)
+@RestControllerAdvice(assignableTypes = {CourseSessionController.class, AttendanceCheckpointController.class})
 class CourseSessionExceptionHandler {
 
     @ExceptionHandler(CourseSessionException.class)
@@ -84,6 +84,36 @@ class CourseSessionExceptionHandler {
                 status = HttpStatus.FORBIDDEN;
                 code = "SESSION_OPERATION_FORBIDDEN";
                 message = "Vous n'êtes pas autorisé à effectuer cette opération sur cette séance.";
+            }
+            case CHECKPOINT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_CHECKPOINT_NOT_FOUND";
+                message = "Aucun point de contrôle ne correspond à cet identifiant.";
+            }
+            case CHECKPOINT_INVALID_STATE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_CHECKPOINT_INVALID_STATE";
+                message = "L'état actuel du point de contrôle ne permet pas cette opération.";
+            }
+            case CHECKPOINT_INVALID_TYPE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_CHECKPOINT_INVALID_TYPE";
+                message = "Type de point de contrôle invalide (START, END ou CUSTOM attendu).";
+            }
+            case CHECKPOINT_ORDER_CONFLICT -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_CHECKPOINT_ORDER_CONFLICT";
+                message = "Un point de contrôle occupe déjà cet ordre d'affichage.";
+            }
+            case CHECKPOINT_REASON_REQUIRED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_MANUAL_REASON_REQUIRED";
+                message = "Un motif est obligatoire pour annuler un point de contrôle.";
+            }
+            case CHECKPOINT_SESSION_NOT_OPEN -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_CHECKPOINT_INVALID_STATE";
+                message = "La séance doit être ouverte pour gérer ses points de contrôle.";
             }
             default -> {
                 status = HttpStatus.BAD_REQUEST;
