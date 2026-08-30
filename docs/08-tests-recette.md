@@ -475,12 +475,27 @@ Branche `feature/attendance-management-and-reporting`. Exécuté en local
 8. Vérifier les rôles : un `STUDENT` sur `/me/attendance` → `200`, un
    non-`STUDENT` → `403` ; un `TEACHER` sur `/attendance/reports/**` →
    `403`.
+9. **(PR #22)** `GET /api/v1/sessions/{id}/attendance/candidates` : les 2
+   apprenants inscrits, sans e-mail ni id SQL ; `STUDENT` → `403`,
+   anonyme → `401`. Utiliser l'identifiant renvoyé pour une présence
+   manuelle.
+10. **(PR #22)** Rapports : `sort=lastName,desc` → `200` ; `sort=email,asc`
+    ou `sort=startsAt,sideways` → `400 ATT_REPORT_INVALID_SORT`. Le code
+    de classe des rapports est lisible (`C-DEMO`), jamais un UUID.
+11. **(PR #22)** `GET /api/v1/sessions/{id}/attendance/export` : le
+    formateur affecté exporte sa séance (`200`, nom de fichier contrôlé) ;
+    `STUDENT` → `403`.
+12. **(PR #22)** Concurrence : deux `validate` / deux `correct` / deux
+    `review` / QR+manuel simultanés sur la même cible → exactement une
+    écriture, un `409` contrôlé, **aucun `500`**.
 
-**Critères de validation** : aucun `500` pour un conflit métier attendu ;
-motif obligatoire respecté ; historique conservé ; aucune donnée
-personnelle ni identifiant SQL dans l'audit ou le CSV ; JWT et contexte
-de rôle en mémoire seule côté front (aucun accès `localStorage` /
-`sessionStorage`).
+**Critères de validation** : aucun `500` pour un conflit métier attendu
+(y compris en concurrence) ; motif obligatoire respecté ; historique
+conservé ; aucune donnée personnelle ni identifiant SQL dans l'audit ou
+le CSV ; un `timeZoneId` persistant invalide fait échouer le rapport en
+`500` contrôlé plutôt que de produire des chiffres trompeurs ; JWT et
+contexte de rôle en mémoire seule côté front (aucun accès `localStorage`
+/ `sessionStorage`).
 
 ---
 

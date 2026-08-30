@@ -1043,3 +1043,25 @@ Consignés au fil de l'implémentation (checkpoints 1–11) :
 Aucune fonctionnalité hors périmètre n'a été ajoutée ; aucune règle
 métier importante inventée ; aucun secret commité ; migrations V1–V9
 inchangées.
+
+---
+
+## 11. Passe corrective de revue (PR #22)
+
+Trois commits sur la branche existante, aucune nouvelle fonctionnalité
+hors des points de revue, aucune migration.
+
+| Point | Avant | Après |
+|---|---|---|
+| §1 fuseau persisté invalide | `AttendanceReportService.safeZone()` repliait silencieusement sur `ZoneOffset.UTC` (risque de mauvaise demi-journée) | `persistedZone()` lève une `IllegalStateException` interne contrôlée (→ 500 générique, valeur jamais exposée) — même convention que `AlternationContextService`. Test : un `time_zone_id` corrompu ne produit pas de rapport chiffré. |
+| §2 choix de l'apprenant (présence manuelle) | saisie directe de l'identifiant d'inscription (ligne §10) | **`GET /api/v1/sessions/{id}/attendance/candidates`** — inscriptions actives des classes de la séance, dédupliquées, sans e-mail ni id SQL ; contrôle fin identique à la lecture des présences (`AccessLevel.READ`) ; `STUDENT`/anonyme refusés. Le front `SessionDetail` remplace le champ libre par un `mat-select`. |
+| §3 concurrence | garanties présentes mais non prouvées | tests déterministes (threads réels) : QR/code vs présence manuelle, deux corrections, deux examens de justificatif, ouverture/fermeture concurrentes d'un point de contrôle, deux créations manuelles → une écriture, un conflit contrôlé, **aucun 500**. `flushCheckpoint()` retraduit une transition concurrente perdante en `409 ATT_CHECKPOINT_INVALID_STATE`. |
+| §6 tri des rapports | pagination en mémoire, aucun tri paramétrable | `AttendanceReportSort` — liste blanche par rapport (`field,asc\|desc`), tri en mémoire **avant** pagination + tri secondaire stable sur l'id public ; hors liste → `400 ATT_REPORT_INVALID_SORT`. Contrôle front `mat-select` aligné + garde `isAllowedReportSort`. |
+| §7 code de classe des rapports | `classGroupPublicId.toString()` | résolu via le port public `academic.ClassGroupDirectory` (code lisible, ex. `C-DEMO`). |
+| §8 export CSV au niveau d'une séance | non livré (ligne §10) | **`GET /api/v1/sessions/{id}/attendance/export`** — contrôle fin identique à la consultation (formateur affecté autorisé), protections CSV, nom de fichier contrôlé, aucun id SQL ni e-mail. Bouton dans `SessionDetail`. |
+| §4/§5 front | un `FormGroup` `cancelForm` partagé ; callbacks de succès non regardés | `checkpointCancelForm` / `attendanceCancelForm` séparés ; chaque callback de succès revérifie le droit effectif (pas de faux succès si le droit a été perdu pendant l'appel) ; `effect()` explicites dans `SessionDetail`, `JustificationQueue`, `MyAttendanceList`, `MyAttendanceDetail`. |
+| §9 démonstration | scénario API relevé, pas de run `curl` isolé | démonstration locale réelle exécutée contre le back-end (profil `demo`, schéma jetable `esic_pr22_verify` créé au compte root puis supprimé) — 15 étapes vertes + contrôle §1. Voir `docs/11-guide-demonstration.md` §10.2. |
+
+Vérifs : back-end `./mvnw clean test` → **545 tests, 0 échec**,
+`ModularityTests` vert ; front `npm run lint` OK, `npm test` →
+**451 tests, 0 échec**, `npm run build` 482,24 kB (< 500 kB).
