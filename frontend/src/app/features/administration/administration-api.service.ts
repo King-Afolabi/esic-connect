@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
+  AccountActionRequest,
+  AssignRoleRequest,
   PageResponse,
   UserDetailResponse,
   UserListQuery,
@@ -11,18 +13,20 @@ import {
 } from './administration.models';
 
 /**
- * Accès en **lecture seule** à l'administration des comptes du module
- * `identity` (`UserAccountController`).
+ * Accès à l'administration des comptes du module `identity`
+ * (`UserAccountController`).
  *
  * Ce service ne consomme que des routes déjà exposées par le back-end ;
- * aucune n'est inventée, aucune écriture (`POST …/suspend` · `/restore` ·
- * `/archive` · `/roles` · `/roles/{roleCode}/revoke`) n'est appelée.
+ * aucune n'est inventée. Les lectures (`GET`) alimentent la liste et la
+ * fiche ; les mutations (`POST`) couvrent le cycle de vie du compte
+ * (suspension, réactivation, archivage) et la gestion de rôle
+ * (attribution, retrait). Toutes les mutations répondent `204` et un
+ * corps vide.
  *
  * Les appels sont authentifiés par le jeton porteur ajouté par
  * `authTokenInterceptor` (le jeton reste en mémoire). L'autorisation
- * effective est décidée par Spring Security (`READ_ROLES` =
- * `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`) : le `roleGuard` de
- * la route ne fait que masquer une navigation.
+ * effective est décidée par Spring Security ; le `roleGuard` de la route
+ * et la visibilité des boutons ne font que masquer l'interface.
  */
 @Injectable({ providedIn: 'root' })
 export class AdministrationApiService {
@@ -47,6 +51,52 @@ export class AdministrationApiService {
   getUser(publicId: string): Observable<UserDetailResponse> {
     return this.http.get<UserDetailResponse>(
       `${this.base}/users/${encodeURIComponent(publicId)}`,
+    );
+  }
+
+  /** `POST /api/v1/users/{publicId}/suspend` — `ACTIVE` → `SUSPENDED`. */
+  suspendUser(publicId: string, body: AccountActionRequest): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/users/${encodeURIComponent(publicId)}/suspend`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/users/{publicId}/restore` — `SUSPENDED` → `ACTIVE`. */
+  restoreUser(publicId: string, body: AccountActionRequest): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/users/${encodeURIComponent(publicId)}/restore`,
+      body,
+    );
+  }
+
+  /**
+   * `POST /api/v1/users/{publicId}/archive` — statut `ARCHIVED` ; clôture
+   * tous les rôles actifs, irréversible dans ce lot.
+   */
+  archiveUser(publicId: string, body: AccountActionRequest): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/users/${encodeURIComponent(publicId)}/archive`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/users/{publicId}/roles` — attribue un rôle (nouvelle affectation active). */
+  assignRole(publicId: string, body: AssignRoleRequest): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/users/${encodeURIComponent(publicId)}/roles`,
+      body,
+    );
+  }
+
+  /**
+   * `POST /api/v1/users/{publicId}/roles/{roleCode}/revoke` — clôture une
+   * affectation active sans supprimer son historique.
+   */
+  revokeRole(publicId: string, roleCode: string, body: AccountActionRequest): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/users/${encodeURIComponent(publicId)}/roles/${encodeURIComponent(roleCode)}/revoke`,
+      body,
     );
   }
 }

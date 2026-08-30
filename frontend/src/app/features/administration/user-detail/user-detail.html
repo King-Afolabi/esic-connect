@@ -139,12 +139,180 @@
                 </td>
               </ng-container>
 
-              <tr mat-header-row *matHeaderRowDef="roleColumns"></tr>
-              <tr mat-row *matRowDef="let row; columns: roleColumns"></tr>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef>
+                  <span class="cdk-visually-hidden">Actions sur le rôle</span>
+                </th>
+                <td mat-cell *matCellDef="let row">
+                  @if (row.active && canRevoke(row.role)) {
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      [attr.aria-label]="'Retirer le rôle ' + roleLabel(row.role)"
+                      (click)="startRevoke(row.role)"
+                    >
+                      Retirer
+                    </button>
+                  }
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="roleColumns()"></tr>
+              <tr mat-row *matRowDef="let row; columns: roleColumns()"></tr>
             </table>
           </div>
         }
       </section>
+
+      @if (isArchived()) {
+        <div class="account__panel" role="note">
+          <mat-icon aria-hidden="true">inventory_2</mat-icon>
+          <p>
+            Ce compte est archivé. Dans ce lot, l'archivage est un état terminal :
+            aucune opération de cycle de vie ni de gestion de rôle n'est disponible.
+          </p>
+        </div>
+      } @else if (isSuperAdminProtectedTarget()) {
+        <div class="account__panel" role="note">
+          <mat-icon aria-hidden="true">admin_panel_settings</mat-icon>
+          <p>
+            La gestion de ce compte (suspension, réactivation, archivage, attribution
+            et retrait de rôle) requiert le rôle super administrateur ; ces actions ne
+            sont donc pas proposées ici. La consultation de la fiche et de l'historique
+            des rôles reste disponible.
+          </p>
+        </div>
+      } @else if (canLifecycle() || canManageRoles()) {
+        <section class="account__actions" aria-labelledby="actions-heading">
+          <h2 id="actions-heading" class="account__section-title">Actions sur le compte</h2>
+
+          <div class="account__action-buttons">
+            @if (showSuspend()) {
+              <button mat-stroked-button type="button" (click)="startAction('suspend')">
+                Suspendre le compte
+              </button>
+            }
+            @if (showRestore()) {
+              <button mat-stroked-button type="button" (click)="startAction('restore')">
+                Réactiver le compte
+              </button>
+            }
+            @if (showArchive()) {
+              <button mat-stroked-button type="button" (click)="startAction('archive')">
+                Archiver le compte
+              </button>
+            }
+            @if (canManageTargetRoles()) {
+              <button mat-stroked-button type="button" (click)="startAssign()">
+                Attribuer un rôle
+              </button>
+            }
+          </div>
+
+          @if (isSelf()) {
+            <p class="account__hint" role="note">
+              Vous consultez votre propre compte : la suspension, la réactivation,
+              l'archivage et le retrait de rôle ne vous sont pas proposés.
+            </p>
+          }
+
+          @if (pending(); as action) {
+            @if (action.kind === 'assign') {
+              <form
+                class="account__confirm"
+                role="group"
+                aria-label="Attribuer un rôle"
+                [formGroup]="assignForm"
+                (ngSubmit)="confirm()"
+              >
+                <h3 class="account__confirm-title">{{ confirmTitle() }}</h3>
+                <p class="account__confirm-text">{{ confirmDescription() }}</p>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Rôle</mat-label>
+                  <mat-select formControlName="role" required>
+                    @for (option of assignableRoleOptions(); track option) {
+                      <mat-option [value]="option">{{ roleLabel(option) }}</mat-option>
+                    }
+                  </mat-select>
+                  @if (assignForm.controls.role.hasError('serverUnknown')) {
+                    <mat-error>{{ assignForm.controls.role.getError('serverUnknown') }}</mat-error>
+                  } @else if (assignForm.controls.role.touched && assignForm.controls.role.invalid) {
+                    <mat-error>Choisissez un rôle à attribuer.</mat-error>
+                  }
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Motif</mat-label>
+                  <textarea matInput formControlName="reason" rows="2" required></textarea>
+                  @if (assignForm.controls.reason.touched && assignForm.controls.reason.invalid) {
+                    <mat-error>Le motif est obligatoire.</mat-error>
+                  }
+                </mat-form-field>
+
+                <div class="account__confirm-actions">
+                  <button mat-flat-button type="submit" [disabled]="submitting()">
+                    {{ confirmCta() }}
+                  </button>
+                  <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+                    Annuler
+                  </button>
+                </div>
+                @if (actionError()) {
+                  <p class="account__inline-error" role="alert">{{ actionError() }}</p>
+                }
+              </form>
+            } @else {
+              <form
+                class="account__confirm"
+                role="group"
+                [attr.aria-label]="confirmTitle()"
+                [formGroup]="reasonForm"
+                (ngSubmit)="confirm()"
+              >
+                <h3 class="account__confirm-title">{{ confirmTitle() }}</h3>
+                <p class="account__confirm-text">{{ confirmDescription() }}</p>
+                @if (action.kind === 'archive') {
+                  <p class="account__confirm-warning" role="note">
+                    <mat-icon aria-hidden="true">warning</mat-icon>
+                    L'archivage clôture immédiatement tous les rôles actifs de ce compte
+                    (l'historique est conservé).
+                  </p>
+                }
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Motif</mat-label>
+                  <textarea
+                    matInput
+                    formControlName="reason"
+                    rows="2"
+                    [maxlength]="reasonMaxLength"
+                    required
+                  ></textarea>
+                  <mat-hint align="end">
+                    {{ reasonForm.controls.reason.value.length }} / {{ reasonMaxLength }}
+                  </mat-hint>
+                  @if (reasonForm.controls.reason.touched && reasonForm.controls.reason.invalid) {
+                    <mat-error>Le motif est obligatoire ({{ reasonMaxLength }} caractères maximum).</mat-error>
+                  }
+                </mat-form-field>
+
+                <div class="account__confirm-actions">
+                  <button mat-flat-button type="submit" [disabled]="submitting()">
+                    {{ confirmCta() }}
+                  </button>
+                  <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+                    Annuler
+                  </button>
+                </div>
+                @if (actionError()) {
+                  <p class="account__inline-error" role="alert">{{ actionError() }}</p>
+                }
+              </form>
+            }
+          }
+        </section>
+      }
     }
   }
 }

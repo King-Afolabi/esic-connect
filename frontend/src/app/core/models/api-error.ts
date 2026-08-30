@@ -25,7 +25,7 @@ export interface NormalizedError {
   details: string[];
 }
 
-const SAFE_FALLBACK_MESSAGE =
+export const SAFE_FALLBACK_MESSAGE =
   'Une erreur est survenue. Veuillez réessayer ; si le problème persiste, contactez le support.';
 
 const NETWORK_MESSAGE =
