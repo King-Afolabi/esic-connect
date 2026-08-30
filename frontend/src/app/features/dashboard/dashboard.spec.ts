@@ -151,8 +151,42 @@ describe('Dashboard', () => {
     }
   });
 
-  it('shows the quick-links empty state for a role with no delivered secondary screen', () => {
-    roles.set(['TEACHER']);
+  it('offers Séances as a quick link for the session read roles, including TEACHER', () => {
+    for (const held of [
+      ['ADMIN'],
+      ['SUPER_ADMIN'],
+      ['SCHOOL_ADMINISTRATION'],
+      ['PEDAGOGICAL_MANAGER'],
+      ['TEACHER'],
+    ] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions"]'),
+      ).not.toBeNull();
+    }
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions"]')).toBeNull();
+  });
+
+  it('offers Émargement as a quick link only for a STUDENT', () => {
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('a[href="/attendance"]'),
+    ).not.toBeNull();
+    for (const held of [['ADMIN'], ['TEACHER'], ['PEDAGOGICAL_MANAGER']] as Role[][]) {
+      roles.set(held);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/attendance"]'),
+      ).toBeNull();
+    }
+  });
+
+  it('shows the quick-links empty state when the account holds no known role', () => {
+    roles.set([]);
     fixture.detectChanges();
     expect(text()).toContain("Aucun autre écran n'est disponible");
   });

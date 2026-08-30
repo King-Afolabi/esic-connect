@@ -38,6 +38,26 @@ describe('NAV_ITEMS', () => {
       'PEDAGOGICAL_MANAGER',
     ]);
   });
+
+  it('exposes /sessions gated on CourseSessionWeb.READ_ROLES (TEACHER included)', () => {
+    const sessions = NAV_ITEMS.find((i) => i.path === '/sessions');
+    expect(sessions).toBeDefined();
+    expect(sessions?.placeholder).toBeUndefined();
+    expect(sessions?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+      'TEACHER',
+    ]);
+  });
+
+  it('exposes /attendance gated on the STUDENT role only', () => {
+    const attendance = NAV_ITEMS.find((i) => i.path === '/attendance');
+    expect(attendance).toBeDefined();
+    expect(attendance?.placeholder).toBeUndefined();
+    expect(attendance?.roles).toEqual(['STUDENT']);
+  });
 });
 
 describe('visibleNavItems', () => {
@@ -86,6 +106,32 @@ describe('visibleNavItems', () => {
     }
     for (const role of ['TEACHER', 'STUDENT'] as const) {
       expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/alternation');
+    }
+  });
+
+  it('shows /sessions for the session read roles (TEACHER included), and hides it from a STUDENT', () => {
+    for (const role of [
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+      'TEACHER',
+    ] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/sessions');
+    }
+    expect(visibleNavItems(NAV_ITEMS, ['STUDENT']).map((i) => i.path)).not.toContain('/sessions');
+  });
+
+  it('shows /attendance only for a STUDENT', () => {
+    expect(visibleNavItems(NAV_ITEMS, ['STUDENT']).map((i) => i.path)).toContain('/attendance');
+    for (const role of [
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+      'TEACHER',
+    ] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/attendance');
     }
   });
 

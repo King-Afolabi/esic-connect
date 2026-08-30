@@ -1,0 +1,55 @@
+<main class="checkin">
+  <h1 class="checkin__title">Émargement</h1>
+  <p class="checkin__intro">
+    Saisissez le code court affiché par votre formateur pour confirmer votre présence.
+  </p>
+
+  @if (successRecord(); as record) {
+    <div class="checkin__panel checkin__panel--success" role="status">
+      <mat-icon aria-hidden="true">check_circle</mat-icon>
+      <div>
+        <p class="checkin__panel-title">Présence enregistrée.</p>
+        <p>Le {{ formatInstantUtc(record.recordedAt) }}.</p>
+        @if (record.sessionTitle) {
+          <p>Séance : {{ record.sessionTitle }}.</p>
+        }
+      </div>
+      <button mat-stroked-button type="button" (click)="reset()">Nouvel émargement</button>
+    </div>
+  } @else {
+    <form class="checkin__form" [formGroup]="form" (ngSubmit)="submit()">
+      <mat-form-field appearance="outline" class="checkin__field">
+        <mat-label>Code court</mat-label>
+        <input
+          matInput
+          formControlName="shortCode"
+          [maxlength]="shortCodeMaxLength"
+          autocomplete="off"
+          autocapitalize="characters"
+          inputmode="latin"
+          aria-describedby="checkin-help"
+        />
+        @if (form.controls.shortCode.touched && form.controls.shortCode.invalid) {
+          <mat-error>Saisissez le code court affiché par le formateur.</mat-error>
+        }
+      </mat-form-field>
+
+      @if (errorMessage()) {
+        <p class="checkin__inline-error" role="alert">{{ errorMessage() }}</p>
+      }
+
+      <button mat-flat-button type="submit" [disabled]="submitting()">
+        Valider ma présence
+      </button>
+    </form>
+
+    <p id="checkin-help" class="checkin__note">
+      Le scan caméra sera ajouté dans une tranche ultérieure ; utilisez le code affiché par le
+      formateur.
+    </p>
+  }
+
+  <p class="checkin__back">
+    <a routerLink="/dashboard">Retour au tableau de bord</a>
+  </p>
+</main>

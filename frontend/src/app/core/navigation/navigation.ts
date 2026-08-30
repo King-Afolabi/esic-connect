@@ -72,6 +72,24 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'sync_alt',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
+  {
+    // Écran livré : séances exceptionnelles et émargement (liste,
+    // création, ouverture / fermeture, QR + code court, présences).
+    // Périmètre aligné sur `CourseSessionWeb.READ_ROLES` ; un `TEACHER`
+    // ne voit que ses séances (décidé côté serveur).
+    label: 'Séances',
+    path: '/sessions',
+    icon: 'event_available',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER', 'TEACHER'],
+  },
+  {
+    // Écran livré : émargement de l'apprenant par code court
+    // (`AttendanceWeb.VALIDATE_ROLE` = `STUDENT` uniquement).
+    label: 'Émargement',
+    path: '/attendance',
+    icon: 'how_to_reg',
+    roles: ['STUDENT'],
+  },
 ];
 
 /**
