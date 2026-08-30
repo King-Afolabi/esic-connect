@@ -3,7 +3,7 @@
 ## Dernière mise à jour
 
 ```text
-30 août 2026
+31 août 2026
 ```
 
 ## Dernier commit stable
@@ -12,60 +12,121 @@
 5874f5a — Merge pull request #20 from King-Afolabi/feature/attendance-qr-demonstration, sur main
 ```
 
-## Tranche en cours — Import CSV contrôlé des apprenants (conception, V11)
+## Tranche en cours — Import CSV contrôlé des apprenants (V11, checkpoint CP1)
 
 ```text
-Branche `feature/student-csv-import` (créée depuis `main` = `35bd04b`,
-PR #22 / V10 fusionnée). PR ouverte vers `main`. NON fusionnée.
+Branche `feature/student-csv-import-cp1` (créée depuis `main` = `e8fd16d`,
+PR #23 / CP0 conception fusionnée). NON poussée, aucune PR ouverte.
 ```
 
-**Checkpoint 0 uniquement — conception, aucun code.** Rapport figé
-(révision **R2** : conception transactionnelle et traçabilité corrigées ;
-« Livré » remplacé partout par « Prévu » / « Conçu ») :
-`docs/reports/STUDENT_CSV_IMPORT_DESIGN.md`. Couvre EF-IMP-001 /
+Conception figée au **Checkpoint 0** (rapport `docs/reports/STUDENT_CSV_IMPORT_DESIGN.md`,
+révision **R2**, fusionné via PR #23 = `e8fd16d`) : couvre EF-IMP-001 /
 EF-IMP-002, US-050 / US-051, RG-020 à RG-024, AC-004 / AC-005 / AC-006,
-TI-001 à TI-012, docs/07 §10. Décisions clés : nouveau module Spring
-Modulith `studentimport` (propriétaire d'une migration additive `V11`,
-**non créée** : `student_import_job` / `_job_issue` / `_row` /
-`_row_issue` + `student_number_sequence`) ; téléversement multipart
-`.csv` (fichier **non conservé** : nom assaini + SHA-256) ; séparateur
-`,`/`;` auto-détecté, UTF-8 ; ≤ 2 MiB et ≤ 500 lignes ; **données
-temporaires minimisées** (colonnes typées explicites, pas de duplicata
-JSON brut du CSV) ; simulation persistant **uniquement** des lignes
-techniques temporaires (RG-020, invariant T1) ; **confirmation = une
-seule transaction** (`REQUIRED`, jamais `REQUIRES_NEW`, jamais
-`EnrollmentPersister`) avec verrou pessimiste, re-validation complète,
-rollback total sur toute erreur (T2–T5), idempotence (`APPLIED` → `200` +
-bilan mémorisé + `alreadyApplied=true` ; **le code `IMP_ALREADY_CONFIRMED`
-est supprimé pour ce cas**), `409 IMP_STALE_SIMULATION` si la simulation
-n'est plus à jour (aucune application partielle, pas de statut `FAILED`,
-le job reste `SIMULATED`). **Audit transactionnel de l'existant** :
-`EnrollmentPersister` (`REQUIRES_NEW`), `StudentProfileService.create` /
-`EnrollmentService.enroll` (via ce persister) et les listeners d'audit
-`@EventListener` + `REQUIRES_NEW` survivraient à un rollback → le chemin
-d'import **ne les appelle pas**. Nouveaux ports :
-`identity.StudentAccountProvisioner` (création compte `PENDING_ACTIVATION`
-+ rôle `STUDENT` + `account_invitation` en écriture directe dans la
-transaction de l'appelant ; publie `AccountInvitationIssuedEvent` pour
-l'e-mail `AFTER_COMMIT` ; **ne publie pas** `AccountLifecycleEvent`) ;
-`enrollment.StudentEnrollmentProvisioner` (écriture directe, sans
-`EnrollmentPersister`, sans `EnrollmentChangeEvent`) ; extension
-`academic.ClassGroupDirectory.resolveForImport(codes)`.
-`student_number` : colonne CSV **optionnelle** ; si absente →
-**génération serveur atomique** `ESIC-{annéeDébut}-{séquence bornée}` via
-`student_number_sequence` (verrou de ligne dans la transaction, nouvelle
-tentative bornée sur collision, unicité SQL
-`uq_student_profile_student_number` = autorité). Endpoints
-`POST /api/v1/student-imports`, `GET .../{id}`, `GET .../{id}/rows`,
-`POST .../{id}/confirm`, `POST .../{id}/cancel`, `GET /api/v1/student-imports` ;
-écrans Angular `/students/import` et `/students/import/:publicId`. 12
-ambiguïtés listées **à valider** (jeu de colonnes docs/01 §8.1 vs docs/02
-§10.4, rapprochement `academic_year` ↔ `academic_year.code`, rétention
-`P7D` / `P30D` prototype vs 30–90 jours docs/07, non-conservation du
-fichier, tables dédiées vs `import_job` générique docs/04 §16, pas de
-statut `FAILED`, application non partielle, pas de réécriture d'identité,
-confirmation par un tiers, format du numéro généré, config multipart à
-ajouter). Découpage en 11 checkpoints (CP0 = ce rapport).
+TI-001 à TI-012, docs/07 §10 ; nouveau module Spring Modulith
+`studentimport` ; découpage en 11 checkpoints (§15). Le reste de la
+conception (parsing CSV, simulation, confirmation transactionnelle, ports
+inter-modules, endpoints REST, écrans Angular) est **inchangé et non
+implémenté** — voir le rapport.
+
+### CP1 réalisé — schéma V11 (migration + entités + repositories + tests)
+
+**Périmètre strict CP1** : uniquement le schéma. Aucun endpoint,
+contrôleur, parsing CSV, simulation, confirmation, service métier,
+listener, événement, génération fonctionnelle de `student_number`, ni
+frontend.
+
+- **Migration `V11__create_student_import_tables.sql`** (additive, MySQL 8,
+  `InnoDB` / `utf8mb4_0900_ai_ci` ; V1–V10 inchangées ; schéma **en
+  version 11**). Aucune donnée métier insérée. Cinq tables propres au
+  module `studentimport` (rapport §7) :
+  - `student_import_job` — en-tête d'import (`public_id` unique,
+    `status` `CHECK IN ('SIMULATED','APPLIED','CANCELLED','EXPIRED')` —
+    **pas de `FAILED`**, §3.4 —, `original_file_name` assaini,
+    `file_sha256` `CHAR(64)` (contenu **non conservé**),
+    `file_size_bytes` `INT UNSIGNED` `CHECK > 0`, `csv_separator`
+    `CHAR(1)`, compteurs de simulation / bilan `APPLIED`, `confirmable`,
+    `simulated_at` / `expires_at` / `confirmed_at`, `version`) ; FK
+    `RESTRICT` `requested_by_id` / `confirmed_by_id` → `user_account` ;
+    index `(status, expires_at)` et `(requested_by_id, created_at)`.
+  - `student_import_job_issue` — anomalies globales ; `severity`
+    `CHECK IN ('INFO','WARNING','ERROR','BLOCKING')` ; FK
+    **`ON DELETE CASCADE`** → `student_import_job`.
+  - `student_import_row` — ligne CSV **normalisée** (11 colonnes métier
+    typées explicites, **pas de JSON brut** — minimisation §7.3) ;
+    `row_status` `CHECK IN ('VALID','WARNING','ERROR')` ;
+    `planned_action` `CHECK IN ('CREATE_ACCOUNT_AND_ENROLL',
+    'ENROLL_EXISTING','UPDATE_PROFILE','TRANSFER_CLASS','NONE')` ;
+    `resolved_*_public_id` `BINARY(16)` de traçabilité ;
+    `student_number_generated` ; `applied_outcome` (sans `CHECK`, §7.3) ;
+    `UNIQUE (student_import_job_id, `row_number`)` (colonne citée car
+    `row_number` est un mot réservé MySQL 8) ; index
+    `(student_import_job_id, row_status)` ; FK **`CASCADE`**.
+  - `student_import_row_issue` — anomalies de ligne ; `severity`
+    `CHECK IN (...)` ; `received_value` `VARCHAR(200)` (valeur reçue
+    tronquée, **jamais dans l'audit**) ; FK **`CASCADE`** →
+    `student_import_row`. Chaîne complète
+    `job → job_issue / row → row_issue` supprimée en cascade (avant
+    confirmation / à la purge — docs/04 §16.4) ; les données métier d'une
+    future confirmation ne dépendent d'aucune de ces FK.
+  - `student_number_sequence` — `start_year` `INT UNSIGNED` **PK
+    fonctionnelle** (ni `id`, ni `public_id`, ni `version`),
+    `next_value` `INT UNSIGNED` `CHECK > 0`, `updated_at`. Alimentée
+    **uniquement** pendant une future confirmation (allocation atomique
+    `INSERT ... ON DUPLICATE KEY UPDATE`, verrou de ligne) — non
+    implémentée à CP1.
+- **Module `com.esic.connect.studentimport`** : `package-info.java`
+  (`@ApplicationModule(displayName = "Student import")`, javadoc bornée à
+  l'état CP1). Types d'implémentation dans `studentimport.internal` :
+  entités JPA `StudentImportJob` / `StudentImportJobIssue` /
+  `StudentImportRow` / `StudentImportRowIssue` (héritant
+  `shared.BaseEntity` — d'où la colonne `version` sur les quatre tables,
+  même convention que `audit_event` / `attendance_correction`) et
+  `StudentNumberSequence` (`@Id start_year`, hors `BaseEntity`) ; enums
+  `StudentImportJobStatus` (avec `FAILED` conservé mais **hors CHECK**,
+  inutilisé), `StudentImportIssueSeverity`, `StudentImportRowStatus`,
+  `StudentImportPlannedAction`, `StudentImportRowOutcome` ; repositories
+  `JpaRepository` en lecture simple (`findByPublicId`, `countByJobId`,
+  `countByRowId`, `findByJobIdOrderByRowNumberAsc`). Aucune dépendance
+  inter-modules ; `ModularityTests` reste **vert**.
+- **`StudentImportSchemaConstraintsTests`** (`@DataJpaTest`, base MySQL de
+  test réelle, `replace = NONE` — pas de H2) : **19 tests, 0 échec**.
+  Couvre les `CHECK` `status` / `file_size_bytes` / `severity` (job_issue
+  et row_issue) / `row_status` / `planned_action` / `next_value` ;
+  `UNIQUE (student_import_job_id, row_number)` (même n° accepté sur un
+  autre job) ; `ON DELETE CASCADE` `job → job_issue` et
+  `job → row → row_issue` ; FK `RESTRICT` `requested_by_id` /
+  `confirmed_by_id` ; unicité `public_id` des quatre tables ; PK
+  `student_number_sequence.start_year` et
+  `INSERT ... ON DUPLICATE KEY UPDATE` incrémentant `next_value` ;
+  aller-retour de persistance (mapping des colonnes typées, dont
+  `BINARY(16)`, `CHAR`, énumérations, `created_at` audité).
+
+**Vérifications (31 août 2026, OpenJDK 21, MySQL 8.4, Redis 7)** :
+- `./mvnw test -Dtest=StudentImportSchemaConstraintsTests` → **19 tests,
+  0 échec** ; Flyway « now at version v11 ».
+- `./mvnw clean test` (suite complète, exécutée aussi sur un schéma
+  jetable `esic_cp1_verify` créé puis supprimé) → **567 tests** (548 →
+  567, +19), `ModularityTests` vert, `EsicConnectApplicationTests` vert
+  (Hibernate `validate` OK contre V11), **7 échecs pré-existants** dans
+  `AttendanceIntegrationTests` (`ATT_NOT_ENROLLED` sur
+  `POST /api/v1/attendance/validate`). Ces 7 échecs sont **indépendants
+  de CP1** : ils se reproduisent à l'identique avec l'arbre ramené
+  exactement à `e8fd16d` (migration V11 et module `studentimport`
+  retirés, ligne d'historique Flyway `11` supprimée). Aucun fichier de
+  `coursesession` / `attendance` / `enrollment` ni migration V1–V10 n'a
+  été touché par CP1. Non corrigés (hors périmètre CP1).
+
+**Écart avec la conception (CP1)** : le rapport range `package-info`
+(`@ApplicationModule`) et les entités JPA au **CP2** ; CP1 les crée déjà
+car le `@DataJpaTest` de mapping du CP1 en a besoin (les repositories et
+entités sont « strictement nécessaires » à ce checkpoint). Ajout des
+colonnes `version` sur `student_import_job_issue` / `student_import_row` /
+`student_import_row_issue` (non listées §7.2–7.4) pour respecter la
+réutilisation de `shared.BaseEntity` annoncée §2.3 et la convention de
+tout le dépôt (même les tables append-only portent `version`). Nom de
+colonne `row_number` conservé (conception §7.3) mais **cité** en SQL et
+dans `@Column` car réservé en MySQL 8. `csv_separator` / `file_sha256`
+gardent `CHAR(1)` / `CHAR(64)` via `@JdbcTypeCode(SqlTypes.CHAR)`.
 
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
@@ -2200,7 +2261,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; consultation des référentiels académiques (lecture seule) via PR #15 = `b47cfa3` ; administration des comptes utilisateurs (lecture seule) via PR #16 = `5d5e51d` ; gestion de l'alternance via PR #18 = `a79b5bf` ; **parcours d'écriture de l'administration des comptes (suspension / réactivation / archivage / attribution / retrait de rôle) sur branche `feature/frontend-user-administration-write`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, **`/administration` (placeholder REMPLACÉ par un écran réel : parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController.READ_ROLES` ; `''` → `UserList`, `:publicId` → `UserDetail`)**, `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), `/academic` (parent gardé `AcademicWeb.READ_ROLES` → `AcademicReferenceList`/`AcademicReferenceDetail`, `data.resource`), `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` ; référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) ; **administration des comptes : `AdministrationApiService` (lecture seule, 2 GET) consommant `GET /api/v1/users` (recherche `q` = email ou prénom ou nom, filtres `status` (`AccountStatus`) + `role` (affectation active, `RoleCode`), tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le défaut —, pagination ≤ 100, strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles actifs et clôturés) ; `UserList` + `UserDetail` ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; aucun endpoint ni champ inventé ; aucun `id` SQL / hash / jeton / trace affiché, `5xx` masqués par `normalizeHttpError`. **Parcours d'écriture (branche `feature/frontend-user-administration-write`, non fusionnée)** : `AdministrationApiService` gagne `suspendUser` / `restoreUser` / `archiveUser` / `assignRole` / `revokeRole` (une méthode par `POST` réel, corps exact `{ reason }` ou `{ role, reason }`, `encodeURIComponent` sur `publicId` et `roleCode`, `204`) ; `UserDetail` gagne une section « Actions sur le compte » (Suspendre `ACTIVE` / Réactiver `SUSPENDED` / Archiver / Attribuer un rôle) et un bouton « Retirer » sur chaque affectation active — confirmations **en ligne**, motif obligatoire (`maxlength=500` + compteur pour suspension / réactivation / archivage / retrait ; **sans borne** pour l'attribution — `AssignRoleRequest.reason` = `@NotBlank` seul, un motif > 500 caractères part intégralement), avertissement de clôture des rôles à l'archivage, `disabled` pendant l'appel, double soumission bloquée, `NotificationService.info` puis rechargement `GET /api/v1/users/{publicId}`, échec métier affiché en ligne sans faux succès ; visibilité pilotée par `RoleContextService.effectiveRoles()` (restreint, jamais n'élargit le JWT) + masquage des auto-actions si `subject` JWT = cible (sauf attribution, non interdite côté back-end) ; **cible portant `SUPER_ADMIN` actif : hors contexte `SUPER_ADMIN`, toutes les mutations sont masquées** (note « requiert le rôle super administrateur », non présentée comme une garantie ; lecture inchangée ; `SUPER_ADMIN` → `ADMIN` ferme un formulaire ouvert) ; `ARCHIVED` = état terminal (note, aucune action) ; `SUPER_ADMIN` proposé/révocable seulement en contexte `SUPER_ADMIN` ; `effect()` fermant un panneau devenu indisponible ; `administration-errors.ts` (`toAdministrationError`) — **liste blanche explicite** de codes (pas de `startsWith('USER_')`) : `USER_NOT_FOUND` / `USER_INVALID_STATE` / `USER_ROLE_ALREADY_ASSIGNED` / `USER_ROLE_NOT_ASSIGNED` / `USER_LAST_ACTIVE_ROLE` / `USER_SELF_ACTION_FORBIDDEN` / `USER_SUPER_ADMIN_PROTECTED` / `USER_OPERATION_FORBIDDEN` / `USER_ROLE_UNKNOWN` (→ champ rôle, erreur `FormControl` reliée au `mat-select` par `aria-describedby`) / `USER_INVALID_SORT` / `USER_INVALID_FILTER` ; tout autre code (y compris un `USER_*` non listé) et tout `5xx` → `code`/`field` `null`, message générique, message brut jamais affiché ; JWT et contexte en mémoire seule, rien en `localStorage` / `sessionStorage`** ; **gestion de l'alternance (`/alternation`) via PR #18 = `a79b5bf` — première tranche front-end avec écriture : parent gardé `roleGuard` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` (`AlternationWeb` lecture), garde d'écriture supplémentaire `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` sur `patterns/new` et `patterns/:publicId/edit` ; `AlternationApiService` (une méthode par endpoint réel des modèles de rythme, affectations de classe et exceptions individuelles) ; `PatternList`/`PatternForm` (création + édition, `code`/`type` figés en édition, `configuration` assemblée localement par type via `pattern-config.ts` — `companyDays` explicite même vide pour `CUSTOM` — validation finale serveur `ALT_INVALID_CONFIGURATION`)/`PatternDetail` (faits + `app-cycle-preview` accessible représentant la config, jamais une résolution de date + archiver/restaurer avec confirmation en ligne) ; `ClassPicker`/`ClassAlternation` (historique des affectations, affectation, clôture avec motif, sonde `GET .../classes/{id}/context` affichée telle quelle) ; `EnrollmentPicker`/`EnrollmentAlternation` (exceptions, création avec encodage heure locale + fuseau IANA → instant via `Intl` sans repli UTC ni conversion de fuseau, sémantique `[startAt, endAt)` affichée, annulation, sonde `GET .../enrollments/{id}/context`) ; limite back-end : `GET /api/v1/enrollments` fermé au `PEDAGOGICAL_MANAGER` → `EnrollmentPicker` propose une saisie directe d'identifiant en repli ; nav item « Alternance » (`sync_alt`) ; aucune écriture ni endpoint inventé ; 403 `ALT_FORBIDDEN` rendu « accès refusé »** ; **le parcours d'écriture de l'administration des comptes est désormais FUSIONNÉ sur `main` via la PR #19 (`317753a`) — l'administration front-end n'est plus en lecture seule** ; **séances & émargement (fusionné sur `main` via la PR #20 = `5874f5a`) : espace `/sessions` (parent gardé `roleGuard` READ `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`/`TEACHER` ; `/sessions/new` gardé CREATE `ADMIN`/`SUPER_ADMIN`/`PEDAGOGICAL_MANAGER`) → `SessionList` / `SessionForm` / `SessionDetail` (ouverture/fermeture en confirmation en ligne ; panneau QR — `QrDisplay` (`angularx-qrcode@21.0.5`) encode la seule chaîne opaque, jamais affichée en texte ; code court affiché ; jeton renouvelé ~3 s avant expiration ; présences avec rafraîchissement manuel + polling modéré 15 s ; renouvellement + QR arrêtés à la destruction / fermeture / perte du droit de gestion dans le contexte de rôle actif, polling arrêté dès que le contexte actif ne permet plus la lecture, émission de jeton tardive ignorée si l'état a changé ; `SessionList` masque « Nouvelle séance » sur le contexte actif ; `SessionForm` neutralisé sur perte de permission (réponse tardive ignorée) ; Redis 503 → message contrôlé) ; `/attendance` gardé `STUDENT` → `AttendanceCheckIn` (saisie du code court normalisée comme le serveur, erreurs `ATT_*` contrôlées, code inconnu / 5xx → message générique, rien en URL ni en storage, note « scan caméra ajouté ultérieurement » ; saisie/soumission uniquement en contexte `STUDENT` effectif, perte du contexte efface code/récépissé/erreurs et bloque les requêtes, retour au contexte sans rechargement) ; `SessionsApiService` (une méthode par endpoint réel, jeton jamais dans une URL) ; nav items « Séances » et « Émargement » ; origine `main` 336 → 416 tests Vitest** ; `npm test -- --watch=false` / `npm run build` (< seuil 500 kB) / `npm run lint` verts en local le 30 août 2026. Non démontré de bout en bout automatiquement avec le back-end en marche (parcours API vérifié en direct, cf. « Démonstration locale ») ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée). **Avant cette PR : infrastructure présente, non consommée par le back-end. Après : consommé par le module `attendance` pour les jetons d'émargement uniquement** (jeton opaque + code court, TTL `app.attendance.token-ttl` défaut `PT30S`, rotation, purge à la fermeture ; `StringRedisTemplate` ; Redis indisponible → `503 ATT_TOKEN_BACKEND_UNAVAILABLE`, jamais de validation dégradée). `AttendanceTokenServiceTests` (Redis mocké), `AttendanceIntegrationTests`, démonstration locale (503 en pausant le conteneur) |
-| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment`, V8 tables `work_study_pattern`/`class_work_study_pattern`/`student_schedule_exception`, V9 tables `course_session`/`session_class`/`attendance_checkpoint`/`attendance_record`, **V10 (branche `feature/attendance-management-and-reporting`, non fusionnée) : enrichissement `attendance_checkpoint` (N points de contrôle par séance) et `attendance_record` (statut métier, retard, commentaire, acteurs), nouvelles tables append-only `attendance_correction` et `attendance_justification`** — migrations appliquées et vérifiées, schéma en version 10) |
+| Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment`, V8 tables `work_study_pattern`/`class_work_study_pattern`/`student_schedule_exception`, V9 tables `course_session`/`session_class`/`attendance_checkpoint`/`attendance_record`, **V10 (branche `feature/attendance-management-and-reporting`, non fusionnée) : enrichissement `attendance_checkpoint` (N points de contrôle par séance) et `attendance_record` (statut métier, retard, commentaire, acteurs), nouvelles tables append-only `attendance_correction` et `attendance_justification`**, **V11 (branche `feature/student-csv-import-cp1`, non poussée) : tables techniques d'import `student_import_job` / `student_import_job_issue` / `student_import_row` / `student_import_row_issue` (chaîne `ON DELETE CASCADE`, FK `RESTRICT` vers `user_account`, `CHECK` de statut / gravité / action) + séquence `student_number_sequence` (`start_year` PK, `CHECK next_value > 0`) ; additive, aucune donnée métier** — migrations appliquées et vérifiées, schéma en version 11) |
 | Authentification | TESTED (`POST /api/v1/auth/login` : email/mot de passe, JWT HS256 stateless, `last_login_at`, audit succès/échec ; réponse publique uniforme vérifiée pour email inconnu/mauvais mot de passe/compte non actif ; routes protégées refusent sans jeton ; MFA/WebAuthn/refresh token non implémentés) |
 | Rôles | TESTED (persistance `role`/`user_role` : 6 rôles système, unicité d'affectation active, réattribution après clôture ; attribués via `user_role` à l'émission d'une invitation ; API d'attribution / retrait dédiée — voir « Gestion des comptes / rôles ») |
 | Gestion des comptes / rôles | TESTED (`GET /api/v1/users` paginé/filtré/trié, `GET /api/v1/users/{public_id}`, `POST …/{public_id}/suspend`·`/restore`·`/archive`·`/roles`·`/roles/{roleCode}/revoke` ; `@PreAuthorize` + contrôles sensibles dans `UserManagementService` (protection SUPER_ADMIN, auto-action interdite, dernier rôle actif protégé) ; archivage = clôture transactionnelle des rôles actifs, ARCHIVED irréversible ; DTO sans id SQL / `password_hash` / jeton ; audit `ACCOUNT_SUSPENDED`/`ACCOUNT_REACTIVATED`/`ACCOUNT_ARCHIVED`/`ROLE_ASSIGNED`/`ROLE_REVOKED` ; aucune migration V4 ; `PEDAGOGICAL_MANAGER` exclu jusqu'au périmètre pédagogique) |
@@ -2211,7 +2272,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | TESTED (module `organization`, migration V4 ; CRUD + archivage/restauration site·bâtiment·salle, création + activation/désactivation plages réseau, aucun DELETE physique ; routes en public_id sous `/api/v1/sites`, `/api/v1/buildings/{id}`, `/api/v1/rooms/{id}`, `/api/v1/network-ranges/{id}` ; pagination max 100 + tri liste blanche ; unicités site.code / (site,code) / (site,cidr) active ; refus parent archivé, room.site=building.site, archivage bloqué si enfants actifs, code immuable ; ZoneId + ISO 3166-1 + CIDR IPv4/IPv6 validés ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN, plages réseau SUPER_ADMIN pour toute opération ; DTO sans id SQL ; audit `SITE_*`/`BUILDING_*`/`ROOM_*`/`SITE_NETWORK_RANGE_*` catégorie ORGANIZATION ; port public `identity.CurrentUserResolver` pour l'auteur des écritures) |
 | Inscriptions historiques (student_profile / enrollment) | TESTED (module `enrollment`, migration V7 ; `StudentProfile` (`user_id` valeur technique via `identity.UserDirectory`, unique ; `student_number` unique ; statut ACTIVE/ARCHIVED) et `Enrollment` (rattachements `class_group_id`/`academic_year_id` = valeurs techniques via nouveau port `academic.ClassGroupDirectory` ; `previous_enrollment_id` auto-référence ; `enrollment_source` MANUAL/CLASS_TRANSFER ; statuts docs/04 §13.1) ; **au plus une inscription ACTIVE par apprenant et par année scolaire** (RG-012 / docs/04 §13.3) : pré-contrôle applicatif + contrainte SQL `uq_enrollment_active_per_year` (colonnes générées) + isolation de la collision concurrente (bean `EnrollmentPersister` `@Transactional(REQUIRES_NEW)` pour `create`/`enroll` — retraduction hors transaction en échec ; `EnrollmentExceptionHandler` pour `transfer` — dont l'INSERT doit voir la clôture dans la même transaction), retraduite en 409 ciblé, jamais 500 ; changement de classe `POST …/{id}/transfer` clôturant l'ancienne inscription en TRANSFERRED (`end_date` inclusif, historique conservé — AC-006) et créant la nouvelle liée débutant `end_date` + 1 jour (aucun chevauchement de période) ; clôture `POST …/{id}/close` (COMPLETED/WITHDRAWN, motif obligatoire) ; `CHECK (end_date IS NULL OR end_date >= start_date)` ; routes en public_id sous `/api/v1/student-profiles` et `/api/v1/enrollments` (GET liste filtres + tri liste blanche + pagination max 100, GET détail, POST) réservées ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION (PEDAGOGICAL_MANAGER exclu tant qu'un port de périmètre pédagogique public n'existe pas ; TEACHER/STUDENT sans accès), aucun PATCH/DELETE/route nichée ; horloge `java.time.Clock` injectée ; DTO sans id SQL ; audit `STUDENT_PROFILE_CREATED`/`ENROLLMENT_CREATED`/`_TRANSFERRED`/`_CLOSED` catégorie `ENROLLMENT`. Import CSV, rythmes d'alternance, apprenants provisoires : hors périmètre de ce lot. |
 | Rythmes d'alternance (work_study_pattern / class_work_study_pattern / student_schedule_exception) | TESTED (module `alternation`, migration V8 ; modèles réutilisables de rythme — 4 `pattern_type`, `configuration_json` validé + canonicalisé par `AlternationConfigParser` (composant pur ; propriété inconnue / jour inconnu / intersection école-entreprise / nombre de semaines incohérent / index hors cycle → 400 `ALT_INVALID_CONFIGURATION`), round-trip canonique `parseCanonical(canonicalize(parse(...)))` corrigé et testé pour les 4 types (tolère les tableaux de jours vides que `canonicalize` produit, reste strict : 5 clés obligatoires, aucune propriété inconnue, index de semaine et intersections contrôlés) ; CRUD + archivage/restauration, `code` et `pattern_type` immuables ; affectation historisée à une classe (`class_group_id` valeur technique via `academic.ClassGroupDirectory`, `cycle_start_date` porté par l'affectation), `CHECK (valid_until IS NULL OR >= valid_from)`, non-chevauchement des périodes ACTIVE — adjacence stricte autorisée, pré-contrôle applicatif (course résiduelle sur périodes bornées documentée) —, unicité SQL de l'affectation ACTIVE « ouverte » par classe (`active_open_key` généré) + collision concurrente retraduite en 409 `ALT_OPEN_ASSIGNMENT_EXISTS` par `ClassAssignmentPersister` (`REQUIRES_NEW`), jamais 500 (deux créations HTTP simultanées → 1×201 / 1×409 / 0×500 / une seule ligne ACTIVE ouverte, vérifié) ; clôture explicite bornée (`effectiveDate >= valid_from`, `<= valid_until` s'il est fixé sinon 400 `ALT_INVALID_PERIOD` ; `< next.validFrom` de l'affectation suivante sinon 409 `ALT_ASSIGNMENT_CLOSE_CONFLICT` via requête repository déterministe), historique conservé ; exceptions individuelles (`enrollment_id` valeur technique via **nouveau port** `enrollment.EnrollmentDirectory`) — 4 `exception_type`, `ACTIVE`/`CANCELLED`, `CHECK (end_at > start_at)`, `time_zone_id` IANA validé, `reason` obligatoire ; chevauchement de **même type** refusé (pré-contrôle applicatif seul — deux exceptions concurrentes de même type peuvent encore être persistées, limite documentée) ; projection d'une exception sur un jour civil en sémantique demi-ouverte `[startAt, endAt)` par intersection d'intervalles dans le fuseau de l'exception (minuit exact et changement d'heure Europe/Paris gérés ; fuseau persisté invalide → erreur interne explicite, plus de repli UTC) ; résolution `SCHOOL`/`COMPANY`/`UNKNOWN` par classe et par inscription (`AlternationResolver`, service pur, déterministe — date < ancre / week-end / semaine non classifiée / absence d'affectation → `UNKNOWN`), résolution effective = priorité **structurelle** d'une exception `ON_SITE_REQUIRED`→`SCHOOL` / `COMPANY_PERIOD`→`COMPANY`, **aucun calcul d'assiduité** ; routes `/api/v1/alternation/...` (patterns, class-assignments, classes/{id}/assignments+context, student-exceptions, enrollments/{id}/exceptions+context), tri liste blanche → 400 `ALT_INVALID_SORT`, pagination ≤ 100, DTO sans id SQL, `ApiError` codes `ALT_*` ; `@PreAuthorize` — modèles : lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION ; affectations + exceptions : + PEDAGOGICAL_MANAGER limité à son périmètre via **nouveau port** `academic.AcademicScopeDirectory` (hors périmètre → 403 `ALT_FORBIDDEN`) ; TEACHER/STUDENT → 403 ; audit `WORK_STUDY_PATTERN_*` / `CLASS_WORK_STUDY_PATTERN_ASSIGNED`/`_CLOSED` / `STUDENT_SCHEDULE_EXCEPTION_CREATED`/`_CANCELLED` catégorie `ALTERNATION` via `alternation.AlternationChangeEvent` → `audit.internal.AlternationAuditListener`. Exceptions collectives, `planning`/`coursesession`/`attendance`, calcul d'assiduité, frontend : hors périmètre de ce lot. Aucun seed métier en V8.) |
-| Import apprenants | CONÇU (Checkpoint 0, révision R2 — `docs/reports/STUDENT_CSV_IMPORT_DESIGN.md` ; branche `feature/student-csv-import`, PR #23 ouverte non fusionnée ; module `studentimport` + migration `V11` (`student_import_job` / `_job_issue` / `_row` / `_row_issue` + `student_number_sequence`) **prévus mais non créés** ; confirmation en une transaction atomique via nouveaux ports `identity.StudentAccountProvisioner` / `enrollment.StudentEnrollmentProvisioner` (écriture directe, sans `EnrollmentPersister` `REQUIRES_NEW`, sans événement d'audit synchrone) ; aucun code produit) |
+| Import apprenants | IN_PROGRESS — CP1 sur `feature/student-csv-import-cp1` (non poussée). Conception CP0 figée (`docs/reports/STUDENT_CSV_IMPORT_DESIGN.md` R2, fusionnée PR #23 = `e8fd16d`). **CP1 = schéma V11 uniquement** : migration `V11__create_student_import_tables.sql` (tables `student_import_job` / `_job_issue` / `_row` / `_row_issue` + `student_number_sequence` ; chaîne `ON DELETE CASCADE` ; FK `RESTRICT` vers `user_account` ; `CHECK` statut / gravité / action / `file_size_bytes > 0` / `next_value > 0` ; `UNIQUE (student_import_job_id, `row_number`)` ; index purge / requêteur), module Spring Modulith `studentimport` (`package-info` `@ApplicationModule`, entités JPA `studentimport.internal` héritant `shared.BaseEntity`, enums, repositories `JpaRepository` en lecture simple), `StudentImportSchemaConstraintsTests` (`@DataJpaTest` MySQL réel, **19 tests, 0 échec**). `ModularityTests` vert ; suite `./mvnw clean test` → **567 tests** (+19), schéma en version 11 ; 7 échecs `AttendanceIntegrationTests` **pré-existants** (reproduits arbre ramené à `e8fd16d`), hors périmètre CP1. **Non implémenté** (CP2+) : parsing CSV, simulation, confirmation transactionnelle, ports `identity.StudentAccountProvisioner` / `enrollment.StudentEnrollmentProvisioner` / `academic.ClassGroupDirectory.resolveForImport`, génération fonctionnelle de `student_number`, endpoints REST, écrans Angular. |
 | Import planning | TODO |
 | Séances | IMPLEMENTED et TESTED — fusionné sur `main` via la PR #20 (`5874f5a`) (module `coursesession`, V9 ; séance **exceptionnelle** créée manuellement, motif obligatoire, formateur = compte `TEACHER` actif via port `identity.TeacherDirectory`, ≥ 1 classe ; cycle strict `PLANNED → OPEN → CLOSED` sans réouverture ; API `/api/v1/sessions` liste filtrée par périmètre + `/teachers` + détail + création + `/open` + `/close` ; contrôle fin `CourseSessionAccessGuard` (contexte Spring Security) : `ADMIN`/`SUPER_ADMIN` global, `SCHOOL_ADMINISTRATION` lecture seule, `PEDAGOGICAL_MANAGER` limité au périmètre, `TEACHER` seulement ses séances, `STUDENT` aucun accès ; audit `SESSION_CREATED`/`_OPENED`/`_CLOSED` ; port public `coursesession.CourseSessionDirectory`. `CourseSessionConstraintsTests` (7), `CourseSessionIntegrationTests` (6). Un seul point de contrôle par séance ; planning non livré) **V10 (branche non fusionnée)** : plusieurs points de contrôle par séance (`AttendanceCheckpointService` + `AttendanceCheckpointController`, cycle `PLANNED → OPEN → CLOSED`/`CANCELLED`, ordre d'affichage unique, ≤ 1 `START` / ≤ 1 `END` actif, motif obligatoire à l'annulation ; `SCHOOL_ADMINISTRATION` exclu de la gestion) ; ouverture de séance ouvre le `START`, fermeture ferme tous les points de contrôle ouverts ; événement `AttendanceCheckpointChangeEvent` audité (`CHECKPOINT_CREATED`/`_OPENED`/`_CLOSED`/`_CANCELLED`) ; `CourseSessionConstraintsTests` 7→10, `CourseSessionIntegrationTests` 6→9→10 (**PR #22** : `flushCheckpoint()` retraduit une transition concurrente perdante en `409 ATT_CHECKPOINT_INVALID_STATE`, jamais 500 ; test ouverture/fermeture concurrentes d'un point de contrôle). |
 | Émargement | IMPLEMENTED, TESTED et DÉMONTRÉ localement (API) — fusionné sur `main` via la PR #20 (`5874f5a`), validation manuelle locale du parcours fonctionnel frontend et API, sous le profil `demo`, réussie (connexion formateur et apprenants, ouverture, QR / code court, enregistrement des deux présences, anti-double présence, consultation du tableau, fermeture et refus de l'ancien code ; changements de contexte de rôle non applicables manuellement — comptes de démonstration mono-rôle —, couverts par les tests automatisés) (module `attendance`, V9 ; jeton dynamique **opaque** `SecureRandom` + **code court** dans **Redis** avec TTL court, rotation, purge à la fermeture ; QR encodant uniquement le jeton opaque ; `POST /api/v1/sessions/{id}/attendance-token` (formateur/gestionnaire, séance `OPEN`) ; `POST /api/v1/attendance/validate` (**`STUDENT` uniquement** ; apprenant résolu depuis le seul JWT ; inscription `ACTIVE` dans une classe de la séance, 0 ou >1 → refus) ; **anti-double présence par contrainte SQL `uq_attendance_record_checkpoint_enrollment`** (violation concurrente → `409 ATT_ALREADY_RECORDED`, jamais 500) ; `GET /api/v1/sessions/{id}/attendance` (effectif attendu + présents + lignes sans email ni id SQL) ; Redis KO → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` ; audit `ATTENDANCE_RECORDED` sans jeton/numéro/nom. **Revue PR #20** : `resolveSession` applique l'invariant du pointeur courant (`session -> token\ncode`) — une clé `token -> session` résiduelle n'est plus acceptée après rotation ou invalidation. `AttendanceRecordConstraintsTests` (4), `AttendanceTokenServiceTests` (18), `AttendanceIntegrationTests` (7 dont concurrence), `AttendanceSecurityTests` (4). **Scan caméra NON RÉALISÉ** ; parcours fiable = code court ; pas de présence manuelle, correction, justificatif, demi-journée, export) **V10 (branche non fusionnée)** : jeton émis **par point de contrôle** ; `validate` classe la présence `PRESENT`/`LATE` selon `app.attendance.late-threshold` (défaut `PT10M`) ; présence manuelle / correction / annulation logique avec historique append-only (`attendance_correction`, motif obligatoire, verrou optimiste → 409) ; justificatif métier SANS fichier (`attendance_justification`, dépôt / modif `PENDING` / examen ; `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE`) ; espace apprenant `GET /api/v1/me/attendance*` (absences dérivées non persistées) ; `AttendanceIntegrationTests` (25), `AttendanceSecurityTests` (8), `AttendanceTokenServiceTests` (19), `AttendanceRecordConstraintsTests` (7), `CourseSessionIntegrationTests` (10), `AttendanceManagementConstraintsTests` (9), `AttendanceReportSortTests` (4). **Correctifs PR #22** : `GET /api/v1/sessions/{id}/attendance/candidates` (candidats à la saisie manuelle : inscriptions actives des classes de la séance, dédupliquées, sans e-mail ni id SQL, contrôle fin = lecture des présences ; §2) ; `GET /api/v1/sessions/{id}/attendance/export` (CSV borné à la séance, formateur affecté autorisé, protections CSV, nom de fichier contrôlé ; §8) ; tests de concurrence déterministes (QR/code vs présence manuelle, deux corrections, deux examens de justificatif, deux créations manuelles → une écriture / un conflit contrôlé / aucun 500 ; §3). **2ᵉ passe PR #22** : éligibilité des candidats et validation manuelle bornées à l'inscription valable **le jour de la séance** (`EnrollmentDirectory.findRosterForClassesOn` / `isEnrollmentValidOn`, date locale = `startsAt` + fuseau persisté, aucun repli UTC) ; matrice de sécurité du endpoint des candidats sur fixtures réelles (ADMIN/`SCHOOL_ADMINISTRATION` 200, `PEDAGOGICAL_MANAGER` in/out périmètre 200/403, `TEACHER` affecté/non 200/403, `STUDENT` 403, anonyme 401) ; export CSV de séance **sans** colonne libre `commentaire`. |
