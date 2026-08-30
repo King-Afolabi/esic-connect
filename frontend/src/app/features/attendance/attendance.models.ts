@@ -228,11 +228,64 @@ export interface ReportQuery {
   to?: string | null;
   classGroup?: string | null;
   studentProfile?: string | null;
+  /** `field,asc` | `field,desc` — cf. {@link REPORT_SORT_FIELDS}. */
+  sort?: string | null;
   page?: number;
   size?: number;
 }
 
 export type ReportKind = 'sessions' | 'classes' | 'students';
+
+/**
+ * Liste blanche du tri serveur (correctif PR #22 §6), alignée sur
+ * `AttendanceReportSort` côté back-end. Le composant n'émet jamais
+ * d'autre valeur ; un `sort` hors liste renverrait
+ * `400 ATT_REPORT_INVALID_SORT`.
+ */
+export const REPORT_SORT_FIELDS: Record<ReportKind, readonly string[]> = {
+  sessions: ['startsAt', 'attendanceRate', 'presentCount'],
+  classes: ['classCode', 'attendanceRate', 'absentHalfDays'],
+  students: ['lastName', 'studentNumber', 'attendanceRate', 'absentHalfDays'],
+};
+
+export interface ReportSortOption {
+  value: string;
+  label: string;
+}
+
+const SORT_FIELD_LABELS: Record<string, string> = {
+  startsAt: 'Date de début',
+  attendanceRate: 'Taux de présence',
+  presentCount: 'Présences',
+  classCode: 'Code de classe',
+  absentHalfDays: 'Demi-journées absentes',
+  lastName: 'Nom',
+  studentNumber: 'Numéro étudiant',
+};
+
+/** Options `mat-select` de tri pour un rapport donné (défaut + asc/desc). */
+export function reportSortOptions(kind: ReportKind): ReportSortOption[] {
+  const options: ReportSortOption[] = [{ value: '', label: 'Tri par défaut' }];
+  for (const field of REPORT_SORT_FIELDS[kind]) {
+    const name = SORT_FIELD_LABELS[field] ?? field;
+    options.push({ value: `${field},asc`, label: `${name} (croissant)` });
+    options.push({ value: `${field},desc`, label: `${name} (décroissant)` });
+  }
+  return options;
+}
+
+/** Vrai si `sort` respecte la liste blanche du `kind` (défense en profondeur). */
+export function isAllowedReportSort(kind: ReportKind, sort: string | null | undefined): boolean {
+  if (!sort) {
+    return true;
+  }
+  const [field, direction, ...rest] = sort.split(',');
+  return (
+    rest.length === 0 &&
+    (direction === 'asc' || direction === 'desc') &&
+    REPORT_SORT_FIELDS[kind].includes(field)
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Rôles (ergonomie ; Spring Security reste l'autorité)

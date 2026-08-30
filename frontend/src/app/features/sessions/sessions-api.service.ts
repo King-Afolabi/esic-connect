@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
+  AttendanceCandidate,
   AttendanceCorrectionEntry,
   AttendanceRecordResponse,
   AttendanceTokenResponse,
@@ -20,6 +21,8 @@ import {
   TeacherOptionResponse,
   ValidateAttendanceRequest,
 } from './sessions.models';
+
+type HttpResponseBlob = import('@angular/common/http').HttpResponse<Blob>;
 
 /**
  * Accès HTTP aux modules `coursesession` et `attendance`. Ce service ne
@@ -170,6 +173,30 @@ export class SessionsApiService {
   ): Observable<AttendanceCorrectionEntry[]> {
     return this.http.get<AttendanceCorrectionEntry[]>(
       `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/${encodeURIComponent(attendanceId)}/history`,
+    );
+  }
+
+  /**
+   * `GET /api/v1/sessions/{sessionId}/attendance/candidates` — inscriptions
+   * actives des classes de la séance, pour alimenter le sélecteur de
+   * saisie manuelle. Le serveur applique le contrôle fin de la lecture
+   * des présences ; aucun identifiant n'élargit le périmètre.
+   */
+  listAttendanceCandidates(sessionId: string): Observable<AttendanceCandidate[]> {
+    return this.http.get<AttendanceCandidate[]>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/candidates`,
+    );
+  }
+
+  /**
+   * `GET /api/v1/sessions/{sessionId}/attendance/export` — CSV des
+   * présences de cette séance, en `blob`. Le composant appelant déclenche
+   * le téléchargement ; le jeton ne transite jamais par l'URL.
+   */
+  exportSessionAttendance(sessionId: string): Observable<HttpResponseBlob> {
+    return this.http.get(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/export`,
+      { responseType: 'blob', observe: 'response' },
     );
   }
 

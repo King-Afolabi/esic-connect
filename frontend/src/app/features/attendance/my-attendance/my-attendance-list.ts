@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -104,6 +104,15 @@ export class MyAttendanceList {
 
   constructor() {
     this.load();
+    // §5 : sortir du contexte STUDENT ferme le formulaire de dépôt et
+    // efface le brouillon (catégorie, référence, commentaire, erreur).
+    effect(() => {
+      if (!this.isStudentContext()) {
+        this.justifyRowId.set(null);
+        this.formError.set(null);
+        this.justifyForm.reset({ category: 'MEDICAL', externalReference: '', comment: '' });
+      }
+    });
   }
 
   protected applyFilters(): void {
@@ -168,6 +177,11 @@ export class MyAttendanceList {
         next: () => {
           this.submitting.set(false);
           this.justifyRowId.set(null);
+          // §5 : contexte STUDENT perdu pendant l'appel — pas de faux
+          // succès. Le back-end peut avoir enregistré le dépôt.
+          if (!this.isStudentContext()) {
+            return;
+          }
           this.notifications.info('Justificatif déposé : il sera examiné par l’administration.');
           this.load();
         },

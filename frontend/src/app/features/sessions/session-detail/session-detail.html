@@ -161,12 +161,12 @@
                     }
                   }
                   @if (checkpointCancelId() === cp.publicId) {
-                    <form class="sessions__inline-form" [formGroup]="cancelForm" (ngSubmit)="confirmCancelCheckpoint()">
+                    <form class="sessions__inline-form" [formGroup]="checkpointCancelForm" (ngSubmit)="confirmCancelCheckpoint()">
                       <mat-form-field appearance="outline">
-                        <mat-label>Motif d'annulation</mat-label>
+                        <mat-label>Motif d'annulation du point de contrôle</mat-label>
                         <input matInput formControlName="reason" maxlength="500" />
                       </mat-form-field>
-                      <button mat-flat-button type="submit" [disabled]="rowBusy() || cancelForm.invalid">Confirmer</button>
+                      <button mat-flat-button type="submit" [disabled]="rowBusy() || checkpointCancelForm.invalid">Confirmer</button>
                       <button mat-button type="button" (click)="abortCancelCheckpoint()">Fermer</button>
                     </form>
                   }
@@ -231,6 +231,9 @@
             <button mat-stroked-button type="button" (click)="refreshAttendance()">
               <mat-icon aria-hidden="true">refresh</mat-icon> Rafraîchir
             </button>
+            <button mat-stroked-button type="button" (click)="exportAttendanceCsv()" [disabled]="exportingCsv()">
+              <mat-icon aria-hidden="true">download</mat-icon> Exporter les présences de cette séance (CSV)
+            </button>
             @if (canManage()) {
               <button mat-stroked-button type="button" (click)="toggleManualForm()">
                 <mat-icon aria-hidden="true">person_add</mat-icon> Saisie manuelle
@@ -246,11 +249,32 @@
               Point de contrôle ciblé :
               <strong>{{ (selectedCheckpoint() ?? checkpoints()[0])?.label || '—' }}</strong>.
             </p>
-            <mat-form-field appearance="outline">
-              <mat-label>Identifiant public d'inscription</mat-label>
-              <input matInput formControlName="enrollmentPublicId" />
-              <mat-hint>Repli : l'effectif nominatif n'est pas exposé au formateur.</mat-hint>
-            </mat-form-field>
+            @if (candidatesState() === 'loading') {
+              <p class="sessions__status" role="status">Chargement des inscrits de la séance…</p>
+            } @else if (candidatesState() === 'forbidden') {
+              <p class="sessions__inline-error" role="alert">
+                Vous n'êtes pas autorisé à consulter les inscrits de cette séance.
+              </p>
+            } @else if (candidatesState() === 'error') {
+              <p class="sessions__inline-error" role="alert">
+                Impossible de charger la liste des inscrits.
+                <button mat-button type="button" (click)="loadCandidates()">Réessayer</button>
+              </p>
+            } @else if (candidatesState() === 'empty') {
+              <p class="sessions__status" role="status">Aucune inscription active dans les classes de cette séance.</p>
+            } @else {
+              <mat-form-field appearance="outline">
+                <mat-label>Apprenant inscrit</mat-label>
+                <mat-select formControlName="enrollmentPublicId">
+                  @for (candidate of candidates(); track candidate.enrollmentPublicId) {
+                    <mat-option [value]="candidate.enrollmentPublicId">
+                      {{ candidateLabel(candidate) }}
+                    </mat-option>
+                  }
+                </mat-select>
+                <mat-hint>Effectif nominatif de la séance — aucun e-mail exposé.</mat-hint>
+              </mat-form-field>
+            }
             <mat-form-field appearance="outline">
               <mat-label>Statut</mat-label>
               <mat-select formControlName="status">
@@ -366,16 +390,16 @@
           </form>
         }
 
-        @if (cancelRowId(); as rowId) {
-          <form class="sessions__reveal" [formGroup]="cancelForm" (ngSubmit)="confirmCancelRow()"
+        @if (attendanceCancelId(); as rowId) {
+          <form class="sessions__reveal" [formGroup]="attendanceCancelForm" (ngSubmit)="confirmCancelRow()"
                 role="group" aria-label="Annuler la présence">
             <p>L'annulation est logique : la ligne est conservée, l'historique est tracé.</p>
             <mat-form-field appearance="outline">
-              <mat-label>Motif d'annulation</mat-label>
+              <mat-label>Motif d'annulation de la présence</mat-label>
               <input matInput formControlName="reason" maxlength="500" />
             </mat-form-field>
             <div class="sessions__form-actions">
-              <button mat-flat-button type="submit" [disabled]="rowBusy() || cancelForm.invalid">Confirmer l'annulation</button>
+              <button mat-flat-button type="submit" [disabled]="rowBusy() || attendanceCancelForm.invalid">Confirmer l'annulation</button>
               <button mat-button type="button" (click)="abortCancelRow()" [disabled]="rowBusy()">Annuler</button>
             </div>
             @if (rowError()) { <p class="sessions__inline-error" role="alert">{{ rowError() }}</p> }

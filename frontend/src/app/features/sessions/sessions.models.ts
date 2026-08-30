@@ -160,6 +160,29 @@ export interface CancelAttendanceRequest {
   reason: string;
 }
 
+/**
+ * `AttendanceCandidateResponse` — candidat à une saisie manuelle de
+ * présence : inscription active d'une classe de la séance. Le back-end
+ * n'expose ni e-mail ni identifiant SQL ; le contrôle fin est celui de la
+ * lecture des présences.
+ */
+export interface AttendanceCandidate {
+  studentProfilePublicId: string | null;
+  enrollmentPublicId: string;
+  studentNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  classCode: string | null;
+}
+
+/** Libellé lisible d'un candidat (nom + numéro), sans e-mail. */
+export function attendanceCandidateLabel(candidate: AttendanceCandidate): string {
+  const name = [candidate.firstName, candidate.lastName].filter((part) => !!part).join(' ').trim();
+  const number = candidate.studentNumber ? ` — ${candidate.studentNumber}` : '';
+  const clazz = candidate.classCode ? ` (${candidate.classCode})` : '';
+  return `${name || 'Apprenant'}${number}${clazz}`;
+}
+
 /** `AttendanceCorrectionResponse` — une entrée d'historique append-only. */
 export interface AttendanceCorrectionEntry {
   publicId: string;

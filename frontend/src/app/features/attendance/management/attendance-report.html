@@ -26,6 +26,14 @@
       <input matInput formControlName="studentProfile" />
     </mat-form-field>
   }
+  <mat-form-field appearance="outline">
+    <mat-label>Trier par</mat-label>
+    <mat-select formControlName="sort">
+      @for (option of sortOptions; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
   <div class="att__filter-actions">
     <button mat-flat-button type="submit">Appliquer</button>
     <button mat-button type="button" (click)="reset()">Réinitialiser</button>

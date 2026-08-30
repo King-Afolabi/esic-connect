@@ -34,6 +34,7 @@ interface Internals {
   startJustify: (row: unknown) => void;
   submitJustify: () => void;
   justifyForm: { patchValue: (v: Record<string, unknown>) => void };
+  justifyRowId: () => string | null;
 }
 
 function setup(roles: Role[] = ['STUDENT']) {
@@ -135,5 +136,27 @@ describe('MyAttendanceList', () => {
     fixture.detectChanges();
     internals.submitJustify();
     http.expectNone('/api/v1/me/attendance/justifications');
+  });
+
+  it('closes the deposit form via effect and drops a late success once the STUDENT context is lost', () => {
+    let internals!: Internals;
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup());
+    http.expectOne((r) => r.url === URL).flush({ content: [ROW], page: 0, size: 20, totalElements: 1, totalPages: 1 });
+
+    internals.startJustify(ROW);
+    internals.justifyForm.patchValue({ category: 'MEDICAL', comment: 'certificat' });
+    internals.submitJustify();
+    const post = http.expectOne('/api/v1/me/attendance/justifications');
+
+    effectiveRoles.set(['ADMIN']);
+    fixture.detectChanges();
+    expect(internals.justifyRowId()).toBeNull();
+
+    post.flush({});
+    fixture.detectChanges();
+    http.expectNone((r) => r.url === URL);
+    const notifications = TestBed.inject(NotificationService);
+    expect(notifications.info).not.toHaveBeenCalled();
   });
 });

@@ -158,6 +158,36 @@ describe('AttendanceReport', () => {
     clickSpy.mockRestore();
     http.verify();
   });
+
+  it('only forwards a whitelisted sort value and drops anything off-list', () => {
+    const { fixture, http } = setupReport('students');
+    http.expectOne((r) => r.url === '/api/v1/attendance/reports/students').flush({
+      content: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+    });
+
+    const internals = fixture.componentInstance as unknown as {
+      filters: { patchValue: (v: Record<string, unknown>) => void };
+      apply: () => void;
+    };
+
+    internals.filters.patchValue({ sort: 'studentNumber,desc' });
+    internals.apply();
+    const ok = http.expectOne((r) => r.url === '/api/v1/attendance/reports/students');
+    expect(ok.request.params.get('sort')).toBe('studentNumber,desc');
+    ok.flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+
+    // Valeur hors liste blanche (injectée dans le contrôle) : jamais transmise.
+    internals.filters.patchValue({ sort: 'email,asc' });
+    internals.apply();
+    const guarded = http.expectOne((r) => r.url === '/api/v1/attendance/reports/students');
+    expect(guarded.request.params.has('sort')).toBe(false);
+    guarded.flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+    http.verify();
+  });
 });
 
 describe('JustificationQueue', () => {
@@ -244,6 +274,33 @@ describe('JustificationQueue', () => {
     fixture.detectChanges();
     internals.submitReview();
     http.expectNone(`${JUSTIF_URL}/j-1/review`);
+    http.verify();
+  });
+
+  it('closes the panel via effect and drops a review success that lands after the right was lost', () => {
+    const { fixture, http, effectiveRoles } = setupQueue(['SCHOOL_ADMINISTRATION']);
+    http.expectOne((r) => r.url === JUSTIF_URL).flush([PENDING]);
+    const internals = fixture.componentInstance as unknown as {
+      startReview: (r: unknown) => void;
+      reviewForm: { patchValue: (v: unknown) => void };
+      submitReview: () => void;
+      reviewId: () => string | null;
+    };
+    internals.startReview(PENDING);
+    internals.reviewForm.patchValue({ decision: 'ACCEPTED', decisionReason: '' });
+    internals.submitReview();
+    const review = http.expectOne(`${JUSTIF_URL}/j-1/review`);
+
+    effectiveRoles.set(['TEACHER']);
+    fixture.detectChanges();
+    expect(internals.reviewId()).toBeNull();
+
+    review.flush({ ...PENDING, status: 'ACCEPTED' });
+    fixture.detectChanges();
+    // Aucun rechargement de la file, aucun faux succès.
+    http.expectNone((r) => r.url === JUSTIF_URL);
+    const notifications = TestBed.inject(NotificationService);
+    expect(notifications.info).not.toHaveBeenCalledWith('Justificatif examiné.');
     http.verify();
   });
 });

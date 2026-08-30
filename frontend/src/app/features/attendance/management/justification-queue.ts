@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -90,6 +90,16 @@ export class JustificationQueue {
 
   constructor() {
     this.load();
+    // §5 : à la perte du droit d'examen, fermer le panneau, réinitialiser
+    // le formulaire et effacer les données temporaires (identifiant
+    // sélectionné, motif, erreur).
+    effect(() => {
+      if (!this.canReview()) {
+        this.reviewId.set(null);
+        this.formError.set(null);
+        this.reviewForm.reset({ decision: 'ACCEPTED', decisionReason: '' });
+      }
+    });
   }
 
   protected setFilter(status: string): void {
@@ -135,6 +145,11 @@ export class JustificationQueue {
         next: () => {
           this.submitting.set(false);
           this.reviewId.set(null);
+          // §5 : droit d'examen perdu pendant l'appel — pas de faux
+          // succès, pas de rechargement. Le back-end peut avoir tranché.
+          if (!this.canReview()) {
+            return;
+          }
           this.notifications.info('Justificatif examiné.');
           this.load();
         },

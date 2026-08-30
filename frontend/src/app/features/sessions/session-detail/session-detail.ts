@@ -26,6 +26,7 @@ import { QrDisplay } from '../shared/qr-display/qr-display';
 import { SessionsApiService } from '../sessions-api.service';
 import { toSessionError } from '../session-errors';
 import {
+  AttendanceCandidate,
   AttendanceCorrectionEntry,
   AttendanceTokenResponse,
   CheckpointAttendance,
@@ -34,6 +35,7 @@ import {
   SESSION_MANAGE_ROLES,
   SESSION_READ_ROLES,
   SessionAttendanceResponse,
+  attendanceCandidateLabel,
   attendanceSourceLabel,
   attendanceStatusLabel,
   checkpointStatusLabel,
@@ -112,6 +114,7 @@ export class SessionDetail {
   protected readonly checkpointTypeLabel = checkpointTypeLabel;
   protected readonly checkpointStatusLabel = checkpointStatusLabel;
   protected readonly correctionActionLabel = correctionActionLabel;
+  protected readonly candidateLabel = attendanceCandidateLabel;
   protected readonly formatInstantUtc = formatInstantUtc;
   protected readonly classCodes = classCodes;
   protected readonly teacherName = teacherName;
@@ -136,18 +139,30 @@ export class SessionDetail {
   protected readonly showCheckpointForm = signal(false);
   protected readonly showManualForm = signal(false);
   protected readonly correctRowId = signal<string | null>(null);
-  protected readonly cancelRowId = signal<string | null>(null);
+  protected readonly attendanceCancelId = signal<string | null>(null);
   protected readonly historyRowId = signal<string | null>(null);
   protected readonly historyEntries = signal<AttendanceCorrectionEntry[]>([]);
   protected readonly rowBusy = signal(false);
   protected readonly rowError = signal<string | null>(null);
+  protected readonly exportingCsv = signal(false);
+
+  /** Candidats à la saisie manuelle (§2) — jamais d'e-mail ni d'id SQL. */
+  protected readonly candidates = signal<AttendanceCandidate[]>([]);
+  protected readonly candidatesState = signal<
+    'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'forbidden'
+  >('idle');
 
   protected readonly checkpointForm = this.fb.nonNullable.group({
     label: ['', [Validators.required, Validators.maxLength(120)]],
     type: ['CUSTOM' as 'START' | 'END' | 'CUSTOM', Validators.required],
     required: [true],
   });
-  protected readonly cancelForm = this.fb.nonNullable.group({
+  /** Motif d'annulation d'un **point de contrôle** — jamais partagé (§4). */
+  protected readonly checkpointCancelForm = this.fb.nonNullable.group({
+    reason: ['', [Validators.required, Validators.maxLength(500)]],
+  });
+  /** Motif d'annulation d'une **présence** — jamais partagé (§4). */
+  protected readonly attendanceCancelForm = this.fb.nonNullable.group({
     reason: ['', [Validators.required, Validators.maxLength(500)]],
   });
   protected readonly manualForm = this.fb.nonNullable.group({
@@ -215,15 +230,26 @@ export class SessionDetail {
         this.attendanceToken.set(null);
       }
     });
-    // Ferme tout formulaire sensible dès que le contexte de rôle retire
-    // le droit de gestion.
+    // Ferme tout formulaire sensible et efface les données temporaires dès
+    // que le contexte de rôle retire le droit de gestion (§4, §5).
     effect(() => {
       if (!this.canManage()) {
         this.showCheckpointForm.set(false);
         this.showManualForm.set(false);
         this.checkpointCancelId.set(null);
+        this.attendanceCancelId.set(null);
         this.correctRowId.set(null);
+        this.historyRowId.set(null);
+        this.historyEntries.set([]);
+        this.candidates.set([]);
+        this.candidatesState.set('idle');
         this.pendingAction.set(null);
+        this.rowError.set(null);
+        this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
+        this.checkpointCancelForm.reset({ reason: '' });
+        this.attendanceCancelForm.reset({ reason: '' });
+        this.manualForm.reset({ enrollmentPublicId: '', status: 'ABSENT', lateMinutes: null, comment: '' });
+        this.correctForm.reset({ status: '', lateMinutes: null, comment: '', reason: '' });
       }
     });
 
@@ -289,6 +315,9 @@ export class SessionDetail {
           this.rowBusy.set(false);
           this.showCheckpointForm.set(false);
           this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
+          if (!this.canManage()) {
+            return;
+          }
           this.notifications.info('Point de contrôle créé.');
           this.load();
         },
@@ -309,24 +338,35 @@ export class SessionDetail {
     );
   }
   protected startCancelCheckpoint(cp: CheckpointView): void {
+    // §4 : ouvrir l'annulation d'un point de contrôle ferme l'annulation
+    // d'une présence — jamais de motif mélangé.
+    this.attendanceCancelId.set(null);
+    this.attendanceCancelForm.reset({ reason: '' });
     this.checkpointCancelId.set(cp.publicId);
-    this.cancelForm.reset({ reason: '' });
+    this.checkpointCancelForm.reset({ reason: '' });
     this.rowError.set(null);
   }
   protected confirmCancelCheckpoint(): void {
     const id = this.checkpointCancelId();
-    if (!id || this.cancelForm.invalid || this.rowBusy()) {
-      this.cancelForm.markAllAsTouched();
+    if (!id || this.checkpointCancelForm.invalid || this.rowBusy()) {
+      this.checkpointCancelForm.markAllAsTouched();
       return;
     }
     this.checkpointAction(
-      () => this.api.cancelCheckpoint(this.publicId, id, { reason: this.cancelForm.getRawValue().reason.trim() }),
+      () =>
+        this.api.cancelCheckpoint(this.publicId, id, {
+          reason: this.checkpointCancelForm.getRawValue().reason.trim(),
+        }),
       'Point de contrôle annulé.',
-      () => this.checkpointCancelId.set(null),
+      () => {
+        this.checkpointCancelId.set(null);
+        this.checkpointCancelForm.reset({ reason: '' });
+      },
     );
   }
   protected abortCancelCheckpoint(): void {
     this.checkpointCancelId.set(null);
+    this.checkpointCancelForm.reset({ reason: '' });
     this.rowError.set(null);
   }
 
@@ -339,6 +379,13 @@ export class SessionDetail {
     call().subscribe({
       next: () => {
         this.rowBusy.set(false);
+        // §5 : le droit peut avoir été perdu pendant l'appel — ne pas
+        // afficher de faux succès ni recharger. Le back-end peut avoir agi.
+        if (!this.canManage()) {
+          this.checkpointCancelId.set(null);
+          this.showCheckpointForm.set(false);
+          return;
+        }
         after?.();
         this.notifications.info(message);
         this.load();
@@ -401,9 +448,41 @@ export class SessionDetail {
   protected toggleManualForm(): void {
     this.showManualForm.update((v) => !v);
     this.rowError.set(null);
-    if (!this.showManualForm()) {
+    if (this.showManualForm()) {
+      this.loadCandidates();
+    } else {
       this.manualForm.reset({ enrollmentPublicId: '', status: 'ABSENT', lateMinutes: null, comment: '' });
+      this.candidates.set([]);
+      this.candidatesState.set('idle');
     }
+  }
+
+  /**
+   * Charge les candidats à la saisie manuelle (§2). L'identifiant
+   * d'inscription ne vit que dans la valeur du contrôle du formulaire :
+   * jamais dans l'URL de navigation ni dans un storage.
+   */
+  protected loadCandidates(): void {
+    if (!this.canManage()) {
+      return;
+    }
+    this.candidatesState.set('loading');
+    this.candidates.set([]);
+    this.api.listAttendanceCandidates(this.publicId).subscribe({
+      next: (list) => {
+        if (!this.canManage() || !this.showManualForm()) {
+          this.candidates.set([]);
+          this.candidatesState.set('idle');
+          return;
+        }
+        this.candidates.set(list);
+        this.candidatesState.set(list.length ? 'ready' : 'empty');
+      },
+      error: (error: unknown) => {
+        const view = toSessionError(error);
+        this.candidatesState.set(view.forbidden ? 'forbidden' : 'error');
+      },
+    });
   }
 
   protected submitManual(): void {
@@ -428,6 +507,11 @@ export class SessionDetail {
           this.rowBusy.set(false);
           this.showManualForm.set(false);
           this.manualForm.reset({ enrollmentPublicId: '', status: 'ABSENT', lateMinutes: null, comment: '' });
+          this.candidates.set([]);
+          this.candidatesState.set('idle');
+          if (!this.canManage()) {
+            return;
+          }
           this.notifications.info('Présence enregistrée.');
           this.refreshAttendance();
         },
@@ -474,28 +558,39 @@ export class SessionDetail {
   }
 
   protected startCancelRow(attendancePublicId: string): void {
-    this.cancelRowId.set(attendancePublicId);
+    // §4 : ferme l'annulation d'un point de contrôle et le formulaire de
+    // correction — chaque motif reste isolé dans son propre FormGroup.
+    this.checkpointCancelId.set(null);
+    this.checkpointCancelForm.reset({ reason: '' });
     this.correctRowId.set(null);
     this.historyRowId.set(null);
-    this.cancelForm.reset({ reason: '' });
+    this.attendanceCancelId.set(attendancePublicId);
+    this.attendanceCancelForm.reset({ reason: '' });
     this.rowError.set(null);
   }
   protected abortCancelRow(): void {
-    this.cancelRowId.set(null);
+    this.attendanceCancelId.set(null);
+    this.attendanceCancelForm.reset({ reason: '' });
     this.rowError.set(null);
   }
   protected confirmCancelRow(): void {
-    const id = this.cancelRowId();
-    if (!id || this.cancelForm.invalid || this.rowBusy() || !this.canManage()) {
-      this.cancelForm.markAllAsTouched();
+    const id = this.attendanceCancelId();
+    if (!id || this.attendanceCancelForm.invalid || this.rowBusy() || !this.canManage()) {
+      this.attendanceCancelForm.markAllAsTouched();
       return;
     }
     this.rowBusy.set(true);
     this.rowError.set(null);
     this.api
-      .cancelAttendance(this.publicId, id, { reason: this.cancelForm.getRawValue().reason.trim() })
+      .cancelAttendance(this.publicId, id, {
+        reason: this.attendanceCancelForm.getRawValue().reason.trim(),
+      })
       .subscribe({
-        next: () => this.afterRowMutation('Présence annulée.', () => this.cancelRowId.set(null)),
+        next: () =>
+          this.afterRowMutation('Présence annulée.', () => {
+            this.attendanceCancelId.set(null);
+            this.attendanceCancelForm.reset({ reason: '' });
+          }),
         error: (error: unknown) => {
           this.rowBusy.set(false);
           this.rowError.set(toSessionError(error).message);
@@ -511,7 +606,15 @@ export class SessionDetail {
     this.historyRowId.set(attendancePublicId);
     this.historyEntries.set([]);
     this.api.attendanceHistory(this.publicId, attendancePublicId).subscribe({
-      next: (entries) => this.historyEntries.set(entries),
+      next: (entries) => {
+        // §5 : plus le droit de lecture — ne pas exposer l'historique.
+        if (!this.canRead() || this.historyRowId() !== attendancePublicId) {
+          this.historyRowId.set(null);
+          this.historyEntries.set([]);
+          return;
+        }
+        this.historyEntries.set(entries);
+      },
       error: (error: unknown) => {
         this.historyRowId.set(null);
         this.rowError.set(toSessionError(error).message);
@@ -522,6 +625,13 @@ export class SessionDetail {
   private afterRowMutation(message: string, after?: () => void): void {
     this.rowBusy.set(false);
     after?.();
+    // §5 : droit perdu pendant l'appel — aucun faux succès, aucun
+    // rafraîchissement. Le back-end peut avoir effectué l'action.
+    if (!this.canManage()) {
+      this.correctRowId.set(null);
+      this.attendanceCancelId.set(null);
+      return;
+    }
     this.notifications.info(message);
     this.refreshAttendance();
   }
@@ -538,6 +648,10 @@ export class SessionDetail {
       next: () => {
         this.submitting.set(false);
         this.pendingAction.set(null);
+        // §5 : droit de gestion perdu pendant l'appel — pas de faux succès.
+        if (!this.canManage()) {
+          return;
+        }
         this.notifications.info(successMessage);
         this.load();
         this.refreshAttendance();
@@ -545,6 +659,41 @@ export class SessionDetail {
       error: (error: unknown) => {
         this.submitting.set(false);
         this.actionError.set(toSessionError(error).message);
+      },
+    });
+  }
+
+  /**
+   * §8 — Export CSV des présences de cette séance. Le blob est remis par
+   * un téléchargement programmatique ; rien ne transite par l'URL.
+   */
+  protected exportAttendanceCsv(): void {
+    if (this.exportingCsv() || !this.canRead()) {
+      return;
+    }
+    this.exportingCsv.set(true);
+    this.api.exportSessionAttendance(this.publicId).subscribe({
+      next: (response) => {
+        this.exportingCsv.set(false);
+        if (!this.canRead()) {
+          return;
+        }
+        const disposition = response.headers.get('content-disposition') ?? '';
+        const match = /filename="?([^"]+)"?/i.exec(disposition);
+        const name = match?.[1] ?? `presences-seance-${this.publicId}.csv`;
+        const blob = response.body ?? new Blob([], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = name;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      },
+      error: (error: unknown) => {
+        this.exportingCsv.set(false);
+        this.notifications.error(toSessionError(error).message);
       },
     });
   }
@@ -578,6 +727,11 @@ export class SessionDetail {
         }
         if (this.attendance().kind === 'idle') {
           this.refreshAttendance();
+        }
+        // Si la saisie manuelle est ouverte, réaligner les candidats sur
+        // la séance rechargée (§2 : invalider si la séance change).
+        if (this.showManualForm() && this.canManage()) {
+          this.loadCandidates();
         }
         this.maybeStartPolling();
       },

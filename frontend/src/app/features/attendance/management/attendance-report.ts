@@ -5,6 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -19,7 +20,9 @@ import {
   ReportQuery,
   SessionReportRow,
   StudentReportRow,
+  isAllowedReportSort,
   percent,
+  reportSortOptions,
 } from '../attendance.models';
 import { formatInstantUtc } from '../../sessions/sessions.models';
 
@@ -47,6 +50,7 @@ type State =
     MatIconModule,
     MatFormFieldModule,
     MatInputModule,
+    MatSelectModule,
     MatProgressBarModule,
   ],
   templateUrl: './attendance-report.html',
@@ -67,11 +71,14 @@ export class AttendanceReport {
   protected readonly exporting = signal(false);
   private readonly size = 20;
 
+  /** Options de tri bornées à la liste blanche serveur (§6). */
+  protected readonly sortOptions = reportSortOptions(this.kind);
   protected readonly filters = this.fb.nonNullable.group({
     from: [''],
     to: [''],
     classGroup: [''],
     studentProfile: [''],
+    sort: [''],
   });
 
   protected readonly title = computed(
@@ -110,7 +117,7 @@ export class AttendanceReport {
     this.load();
   }
   protected reset(): void {
-    this.filters.reset({ from: '', to: '', classGroup: '', studentProfile: '' });
+    this.filters.reset({ from: '', to: '', classGroup: '', studentProfile: '', sort: '' });
     this.page.set(0);
     this.load();
   }
@@ -151,11 +158,16 @@ export class AttendanceReport {
 
   private query(paged: boolean): ReportQuery {
     const raw = this.filters.getRawValue();
+    // Défense en profondeur : un `sort` hors liste blanche n'est jamais
+    // transmis (le `mat-select` n'en propose pas, mais on ne fait pas
+    // confiance à la valeur du contrôle).
+    const sort = isAllowedReportSort(this.kind, raw.sort) ? raw.sort || null : null;
     return {
       from: isoStart(raw.from),
       to: isoStart(raw.to),
       classGroup: raw.classGroup.trim() || null,
       studentProfile: this.kind === 'students' ? raw.studentProfile.trim() || null : null,
+      sort,
       ...(paged ? { page: this.page(), size: this.size } : {}),
     };
   }

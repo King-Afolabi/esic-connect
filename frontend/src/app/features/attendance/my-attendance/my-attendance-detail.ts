@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -90,6 +90,15 @@ export class MyAttendanceDetail {
 
   constructor() {
     this.load();
+    // §5 : à la perte du contexte STUDENT, fermer l'édition et effacer le
+    // brouillon du justificatif.
+    effect(() => {
+      if (!this.isStudentContext()) {
+        this.editing.set(false);
+        this.formError.set(null);
+        this.amendForm.reset({ category: 'MEDICAL', externalReference: '', comment: '' });
+      }
+    });
   }
 
   protected retry(): void {
@@ -134,6 +143,11 @@ export class MyAttendanceDetail {
         next: () => {
           this.submitting.set(false);
           this.editing.set(false);
+          // §5 : contexte STUDENT perdu pendant l'appel — pas de faux
+          // succès. Le back-end peut avoir appliqué la modification.
+          if (!this.isStudentContext()) {
+            return;
+          }
           this.notifications.info('Justificatif mis à jour.');
           this.load();
         },

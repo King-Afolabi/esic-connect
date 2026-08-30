@@ -12,7 +12,20 @@ import { SessionDetail } from './session-detail';
 
 const GET_URL = '/api/v1/sessions/s-1';
 const ATTENDANCE_URL = '/api/v1/sessions/s-1/attendance';
+const CANDIDATES_URL = '/api/v1/sessions/s-1/attendance/candidates';
+const EXPORT_URL = '/api/v1/sessions/s-1/attendance/export';
 const TOKEN_URL = '/api/v1/sessions/s-1/checkpoints/cp-1/attendance-token';
+
+const CANDIDATES = [
+  {
+    studentProfilePublicId: 'sp-1',
+    enrollmentPublicId: 'e-1',
+    studentNumber: 'ESIC-2026-001',
+    firstName: 'Bob',
+    lastName: 'Durand',
+    classCode: 'C1',
+  },
+];
 
 const CP_OPEN: CheckpointView = {
   publicId: 'cp-1',
@@ -89,7 +102,20 @@ interface DetailInternals {
   checkpointForm: { patchValue: (v: Record<string, unknown>) => void };
   toggleManualForm: () => void;
   submitManual: () => void;
-  manualForm: { patchValue: (v: Record<string, unknown>) => void };
+  loadCandidates: () => void;
+  candidates: () => unknown[];
+  candidatesState: () => string;
+  manualForm: {
+    patchValue: (v: Record<string, unknown>) => void;
+    getRawValue: () => Record<string, unknown>;
+  };
+  exportAttendanceCsv: () => void;
+  startCancelCheckpoint: (cp: CheckpointView) => void;
+  startCancelRow: (id: string) => void;
+  checkpointCancelForm: { patchValue: (v: Record<string, unknown>) => void; value: unknown };
+  attendanceCancelForm: { patchValue: (v: Record<string, unknown>) => void; value: unknown };
+  checkpointCancelId: () => string | null;
+  attendanceCancelId: () => string | null;
   toggleHistory: (id: string) => void;
   showCheckpointForm: () => boolean;
   showManualForm: () => boolean;
@@ -364,12 +390,20 @@ describe('SessionDetail', () => {
     expect(internals.showCheckpointForm()).toBe(false);
   });
 
-  it('records a manual attendance against the selected checkpoint and refreshes the roster', () => {
+  it('loads the session candidates and records a manual attendance for the selected enrollment', () => {
     ({ fixture, http, internals } = setup(['TEACHER']));
     initialLoad(http);
     fixture.detectChanges();
 
     internals.toggleManualForm();
+    const candidates = http.expectOne((r) => r.url === CANDIDATES_URL && r.method === 'GET');
+    candidates.flush(CANDIDATES);
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('ready');
+    expect(internals.candidates()).toHaveLength(1);
+    // Le contrat client ne porte ni e-mail ni identifiant SQL.
+    expect(Object.keys(internals.candidates()[0] as object)).not.toContain('email');
+
     internals.manualForm.patchValue({ enrollmentPublicId: 'e-1', status: 'ABSENT', comment: 'absent constaté' });
     internals.submitManual();
 
@@ -382,6 +416,100 @@ describe('SessionDetail', () => {
     });
     post.flush({});
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    expect(internals.showManualForm()).toBe(false);
+    expect(internals.candidates()).toEqual([]);
+  });
+
+  it('surfaces empty / error / forbidden states for the manual candidates list', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush([]);
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('empty');
+    expect(text()).toContain('Aucune inscription active');
+
+    internals.loadCandidates();
+    http.expectOne(CANDIDATES_URL).flush(
+      { timestamp: 't', status: 403, code: 'ATT_OPERATION_FORBIDDEN', message: 'x', path: '/', correlationId: null, details: [] },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('forbidden');
+
+    internals.loadCandidates();
+    http.expectOne(CANDIDATES_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('error');
+  });
+
+  it('never mixes the checkpoint-cancel and attendance-cancel reason forms', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.startCancelCheckpoint(CP_OPEN);
+    internals.checkpointCancelForm.patchValue({ reason: 'point de contrôle en trop' });
+    internals.startCancelRow('a-9');
+
+    expect(internals.checkpointCancelId()).toBeNull();
+    expect(internals.attendanceCancelId()).toBe('a-9');
+    expect((internals.attendanceCancelForm.value as { reason: string }).reason).toBe('');
+
+    internals.attendanceCancelForm.patchValue({ reason: 'doublon' });
+    internals.startCancelCheckpoint(CP_OPEN);
+    expect((internals.checkpointCancelForm.value as { reason: string }).reason).toBe('');
+    expect(internals.attendanceCancelId()).toBeNull();
+  });
+
+  it('exports this session attendance as a CSV blob without putting anything in the URL', () => {
+    ({ fixture, http, internals } = setup(['SCHOOL_ADMINISTRATION']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    try {
+      internals.exportAttendanceCsv();
+      const req = http.expectOne((r) => r.url === EXPORT_URL && r.method === 'GET');
+      expect(req.request.responseType).toBe('blob');
+      expect(req.request.urlWithParams).toBe(EXPORT_URL);
+      req.flush(new Blob(['a;b\r\n'], { type: 'text/csv' }), {
+        headers: { 'content-disposition': 'attachment; filename="attendance-session_s-1.csv"' },
+      });
+      expect(clickSpy).toHaveBeenCalledOnce();
+      expect(revokeSpy).toHaveBeenCalledWith('blob:x');
+    } finally {
+      createUrlSpy.mockRestore();
+      revokeSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+  });
+
+  it('drops a manual-record success that lands after the manage right was lost', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush(CANDIDATES);
+    internals.manualForm.patchValue({ enrollmentPublicId: 'e-1', status: 'ABSENT', comment: 'x' });
+    internals.submitManual();
+    const post = http.expectOne('/api/v1/sessions/s-1/attendance/manual');
+
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+
+    post.flush({});
+    fixture.detectChanges();
+    // Aucun rafraîchissement de la liste des présences n'est déclenché.
+    http.expectNone(ATTENDANCE_URL);
+    const notifications = TestBed.inject(NotificationService);
+    expect(notifications.info).not.toHaveBeenCalledWith('Présence enregistrée.');
     expect(internals.showManualForm()).toBe(false);
   });
 
@@ -415,12 +543,15 @@ describe('SessionDetail', () => {
     initialLoad(http);
     internals.toggleCheckpointForm();
     internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush(CANDIDATES);
     expect(internals.showCheckpointForm()).toBe(true);
 
     effectiveRoles.set(['STUDENT']);
     fixture.detectChanges();
     expect(internals.showCheckpointForm()).toBe(false);
     expect(internals.showManualForm()).toBe(false);
+    expect(internals.candidates()).toEqual([]);
+    expect(internals.attendanceCancelId()).toBeNull();
   });
 
   it('renders a not-found panel on a 404 and never touches browser storage', () => {

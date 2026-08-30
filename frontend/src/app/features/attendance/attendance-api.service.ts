@@ -161,6 +161,7 @@ function reportParams(query: ReportQuery): HttpParams {
     to: query.to,
     classGroup: query.classGroup,
     studentProfile: query.studentProfile,
+    sort: query.sort,
     page: query.page,
     size: query.size,
   });
