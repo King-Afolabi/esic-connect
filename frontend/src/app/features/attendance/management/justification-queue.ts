@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -65,6 +73,8 @@ export class JustificationQueue {
 
   protected readonly state = signal<State>({ kind: 'loading' });
   protected readonly statusFilter = signal<string>('PENDING');
+  /** §5 — jeton monotone : voir {@link AttendanceSummary}. */
+  private readonly loadToken = signal(0);
 
   protected readonly reviewId = signal<string | null>(null);
   protected readonly submitting = signal(false);
@@ -89,16 +99,23 @@ export class JustificationQueue {
   });
 
   constructor() {
-    this.load();
     // §5 : à la perte du droit d'examen, fermer le panneau, réinitialiser
-    // le formulaire et effacer les données temporaires (identifiant
-    // sélectionné, motif, erreur).
+    // le formulaire, effacer les données temporaires, invalider la
+    // requête en cours et vider la liste ; sur contexte retrouvé,
+    // rechargement propre.
     effect(() => {
-      if (!this.canReview()) {
-        this.reviewId.set(null);
-        this.formError.set(null);
-        this.reviewForm.reset({ decision: 'ACCEPTED', decisionReason: '' });
-      }
+      const allowed = this.canReview();
+      untracked(() => {
+        if (allowed) {
+          this.load();
+        } else {
+          this.loadToken.update((n) => n + 1);
+          this.reviewId.set(null);
+          this.formError.set(null);
+          this.reviewForm.reset({ decision: 'ACCEPTED', decisionReason: '' });
+          this.state.set({ kind: 'forbidden' });
+        }
+      });
     });
   }
 
@@ -161,10 +178,24 @@ export class JustificationQueue {
   }
 
   private load(): void {
+    this.loadToken.update((n) => n + 1);
+    const token = this.loadToken();
+    if (!this.canReview()) {
+      this.state.set({ kind: 'forbidden' });
+      return;
+    }
     this.state.set({ kind: 'loading' });
     this.api.listJustificationsForReview(this.statusFilter() || null).subscribe({
-      next: (rows) => this.state.set({ kind: 'ready', rows }),
+      next: (rows) => {
+        if (token !== this.loadToken() || !this.canReview()) {
+          return;
+        }
+        this.state.set({ kind: 'ready', rows });
+      },
       error: (error: unknown) => {
+        if (token !== this.loadToken() || !this.canReview()) {
+          return;
+        }
         const view = toAttendanceError(error);
         this.state.set(view.forbidden ? { kind: 'forbidden' } : { kind: 'error', message: view.message });
       },

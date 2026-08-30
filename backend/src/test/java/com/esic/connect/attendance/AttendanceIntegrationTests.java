@@ -419,8 +419,127 @@ class AttendanceIntegrationTests {
     }
 
     private HttpStatus rawStatus(String path, String token) {
+        RequestEntity.HeadersBuilder<?> builder = RequestEntity.get(URI.create(path));
+        if (token != null) {
+            builder = builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return (HttpStatus) restTemplate.exchange(builder.build(), String.class).getStatusCode();
+    }
+
+    /**
+     * §2 — l'éligibilité des candidats (et la validation d'une saisie
+     * manuelle) dépend de la <strong>date de la séance</strong>, pas du
+     * seul état actif courant : une inscription qui débute après la séance
+     * ou qui s'est terminée avant est exclue de la liste et refusée à la
+     * saisie ; un apprenant d'une classe extérieure n'apparaît jamais.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void candidateEligibilityDependsOnTheSessionDateNotJustCurrentActiveState() {
+        String admin = adminToken();
+        // Séance au 2026-09-10 (fixture par défaut). L'apprenant de base a
+        // une inscription ouverte débutant aujourd'hui -> valable ce jour.
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String validEnrollment = fx.enrollments().get(0);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+
+        // Inscription débutant APRÈS la séance : active, mais pas encore en vigueur le 10/09.
+        String futureEnrollment = enrollExtraStudentInFixtureClass(admin, fx, "2026-10-01");
+        // Inscription TERMINÉE avant la séance : forcée ACTIVE + end_date passée
+        // (impossible via l'API, qui clôt aussi le statut ; on isole ainsi la
+        // branche "date" de la branche "statut").
+        String endedEnrollment = enrollExtraStudentInFixtureClass(admin, fx, "2026-08-15");
+        assertThat(jdbcTemplate.update(
+                "UPDATE enrollment SET end_date = ? WHERE public_id = UUID_TO_BIN(?)",
+                "2026-09-01", endedEnrollment)).isEqualTo(1);
+
+        // Un apprenant actif d'une classe extérieure (autre séance) : jamais retourné.
+        Fixture outside = openSessionWithEnrolledStudents(admin, 1);
+
+        List<Map<String, Object>> candidates = listRaw(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/candidates", admin);
+        List<Object> ids = candidates.stream().map(c -> c.get("enrollmentPublicId")).toList();
+        assertThat(ids).containsExactly(validEnrollment);
+        assertThat(ids).doesNotContain(futureEnrollment, endedEnrollment);
+        assertThat(ids).doesNotContainAnyElementsOf(outside.enrollments());
+
+        // Saisie manuelle : acceptée pour l'inscription valable ce jour-là.
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", validEnrollment, "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "absent au pointage"),
+                admin, HttpStatus.CREATED);
+
+        // Refusée (409 ATT_NOT_ENROLLED) pour l'inscription débutant après la séance.
+        ResponseEntity<Map<String, Object>> future = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", futureEnrollment, "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "x"), admin);
+        assertThat(future.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(future.getBody().get("code")).isEqualTo("ATT_NOT_ENROLLED");
+
+        // Refusée pour l'inscription terminée avant la séance.
+        ResponseEntity<Map<String, Object>> ended = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", endedEnrollment, "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "x"), admin);
+        assertThat(ended.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ended.getBody().get("code")).isEqualTo("ATT_NOT_ENROLLED");
+    }
+
+    /**
+     * §3 — matrice de contrôle d'accès du endpoint final des candidats,
+     * exercée avec des fixtures représentatives (pas seulement le
+     * {@code @PreAuthorize}) : ADMIN et SCHOOL_ADMINISTRATION 200 ; un
+     * PEDAGOGICAL_MANAGER dans son périmètre 200, hors périmètre 403 ; le
+     * formateur affecté 200, un formateur non affecté 403 ; STUDENT 403 ;
+     * anonyme 401.
+     */
+    @Test
+    void candidatesEndpointEnforcesFineGrainedScopePerRole() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String path = "/api/v1/sessions/" + fx.sessionId() + "/attendance/candidates";
+
+        assertThat(rawStatus(path, admin)).as("ADMIN").isEqualTo(HttpStatus.OK);
+        assertThat(rawStatus(path, roleToken(RoleCode.SCHOOL_ADMINISTRATION)))
+                .as("SCHOOL_ADMINISTRATION").isEqualTo(HttpStatus.OK);
+        assertThat(rawStatus(path, tokenFor(fx.teacher()))).as("TEACHER affecté").isEqualTo(HttpStatus.OK);
+        assertThat(rawStatus(path, roleToken(RoleCode.TEACHER)))
+                .as("TEACHER non affecté").isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(rawStatus(path, tokenFor(fx.students().get(0)))).as("STUDENT").isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(rawStatus(path, null)).as("anonyme").isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        // PEDAGOGICAL_MANAGER hors périmètre (aucune affectation) -> 403.
+        Account outOfScope = accountWithRoles(RoleCode.PEDAGOGICAL_MANAGER);
+        assertThat(rawStatus(path, tokenFor(outOfScope)))
+                .as("PEDAGOGICAL_MANAGER hors périmètre").isEqualTo(HttpStatus.FORBIDDEN);
+
+        // PEDAGOGICAL_MANAGER responsable principal de la formation -> 200.
+        Account inScope = accountWithRoles(RoleCode.PEDAGOGICAL_MANAGER);
+        created("/api/v1/pedagogical-assignments", Map.of(
+                "programPublicId", fx.program(), "userPublicId", inScope.publicId(),
+                "type", "PRIMARY_MANAGER", "reason", "responsable de la formation"), admin);
+        assertThat(rawStatus(path, tokenFor(inScope)))
+                .as("PEDAGOGICAL_MANAGER dans son périmètre").isEqualTo(HttpStatus.OK);
+
+        // SCHOOL_ADMINISTRATION peut aussi enregistrer une présence manuelle
+        // (rôle « global » du modèle documenté — exclu seulement des points
+        // de contrôle) ; un formateur non affecté reste refusé.
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        String manualBody = "{\"enrollmentPublicId\":\"" + fx.enrollments().get(0)
+                + "\",\"checkpointPublicId\":\"" + cp + "\",\"status\":\"ABSENT\",\"comment\":\"absent\"}";
+        assertThat(rawPost("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                manualBody, roleToken(RoleCode.SCHOOL_ADMINISTRATION)))
+                .as("SCHOOL_ADMINISTRATION saisie manuelle").isEqualTo(HttpStatus.CREATED);
+        assertThat(rawPost("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                manualBody, roleToken(RoleCode.TEACHER)))
+                .as("TEACHER non affecté saisie manuelle").isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private HttpStatus rawPost(String path, String jsonBody, String token) {
         return (HttpStatus) restTemplate.exchange(
-                RequestEntity.get(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                RequestEntity.post(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).body(jsonBody),
                 String.class).getStatusCode();
     }
 
@@ -753,6 +872,38 @@ class AttendanceIntegrationTests {
         assertThat(csv).doesNotContain(";=SUM(A1:A9)");
     }
 
+    /**
+     * §6 — l'export CSV des présences <em>d'une séance</em> ne contient
+     * plus la colonne libre « commentaire » (minimisation) ; le texte des
+     * commentaires n'apparaît nulle part ; la neutralisation d'injection
+     * de formule reste appliquée à toutes les cellules issues des
+     * utilisateurs (ici le libellé d'un point de contrôle).
+     */
+    @Test
+    void sessionAttendanceCsvExportExcludesFreeTextCommentAndNeutralizesInjection() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = (String) post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints",
+                Map.of("label", "=SUM(A1)+cmd|'/c calc'", "type", "CUSTOM"), admin, HttpStatus.CREATED)
+                .get("publicId");
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", fx.enrollments().get(0), "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "=DANGER()-formule@ligne libre"),
+                admin, HttpStatus.CREATED);
+
+        String csv = getCsv("/api/v1/sessions/" + fx.sessionId() + "/attendance/export", admin);
+        String header = csv.split("\r\n", 2)[0];
+        assertThat(header).doesNotContain("commentaire");
+        assertThat(header).contains("point_de_controle;numero_etudiant;prenom;nom;statut;retard_minutes;"
+                + "enregistre_le;canal");
+        // Le contenu du commentaire libre est absent de l'export.
+        assertThat(csv).doesNotContain("DANGER");
+        // Neutralisation d'injection conservée : le libellé du point de
+        // contrôle commençant par '=' est préfixé d'une apostrophe.
+        assertThat(csv).contains("'=SUM(A1)+cmd");
+        assertThat(csv).doesNotContain(";=SUM(A1)");
+    }
+
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
@@ -782,7 +933,25 @@ class AttendanceIntegrationTests {
     }
 
     private record Fixture(String sessionId, List<Account> students, List<String> enrollments,
-                           String classA, Account teacher) {
+                           String classA, String program, Account teacher) {
+    }
+
+    /**
+     * Inscrit un apprenant supplémentaire dans la classe de la fixture,
+     * avec une {@code startDate} explicite (pour tester la couverture de
+     * l'inscription à la date de la séance — §2). Renvoie l'identifiant
+     * public de l'inscription.
+     */
+    private String enrollExtraStudentInFixtureClass(String admin, Fixture fx, String startDate) {
+        Account student = accountWithRoles(RoleCode.STUDENT);
+        String profile = createProfile(admin, student.publicId());
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("studentProfilePublicId", profile);
+        body.put("classGroupPublicId", fx.classA());
+        if (startDate != null) {
+            body.put("startDate", startDate);
+        }
+        return (String) created("/api/v1/enrollments", body, admin).get("publicId");
     }
 
     private Fixture openSessionWithEnrolledStudents(String admin, int studentCount) {
@@ -811,7 +980,7 @@ class AttendanceIntegrationTests {
             students.add(student);
             enrollments.add(enrollment);
         }
-        return new Fixture(sessionId, students, enrollments, chain.classA(), teacher);
+        return new Fixture(sessionId, students, enrollments, chain.classA(), chain.program(), teacher);
     }
 
     private String createProfile(String admin, String userPublicId) {
@@ -825,7 +994,7 @@ class AttendanceIntegrationTests {
                 "timeZoneId", "Europe/Paris", "reason", "séance exceptionnelle");
     }
 
-    private record Chain(String classA, String classB) {
+    private record Chain(String classA, String classB, String program) {
     }
 
     private Chain academicChain(String admin) {
@@ -845,7 +1014,7 @@ class AttendanceIntegrationTests {
         String classB = (String) created("/api/v1/class-groups", Map.of("promotionPublicId", promo,
                 "programLevelPublicId", level, "sitePublicId", site, "code", "C2", "name", "Classe 2"), admin)
                 .get("publicId");
-        return new Chain(classA, classB);
+        return new Chain(classA, classB, program);
     }
 
     private static HttpStatus get(Future<HttpStatus> future) {

@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -62,13 +64,26 @@ class AttendanceManagementService {
 
     AttendanceRecordResponse recordManual(String sessionPublicId, AttendanceManagementRequests.ManualRecord request,
                                           String callerSubject) {
-        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.MANAGE);
+        // Écriture d'assiduité : l'autorisation de rôle est portée par
+        // @PreAuthorize(AttendanceManagementWeb.MANAGE_ROLES) sur le
+        // contrôleur (STUDENT / anonyme exclus). La résolution de séance
+        // n'exige que READ — SCHOOL_ADMINISTRATION global, TEACHER sur sa
+        // séance, PEDAGOGICAL_MANAGER dans son périmètre — conformément au
+        // modèle de rôles documenté (SCHOOL_ADMINISTRATION exclu de la
+        // seule gestion des points de contrôle, pas des présences).
+        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
         CheckpointRef checkpoint = requireCheckpoint(session, request.checkpointPublicId());
 
         EnrollmentDirectory.EnrollmentRef enrollment = enrollmentDirectory
                 .findByPublicId(parseUuid(request.enrollmentPublicId(), AttendanceException.Kind.NOT_ENROLLED))
                 .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.NOT_ENROLLED));
         if (!session.classGroupPublicIds().contains(enrollment.classGroupPublicId()) || !enrollment.usable()) {
+            throw new AttendanceException(AttendanceException.Kind.NOT_ENROLLED);
+        }
+        // Correctif PR #22 §2 : l'inscription doit avoir couvert le jour
+        // <em>de la séance</em>, pas seulement être active aujourd'hui —
+        // même règle que la liste des candidats.
+        if (!enrollmentDirectory.isEnrollmentValidOn(enrollment.publicId(), sessionLocalDate(session))) {
             throw new AttendanceException(AttendanceException.Kind.NOT_ENROLLED);
         }
         long studentUserId = userDirectory.findByPublicId(enrollment.studentUserPublicId())
@@ -108,7 +123,8 @@ class AttendanceManagementService {
     @Transactional
     AttendanceRecordResponse correct(String sessionPublicId, String attendancePublicId,
                                      AttendanceManagementRequests.Correct request, String callerSubject) {
-        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.MANAGE);
+        // Voir recordManual : READ suffit ; MANAGE_ROLES gère l'écriture.
+        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
         AttendanceRecord record = requireRecord(session, attendancePublicId);
         if (record.isCancelled()) {
             throw new AttendanceException(AttendanceException.Kind.RECORD_INVALID_STATE);
@@ -153,7 +169,8 @@ class AttendanceManagementService {
     @Transactional
     AttendanceRecordResponse cancel(String sessionPublicId, String attendancePublicId,
                                     AttendanceManagementRequests.Cancel request, String callerSubject) {
-        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.MANAGE);
+        // Voir recordManual : READ suffit ; MANAGE_ROLES gère l'écriture.
+        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
         AttendanceRecord record = requireRecord(session, attendancePublicId);
         if (record.isCancelled()) {
             throw new AttendanceException(AttendanceException.Kind.RECORD_INVALID_STATE);
@@ -197,7 +214,8 @@ class AttendanceManagementService {
         CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
         java.util.LinkedHashMap<UUID, AttendanceCandidateResponse> byEnrollment = new java.util.LinkedHashMap<>();
         for (EnrollmentDirectory.RosterEntry entry
-                : enrollmentDirectory.findActiveRosterForClasses(session.classGroupPublicIds())) {
+                : enrollmentDirectory.findRosterForClassesOn(
+                        session.classGroupPublicIds(), sessionLocalDate(session))) {
             if (entry.enrollmentPublicId() == null) {
                 continue;
             }
@@ -232,6 +250,11 @@ class AttendanceManagementService {
                     : recordRepository.findByAttendanceCheckpointIdOrderByRecordedAtAsc(cp.internalId())) {
                 EnrollmentDirectory.AttendeeRef attendee = enrollmentDirectory
                         .describeAttendee(record.getEnrollmentId()).orElse(null);
+                // Correctif PR #22 §6 : minimisation — pas de colonne
+                // « commentaire » (champ libre) dans l'export. Seules des
+                // données strictement nécessaires au suivi d'assiduité,
+                // toutes neutralisées contre l'injection de formule par
+                // AttendanceCsvWriter.
                 body.add(List.of(
                         nullSafe(cp.label()),
                         attendee != null ? nullSafe(attendee.studentNumber()) : "",
@@ -239,14 +262,13 @@ class AttendanceManagementService {
                         attendee != null ? nullSafe(attendee.lastName()) : "",
                         record.getStatus() != null ? record.getStatus().name() : "",
                         record.getLateMinutes() != null ? record.getLateMinutes().toString() : "",
-                        nullSafe(record.getComment()),
                         record.getRecordedAt() != null ? record.getRecordedAt().toString() : "",
                         record.getSource() != null ? record.getSource().name() : ""));
             }
         }
         String content = AttendanceCsvWriter.write(List.of(
                 "point_de_controle", "numero_etudiant", "prenom", "nom", "statut", "retard_minutes",
-                "commentaire", "enregistre_le", "canal"), body);
+                "enregistre_le", "canal"), body);
         String fileName = "attendance-session_" + session.publicId() + ".csv";
         return new SessionCsv(fileName, content);
     }
@@ -292,6 +314,27 @@ class AttendanceManagementService {
             throw new AttendanceException(AttendanceException.Kind.RECORD_NOT_FOUND);
         }
         return record;
+    }
+
+    /**
+     * Date civile <em>de la séance</em> : {@code startsAt} projeté dans le
+     * fuseau IANA persisté de la séance. Un fuseau persisté invalide est
+     * un état interne corrompu — il lève une erreur interne contrôlée
+     * plutôt qu'un repli silencieux sur UTC qui décalerait la date
+     * (correctif PR #22 §2 ; même convention que
+     * {@code AttendanceReportService.persistedZone}). La valeur invalide
+     * n'est jamais exposée.
+     */
+    private static LocalDate sessionLocalDate(CourseSessionDirectory.SessionRef session) {
+        return session.startsAt().atZone(persistedZone(session.timeZoneId())).toLocalDate();
+    }
+
+    private static ZoneId persistedZone(String id) {
+        try {
+            return ZoneId.of(id);
+        } catch (RuntimeException invalid) {
+            throw new IllegalStateException("Fuseau horaire persisté invalide pour une séance");
+        }
     }
 
     private static AttendanceStatus parseManualStatus(String value) {

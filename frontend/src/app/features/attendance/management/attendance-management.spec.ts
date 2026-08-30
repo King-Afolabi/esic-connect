@@ -70,6 +70,53 @@ describe('AttendanceSummary', () => {
     http.verify();
   });
 
+  it('clears the summary on context loss, ignores a late response, and reloads on a valid context', () => {
+    const { providers, effectiveRoles } = base(['ADMIN']);
+    TestBed.configureTestingModule({ providers });
+    const fixture = TestBed.createComponent(AttendanceSummary);
+    const http = TestBed.inject(HttpTestingController);
+    const summary = {
+      from: null,
+      to: null,
+      classCount: 1,
+      sessionCount: 2,
+      totals: EMPTY_TOTALS,
+      pendingJustifications: 0,
+      notes: [],
+    };
+    const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    // contexte autorisé -> données visibles
+    fixture.detectChanges();
+    http.expectOne((r) => r.url === SUMMARY_URL).flush(summary);
+    fixture.detectChanges();
+    expect(text()).toContain('75,0 %');
+
+    // une requête en cours au moment de la bascule
+    (fixture.componentInstance as unknown as { apply: () => void }).apply();
+    const inflight = http.expectOne((r) => r.url === SUMMARY_URL);
+
+    // bascule vers STUDENT -> synthèse effacée, aucune nouvelle requête
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(text()).not.toContain('75,0 %');
+    expect(text()).toContain("Vous n'êtes pas autorisé");
+    http.expectNone((r) => r.url === SUMMARY_URL);
+
+    // réponse HTTP tardive après la bascule -> ignorée, données toujours absentes
+    inflight.flush({ ...summary, classCount: 9 });
+    fixture.detectChanges();
+    expect(text()).not.toContain('75,0 %');
+
+    // retour vers un contexte autorisé -> rechargement propre possible
+    effectiveRoles.set(['SCHOOL_ADMINISTRATION']);
+    fixture.detectChanges();
+    http.expectOne((r) => r.url === SUMMARY_URL).flush(summary);
+    fixture.detectChanges();
+    expect(text()).toContain('75,0 %');
+    http.verify();
+  });
+
   it('renders a forbidden panel on 403', () => {
     const { providers } = base(['PEDAGOGICAL_MANAGER']);
     TestBed.configureTestingModule({ providers });

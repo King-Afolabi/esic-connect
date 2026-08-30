@@ -119,6 +119,14 @@ interface DetailInternals {
   toggleHistory: (id: string) => void;
   showCheckpointForm: () => boolean;
   showManualForm: () => boolean;
+  canManageCheckpoint: () => boolean;
+  canManageAttendance: () => boolean;
+  canReadAttendance: () => boolean;
+  pendingAction: () => 'open' | 'close' | null;
+  startCorrect: (id: string) => void;
+  submitCorrect: () => void;
+  correctForm: { patchValue: (v: Record<string, unknown>) => void };
+  correctRowId: () => string | null;
 }
 
 function setup(roles: Role[]) {
@@ -552,6 +560,68 @@ describe('SessionDetail', () => {
     expect(internals.showManualForm()).toBe(false);
     expect(internals.candidates()).toEqual([]);
     expect(internals.attendanceCancelId()).toBeNull();
+  });
+
+  it('splits capabilities: SCHOOL_ADMINISTRATION manages attendance but not checkpoints or the QR', () => {
+    ({ fixture, http, internals } = setup(['SCHOOL_ADMINISTRATION']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    expect(internals.canManageCheckpoint()).toBe(false);
+    expect(internals.canManageAttendance()).toBe(true);
+    expect(internals.canReadAttendance()).toBe(true);
+
+    // Aucune commande de cycle de vie de séance ni section QR.
+    expect(text()).not.toContain('Fermer la séance');
+    expect(text()).not.toContain('Émargement en cours');
+    expect(fixture.nativeElement.querySelector('qrcode')).toBeNull();
+
+    // Les handlers de gestion de point de contrôle sont des no-op au clic.
+    internals.startClose();
+    expect(internals.pendingAction()).toBeNull();
+    internals.toggleCheckpointForm();
+    expect(internals.showCheckpointForm()).toBe(false);
+    internals.refreshToken();
+    http.expectNone(TOKEN_URL);
+    internals.startCancelCheckpoint(CP_OPEN);
+    expect(internals.checkpointCancelId()).toBeNull();
+
+    // La saisie manuelle est en revanche disponible et charge les candidats.
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush(CANDIDATES);
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('ready');
+    internals.manualForm.patchValue({ enrollmentPublicId: 'e-1', status: 'ABSENT', comment: 'absent' });
+    internals.submitManual();
+    http.expectOne('/api/v1/sessions/s-1/attendance/manual').flush({
+      attendancePublicId: 'a-1',
+      sessionPublicId: 's-1',
+      checkpointPublicId: 'cp-1',
+      status: 'ABSENT',
+      lateMinutes: null,
+      recordedAt: '2026-09-10T06:10:00Z',
+      source: 'MANUAL',
+    });
+    // Le succès déclenche un rafraîchissement de la liste des présences.
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    const notifications = TestBed.inject(NotificationService);
+    expect(notifications.info).toHaveBeenCalledWith('Présence enregistrée.');
+  });
+
+  it('re-checks the attendance-manage right at click time when the context changed', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+
+    internals.startCorrect('a-1');
+    expect(internals.correctRowId()).toBeNull();
+    internals.correctForm.patchValue({ status: 'PRESENT', reason: 'oubli' });
+    internals.submitCorrect();
+    http.expectNone((r) => r.url === '/api/v1/sessions/s-1/attendance/a-1/correct');
   });
 
   it('renders a not-found panel on a 404 and never touches browser storage', () => {

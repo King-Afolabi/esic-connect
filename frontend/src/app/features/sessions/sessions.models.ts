@@ -362,10 +362,29 @@ export const SESSION_READ_ROLES = [
   'TEACHER',
 ] as const;
 
-/** Rôles autorisés à ouvrir / fermer / émettre un jeton (`CourseSessionWeb.MANAGE_ROLES`). */
+/**
+ * Rôles autorisés à gérer les points de contrôle, ouvrir / fermer la
+ * séance et émettre un jeton QR (`CourseSessionWeb.MANAGE_ROLES`).
+ * `SCHOOL_ADMINISTRATION` en est exclu (lecture seule des séances).
+ */
 export const SESSION_MANAGE_ROLES = [
   'ADMIN',
   'SUPER_ADMIN',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+
+/**
+ * Rôles autorisés à la saisie manuelle des présences, à la correction et
+ * à l'annulation, et à charger les candidats
+ * (`AttendanceManagementWeb.MANAGE_ROLES`). Distinct de
+ * {@link SESSION_MANAGE_ROLES} : `SCHOOL_ADMINISTRATION` peut agir sur
+ * les présences mais **pas** sur les points de contrôle ni le QR.
+ */
+export const SESSION_ATTENDANCE_MANAGE_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
   'PEDAGOGICAL_MANAGER',
   'TEACHER',
 ] as const;

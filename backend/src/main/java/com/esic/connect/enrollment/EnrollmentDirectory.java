@@ -82,6 +82,39 @@ public interface EnrollmentDirectory {
     List<RosterEntry> findActiveRosterForClasses(Collection<UUID> classGroupPublicIds);
 
     /**
+     * Effectif nominatif rattaché à l'une des classes indiquées et
+     * <strong>valable le jour {@code date}</strong> : inscription
+     * {@code ACTIVE} dont la période {@code [start_date, end_date]}
+     * (bornes inclusives, {@code end_date} {@code null} = ouverte) couvre
+     * {@code date}. Consommé par le module {@code attendance} pour
+     * proposer les candidats à une saisie manuelle : un apprenant dont
+     * l'inscription ne couvrait pas le jour de la séance (début postérieur
+     * ou fin antérieure) n'est jamais proposé, même si l'inscription est
+     * active aujourd'hui (correctif PR #22 §2).
+     *
+     * @param classGroupPublicIds identifiants publics des classes
+     * @param date                jour civil de référence (date locale de la séance)
+     * @return une entrée par inscription valable ce jour-là ; liste vide sinon
+     */
+    List<RosterEntry> findRosterForClassesOn(Collection<UUID> classGroupPublicIds, LocalDate date);
+
+    /**
+     * Indique si l'inscription {@code enrollmentPublicId} est
+     * <strong>valable le jour {@code date}</strong> : elle existe, son
+     * statut est {@code ACTIVE} et sa période {@code [start_date,
+     * end_date]} (bornes inclusives, {@code end_date} {@code null} =
+     * ouverte) couvre {@code date}. Même règle que
+     * {@link #findRosterForClassesOn} : le module {@code attendance}
+     * l'applique lors d'une saisie manuelle pour refuser un apprenant
+     * dont l'inscription ne couvrait pas le jour de la séance.
+     *
+     * @param enrollmentPublicId identifiant public de l'inscription ; peut être {@code null}
+     * @param date               jour civil de référence (date locale de la séance)
+     * @return {@code true} si l'inscription est active et couvre la date
+     */
+    boolean isEnrollmentValidOn(UUID enrollmentPublicId, LocalDate date);
+
+    /**
      * Ligne d'effectif nominatif — porte l'identifiant interne de
      * l'inscription (pour rapprocher les {@code attendance_record}) mais
      * jamais d'adresse électronique.

@@ -32,6 +32,7 @@ import {
   CheckpointAttendance,
   CheckpointView,
   CourseSessionResponse,
+  SESSION_ATTENDANCE_MANAGE_ROLES,
   SESSION_MANAGE_ROLES,
   SESSION_READ_ROLES,
   SessionAttendanceResponse,
@@ -193,12 +194,30 @@ export class SessionDetail {
   protected readonly isPlanned = computed(() => this.session()?.status === 'PLANNED');
   protected readonly isClosed = computed(() => this.session()?.status === 'CLOSED');
 
-  protected readonly canManage = computed(() =>
+  /**
+   * §4 — capacités distinctes, dérivées du contexte de rôle actif
+   * (jamais du JWT brut ; Spring Security reste l'autorité) :
+   * <ul>
+   *   <li>{@link canManageCheckpoint} : ouverture / fermeture de la
+   *       séance, gestion des points de contrôle, émission / renouvellement
+   *       du QR — `SCHOOL_ADMINISTRATION` exclu ;</li>
+   *   <li>{@link canManageAttendance} : saisie manuelle, correction,
+   *       annulation, chargement des candidats — `SCHOOL_ADMINISTRATION`
+   *       inclus ;</li>
+   *   <li>{@link canReadAttendance} : lecture du tableau et export CSV.</li>
+   * </ul>
+   */
+  protected readonly canManageCheckpoint = computed(() =>
     holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_MANAGE_ROLES),
   );
-  protected readonly canRead = computed(() =>
+  protected readonly canManageAttendance = computed(() =>
+    holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_ATTENDANCE_MANAGE_ROLES),
+  );
+  protected readonly canReadAttendance = computed(() =>
     holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_READ_ROLES),
   );
+  /** Alias conservé pour le polling / la garde de lecture de la page. */
+  protected readonly canRead = this.canReadAttendance;
 
   protected readonly checkpoints = computed<CheckpointView[]>(() => this.session()?.checkpoints ?? []);
   protected readonly openCheckpoints = computed(() =>
@@ -209,7 +228,7 @@ export class SessionDetail {
     return this.openCheckpoints().find((cp) => cp.publicId === id) ?? this.openCheckpoints()[0] ?? null;
   });
   protected readonly canShowQr = computed(
-    () => this.isOpen() && this.canManage() && !!this.selectedCheckpoint(),
+    () => this.isOpen() && this.canManageCheckpoint() && !!this.selectedCheckpoint(),
   );
 
   protected readonly attendanceBlocks = computed<CheckpointAttendance[]>(() => {
@@ -230,26 +249,39 @@ export class SessionDetail {
         this.attendanceToken.set(null);
       }
     });
-    // Ferme tout formulaire sensible et efface les données temporaires dès
-    // que le contexte de rôle retire le droit de gestion (§4, §5).
+    // §4/§5 — perte du droit de **gestion des points de contrôle** :
+    // ferme le formulaire de point de contrôle et les confirmations
+    // associées, annule l'ouverture / fermeture de séance en attente.
     effect(() => {
-      if (!this.canManage()) {
+      if (!this.canManageCheckpoint()) {
         this.showCheckpointForm.set(false);
-        this.showManualForm.set(false);
         this.checkpointCancelId.set(null);
-        this.attendanceCancelId.set(null);
-        this.correctRowId.set(null);
-        this.historyRowId.set(null);
-        this.historyEntries.set([]);
-        this.candidates.set([]);
-        this.candidatesState.set('idle');
         this.pendingAction.set(null);
-        this.rowError.set(null);
         this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
         this.checkpointCancelForm.reset({ reason: '' });
+      }
+    });
+    // §4/§5 — perte du droit de **gestion des présences** : ferme la
+    // saisie manuelle, la correction, l'annulation de présence, efface les
+    // candidats déjà chargés.
+    effect(() => {
+      if (!this.canManageAttendance()) {
+        this.showManualForm.set(false);
+        this.attendanceCancelId.set(null);
+        this.correctRowId.set(null);
+        this.candidates.set([]);
+        this.candidatesState.set('idle');
+        this.rowError.set(null);
         this.attendanceCancelForm.reset({ reason: '' });
         this.manualForm.reset({ enrollmentPublicId: '', status: 'ABSENT', lateMinutes: null, comment: '' });
         this.correctForm.reset({ status: '', lateMinutes: null, comment: '', reason: '' });
+      }
+    });
+    // §5 — perte du droit de **lecture** : replie l'historique déplié.
+    effect(() => {
+      if (!this.canReadAttendance()) {
+        this.historyRowId.set(null);
+        this.historyEntries.set([]);
       }
     });
 
@@ -263,10 +295,16 @@ export class SessionDetail {
   // --- Cycle de vie de la séance ---------------------------------
 
   protected startOpen(): void {
+    if (!this.canManageCheckpoint()) {
+      return;
+    }
     this.actionError.set(null);
     this.pendingAction.set('open');
   }
   protected startClose(): void {
+    if (!this.canManageCheckpoint()) {
+      return;
+    }
     this.actionError.set(null);
     this.pendingAction.set('close');
   }
@@ -289,6 +327,9 @@ export class SessionDetail {
   // --- Points de contrôle --------------------------------------
 
   protected toggleCheckpointForm(): void {
+    if (!this.showCheckpointForm() && !this.canManageCheckpoint()) {
+      return;
+    }
     this.showCheckpointForm.update((v) => !v);
     this.rowError.set(null);
     if (!this.showCheckpointForm()) {
@@ -297,7 +338,7 @@ export class SessionDetail {
   }
 
   protected submitCheckpoint(): void {
-    if (this.checkpointForm.invalid || this.rowBusy() || !this.canManage()) {
+    if (this.checkpointForm.invalid || this.rowBusy() || !this.canManageCheckpoint()) {
       this.checkpointForm.markAllAsTouched();
       return;
     }
@@ -315,7 +356,7 @@ export class SessionDetail {
           this.rowBusy.set(false);
           this.showCheckpointForm.set(false);
           this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
-          if (!this.canManage()) {
+          if (!this.canManageCheckpoint()) {
             return;
           }
           this.notifications.info('Point de contrôle créé.');
@@ -338,6 +379,9 @@ export class SessionDetail {
     );
   }
   protected startCancelCheckpoint(cp: CheckpointView): void {
+    if (!this.canManageCheckpoint()) {
+      return;
+    }
     // §4 : ouvrir l'annulation d'un point de contrôle ferme l'annulation
     // d'une présence — jamais de motif mélangé.
     this.attendanceCancelId.set(null);
@@ -371,7 +415,7 @@ export class SessionDetail {
   }
 
   private checkpointAction(call: () => Observable<void>, message: string, after?: () => void): void {
-    if (this.rowBusy() || !this.canManage()) {
+    if (this.rowBusy() || !this.canManageCheckpoint()) {
       return;
     }
     this.rowBusy.set(true);
@@ -381,7 +425,7 @@ export class SessionDetail {
         this.rowBusy.set(false);
         // §5 : le droit peut avoir été perdu pendant l'appel — ne pas
         // afficher de faux succès ni recharger. Le back-end peut avoir agi.
-        if (!this.canManage()) {
+        if (!this.canManageCheckpoint()) {
           this.checkpointCancelId.set(null);
           this.showCheckpointForm.set(false);
           return;
@@ -446,6 +490,9 @@ export class SessionDetail {
   // --- Présence manuelle / correction / annulation / historique -
 
   protected toggleManualForm(): void {
+    if (!this.showManualForm() && !this.canManageAttendance()) {
+      return;
+    }
     this.showManualForm.update((v) => !v);
     this.rowError.set(null);
     if (this.showManualForm()) {
@@ -463,14 +510,14 @@ export class SessionDetail {
    * jamais dans l'URL de navigation ni dans un storage.
    */
   protected loadCandidates(): void {
-    if (!this.canManage()) {
+    if (!this.canManageAttendance()) {
       return;
     }
     this.candidatesState.set('loading');
     this.candidates.set([]);
     this.api.listAttendanceCandidates(this.publicId).subscribe({
       next: (list) => {
-        if (!this.canManage() || !this.showManualForm()) {
+        if (!this.canManageAttendance() || !this.showManualForm()) {
           this.candidates.set([]);
           this.candidatesState.set('idle');
           return;
@@ -487,7 +534,7 @@ export class SessionDetail {
 
   protected submitManual(): void {
     const checkpoint = this.selectedCheckpoint() ?? this.checkpoints()[0] ?? null;
-    if (this.manualForm.invalid || this.rowBusy() || !this.canManage() || !checkpoint) {
+    if (this.manualForm.invalid || this.rowBusy() || !this.canManageAttendance() || !checkpoint) {
       this.manualForm.markAllAsTouched();
       return;
     }
@@ -509,7 +556,7 @@ export class SessionDetail {
           this.manualForm.reset({ enrollmentPublicId: '', status: 'ABSENT', lateMinutes: null, comment: '' });
           this.candidates.set([]);
           this.candidatesState.set('idle');
-          if (!this.canManage()) {
+          if (!this.canManageAttendance()) {
             return;
           }
           this.notifications.info('Présence enregistrée.');
@@ -523,6 +570,9 @@ export class SessionDetail {
   }
 
   protected startCorrect(attendancePublicId: string): void {
+    if (!this.canManageAttendance()) {
+      return;
+    }
     this.correctRowId.set(attendancePublicId);
     this.historyRowId.set(null);
     this.correctForm.reset({ status: '', lateMinutes: null, comment: '', reason: '' });
@@ -534,7 +584,7 @@ export class SessionDetail {
   }
   protected submitCorrect(): void {
     const id = this.correctRowId();
-    if (!id || this.correctForm.invalid || this.rowBusy()) {
+    if (!id || this.correctForm.invalid || this.rowBusy() || !this.canManageAttendance()) {
       this.correctForm.markAllAsTouched();
       return;
     }
@@ -558,6 +608,9 @@ export class SessionDetail {
   }
 
   protected startCancelRow(attendancePublicId: string): void {
+    if (!this.canManageAttendance()) {
+      return;
+    }
     // §4 : ferme l'annulation d'un point de contrôle et le formulaire de
     // correction — chaque motif reste isolé dans son propre FormGroup.
     this.checkpointCancelId.set(null);
@@ -575,7 +628,7 @@ export class SessionDetail {
   }
   protected confirmCancelRow(): void {
     const id = this.attendanceCancelId();
-    if (!id || this.attendanceCancelForm.invalid || this.rowBusy() || !this.canManage()) {
+    if (!id || this.attendanceCancelForm.invalid || this.rowBusy() || !this.canManageAttendance()) {
       this.attendanceCancelForm.markAllAsTouched();
       return;
     }
@@ -627,7 +680,7 @@ export class SessionDetail {
     after?.();
     // §5 : droit perdu pendant l'appel — aucun faux succès, aucun
     // rafraîchissement. Le back-end peut avoir effectué l'action.
-    if (!this.canManage()) {
+    if (!this.canManageAttendance()) {
       this.correctRowId.set(null);
       this.attendanceCancelId.set(null);
       return;
@@ -649,7 +702,7 @@ export class SessionDetail {
         this.submitting.set(false);
         this.pendingAction.set(null);
         // §5 : droit de gestion perdu pendant l'appel — pas de faux succès.
-        if (!this.canManage()) {
+        if (!this.canManageCheckpoint()) {
           return;
         }
         this.notifications.info(successMessage);
@@ -730,7 +783,7 @@ export class SessionDetail {
         }
         // Si la saisie manuelle est ouverte, réaligner les candidats sur
         // la séance rechargée (§2 : invalider si la séance change).
-        if (this.showManualForm() && this.canManage()) {
+        if (this.showManualForm() && this.canManageAttendance()) {
           this.loadCandidates();
         }
         this.maybeStartPolling();

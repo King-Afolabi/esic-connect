@@ -82,6 +82,33 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     @Override
     @Transactional(readOnly = true)
     public List<RosterEntry> findActiveRosterForClasses(Collection<UUID> classGroupPublicIds) {
+        return roster(classGroupPublicIds, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RosterEntry> findRosterForClassesOn(Collection<UUID> classGroupPublicIds, LocalDate date) {
+        return roster(classGroupPublicIds, date);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isEnrollmentValidOn(UUID enrollmentPublicId, LocalDate date) {
+        if (enrollmentPublicId == null) {
+            return false;
+        }
+        return enrollmentRepository.findByPublicId(enrollmentPublicId)
+                .filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.ACTIVE)
+                .filter(enrollment -> coversDate(enrollment, date))
+                .isPresent();
+    }
+
+    /**
+     * Effectif {@code ACTIVE} des classes indiquées, filtré sur la
+     * couverture de {@code date} lorsqu'elle est fournie ({@code null} =
+     * pas de filtrage temporel, effectif actif « courant »).
+     */
+    private List<RosterEntry> roster(Collection<UUID> classGroupPublicIds, LocalDate date) {
         if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
             return List.of();
         }
@@ -96,6 +123,7 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         }
         return enrollmentRepository
                 .findByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE).stream()
+                .filter(enrollment -> date == null || coversDate(enrollment, date))
                 .map(enrollment -> {
                     StudentProfile profile = enrollment.getStudentProfile();
                     UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);

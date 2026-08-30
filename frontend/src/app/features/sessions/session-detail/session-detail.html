@@ -33,7 +33,7 @@
     @if (session(); as current) {
       <div class="sessions__header">
         <h1 class="sessions__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
-        @if (canManage()) {
+        @if (canManageCheckpoint()) {
           <div class="sessions__form-actions">
             @if (isPlanned()) {
               <button mat-flat-button type="button" (click)="startOpen()">Ouvrir la séance</button>
@@ -90,7 +90,7 @@
       <section class="sessions__section" aria-label="Points de contrôle">
         <div class="sessions__header">
           <h2 class="sessions__subtitle">Points de contrôle</h2>
-          @if (canManage() && !isClosed()) {
+          @if (canManageCheckpoint() && !isClosed()) {
             <button mat-stroked-button type="button" (click)="toggleCheckpointForm()">
               <mat-icon aria-hidden="true">add</mat-icon> Ajouter
             </button>
@@ -149,7 +149,7 @@
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef>Actions</th>
                 <td mat-cell *matCellDef="let cp">
-                  @if (canManage()) {
+                  @if (canManageCheckpoint()) {
                     @if (cp.status === 'PLANNED' && isOpen()) {
                       <button mat-button type="button" (click)="openCheckpoint(cp)" [disabled]="rowBusy()">Ouvrir</button>
                     }
@@ -183,7 +183,7 @@
       </section>
 
       <!-- QR -->
-      @if (isOpen() && canManage()) {
+      @if (isOpen() && canManageCheckpoint()) {
         <section class="sessions__section" aria-label="QR code d'émargement">
           <h2 class="sessions__subtitle">Émargement en cours</h2>
           @if (openCheckpoints().length === 0) {
@@ -231,10 +231,12 @@
             <button mat-stroked-button type="button" (click)="refreshAttendance()">
               <mat-icon aria-hidden="true">refresh</mat-icon> Rafraîchir
             </button>
-            <button mat-stroked-button type="button" (click)="exportAttendanceCsv()" [disabled]="exportingCsv()">
-              <mat-icon aria-hidden="true">download</mat-icon> Exporter les présences de cette séance (CSV)
-            </button>
-            @if (canManage()) {
+            @if (canReadAttendance()) {
+              <button mat-stroked-button type="button" (click)="exportAttendanceCsv()" [disabled]="exportingCsv()">
+                <mat-icon aria-hidden="true">download</mat-icon> Exporter les présences de cette séance (CSV)
+              </button>
+            }
+            @if (canManageAttendance()) {
               <button mat-stroked-button type="button" (click)="toggleManualForm()">
                 <mat-icon aria-hidden="true">person_add</mat-icon> Saisie manuelle
               </button>
@@ -343,7 +345,7 @@
                     <td mat-cell *matCellDef="let row">
                       @if (row.attendancePublicId) {
                         <button mat-button type="button" (click)="toggleHistory(row.attendancePublicId)">Historique</button>
-                        @if (canManage() && row.status !== 'CANCELLED') {
+                        @if (canManageAttendance() && row.status !== 'CANCELLED') {
                           <button mat-button type="button" (click)="startCorrect(row.attendancePublicId)" [disabled]="rowBusy()">Corriger</button>
                           <button mat-button type="button" (click)="startCancelRow(row.attendancePublicId)" [disabled]="rowBusy()">Annuler</button>
                         }
