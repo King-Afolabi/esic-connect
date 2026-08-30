@@ -3,6 +3,7 @@ package com.esic.connect.attendance.internal;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,4 +16,8 @@ interface AttendanceJustificationRepository
     List<AttendanceJustification> findByAttendanceRecordIdOrderBySubmittedAtDesc(Long attendanceRecordId);
 
     boolean existsByAttendanceRecordIdAndStatusNot(Long attendanceRecordId, JustificationStatus status);
+
+    List<AttendanceJustification> findBySubmittedByIdOrderBySubmittedAtDesc(Long submittedById);
+
+    List<AttendanceJustification> findByStatusInOrderBySubmittedAtAsc(Collection<JustificationStatus> statuses);
 }

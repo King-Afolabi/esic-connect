@@ -298,10 +298,197 @@ class AttendanceIntegrationTests {
     }
 
     // ------------------------------------------------------------------
+    // Présence manuelle / correction / annulation / historique (V10)
+    // ------------------------------------------------------------------
+
+    @Test
+    void manualRecordCorrectionAndCancellationAreAuditedWithAppendOnlyHistory() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        Map<String, Object> manual = post("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", fx.enrollments().get(0),
+                        "checkpointPublicId", firstCheckpoint(admin, fx.sessionId()),
+                        "status", "ABSENT", "comment", "absent constaté en début de cours"),
+                admin, HttpStatus.CREATED);
+        String attendanceId = (String) manual.get("attendancePublicId");
+        assertThat(manual.get("status")).isEqualTo("ABSENT");
+        assertThat(manual.get("source")).isEqualTo("MANUAL");
+        assertThat(auditActions(attendanceId)).contains("ATTENDANCE_MANUAL_RECORDED");
+
+        Map<String, Object> corrected = post(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/" + attendanceId + "/correct",
+                Map.of("status", "PRESENT", "reason", "arrivé en fait, pointage oublié"), admin, HttpStatus.OK);
+        assertThat(corrected.get("status")).isEqualTo("PRESENT");
+
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/" + attendanceId + "/cancel",
+                Map.of("reason", "doublon"), admin, HttpStatus.OK);
+
+        List<Map<String, Object>> history = listRaw(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/" + attendanceId + "/history", admin);
+        assertThat(history).extracting(h -> h.get("action"))
+                .containsExactly("CREATED_MANUALLY", "STATUS_CORRECTED", "CANCELLED");
+        assertThat(auditActions(attendanceId)).contains("ATTENDANCE_CORRECTED", "ATTENDANCE_CANCELLED");
+
+        // Re-corriger une présence annulée -> 409.
+        ResponseEntity<Map<String, Object>> onCancelled = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/" + attendanceId + "/correct",
+                Map.of("status", "PRESENT", "reason", "x"), admin);
+        assertThat(onCancelled.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(onCancelled.getBody().get("code")).isEqualTo("ATT_RECORD_INVALID_STATE");
+    }
+
+    @Test
+    void manualRecordRejectsMissingCommentAndForeignEnrollment() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+
+        // Commentaire manquant -> 400 (validation @NotBlank).
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", fx.enrollments().get(0), "checkpointPublicId", cp,
+                        "status", "ABSENT"), admin).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // Statut EXCUSED_ABSENCE non saisissable directement -> 400.
+        ResponseEntity<Map<String, Object>> excused = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", fx.enrollments().get(0), "checkpointPublicId", cp,
+                        "status", "EXCUSED_ABSENCE", "comment", "x"), admin);
+        assertThat(excused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // Inscription d'une autre séance / classe -> 409 ATT_NOT_ENROLLED.
+        Fixture other = openSessionWithEnrolledStudents(admin, 1);
+        ResponseEntity<Map<String, Object>> foreign = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", other.enrollments().get(0), "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "x"), admin);
+        assertThat(foreign.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(foreign.getBody().get("code")).isEqualTo("ATT_NOT_ENROLLED");
+    }
+
+    // ------------------------------------------------------------------
+    // Justificatifs + espace apprenant (V10)
+    // ------------------------------------------------------------------
+
+    @Test
+    void studentJustificationLifecycleAcceptedThenRejected() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        // Un second point de contrôle pour tester le parcours de refus.
+        String cp2 = (String) post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints",
+                Map.of("label", "Fin", "type", "END"), admin, HttpStatus.CREATED).get("publicId");
+        post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints/" + cp2 + "/open", null, admin,
+                HttpStatus.NO_CONTENT);
+        // Séance fermée -> les points de contrôle passent CLOSED, les absences sont dérivées.
+        post("/api/v1/sessions/" + fx.sessionId() + "/close", null, admin, HttpStatus.NO_CONTENT);
+
+        String student = tokenFor(fx.students().get(0));
+        Map<String, Object> justif = post("/api/v1/me/attendance/justifications",
+                Map.of("checkpointPublicId", cp, "category", "MEDICAL",
+                        "comment", "certificat médical du 10/09"), student, HttpStatus.CREATED);
+        String justifId = (String) justif.get("publicId");
+        assertThat(justif.get("status")).isEqualTo("PENDING");
+        assertThat(justif.get("attendanceStatus")).isEqualTo("ABSENT");
+        // Vue apprenant : les champs d'identité nominative restent nuls.
+        assertThat(justif.get("studentNumber")).isNull();
+        assertThat(justif.get("firstName")).isNull();
+
+        // Un second dépôt actif -> 409.
+        ResponseEntity<Map<String, Object>> again = exchange(HttpMethod.POST,
+                "/api/v1/me/attendance/justifications",
+                Map.of("checkpointPublicId", cp, "category", "TRANSPORT", "comment", "grève"), student);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(again.getBody().get("code")).isEqualTo("ATT_JUSTIFICATION_INVALID_STATE");
+
+        // Un formateur ne peut pas examiner.
+        ResponseEntity<Map<String, Object>> byTeacher = exchange(HttpMethod.POST,
+                "/api/v1/attendance/justifications/" + justifId + "/review",
+                Map.of("decision", "ACCEPTED"), tokenFor(fx.teacher()));
+        assertThat(byTeacher.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        // L'administration accepte -> la présence passe EXCUSED_ABSENCE.
+        Map<String, Object> reviewed = post("/api/v1/attendance/justifications/" + justifId + "/review",
+                Map.of("decision", "ACCEPTED"), roleToken(RoleCode.SCHOOL_ADMINISTRATION), HttpStatus.OK);
+        assertThat(reviewed.get("status")).isEqualTo("ACCEPTED");
+        assertThat(reviewed.get("attendanceStatus")).isEqualTo("EXCUSED_ABSENCE");
+        assertThat(auditActions(justifId)).contains("ATTENDANCE_JUSTIFICATION_SUBMITTED",
+                "ATTENDANCE_JUSTIFICATION_REVIEWED");
+
+        // Ré-examen d'un justificatif déjà traité -> 409.
+        ResponseEntity<Map<String, Object>> reReview = exchange(HttpMethod.POST,
+                "/api/v1/attendance/justifications/" + justifId + "/review",
+                Map.of("decision", "REJECTED", "decisionReason", "x"),
+                roleToken(RoleCode.SCHOOL_ADMINISTRATION));
+        assertThat(reReview.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+        // Sur le second point de contrôle : refus sans motif -> 400 ;
+        // refus motivé -> REJECTED, la présence reste ABSENT ; nouveau
+        // dépôt alors possible.
+        String j2 = (String) post("/api/v1/me/attendance/justifications",
+                Map.of("checkpointPublicId", cp2, "category", "TRANSPORT", "comment", "retard de train"),
+                student, HttpStatus.CREATED).get("publicId");
+        assertThat(exchange(HttpMethod.POST, "/api/v1/attendance/justifications/" + j2 + "/review",
+                Map.of("decision", "REJECTED"), roleToken(RoleCode.SCHOOL_ADMINISTRATION)).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        Map<String, Object> rejected = post("/api/v1/attendance/justifications/" + j2 + "/review",
+                Map.of("decision", "REJECTED", "decisionReason", "pièce illisible"),
+                roleToken(RoleCode.SCHOOL_ADMINISTRATION), HttpStatus.OK);
+        assertThat(rejected.get("status")).isEqualTo("REJECTED");
+        assertThat(rejected.get("attendanceStatus")).isEqualTo("ABSENT");
+
+        Map<String, Object> resubmit = post("/api/v1/me/attendance/justifications",
+                Map.of("checkpointPublicId", cp2, "category", "OTHER", "comment", "nouvelle pièce"),
+                student, HttpStatus.CREATED);
+        assertThat(resubmit.get("status")).isEqualTo("PENDING");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void studentSeesOnlyTheirOwnAttendance() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 2);
+        post("/api/v1/sessions/" + fx.sessionId() + "/close", null, admin, HttpStatus.NO_CONTENT);
+
+        Map<String, Object> mine = getMap("/api/v1/me/attendance", tokenFor(fx.students().get(0)));
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) mine.get("content");
+        assertThat(rows).isNotEmpty();
+        assertThat(rows).allSatisfy(r -> assertThat(r).doesNotContainKeys("email", "id", "studentNumber"));
+        // Absence dérivée d'un point de contrôle fermé, justifiable.
+        assertThat(rows).anySatisfy(r -> {
+            assertThat(r.get("status")).isEqualTo("ABSENT");
+            assertThat(r.get("canJustify")).isEqualTo(true);
+        });
+
+        // Un non-STUDENT ne peut pas appeler /me/attendance.
+        assertThat(exchange(HttpMethod.GET, "/api/v1/me/attendance", null, admin).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
 
-    private record Fixture(String sessionId, List<Account> students) {
+    private String firstCheckpoint(String token, String sessionId) {
+        Map<String, Object> session = getMap("/api/v1/sessions/" + sessionId, token);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> checkpoints = (List<Map<String, Object>>) session.get("checkpoints");
+        return (String) checkpoints.get(0).get("publicId");
+    }
+
+    private String roleToken(RoleCode... roles) {
+        return tokenFor(accountWithRoles(roles));
+    }
+
+    private List<Map<String, Object>> listRaw(String path, String token) {
+        return restTemplate.exchange(
+                RequestEntity.get(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                }).getBody();
+    }
+
+    private record Fixture(String sessionId, List<Account> students, List<String> enrollments,
+                           String classA, Account teacher) {
     }
 
     private Fixture openSessionWithEnrolledStudents(String admin, int studentCount) {
@@ -321,14 +508,16 @@ class AttendanceIntegrationTests {
         post("/api/v1/sessions/" + sessionId + "/open", null, admin, HttpStatus.NO_CONTENT);
 
         java.util.ArrayList<Account> students = new java.util.ArrayList<>();
+        java.util.ArrayList<String> enrollments = new java.util.ArrayList<>();
         for (int i = 0; i < studentCount; i++) {
             Account student = accountWithRoles(RoleCode.STUDENT);
             String profile = createProfile(admin, student.publicId());
-            created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
-                    "classGroupPublicId", chain.classA()), admin);
+            String enrollment = (String) created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+                    "classGroupPublicId", chain.classA()), admin).get("publicId");
             students.add(student);
+            enrollments.add(enrollment);
         }
-        return new Fixture(sessionId, students);
+        return new Fixture(sessionId, students, enrollments, chain.classA(), teacher);
     }
 
     private String createProfile(String admin, String userPublicId) {

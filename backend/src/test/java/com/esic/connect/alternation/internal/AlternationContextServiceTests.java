@@ -263,7 +263,7 @@ class AlternationContextServiceTests {
     private void stubEnrollmentWithPattern() {
         UUID classPub = classPublicId;
         EnrollmentDirectory.EnrollmentRef ref = new EnrollmentDirectory.EnrollmentRef(11L, enrollmentPublicId,
-                UUID.randomUUID(), classPub, "C1", UUID.randomUUID(), "2026-2027", true);
+                UUID.randomUUID(), UUID.randomUUID(), classPub, "C1", UUID.randomUUID(), "2026-2027", true);
         when(enrollmentDirectory.findByPublicId(enrollmentPublicId)).thenReturn(Optional.of(ref));
         lenient().when(academicScope.hasGlobalScope()).thenReturn(true);
         when(classGroupDirectory.findByPublicId(classPub)).thenReturn(Optional.of(classRef()));

@@ -59,6 +59,54 @@ public interface EnrollmentDirectory {
     List<EnrollmentRef> findActiveEnrollmentsForUserOn(UUID userPublicId, LocalDate date);
 
     /**
+     * Toutes les inscriptions (tous statuts sauf {@code ARCHIVED}) du
+     * compte apprenant — pour l'espace « Mes présences » (module
+     * {@code attendance}). Le serveur résout l'apprenant à partir du seul
+     * JWT.
+     *
+     * @param userPublicId identifiant public du compte apprenant ; peut
+     *                     être {@code null}
+     * @return la liste, éventuellement vide
+     */
+    List<EnrollmentRef> findEnrollmentsForUser(UUID userPublicId);
+
+    /**
+     * Effectif nominatif {@code ACTIVE} rattaché à l'une des classes
+     * indiquées — pour les rapports d'assiduité (module
+     * {@code attendance}) qui déduisent les absents de l'effectif attendu
+     * moins les présences valides.
+     *
+     * @param classGroupPublicIds identifiants publics des classes
+     * @return une entrée par inscription active ; liste vide si aucune
+     */
+    List<RosterEntry> findActiveRosterForClasses(Collection<UUID> classGroupPublicIds);
+
+    /**
+     * Ligne d'effectif nominatif — porte l'identifiant interne de
+     * l'inscription (pour rapprocher les {@code attendance_record}) mais
+     * jamais d'adresse électronique.
+     *
+     * @param enrollmentInternalId   clé primaire SQL de l'inscription
+     * @param enrollmentPublicId     identifiant public de l'inscription
+     * @param studentProfilePublicId identifiant public du profil apprenant
+     * @param studentNumber          numéro étudiant
+     * @param firstName              prénom ({@code null} si non résolu)
+     * @param lastName               nom ({@code null} si non résolu)
+     * @param classGroupPublicId     classe de l'inscription
+     * @param classGroupCode         code fonctionnel de cette classe
+     */
+    record RosterEntry(
+            long enrollmentInternalId,
+            UUID enrollmentPublicId,
+            UUID studentProfilePublicId,
+            String studentNumber,
+            String firstName,
+            String lastName,
+            UUID classGroupPublicId,
+            String classGroupCode) {
+    }
+
+    /**
      * Identité minimale de l'apprenant d'une inscription, pour bâtir la
      * liste des présences d'une séance (module {@code attendance}).
      *
@@ -120,6 +168,7 @@ public interface EnrollmentDirectory {
             long internalId,
             UUID publicId,
             UUID studentProfilePublicId,
+            UUID studentUserPublicId,
             UUID classGroupPublicId,
             String classGroupCode,
             UUID academicYearPublicId,

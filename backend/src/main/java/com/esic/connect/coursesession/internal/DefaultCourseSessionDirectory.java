@@ -2,11 +2,15 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -77,6 +81,45 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         }
         return sessionRepository.findByPublicId(sessionPublicId)
                 .flatMap(session -> toRef(session, classPublicIds(session)).checkpoint(checkpointPublicId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findSessionsForClasses(Set<UUID> classGroupPublicIds, Instant from, Instant to) {
+        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> internalIds = classGroupPublicIds.stream()
+                .map(classGroupDirectory::findByPublicId)
+                .filter(Optional::isPresent)
+                .map(ref -> ref.get().internalId())
+                .collect(Collectors.toUnmodifiableSet());
+        if (internalIds.isEmpty()) {
+            return List.of();
+        }
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.hasAnyClassIn(internalIds));
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
+                .stream()
+                .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SessionRef> findSessionByCheckpointPublicId(UUID checkpointPublicId) {
+        if (checkpointPublicId == null) {
+            return Optional.empty();
+        }
+        return checkpointRepository.findByPublicId(checkpointPublicId)
+                .map(cp -> cp.getCourseSession())
+                .map(session -> toRef(session, classPublicIds(session)));
     }
 
     private SessionRef toRef(CourseSession session, Set<UUID> classPublicIds) {

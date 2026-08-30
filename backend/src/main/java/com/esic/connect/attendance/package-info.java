@@ -19,15 +19,26 @@
  * Redis produit une erreur contrôlée ({@code ATT_TOKEN_BACKEND_UNAVAILABLE},
  * 503) — jamais de validation dégradée.
  *
- * <p><strong>Hors périmètre</strong> : présence manuelle, correction,
- * justificatif, calcul de demi-journée, export CSV.
+ * <p>V10 ajoute : plusieurs points de contrôle par séance (jeton émis par
+ * point de contrôle), présence manuelle, correction et annulation
+ * logique avec historique append-only ({@code attendance_correction}),
+ * justificatif métier <em>sans fichier</em> ({@code attendance_justification} :
+ * dépôt / modification par l'apprenant, examen par un gestionnaire),
+ * espace « Mes présences » de l'apprenant, et le calcul d'assiduité /
+ * les rapports / exports CSV (déduction des absents, exclusion du
+ * contexte d'alternance {@code COMPANY}).
  *
  * <p>Dépendances inter-modules limitées aux ports publics :
  * {@link com.esic.connect.coursesession.CourseSessionDirectory} (séance,
- * point de contrôle, contrôle d'accès de lecture / gestion),
+ * points de contrôle, contrôle d'accès de lecture / gestion),
  * {@link com.esic.connect.enrollment.EnrollmentDirectory} (inscription
- * active de l'apprenant émargeur, identité des présents, effectif
- * attendu), {@link com.esic.connect.identity.CurrentUserResolver} et
+ * active de l'apprenant émargeur, effectif nominatif attendu),
+ * {@link com.esic.connect.academic.AcademicScopeDirectory} (périmètre
+ * pédagogique pour l'examen des justificatifs et les rapports),
+ * {@link com.esic.connect.alternation.AlternationDirectory} (contexte
+ * SCHOOL / COMPANY / UNKNOWN d'une inscription à une date, pour les
+ * rapports),
+ * {@link com.esic.connect.identity.CurrentUserResolver} et
  * {@link com.esic.connect.identity.UserDirectory} (compte de l'apprenant).
  * Consomme {@link com.esic.connect.coursesession.CourseSessionChangeEvent}
  * (purge Redis à la fermeture). Publie

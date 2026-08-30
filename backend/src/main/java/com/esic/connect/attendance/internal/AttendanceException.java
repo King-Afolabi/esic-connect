@@ -32,7 +32,30 @@ class AttendanceException extends RuntimeException {
         /** Aucun point de contrôle pour cet identifiant dans la séance résolue. */
         CHECKPOINT_NOT_FOUND,
         /** L'appelant n'a pas le droit d'effectuer cette opération sur cette séance. */
-        OPERATION_FORBIDDEN
+        OPERATION_FORBIDDEN,
+        // --- Présence manuelle / correction / annulation (V10) ---
+        /** Aucune présence pour cet identifiant (ou pas dans cette séance). */
+        RECORD_NOT_FOUND,
+        /** L'état de la présence ne permet pas cette opération (déjà annulée, absence à ne pas justifier...). */
+        RECORD_INVALID_STATE,
+        /** Motif obligatoire d'une saisie manuelle. */
+        MANUAL_REASON_REQUIRED,
+        /** Motif obligatoire d'une correction. */
+        CORRECTION_REASON_REQUIRED,
+        /** Statut de saisie manuelle invalide (EXCUSED_ABSENCE non saisissable directement...). */
+        MANUAL_STATUS_INVALID,
+        // --- Justificatifs (V10) ---
+        /** Aucun justificatif pour cet identifiant (ou hors périmètre). */
+        JUSTIFICATION_NOT_FOUND,
+        /** Cycle de vie du justificatif incompatible avec l'opération (déjà examiné, doublon actif...). */
+        JUSTIFICATION_INVALID_STATE,
+        /** Motif de décision obligatoire pour un refus. */
+        JUSTIFICATION_DECISION_REASON_REQUIRED,
+        // --- Rapports (V10) ---
+        /** Filtre de rapport invalide. */
+        REPORT_INVALID_FILTER,
+        /** Champ ou direction de tri de rapport hors liste blanche. */
+        REPORT_INVALID_SORT
     }
 
     private final Kind kind;

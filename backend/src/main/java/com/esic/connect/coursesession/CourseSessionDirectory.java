@@ -47,6 +47,28 @@ public interface CourseSessionDirectory {
      */
     Optional<CheckpointRef> findCheckpointForAttendance(UUID sessionPublicId, UUID checkpointPublicId);
 
+    /**
+     * Séances dont au moins une classe figure dans {@code classGroupPublicIds}
+     * et dont le début tombe dans {@code [from, to]} (bornes incluses ;
+     * {@code null} = borne ouverte).
+     *
+     * <p><strong>Sans</strong> contrôle d'accès de l'appelant : le module
+     * {@code attendance} l'utilise pour bâtir l'assiduité attendue d'un
+     * apprenant (à partir de ses seules inscriptions) et les rapports
+     * (le contrôle de périmètre des classes est fait dans
+     * {@code attendance} via {@code AcademicScopeDirectory}). Résultat
+     * trié par début de séance.
+     */
+    List<SessionRef> findSessionsForClasses(Set<UUID> classGroupPublicIds, Instant from, Instant to);
+
+    /**
+     * Séance portant le point de contrôle {@code checkpointPublicId},
+     * <strong>sans</strong> contrôle d'accès (le module {@code attendance}
+     * l'utilise quand un apprenant ne connaît que l'identifiant du point
+     * de contrôle — dépôt d'un justificatif).
+     */
+    Optional<SessionRef> findSessionByCheckpointPublicId(UUID checkpointPublicId);
+
     /** Niveau d'accès demandé sur une séance. */
     enum AccessLevel {
         /** Consultation (séance + présences). {@code TEACHER} : sa séance uniquement. */
