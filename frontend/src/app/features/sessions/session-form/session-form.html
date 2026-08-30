@@ -1,0 +1,129 @@
+<nav class="sessions__crumbs" aria-label="Fil d'Ariane">
+  <a routerLink="/sessions">← Retour à la liste des séances</a>
+</nav>
+
+<h1 class="sessions__title">Nouvelle séance exceptionnelle</h1>
+<p class="sessions__intro">
+  Une séance est créée manuellement (sans planning) : le motif est obligatoire.
+  Elle référence un formateur actif et au moins une classe.
+</p>
+
+@switch (loadState().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement du formulaire"></mat-progress-bar>
+    <p class="sessions__status" role="status">Chargement…</p>
+  }
+
+  @case ('forbidden') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à créer une séance.</p>
+      <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+    </div>
+  }
+
+  @case ('permission-lost') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>
+        Le contexte de rôle actif ne permet plus de créer une séance. Le formulaire a été
+        neutralisé. Revenez à un contexte autorisé pour recommencer.
+      </p>
+      <a mat-stroked-button routerLink="/sessions">Retour à la liste des séances</a>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ loadState().kind === 'error' ? $any(loadState()).message : '' }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+
+  @case ('ready') {
+    <form class="sessions__form" [formGroup]="form" (ngSubmit)="submit()">
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Formateur</mat-label>
+        <mat-select formControlName="teacherPublicId">
+          @for (teacher of teachers(); track teacher.publicId) {
+            <mat-option [value]="teacher.publicId">{{ teacherName(teacher) }}</mat-option>
+          }
+        </mat-select>
+        @if (form.controls.teacherPublicId.touched && form.controls.teacherPublicId.invalid) {
+          <mat-error>Sélectionnez un formateur.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Classes</mat-label>
+        <mat-select formControlName="classPublicIds" multiple>
+          @for (classGroup of classes(); track classGroup.publicId) {
+            <mat-option [value]="classGroup.publicId">
+              {{ classGroup.code }} — {{ classGroup.name }}
+            </mat-option>
+          }
+        </mat-select>
+        @if (form.controls.classPublicIds.touched && form.controls.classPublicIds.invalid) {
+          <mat-error>Sélectionnez au moins une classe.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Date</mat-label>
+        <input matInput type="date" formControlName="date" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Début (heure locale)</mat-label>
+        <input matInput type="time" formControlName="startTime" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Fin (heure locale)</mat-label>
+        <input matInput type="time" formControlName="endTime" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Fuseau horaire</mat-label>
+        <mat-select formControlName="timeZoneId">
+          @for (zone of timeZones; track zone) {
+            <mat-option [value]="zone">{{ zone }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field sessions__form-field--wide">
+        <mat-label>Motif de la séance exceptionnelle</mat-label>
+        <textarea
+          matInput
+          formControlName="reason"
+          rows="2"
+          [maxlength]="reasonMaxLength"
+          required
+        ></textarea>
+        <mat-hint align="end">{{ reasonLength() }} / {{ reasonMaxLength }}</mat-hint>
+        @if (form.controls.reason.touched && form.controls.reason.invalid) {
+          <mat-error>Le motif est obligatoire ({{ reasonMaxLength }} caractères maximum).</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field sessions__form-field--wide">
+        <mat-label>Libellé (facultatif)</mat-label>
+        <input matInput formControlName="title" [maxlength]="titleMaxLength" />
+      </mat-form-field>
+
+      @if (timeError()) {
+        <p class="sessions__inline-error" role="alert">{{ timeError() }}</p>
+      }
+      @if (submitError()) {
+        <p class="sessions__inline-error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="sessions__form-actions">
+        <button mat-flat-button type="submit" [disabled]="submitting()">Créer la séance</button>
+        <a mat-button routerLink="/sessions">Annuler</a>
+      </div>
+    </form>
+  }
+}

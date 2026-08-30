@@ -49,6 +49,13 @@ app:
       # « un mois »). Configurable, doit rester strictement positive
       # (le démarrage échoue sinon, voir AccountInvitationService).
       token-ttl: ${INVITATION_TOKEN_TTL:P30D}
+  attendance:
+    # Durée de vie d'un jeton dynamique / code court d'émargement dans
+    # Redis (docs/02 §17.10 : « le code visuel peut changer toutes les
+    # 10 secondes »). Volontairement court ; l'écran formateur renouvelle
+    # le jeton avant l'expiration. Doit rester strictement positive (le
+    # démarrage échoue sinon, voir AttendanceTokenService).
+    token-ttl: ${ATTENDANCE_TOKEN_TTL:PT30S}
   activation:
     # Base du lien d'activation inséré dans l'email (front Angular à venir).
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}

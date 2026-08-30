@@ -45,19 +45,21 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Administration / Apprenants / Référentiels / Alternance screens for an ADMIN', () => {
+  it('renders the dashboard and the delivered Administration / Apprenants / Référentiels / Alternance / Séances screens for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/administration',
       '/students',
       '/academic',
       '/alternation',
+      '/sessions',
     ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
     expect(text()).toContain('Référentiels');
     expect(text()).toContain('Alternance');
+    expect(text()).toContain('Séances');
   });
 
   it('shows Administration for SCHOOL_ADMINISTRATION but hides it from a STUDENT', () => {
@@ -70,10 +72,16 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/administration');
   });
 
-  it('keeps the navigation limited to the dashboard for a role with no extra screens', () => {
+  it('shows a TEACHER only the dashboard and Séances (their own sessions server-side)', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard', '/sessions']);
+  });
+
+  it('shows a STUDENT only the dashboard and Émargement', () => {
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard', '/attendance']);
   });
 
   it('hides Apprenants but shows Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {

@@ -213,4 +213,24 @@ public class UserAccount extends BaseEntity {
         this.emailVerifiedAt = activatedAt;
         this.status = AccountStatus.ACTIVE;
     }
+
+    /**
+     * Amorçage de démonstration <strong>uniquement</strong> : ramène un
+     * compte fictif déjà présent (base persistante réutilisée) à un état
+     * permettant la connexion — statut {@link AccountStatus#ACTIVE},
+     * champs de suspension nettoyés, adresse marquée vérifiée si elle ne
+     * l'était pas encore. N'écrase jamais le mot de passe (le rehachage
+     * éventuel est décidé par l'appelant) et ne touche à aucune
+     * dépendance (rôles, profil, inscriptions). Ne doit être invoquée que
+     * par l'implémentation confinée au profil {@code demo}.
+     */
+    public void ensureUsableForDemo(Instant at) {
+        this.status = AccountStatus.ACTIVE;
+        this.suspendedAt = null;
+        this.suspendedById = null;
+        this.suspensionReason = null;
+        if (this.emailVerifiedAt == null) {
+            this.emailVerifiedAt = at;
+        }
+    }
 }

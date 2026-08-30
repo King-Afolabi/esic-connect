@@ -42,6 +42,23 @@ const ALTERNATION_PATTERN_WRITE_ROLES = [
   'SCHOOL_ADMINISTRATION',
 ] as const;
 
+/**
+ * Séances : lecture ouverte à
+ * `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` / `PEDAGOGICAL_MANAGER` / `TEACHER`
+ * (`CourseSessionWeb.READ_ROLES`) ; un `TEACHER` ne voit que ses séances
+ * et un `PEDAGOGICAL_MANAGER` que son périmètre, **décidé côté serveur**.
+ * La création est en plus restreinte à
+ * `ADMIN` / `SUPER_ADMIN` / `PEDAGOGICAL_MANAGER` (`CourseSessionWeb.CREATE_ROLES`).
+ */
+const SESSION_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+const SESSION_CREATE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'] as const;
+
 const academicList = () =>
   import('./features/academic/academic-reference-list/academic-reference-list').then(
     (m) => m.AcademicReferenceList,
@@ -278,6 +295,52 @@ export const routes: Routes = [
               ).then((m) => m.EnrollmentAlternation),
           },
         ],
+      },
+      {
+        // Séances exceptionnelles et émargement
+        // (`com.esic.connect.coursesession` + `com.esic.connect.attendance`) :
+        // liste, création, détail (ouverture / fermeture, QR + code court,
+        // présences). Périmètre de rôles aligné sur `CourseSessionWeb`.
+        // Spring Security reste l'autorité (un `403` API est rendu
+        // « accès refusé ») ; un `TEACHER` ne voit que ses séances.
+        path: 'sessions',
+        canActivate: [roleGuard([...SESSION_READ_ROLES])],
+        canActivateChild: [roleGuard([...SESSION_READ_ROLES])],
+        title: `Séances — ${APP_NAME}`,
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/sessions/session-list/session-list').then((m) => m.SessionList),
+          },
+          {
+            path: 'new',
+            canActivate: [roleGuard([...SESSION_CREATE_ROLES])],
+            title: `Nouvelle séance — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/sessions/session-form/session-form').then((m) => m.SessionForm),
+          },
+          {
+            path: ':publicId',
+            title: `Séance — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/sessions/session-detail/session-detail').then(
+                (m) => m.SessionDetail,
+              ),
+          },
+        ],
+      },
+      {
+        // Émargement de l'apprenant (`POST /api/v1/attendance/validate`) :
+        // saisie du code court affiché par le formateur. Réservé au rôle
+        // `STUDENT` (`AttendanceWeb.VALIDATE_ROLE`).
+        path: 'attendance',
+        canActivate: [roleGuard(['STUDENT'])],
+        title: `Émargement — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/attendance-check-in/attendance-check-in').then(
+            (m) => m.AttendanceCheckIn,
+          ),
       },
     ],
   },

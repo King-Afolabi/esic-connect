@@ -1,0 +1,35 @@
+# Profil "demo" : identique au profil "local" pour l'infrastructure
+# (MySQL / Redis fournis par compose.yaml, valeurs via variables
+# d'environnement du fichier .env), plus l'amorçage
+# `DemoDataInitializer` et le mot de passe de démonstration.
+#
+# Ce profil NE désactive PAS la sécurité, N'UTILISE PAS `ddl-auto=create`
+# et ne contient AUCUN secret en dur. À n'utiliser qu'en local.
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+  jpa:
+    hibernate:
+      # Flyway reste seul responsable du schéma.
+      ddl-auto: validate
+
+management:
+  health:
+    # Mailpit n'est pas critique pour la démonstration.
+    mail:
+      enabled: false
+
+app:
+  demo:
+    # Mot de passe des comptes de démonstration. Obligatoire, aucune
+    # valeur par défaut : le démarrage échoue si absent ou trop court
+    # (voir DemoDataInitializer). À définir dans votre shell, jamais dans
+    # Git : `export ESIC_DEMO_PASSWORD=...` (≥ 12 caractères).
+    password: ${ESIC_DEMO_PASSWORD}

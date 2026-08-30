@@ -40,6 +40,13 @@ class DefaultUserDirectory implements UserDirectory {
         return userAccountRepository.findById(userInternalId).map(this::toRef);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PersonName> findName(long userInternalId) {
+        return userAccountRepository.findById(userInternalId)
+                .map(account -> new PersonName(account.getFirstName(), account.getLastName()));
+    }
+
     private UserRef toRef(UserAccount account) {
         Set<String> activeRoles = userRoleRepository.findActiveWithRoleByUserId(account.getId()).stream()
                 .map(userRole -> userRole.getRole().getCode().name())

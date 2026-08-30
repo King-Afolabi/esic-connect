@@ -249,6 +249,64 @@ describe('application routes (guard wiring)', () => {
     });
   });
 
+  describe('sessions and attendance routes', () => {
+    it('declares /sessions as a guarded parent with list, new and detail children', () => {
+      const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+      const sessions = shell?.children?.find((c) => c.path === 'sessions');
+      expect(sessions).toBeDefined();
+      expect(sessions?.canActivate?.length).toBeGreaterThan(0);
+      expect(sessions?.canActivateChild?.length).toBeGreaterThan(0);
+      const childPaths = (sessions?.children ?? []).map((c) => c.path);
+      expect(childPaths).toEqual(expect.arrayContaining(['', 'new', ':publicId']));
+      const create = (sessions?.children ?? []).find((c) => c.path === 'new');
+      expect(create?.canActivate?.length).toBeGreaterThan(0);
+    });
+
+    it('declares /attendance guarded on the STUDENT role', () => {
+      const shell = routes.find((r) => r.path === '' && Array.isArray(r.children));
+      const attendance = shell?.children?.find((c) => c.path === 'attendance');
+      expect(attendance).toBeDefined();
+      expect(attendance?.canActivate?.length).toBeGreaterThan(0);
+    });
+
+    it('lets a TEACHER reach the session list but not the creation route', async () => {
+      signIn(['TEACHER']);
+
+      await router.navigateByUrl('/sessions');
+      expect(location.path()).toBe('/sessions');
+
+      await router.navigateByUrl('/sessions/new');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('lets a PEDAGOGICAL_MANAGER reach the session creation route', async () => {
+      signIn(['PEDAGOGICAL_MANAGER']);
+      await router.navigateByUrl('/sessions/new');
+      expect(location.path()).toBe('/sessions/new');
+    });
+
+    it('routes a STUDENT to /forbidden on /sessions and to /attendance for check-in', async () => {
+      signIn(['STUDENT']);
+
+      await router.navigateByUrl('/sessions');
+      expect(location.path()).toBe('/forbidden');
+
+      await router.navigateByUrl('/attendance');
+      expect(location.path()).toBe('/attendance');
+    });
+
+    it('routes a TEACHER away from /attendance (STUDENT only)', async () => {
+      signIn(['TEACHER']);
+      await router.navigateByUrl('/attendance');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('redirects an anonymous user from /sessions to /login', async () => {
+      await router.navigateByUrl('/sessions');
+      expect(location.path()).toContain('/login');
+    });
+  });
+
   it('keeps an authenticated user away from the guest-only login route', async () => {
     signIn(['STUDENT']);
     await router.navigateByUrl('/login');

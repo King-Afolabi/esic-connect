@@ -25,4 +25,15 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     @Query("select ur from UserRole ur join fetch ur.role "
             + "where ur.user.id in :userIds and ur.active = true")
     List<UserRole> findActiveWithRoleByUserIds(@Param("userIds") Collection<Long> userIds);
+
+    /**
+     * Affectations actives d'un rôle donné dont le compte porteur est
+     * dans le statut demandé. Utilisé par {@code DefaultTeacherDirectory}
+     * pour lister les formateurs éligibles à une séance sans exposer
+     * {@code GET /api/v1/users}.
+     */
+    @Query("select ur from UserRole ur join fetch ur.user u join ur.role r "
+            + "where r.code = :code and ur.active = true and u.status = :status")
+    List<UserRole> findActiveAssignmentsByRoleCodeAndUserStatus(@Param("code") RoleCode code,
+                                                               @Param("status") AccountStatus status);
 }
