@@ -12,7 +12,9 @@ import java.util.UUID;
 /**
  * Résout l'auteur courant (port {@link CurrentUserResolver}) et publie
  * les {@link AttendanceChangeEvent} consommés par {@code audit}. Aligné
- * sur {@code alternation.internal.AlternationChangePublisher}.
+ * sur {@code alternation.internal.AlternationChangePublisher}. Aucun
+ * jeton, code court, nom, numéro étudiant, IP ni commentaire libre
+ * complet dans {@code detail}.
  */
 @Component
 class AttendanceChangePublisher {
@@ -31,8 +33,26 @@ class AttendanceChangePublisher {
     }
 
     void publishRecorded(UUID recordPublicId, Long actorId, String detail) {
-        eventPublisher.publishEvent(new AttendanceChangeEvent(
-                AttendanceResourceType.ATTENDANCE_RECORD, recordPublicId, actorId,
-                AttendanceChangeAction.RECORDED, detail));
+        publish(AttendanceResourceType.ATTENDANCE_RECORD, recordPublicId, actorId,
+                AttendanceChangeAction.RECORDED, detail);
+    }
+
+    void publishRecord(UUID recordPublicId, Long actorId, AttendanceChangeAction action, String detail) {
+        publish(AttendanceResourceType.ATTENDANCE_RECORD, recordPublicId, actorId, action, detail);
+    }
+
+    void publishJustification(UUID justificationPublicId, Long actorId, AttendanceChangeAction action,
+                              String detail) {
+        publish(AttendanceResourceType.ATTENDANCE_JUSTIFICATION, justificationPublicId, actorId, action, detail);
+    }
+
+    void publishExport(Long actorId, String detail) {
+        publish(AttendanceResourceType.ATTENDANCE_EXPORT, null, actorId,
+                AttendanceChangeAction.REPORT_EXPORTED, detail);
+    }
+
+    private void publish(AttendanceResourceType type, UUID resourcePublicId, Long actorId,
+                         AttendanceChangeAction action, String detail) {
+        eventPublisher.publishEvent(new AttendanceChangeEvent(type, resourcePublicId, actorId, action, detail));
     }
 }

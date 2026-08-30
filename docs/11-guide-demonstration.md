@@ -247,17 +247,154 @@ courant** → `200`.
 
 ---
 
-## 10. Limites de cette tranche
+## 10. Tranche V10 — gestion de l'assiduité et reporting
 
-- **Scan caméra : non livré.** Le parcours apprenant fiable est la saisie
-  du **code court** affiché par le formateur ; le QR prépare un futur
-  scan mobile et sert à la démonstration visuelle.
-- La séance est **exceptionnelle** : créée manuellement, sans module
-  planning.
-- **Un seul point de contrôle** d'émargement par séance.
-- Pas de présence manuelle, pas de correction, pas de justificatif, pas
-  de calcul de demi-journée, pas de rapport ni d'export CSV.
-- Pas de contrôle réseau, pas de QR fixe de salle, pas de WebAuthn.
-- Pas de test e2e automatisé Angular → Spring Boot ; la démonstration UI
-  de bout en bout est manuelle (le scénario **API** ci-dessus a été
-  exécuté et ses statuts relevés).
+La tranche `feature/attendance-management-and-reporting` ajoute, au-dessus
+du parcours d'émargement ci-dessus :
+
+### 10.1 Nouveaux parcours démontrables
+
+1. **Plusieurs points de contrôle par séance.** Sur la fiche séance
+   (`/sessions/:id`), section « Points de contrôle » : le point `START`
+   (« Arrivée ») est créé et ouvert avec la séance ; « Ajouter » crée un
+   point `CUSTOM` / `END` ; chaque point s'ouvre / se ferme / s'annule
+   (motif en confirmation en ligne). Le QR cible le point de contrôle
+   **ouvert sélectionné** ; le jeton est émis par point de contrôle
+   (`POST /api/v1/sessions/{id}/checkpoints/{cpId}/attendance-token`).
+2. **Présence manuelle** (`POST .../attendance/manual`) : bouton
+   « Saisie manuelle » — **sélecteur d'apprenant inscrit** (`mat-select`)
+   alimenté par `GET /api/v1/sessions/{id}/attendance/candidates`
+   (inscriptions actives des classes de la séance, dédupliquées ; nom +
+   numéro étudiant + code de classe, jamais d'e-mail ni d'identifiant
+   SQL ; états chargement / vide / erreur / 403) + statut (`PRESENT` /
+   `LATE` / `ABSENT`) + motif obligatoire. L'identifiant d'inscription ne
+   vit que dans la valeur du contrôle (jamais dans l'URL ni un storage) ;
+   la liste se recharge si la séance change et s'efface à la perte du
+   contexte de gestion (correctif PR #22 §2).
+3. **Correction / annulation logique** (`POST .../attendance/{aid}/correct`
+   `|/cancel`) : sur chaque ligne de présence, motif obligatoire,
+   confirmation en ligne ; la ligne est conservée (`CANCELLED`).
+   « Historique » (`GET .../attendance/{aid}/history`) affiche l'append-only
+   `attendance_correction`.
+4. **Justificatif métier SANS fichier** — apprenant : `/my-attendance`
+   (« Mes présences ») ; sur une absence d'un point de contrôle fermé,
+   « Déposer un justificatif » (catégorie / référence externe /
+   commentaire ; `POST /api/v1/me/attendance/justifications`). Détail
+   `/my-attendance/:id` : historique + modification tant que `PENDING`.
+5. **Examen des justificatifs** — gestion : `/attendance-management/justifications`,
+   « Examiner » → accepter (présence `ABSENT → EXCUSED_ABSENCE`) ou
+   refuser (motif obligatoire ; présence reste `ABSENT`).
+   `POST /api/v1/attendance/justifications/{id}/review`.
+6. **Rapports + synthèse** — `/attendance-management` : cartes de synthèse
+   (taux de présence en demi-journées, retards, absences injustifiées /
+   justifiées, demi-journées en contexte d'alternance `COMPANY` exclues,
+   `UNKNOWN` signalées, justificatifs en attente) ; rapports par séance /
+   classe / apprenant, filtres `from` / `to` / `classGroup` /
+   `studentProfile`, pagination serveur.
+7. **Export CSV** — bouton « Exporter (CSV) » sur chaque rapport :
+   `GET /api/v1/attendance/reports/{sessions|classes|students}/export`
+   → `text/csv` (UTF-8 + BOM, séparateur `;`), **neutralisation
+   d'injection de formule** (une cellule débutant par `=` `+` `-` `@` est
+   préfixée d'une apostrophe), aucun email, aucun identifiant SQL. Les
+   rapports affichent le **code lisible** de la classe (ex. `C-DEMO`),
+   jamais l'UUID (correctif PR #22 §7).
+8. **Tri serveur borné** — chaque rapport propose « Trier par »
+   (`mat-select`) restreint à une liste blanche par rapport
+   (`startsAt` / `attendanceRate` / `presentCount` pour les séances,
+   `classCode` / `attendanceRate` / `absentHalfDays` pour les classes,
+   `lastName` / `studentNumber` / `attendanceRate` / `absentHalfDays`
+   pour les apprenants), au format `field,asc|desc`. Un champ ou sens
+   inconnu renvoie `400 ATT_REPORT_INVALID_SORT` (correctif PR #22 §6).
+9. **Export CSV borné à la séance** — sur la fiche séance, bouton
+   « Exporter les présences de cette séance (CSV) » :
+   `GET /api/v1/sessions/{id}/attendance/export` (mêmes protections CSV,
+   contrôle fin identique à la consultation — un formateur affecté
+   exporte sa séance —, `STUDENT` refusé, nom de fichier contrôlé ;
+   correctif PR #22 §8).
+
+### 10.2 Vérifications relevées
+
+**Tranche V10 initiale (30 août 2026)** : back-end `./mvnw clean test` →
+548 tests (2ᵉ passe PR #22 ; 532 puis 545 aux passes antérieures) ; front `npm test` → 454 tests ; scénario API V10 relevé en
+statuts HTTP (profil `demo`). Une démonstration `curl` manuelle sur base
+isolée n'avait alors pas été exécutée (le compte `esic_app` n'a pas
+`CREATE DATABASE`).
+
+**Passe corrective PR #22 (30 août 2026)** :
+
+- Back-end `./mvnw clean test` (MySQL 8.4, Redis 7) → **545 tests, 0
+  échec**, `ModularityTests` vert, migration `V10` appliquée (schéma en
+  version 10).
+- Front-end `npm test -- --watch=false` → **451 tests, 0 échec** ;
+  `npm run lint` « All files pass linting » ; `npm run build` bundle
+  initial **482,24 kB** brut / **122,57 kB** transféré (seuil 500 kB).
+- **Démonstration locale réelle** exécutée contre le back-end (profil
+  `demo`) sur un **schéma jetable `esic_pr22_verify`** créé avec le
+  compte root du conteneur MySQL, puis **supprimé** (la base principale
+  `esic_connect` n'est jamais touchée). Séquence relevée en statuts HTTP
+  et champs non sensibles (aucun mot de passe, JWT, jeton Redis ni code
+  court réel affiché) :
+  1. `scripts/seed-demo.sh` → site / formation / classe `C-DEMO` / 2
+     apprenants / 2 inscriptions / 1 séance `PLANNED` ;
+  2. ouverture de la séance `204` ;
+  3. création + ouverture d'un 2ᵉ point de contrôle `CUSTOM` `201` /
+     `204` ;
+  4. jeton émis **sur ce point de contrôle** `200` (`checkpointPublicId`
+     ciblé, `ttlSeconds` > 0) ;
+  5. pointage apprenant 1 (code court) `200` (`status=PRESENT`,
+     `source=SHORT_CODE`), re-pointage `409 ATT_ALREADY_RECORDED` ;
+  6. `GET .../attendance/candidates` `200` (2 candidats ; champs
+     `classCode, enrollmentPublicId, firstName, lastName, studentNumber,
+     studentProfilePublicId` — aucun e-mail ni id SQL), présence manuelle
+     via l'identifiant renvoyé `201` (`ABSENT`, `MANUAL`) ;
+  7. correction `200` (`PRESENT`), historique `CREATED_MANUALLY >
+     STATUS_CORRECTED` ;
+  8. fermeture `204`, dépôt de justificatif apprenant 2 `201`
+     (`PENDING`, `attendanceStatus=ABSENT`, identité masquée) ;
+  9. examen administration `ACCEPTED` `200` (présence →
+     `EXCUSED_ABSENCE`), formateur sur `review` `403` ;
+  10. rapports JSON bornés à la classe : `classes` / `students` /
+      `sessions` `200`, `classCode = C-DEMO` (jamais un UUID) ;
+  11. tri `lastName,desc` `200`, `attendanceRate,asc` `200`, `email,asc`
+      `400 ATT_REPORT_INVALID_SORT`, `startsAt,sideways` `400` ;
+  12. export CSV global `200` (`Content-Disposition` + BOM + en-tête
+      `session_id;titre;…`), export CSV de séance par le **formateur
+      affecté** `200` (`filename="attendance-session_<uuid>.csv"`),
+      `STUDENT` sur l'export de séance `403` ;
+  13. cellule de titre `=SUM(A1:A9)+cmd|'/c calc'` → export CSV : forme
+      neutralisée `'=SUM(A1:A9)` présente, forme brute `;=SUM(A1:A9)`
+      absente ;
+  14. après fermeture : `validate` avec l'ancien jeton `409`,
+      `attendance-token` sur séance fermée `409` ;
+  15. `GET .../candidates` — `ADMIN` `200`, `TEACHER` affecté `200`,
+      `STUDENT` `403`, anonyme `401` ;
+  16. contrôle §1 : `time_zone_id` d'une séance forcé à `Invalid/Zone`
+      (SQL root) → `GET .../reports/summary` **`500` générique** (la
+      valeur invalide n'est pas renvoyée, aucun chiffre trompeur) ;
+      restauration → `200`.
+  À la fin : back-end arrêté proprement, schéma `esic_pr22_verify`
+  supprimé et privilège révoqué. La démonstration **UI de bout en bout**
+  n'est pas exécutée automatiquement (parcours API + composants couverts
+  par 451 tests front).
+
+### 10.3 Limites de la tranche V10
+
+- **Scan caméra : non livré** (le parcours fiable reste le code court).
+- La séance est **exceptionnelle** (sans module planning).
+- **Contexte d'alternance `UNKNOWN`** (aucun rythme affecté à la classe) :
+  une demi-journée non émargée est comptée en `unknownHalfDays`,
+  **jamais** en `absentHalfDays` — un rapport « utile » suppose un
+  rythme d'alternance affecté à la classe.
+- **Sélecteur de candidats à la présence manuelle** : fondé sur
+  l'effectif **actif** des classes de la séance (pas de filtrage par date
+  fine — cohérent avec ce qu'accepte la saisie manuelle) ; nom + numéro
+  étudiant exposés au formateur, jamais l'e-mail.
+- **`TEACHER` exclu des rapports agrégés** (il consulte les présences de
+  ses séances via `GET /sessions/{id}/attendance`).
+- **Justificatif = métadonnée métier**, aucune pièce jointe.
+- Pas de contrôle réseau, pas de QR fixe de salle, pas de WebAuthn, pas
+  de test e2e automatisé Angular → Spring Boot.
+- Un `timeZoneId` **persistant invalide** fait échouer un rapport en
+  `500` contrôlé (valeur jamais exposée) plutôt que de produire des
+  chiffres trompeurs — état interne corrompu, non atteignable par l'API
+  (correctif PR #22 §1).

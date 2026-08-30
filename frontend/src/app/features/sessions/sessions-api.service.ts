@@ -4,16 +4,25 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
+  AttendanceCandidate,
+  AttendanceCorrectionEntry,
   AttendanceRecordResponse,
   AttendanceTokenResponse,
+  CancelAttendanceRequest,
+  CheckpointView,
+  CorrectAttendanceRequest,
   CourseSessionResponse,
+  CreateCheckpointRequest,
   CreateSessionRequest,
+  ManualAttendanceRequest,
   PageResponse,
   SessionAttendanceResponse,
   SessionListQuery,
   TeacherOptionResponse,
   ValidateAttendanceRequest,
 } from './sessions.models';
+
+type HttpResponseBlob = import('@angular/common/http').HttpResponse<Blob>;
 
 /**
  * Accès HTTP aux modules `coursesession` et `attendance`. Ce service ne
@@ -75,6 +84,122 @@ export class SessionsApiService {
     return this.http.post<void>(`${this.base}/sessions/${encodeURIComponent(publicId)}/close`, {});
   }
 
+  // --- Points de contrôle (V10) --------------------------------------
+
+  /** `GET /api/v1/sessions/{sessionId}/checkpoints`. */
+  listCheckpoints(sessionId: string): Observable<CheckpointView[]> {
+    return this.http.get<CheckpointView[]>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/checkpoints`,
+    );
+  }
+
+  /** `POST /api/v1/sessions/{sessionId}/checkpoints` → 201. */
+  createCheckpoint(sessionId: string, body: CreateCheckpointRequest): Observable<CheckpointView> {
+    return this.http.post<CheckpointView>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/checkpoints`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/sessions/{sessionId}/checkpoints/{checkpointId}/open` → 204. */
+  openCheckpoint(sessionId: string, checkpointId: string): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/checkpoints/${encodeURIComponent(checkpointId)}/open`,
+      {},
+    );
+  }
+
+  /** `POST /api/v1/sessions/{sessionId}/checkpoints/{checkpointId}/close` → 204. */
+  closeCheckpoint(sessionId: string, checkpointId: string): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/checkpoints/${encodeURIComponent(checkpointId)}/close`,
+      {},
+    );
+  }
+
+  /** `POST /api/v1/sessions/{sessionId}/checkpoints/{checkpointId}/cancel` → 204. */
+  cancelCheckpoint(
+    sessionId: string,
+    checkpointId: string,
+    body: CancelAttendanceRequest,
+  ): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/checkpoints/${encodeURIComponent(checkpointId)}/cancel`,
+      body,
+    );
+  }
+
+  // --- Présence manuelle / correction (V10) -------------------------
+
+  /** `POST /api/v1/sessions/{sessionId}/attendance/manual` → 201. */
+  recordManual(
+    sessionId: string,
+    body: ManualAttendanceRequest,
+  ): Observable<AttendanceRecordResponse> {
+    return this.http.post<AttendanceRecordResponse>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/manual`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/sessions/{sessionId}/attendance/{attendanceId}/correct`. */
+  correctAttendance(
+    sessionId: string,
+    attendanceId: string,
+    body: CorrectAttendanceRequest,
+  ): Observable<AttendanceRecordResponse> {
+    return this.http.post<AttendanceRecordResponse>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/${encodeURIComponent(attendanceId)}/correct`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/sessions/{sessionId}/attendance/{attendanceId}/cancel`. */
+  cancelAttendance(
+    sessionId: string,
+    attendanceId: string,
+    body: CancelAttendanceRequest,
+  ): Observable<AttendanceRecordResponse> {
+    return this.http.post<AttendanceRecordResponse>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/${encodeURIComponent(attendanceId)}/cancel`,
+      body,
+    );
+  }
+
+  /** `GET /api/v1/sessions/{sessionId}/attendance/{attendanceId}/history`. */
+  attendanceHistory(
+    sessionId: string,
+    attendanceId: string,
+  ): Observable<AttendanceCorrectionEntry[]> {
+    return this.http.get<AttendanceCorrectionEntry[]>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/${encodeURIComponent(attendanceId)}/history`,
+    );
+  }
+
+  /**
+   * `GET /api/v1/sessions/{sessionId}/attendance/candidates` — inscriptions
+   * actives des classes de la séance, pour alimenter le sélecteur de
+   * saisie manuelle. Le serveur applique le contrôle fin de la lecture
+   * des présences ; aucun identifiant n'élargit le périmètre.
+   */
+  listAttendanceCandidates(sessionId: string): Observable<AttendanceCandidate[]> {
+    return this.http.get<AttendanceCandidate[]>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/candidates`,
+    );
+  }
+
+  /**
+   * `GET /api/v1/sessions/{sessionId}/attendance/export` — CSV des
+   * présences de cette séance, en `blob`. Le composant appelant déclenche
+   * le téléchargement ; le jeton ne transite jamais par l'URL.
+   */
+  exportSessionAttendance(sessionId: string): Observable<HttpResponseBlob> {
+    return this.http.get(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/attendance/export`,
+      { responseType: 'blob', observe: 'response' },
+    );
+  }
+
   // --- Émargement -----------------------------------------------------
 
   /**
@@ -85,6 +210,20 @@ export class SessionsApiService {
   issueAttendanceToken(sessionPublicId: string): Observable<AttendanceTokenResponse> {
     return this.http.post<AttendanceTokenResponse>(
       `${this.base}/sessions/${encodeURIComponent(sessionPublicId)}/attendance-token`,
+      {},
+    );
+  }
+
+  /**
+   * `POST /api/v1/sessions/{sessionId}/checkpoints/{checkpointId}/attendance-token`
+   * — émet un jeton pour un point de contrôle précis (V10).
+   */
+  issueCheckpointToken(
+    sessionId: string,
+    checkpointId: string,
+  ): Observable<AttendanceTokenResponse> {
+    return this.http.post<AttendanceTokenResponse>(
+      `${this.base}/sessions/${encodeURIComponent(sessionId)}/checkpoints/${encodeURIComponent(checkpointId)}/attendance-token`,
       {},
     );
   }

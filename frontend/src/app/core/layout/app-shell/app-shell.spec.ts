@@ -53,6 +53,7 @@ describe('AppShell', () => {
       '/academic',
       '/alternation',
       '/sessions',
+      '/attendance-management',
     ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
@@ -81,7 +82,11 @@ describe('AppShell', () => {
   it('shows a STUDENT only the dashboard and Émargement', () => {
     roles.set(['STUDENT']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard', '/attendance']);
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard',
+      '/attendance',
+      '/my-attendance',
+    ]);
   });
 
   it('hides Apprenants but shows Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {

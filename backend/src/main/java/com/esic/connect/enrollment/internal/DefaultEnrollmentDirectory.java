@@ -69,6 +69,81 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<EnrollmentRef> findEnrollmentsForUser(UUID userPublicId) {
+        return userDirectory.findByPublicId(userPublicId)
+                .map(user -> enrollmentRepository.findByStudentProfile_UserId(user.internalId()))
+                .orElseGet(List::of)
+                .stream()
+                .filter(enrollment -> enrollment.getStatus() != EnrollmentStatus.ARCHIVED)
+                .map(this::toRef)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RosterEntry> findActiveRosterForClasses(Collection<UUID> classGroupPublicIds) {
+        return roster(classGroupPublicIds, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RosterEntry> findRosterForClassesOn(Collection<UUID> classGroupPublicIds, LocalDate date) {
+        return roster(classGroupPublicIds, date);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isEnrollmentValidOn(UUID enrollmentPublicId, LocalDate date) {
+        if (enrollmentPublicId == null) {
+            return false;
+        }
+        return enrollmentRepository.findByPublicId(enrollmentPublicId)
+                .filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.ACTIVE)
+                .filter(enrollment -> coversDate(enrollment, date))
+                .isPresent();
+    }
+
+    /**
+     * Effectif {@code ACTIVE} des classes indiquées, filtré sur la
+     * couverture de {@code date} lorsqu'elle est fournie ({@code null} =
+     * pas de filtrage temporel, effectif actif « courant »).
+     */
+    private List<RosterEntry> roster(Collection<UUID> classGroupPublicIds, LocalDate date) {
+        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> classInternalIds = classGroupPublicIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(classGroupDirectory::findByPublicId)
+                .filter(Optional::isPresent)
+                .map(ref -> ref.get().internalId())
+                .collect(Collectors.toUnmodifiableSet());
+        if (classInternalIds.isEmpty()) {
+            return List.of();
+        }
+        return enrollmentRepository
+                .findByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE).stream()
+                .filter(enrollment -> date == null || coversDate(enrollment, date))
+                .map(enrollment -> {
+                    StudentProfile profile = enrollment.getStudentProfile();
+                    UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);
+                    ClassGroupDirectory.ClassGroupRef classRef =
+                            classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
+                    return new RosterEntry(
+                            enrollment.getId(),
+                            enrollment.getPublicId(),
+                            profile.getPublicId(),
+                            profile.getStudentNumber(),
+                            name != null ? name.firstName() : null,
+                            name != null ? name.lastName() : null,
+                            classRef != null ? classRef.publicId() : null,
+                            classRef != null ? classRef.code() : null);
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<AttendeeRef> describeAttendee(long enrollmentInternalId) {
         return enrollmentRepository.findById(enrollmentInternalId).map(enrollment -> {
             StudentProfile profile = enrollment.getStudentProfile();
@@ -112,10 +187,13 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     private EnrollmentRef toRef(Enrollment enrollment) {
         ClassGroupDirectory.ClassGroupRef classRef =
                 classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
+        UUID studentUserPublicId = userDirectory.findByInternalId(enrollment.getStudentProfile().getUserId())
+                .map(UserDirectory.UserRef::publicId).orElse(null);
         return new EnrollmentRef(
                 enrollment.getId(),
                 enrollment.getPublicId(),
                 enrollment.getStudentProfile().getPublicId(),
+                studentUserPublicId,
                 classRef != null ? classRef.publicId() : null,
                 classRef != null ? classRef.code() : null,
                 classRef != null ? classRef.academicYearPublicId() : null,

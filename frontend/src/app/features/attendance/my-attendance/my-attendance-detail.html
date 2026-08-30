@@ -1,0 +1,110 @@
+<nav class="att__crumbs" aria-label="Fil d'Ariane">
+  <a routerLink="/my-attendance">← Retour à mes présences</a>
+</nav>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    <p class="att__status" role="status">Chargement…</p>
+  }
+  @case ('not-found') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucune présence ne correspond.</p>
+      <a mat-stroked-button routerLink="/my-attendance">Retour</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Accès refusé.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (detail(); as d) {
+      <h1 class="att__title">{{ d.row.sessionTitle || 'Séance' }} — {{ d.row.checkpointLabel }}</h1>
+      <mat-card appearance="outlined">
+        <mat-card-content>
+          <dl class="att__facts">
+            <div><dt>Statut</dt><dd>{{ attendanceStatusLabel(d.row.status) }}</dd></div>
+            <div><dt>Classe</dt><dd>{{ d.row.classCode || '—' }}</dd></div>
+            <div><dt>Début de séance</dt><dd>{{ formatInstantUtc(d.row.sessionStartsAt) }}</dd></div>
+            <div><dt>Retard</dt><dd>{{ d.row.lateMinutes ? d.row.lateMinutes + ' min' : '—' }}</dd></div>
+            <div><dt>Enregistré le</dt><dd>{{ formatInstantUtc(d.row.recordedAt) }}</dd></div>
+            <div><dt>Commentaire</dt><dd>{{ d.row.comment || '—' }}</dd></div>
+          </dl>
+        </mat-card-content>
+      </mat-card>
+
+      <section class="att__section" aria-label="Justificatif">
+        <h2 class="att__subtitle">Justificatif</h2>
+        @if (d.justification; as j) {
+          <dl class="att__facts">
+            <div><dt>État</dt><dd>{{ justificationStatusLabel(j.status) }}</dd></div>
+            <div><dt>Catégorie</dt><dd>{{ categoryLabel(j.category) }}</dd></div>
+            <div><dt>Référence</dt><dd>{{ j.externalReference || '—' }}</dd></div>
+            <div><dt>Commentaire</dt><dd>{{ j.comment }}</dd></div>
+            <div><dt>Déposé le</dt><dd>{{ formatInstantUtc(j.submittedAt) }}</dd></div>
+            <div><dt>Examiné le</dt><dd>{{ formatInstantUtc(j.reviewedAt) }}</dd></div>
+            <div><dt>Motif de décision</dt><dd>{{ j.decisionReason || '—' }}</dd></div>
+          </dl>
+          @if (canAmend() && !editing()) {
+            <button mat-stroked-button type="button" (click)="startEdit()">Modifier</button>
+          }
+          @if (editing()) {
+            <form class="att__reveal" [formGroup]="amendForm" (ngSubmit)="submitEdit()"
+                  role="group" aria-label="Modifier le justificatif">
+              <mat-form-field appearance="outline">
+                <mat-label>Catégorie</mat-label>
+                <mat-select formControlName="category">
+                  @for (c of categories; track c) {
+                    <mat-option [value]="c">{{ categoryLabel(c) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Référence externe (facultatif)</mat-label>
+                <input matInput formControlName="externalReference" maxlength="120" />
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Commentaire</mat-label>
+                <input matInput formControlName="comment" maxlength="1000" />
+              </mat-form-field>
+              <div class="att__filter-actions">
+                <button mat-flat-button type="submit" [disabled]="submitting() || amendForm.invalid">Enregistrer</button>
+                <button mat-button type="button" (click)="cancelEdit()" [disabled]="submitting()">Annuler</button>
+              </div>
+              @if (formError()) { <p class="att__inline-error" role="alert">{{ formError() }}</p> }
+            </form>
+          }
+        } @else {
+          <p class="att__status" role="status">Aucun justificatif pour cette présence.</p>
+        }
+      </section>
+
+      <section class="att__section" aria-label="Historique">
+        <h2 class="att__subtitle">Historique</h2>
+        @if (d.history.length === 0) {
+          <p class="att__status" role="status">Aucune modification.</p>
+        } @else {
+          <ul class="att__history">
+            @for (h of d.history; track h.publicId) {
+              <li>
+                <strong>{{ correctionActionLabel(h.action) }}</strong> — {{ formatInstantUtc(h.occurredAt) }}
+                @if (h.previousStatus || h.newStatus) { · {{ h.previousStatus || '—' }} → {{ h.newStatus || '—' }} }
+                <br /><span class="att__meta">Motif : {{ h.reason }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  }
+}

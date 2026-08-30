@@ -2,11 +2,16 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -55,13 +60,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, currentSubject())) {
             return new SessionAccess(Access.FORBIDDEN, null);
         }
-        AttendanceCheckpoint checkpoint = checkpointRepository.findByCourseSessionId(session.getId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Point de contrôle manquant pour une séance existante"));
-        SessionRef ref = new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
-                session.getStatus(), checkpoint.getId(), checkpoint.getPublicId(), checkpoint.isOpen(),
-                classPublicIds, session.getStartsAt(), session.getEndsAt());
-        return new SessionAccess(Access.GRANTED, ref);
+        return new SessionAccess(Access.GRANTED, toRef(session, classPublicIds));
     }
 
     @Override
@@ -70,14 +69,85 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         if (sessionPublicId == null) {
             return Optional.empty();
         }
-        return sessionRepository.findByPublicId(sessionPublicId).map(session -> {
-            AttendanceCheckpoint checkpoint = checkpointRepository.findByCourseSessionId(session.getId())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Point de contrôle manquant pour une séance existante"));
-            return new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
-                    session.getStatus(), checkpoint.getId(), checkpoint.getPublicId(), checkpoint.isOpen(),
-                    classPublicIds(session), session.getStartsAt(), session.getEndsAt());
-        });
+        return sessionRepository.findByPublicId(sessionPublicId)
+                .map(session -> toRef(session, classPublicIds(session)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CheckpointRef> findCheckpointForAttendance(UUID sessionPublicId, UUID checkpointPublicId) {
+        if (sessionPublicId == null || checkpointPublicId == null) {
+            return Optional.empty();
+        }
+        return sessionRepository.findByPublicId(sessionPublicId)
+                .flatMap(session -> toRef(session, classPublicIds(session)).checkpoint(checkpointPublicId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findSessionsForClasses(Set<UUID> classGroupPublicIds, Instant from, Instant to) {
+        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> internalIds = classGroupPublicIds.stream()
+                .map(classGroupDirectory::findByPublicId)
+                .filter(Optional::isPresent)
+                .map(ref -> ref.get().internalId())
+                .collect(Collectors.toUnmodifiableSet());
+        if (internalIds.isEmpty()) {
+            return List.of();
+        }
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.hasAnyClassIn(internalIds));
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
+                .stream()
+                .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SessionRef> findSessionByCheckpointPublicId(UUID checkpointPublicId) {
+        if (checkpointPublicId == null) {
+            return Optional.empty();
+        }
+        return checkpointRepository.findByPublicId(checkpointPublicId)
+                .map(cp -> cp.getCourseSession())
+                .map(session -> toRef(session, classPublicIds(session)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findSessionsInRange(Instant from, Instant to) {
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
+                .stream()
+                .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
+    private SessionRef toRef(CourseSession session, Set<UUID> classPublicIds) {
+        List<CheckpointRef> checkpoints = checkpointRepository
+                .findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId()).stream()
+                .map(cp -> new CheckpointRef(cp.getId(), cp.getPublicId(), cp.getLabel(),
+                        cp.getCheckpointType(), cp.getStatus(), cp.isRequired(), cp.getDisplayOrder(),
+                        cp.getOpenedAt(), cp.getClosedAt()))
+                .toList();
+        return new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
+                session.getStatus(), session.getTeacherUserId(), checkpoints, classPublicIds,
+                session.getTimeZoneId(), session.getStartsAt(), session.getEndsAt());
     }
 
     private Set<UUID> classPublicIds(CourseSession session) {

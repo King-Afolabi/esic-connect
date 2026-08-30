@@ -1,0 +1,89 @@
+<h1 class="att__title">Suivi d'assiduité</h1>
+<nav class="att__crumbs" aria-label="Sections">
+  <a routerLink="../sessions">Par séance</a> ·
+  <a routerLink="../classes">Par classe</a> ·
+  <a routerLink="../students">Par apprenant</a> ·
+  <a routerLink="../justifications">Justificatifs</a>
+</nav>
+
+<form class="att__filters" [formGroup]="filters" (ngSubmit)="apply()">
+  <mat-form-field appearance="outline">
+    <mat-label>Depuis</mat-label>
+    <input matInput type="date" formControlName="from" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Jusqu'au</mat-label>
+    <input matInput type="date" formControlName="to" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Classe (identifiant public, facultatif)</mat-label>
+    <input matInput formControlName="classGroup" />
+  </mat-form-field>
+  <div class="att__filter-actions">
+    <button mat-flat-button type="submit">Appliquer</button>
+    <button mat-button type="button" (click)="reset()">Réinitialiser</button>
+  </div>
+</form>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+  }
+  @case ('forbidden') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter ces rapports.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (summary(); as s) {
+      <div class="att__cards">
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Classes / séances</p>
+          <p class="att__card-value">{{ s.classCount }} / {{ s.sessionCount }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Taux de présence (demi-journées)</p>
+          <p class="att__card-value">{{ percent(s.totals.attendanceRate) }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Absences injustifiées</p>
+          <p class="att__card-value">{{ s.totals.absentHalfDays }}</p>
+          <p class="att__meta">{{ percent(s.totals.unjustifiedAbsenceRate) }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Absences excusées</p>
+          <p class="att__card-value">{{ s.totals.excusedHalfDays }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Retards</p>
+          <p class="att__card-value">{{ s.totals.lateCount }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Demi-journées en entreprise (exclues)</p>
+          <p class="att__card-value">{{ s.totals.companyHalfDays }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Demi-journées au contexte indéterminé</p>
+          <p class="att__card-value">{{ s.totals.unknownHalfDays }}</p>
+        </mat-card-content></mat-card>
+        <mat-card appearance="outlined"><mat-card-content>
+          <p class="att__meta">Justificatifs en attente</p>
+          <p class="att__card-value">
+            <a routerLink="../justifications">{{ s.pendingJustifications }}</a>
+          </p>
+        </mat-card-content></mat-card>
+      </div>
+      @for (note of s.notes; track note) {
+        <p class="att__meta" role="note">{{ note }}</p>
+      }
+    }
+  }
+}

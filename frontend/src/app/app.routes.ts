@@ -59,6 +59,18 @@ const SESSION_READ_ROLES = [
 ] as const;
 const SESSION_CREATE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'] as const;
 
+/**
+ * Suivi d'assiduité : rapports agrégés et examen des justificatifs.
+ * Repris de `AttendanceManagementWeb.REPORT_ROLES` / `REVIEW_LIST_ROLES` ;
+ * un `TEACHER` consulte les présences de ses séances via `/sessions`.
+ */
+const ATTENDANCE_MANAGE_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
 const academicList = () =>
   import('./features/academic/academic-reference-list/academic-reference-list').then(
     (m) => m.AcademicReferenceList,
@@ -341,6 +353,88 @@ export const routes: Routes = [
           import('./features/attendance-check-in/attendance-check-in').then(
             (m) => m.AttendanceCheckIn,
           ),
+      },
+      {
+        // Espace « Mes présences » de l'apprenant (V10) :
+        // `GET /api/v1/me/attendance*`, dépôt et suivi d'un justificatif
+        // métier. Réservé au rôle `STUDENT` (`AttendanceManagementWeb.STUDENT_ROLE`).
+        path: 'my-attendance',
+        canActivate: [roleGuard(['STUDENT'])],
+        canActivateChild: [roleGuard(['STUDENT'])],
+        title: `Mes présences — ${APP_NAME}`,
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/attendance/my-attendance/my-attendance-list').then(
+                (m) => m.MyAttendanceList,
+              ),
+          },
+          {
+            path: ':id',
+            title: `Présence — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/my-attendance/my-attendance-detail').then(
+                (m) => m.MyAttendanceDetail,
+              ),
+          },
+        ],
+      },
+      {
+        // Suivi d'assiduité (V10) : synthèse, rapports par séance / classe
+        // / apprenant, file des justificatifs. Périmètre aligné sur
+        // `AttendanceManagementWeb.REPORT_ROLES` / `REVIEW_LIST_ROLES` —
+        // Spring Security reste l'autorité (un `403` est rendu « accès
+        // refusé »), un `PEDAGOGICAL_MANAGER` reste filtré par périmètre.
+        path: 'attendance-management',
+        canActivate: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
+        canActivateChild: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
+        title: `Suivi d'assiduité — ${APP_NAME}`,
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'summary' },
+          {
+            path: 'summary',
+            loadComponent: () =>
+              import('./features/attendance/management/attendance-summary').then(
+                (m) => m.AttendanceSummary,
+              ),
+          },
+          {
+            path: 'sessions',
+            data: { kind: 'sessions' },
+            title: `Rapport par séance — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/management/attendance-report').then(
+                (m) => m.AttendanceReport,
+              ),
+          },
+          {
+            path: 'classes',
+            data: { kind: 'classes' },
+            title: `Rapport par classe — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/management/attendance-report').then(
+                (m) => m.AttendanceReport,
+              ),
+          },
+          {
+            path: 'students',
+            data: { kind: 'students' },
+            title: `Rapport par apprenant — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/management/attendance-report').then(
+                (m) => m.AttendanceReport,
+              ),
+          },
+          {
+            path: 'justifications',
+            title: `Justificatifs — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/management/justification-queue').then(
+                (m) => m.JustificationQueue,
+              ),
+          },
+        ],
       },
     ],
   },

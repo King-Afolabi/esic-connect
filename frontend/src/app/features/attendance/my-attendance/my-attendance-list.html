@@ -1,0 +1,132 @@
+<h1 class="att__title">Mes présences</h1>
+<p class="att__intro">
+  Historique de vos points de contrôle d'émargement. Une absence sur un point de contrôle fermé peut être
+  justifiée : le justificatif est une information (catégorie, référence, commentaire) — aucune pièce jointe
+  n'est demandée dans cette version. Les personnels autorisés y ont accès.
+</p>
+
+<form class="att__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+  <mat-form-field appearance="outline">
+    <mat-label>Depuis</mat-label>
+    <input matInput type="date" formControlName="from" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Jusqu'au</mat-label>
+    <input matInput type="date" formControlName="to" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Statut</mat-label>
+    <mat-select formControlName="status">
+      <mat-option value="">Tous</mat-option>
+      <mat-option value="PRESENT">Présent</mat-option>
+      <mat-option value="LATE">En retard</mat-option>
+      <mat-option value="ABSENT">Absent</mat-option>
+      <mat-option value="EXCUSED_ABSENCE">Absence excusée</mat-option>
+    </mat-select>
+  </mat-form-field>
+  <div class="att__filter-actions">
+    <button mat-flat-button type="submit">Filtrer</button>
+    <button mat-button type="button" (click)="resetFilters()">Réinitialiser</button>
+  </div>
+</form>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    <p class="att__status" role="status">Chargement…</p>
+  }
+  @case ('forbidden') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter cet espace.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (rows().length === 0) {
+      <p class="att__status" role="status">Aucune présence sur la période sélectionnée.</p>
+    } @else {
+      <div class="att__table-wrapper">
+        <table mat-table [dataSource]="rows()">
+          <ng-container matColumnDef="session">
+            <th mat-header-cell *matHeaderCellDef>Séance</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.sessionTitle || 'Séance' }}<br />
+              <span class="att__meta">{{ formatInstantUtc(row.sessionStartsAt) }} · {{ row.classCode || '—' }}</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="checkpoint">
+            <th mat-header-cell *matHeaderCellDef>Point de contrôle</th>
+            <td mat-cell *matCellDef="let row">{{ row.checkpointLabel }}</td>
+          </ng-container>
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Statut</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="att__chip" [attr.data-status]="row.status">{{ attendanceStatusLabel(row.status) }}</span>
+              @if (row.lateMinutes) { <span class="att__meta"> (+{{ row.lateMinutes }} min)</span> }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="justification">
+            <th mat-header-cell *matHeaderCellDef>Justificatif</th>
+            <td mat-cell *matCellDef="let row">
+              @if (row.justificationStatus) {
+                {{ justificationStatusLabel(row.justificationStatus) }}
+              } @else { — }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let row">
+              @if (row.attendancePublicId) {
+                <a mat-button [routerLink]="[row.attendancePublicId]">Détail</a>
+              }
+              @if (row.canJustify && isStudentContext()) {
+                <button mat-button type="button" (click)="startJustify(row)">Déposer un justificatif</button>
+              }
+              @if (justifyRowId() === row.checkpointPublicId) {
+                <form class="att__reveal" [formGroup]="justifyForm" (ngSubmit)="submitJustify()"
+                      role="group" aria-label="Déposer un justificatif">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Catégorie</mat-label>
+                    <mat-select formControlName="category">
+                      @for (c of categories; track c) {
+                        <mat-option [value]="c">{{ categoryLabel(c) }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Référence externe (facultatif)</mat-label>
+                    <input matInput formControlName="externalReference" maxlength="120" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Commentaire</mat-label>
+                    <input matInput formControlName="comment" maxlength="1000" />
+                  </mat-form-field>
+                  <div class="att__filter-actions">
+                    <button mat-flat-button type="submit" [disabled]="submitting() || justifyForm.invalid">Envoyer</button>
+                    <button mat-button type="button" (click)="cancelJustify()" [disabled]="submitting()">Annuler</button>
+                  </div>
+                  @if (formError()) { <p class="att__inline-error" role="alert">{{ formError() }}</p> }
+                </form>
+              }
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+      </div>
+      <div class="att__pager">
+        <button mat-button type="button" (click)="previousPage()" [disabled]="page() === 0">Précédent</button>
+        <span class="att__meta">{{ total() }} ligne(s)</span>
+        <button mat-button type="button" (click)="nextPage()"
+                [disabled]="(page() + 1) * 20 >= total()">Suivant</button>
+      </div>
+    }
+  }
+}

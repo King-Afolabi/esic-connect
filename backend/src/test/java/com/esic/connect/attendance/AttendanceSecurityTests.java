@@ -133,7 +133,110 @@ class AttendanceSecurityTests {
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    @Test
+    void checkpointAndManualManagementMatrix() {
+        String session = "/api/v1/sessions/" + UUID.randomUUID();
+        // Création d'un point de contrôle : MANAGE = ADMIN/SUPER_ADMIN/PEDAGOGICAL_MANAGER/TEACHER.
+        for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.PEDAGOGICAL_MANAGER,
+                RoleCode.TEACHER)) {
+            assertThat(rawStatus(HttpMethod.POST, session + "/checkpoints",
+                    Map.of("label", "x", "type", "CUSTOM"), tokenFor(role)))
+                    .as("checkpoint create as " + role).isNotEqualTo(HttpStatus.FORBIDDEN);
+        }
+        for (RoleCode role : List.of(RoleCode.SCHOOL_ADMINISTRATION, RoleCode.STUDENT)) {
+            assertThat(rawStatus(HttpMethod.POST, session + "/checkpoints",
+                    Map.of("label", "x", "type", "CUSTOM"), tokenFor(role)))
+                    .as("checkpoint create as " + role).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+        // Présence manuelle : MANAGE = les 5 rôles de gestion (SCHOOL_ADMIN inclus) ; STUDENT → 403.
+        for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION,
+                RoleCode.PEDAGOGICAL_MANAGER, RoleCode.TEACHER)) {
+            assertThat(rawStatus(HttpMethod.POST, session + "/attendance/manual",
+                    Map.of("enrollmentPublicId", UUID.randomUUID().toString(),
+                            "checkpointPublicId", UUID.randomUUID().toString(),
+                            "status", "ABSENT", "comment", "x"), tokenFor(role)))
+                    .as("manual record as " + role).isNotEqualTo(HttpStatus.FORBIDDEN);
+        }
+        assertThat(rawStatus(HttpMethod.POST, session + "/attendance/manual",
+                Map.of("enrollmentPublicId", UUID.randomUUID().toString(),
+                        "checkpointPublicId", UUID.randomUUID().toString(),
+                        "status", "ABSENT", "comment", "x"), tokenFor(RoleCode.STUDENT)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void manualAttendanceCandidatesAndSessionExportMatrix() {
+        String session = "/api/v1/sessions/" + UUID.randomUUID();
+        for (String path : List.of(session + "/attendance/candidates", session + "/attendance/export")) {
+            // MANAGE = les 5 rôles de gestion (SCHOOL_ADMIN inclus) : franchissent le @PreAuthorize
+            // (séance inconnue -> 404 métier, jamais 403).
+            for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION,
+                    RoleCode.PEDAGOGICAL_MANAGER, RoleCode.TEACHER)) {
+                assertThat(rawStatus(HttpMethod.GET, path, null, tokenFor(role)))
+                        .as(path + " as " + role).isEqualTo(HttpStatus.NOT_FOUND);
+            }
+            assertThat(rawStatus(HttpMethod.GET, path, null, tokenFor(RoleCode.STUDENT)))
+                    .as(path + " as STUDENT").isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(rawStatus(HttpMethod.GET, path, null, null))
+                    .as(path + " anonymous").isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @Test
+    void justificationReviewAndReportsMatrix() {
+        String review = "/api/v1/attendance/justifications/" + UUID.randomUUID() + "/review";
+        // Examen : ADMIN/SUPER_ADMIN/SCHOOL_ADMIN/PEDAGOGICAL_MANAGER ; TEACHER et STUDENT → 403.
+        for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION,
+                RoleCode.PEDAGOGICAL_MANAGER)) {
+            assertThat(rawStatus(HttpMethod.POST, review, Map.of("decision", "ACCEPTED"), tokenFor(role)))
+                    .as("review as " + role).isNotEqualTo(HttpStatus.FORBIDDEN);
+        }
+        for (RoleCode role : List.of(RoleCode.TEACHER, RoleCode.STUDENT)) {
+            assertThat(rawStatus(HttpMethod.POST, review, Map.of("decision", "ACCEPTED"), tokenFor(role)))
+                    .as("review as " + role).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+        // Rapports + export : ADMIN/SUPER_ADMIN/SCHOOL_ADMIN/PEDAGOGICAL_MANAGER ; TEACHER et STUDENT → 403.
+        for (String path : List.of("/api/v1/attendance/reports/summary",
+                "/api/v1/attendance/reports/sessions/export")) {
+            for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION,
+                    RoleCode.PEDAGOGICAL_MANAGER)) {
+                assertThat(rawStatus(HttpMethod.GET, path, null, tokenFor(role)))
+                        .as(path + " as " + role).isEqualTo(HttpStatus.OK);
+            }
+            for (RoleCode role : List.of(RoleCode.TEACHER, RoleCode.STUDENT)) {
+                assertThat(rawStatus(HttpMethod.GET, path, null, tokenFor(role)))
+                        .as(path + " as " + role).isEqualTo(HttpStatus.FORBIDDEN);
+            }
+            assertThat(rawStatus(HttpMethod.GET, path, null, null))
+                    .as(path + " anonymous").isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @Test
+    void myAttendanceIsStudentOnly() {
+        assertThat(rawStatus(HttpMethod.GET, "/api/v1/me/attendance", null, null))
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION,
+                RoleCode.PEDAGOGICAL_MANAGER, RoleCode.TEACHER)) {
+            assertThat(rawStatus(HttpMethod.GET, "/api/v1/me/attendance", null, tokenFor(role)))
+                    .as("me/attendance as " + role).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+        assertThat(rawStatus(HttpMethod.GET, "/api/v1/me/attendance", null, tokenFor(RoleCode.STUDENT)))
+                .isEqualTo(HttpStatus.OK);
+    }
+
     // ------------------------------------------------------------------
+
+    private HttpStatus rawStatus(HttpMethod method, String path, Map<String, Object> body, String token) {
+        RequestEntity.BodyBuilder builder = RequestEntity.method(method, URI.create(path));
+        if (token != null) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        RequestEntity<?> entity = body == null
+                ? builder.build()
+                : builder.contentType(MediaType.APPLICATION_JSON).body(body);
+        return (HttpStatus) restTemplate.exchange(entity, String.class).getStatusCode();
+    }
 
     private HttpStatus status(HttpMethod method, String path, Map<String, Object> body, String token) {
         RequestEntity.BodyBuilder builder = RequestEntity.method(method, URI.create(path));

@@ -1643,6 +1643,25 @@ Aucune suppression en cascade depuis la classe.
 
 # 19. Points de contrôle et émargements
 
+> **Mise en œuvre (migrations V9 puis V10).** V9 crée
+> `attendance_checkpoint` (un point de contrôle par séance) et
+> `attendance_record` (`source` ∈ {`DYNAMIC_QR`, `SHORT_CODE`}). **V10**
+> (branche `feature/attendance-management-and-reporting`) généralise à
+> **plusieurs points de contrôle** par séance
+> (`checkpoint_type` ∈ {`START`, `END`, `CUSTOM`}, `display_order` unique
+> par séance, `status` ∈ {`PLANNED`, `OPEN`, `CLOSED`, `CANCELLED`},
+> `required`), enrichit `attendance_record` (`status` ∈ {`PRESENT`,
+> `LATE`, `ABSENT`, `EXCUSED_ABSENCE`, `CANCELLED`} — `PARTIAL` /
+> `TO_CONFIRM` reportés ; `EXCUSED_ABSENCE` ≡ `EXCUSED` ; `source` +
+> {`MANUAL`, `CORRECTION`} ; `late_minutes`, `comment`, acteurs de saisie
+> / correction), ajoute `attendance_correction` (§19.4, append-only) et
+> **`attendance_justification`** — justificatif **métier sans fichier**
+> (catégorie, référence externe, commentaire ; cycle `PENDING` →
+> `ACCEPTED` / `REJECTED` ; un seul justificatif actif par absence via une
+> colonne générée). La table matérialisée `daily_attendance_summary`
+> (§19.5) n'est pas créée : le calcul des demi-journées est fait à la
+> volée. Détails et écarts : `docs/reports/ATTENDANCE_MANAGEMENT_DESIGN.md`.
+
 ## 19.1 Table `attendance_checkpoint`
 
 | Colonne | Type |

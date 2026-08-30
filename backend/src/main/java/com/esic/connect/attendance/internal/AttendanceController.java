@@ -36,7 +36,16 @@ class AttendanceController {
     @PostMapping("/api/v1/sessions/{publicId}/attendance-token")
     @PreAuthorize(AttendanceWeb.MANAGE_ROLES)
     AttendanceTokenResponse issueToken(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
-        return service.issueToken(publicId, AttendanceWeb.subject(caller));
+        // Compat V9 : cible le premier point de contrôle OUVERT de la séance.
+        return service.issueToken(publicId, null, AttendanceWeb.subject(caller));
+    }
+
+    @PostMapping("/api/v1/sessions/{sessionId}/checkpoints/{checkpointId}/attendance-token")
+    @PreAuthorize(AttendanceWeb.MANAGE_ROLES)
+    AttendanceTokenResponse issueCheckpointToken(@PathVariable String sessionId,
+                                                 @PathVariable String checkpointId,
+                                                 @AuthenticationPrincipal Jwt caller) {
+        return service.issueToken(sessionId, checkpointId, AttendanceWeb.subject(caller));
     }
 
     @GetMapping("/api/v1/sessions/{publicId}/attendance")

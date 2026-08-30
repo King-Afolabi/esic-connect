@@ -1,0 +1,126 @@
+<h1 class="att__title">{{ title() }}</h1>
+<nav class="att__crumbs" aria-label="Sections">
+  <a routerLink="../summary">Synthèse</a> ·
+  <a routerLink="../sessions">Par séance</a> ·
+  <a routerLink="../classes">Par classe</a> ·
+  <a routerLink="../students">Par apprenant</a> ·
+  <a routerLink="../justifications">Justificatifs</a>
+</nav>
+
+<form class="att__filters" [formGroup]="filters" (ngSubmit)="apply()">
+  <mat-form-field appearance="outline">
+    <mat-label>Depuis</mat-label>
+    <input matInput type="date" formControlName="from" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Jusqu'au</mat-label>
+    <input matInput type="date" formControlName="to" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Classe (identifiant public, facultatif)</mat-label>
+    <input matInput formControlName="classGroup" />
+  </mat-form-field>
+  @if (kind === 'students') {
+    <mat-form-field appearance="outline">
+      <mat-label>Profil apprenant (identifiant public, facultatif)</mat-label>
+      <input matInput formControlName="studentProfile" />
+    </mat-form-field>
+  }
+  <mat-form-field appearance="outline">
+    <mat-label>Trier par</mat-label>
+    <mat-select formControlName="sort">
+      @for (option of sortOptions; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+  <div class="att__filter-actions">
+    <button mat-flat-button type="submit">Appliquer</button>
+    <button mat-button type="button" (click)="reset()">Réinitialiser</button>
+    <button mat-stroked-button type="button" (click)="exportCsv()" [disabled]="exporting()">
+      <mat-icon aria-hidden="true">download</mat-icon> Exporter (CSV)
+    </button>
+  </div>
+</form>
+
+@switch (state().kind) {
+  @case ('loading') { <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar> }
+  @case ('forbidden') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter ce rapport.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (rows().length === 0) {
+      <p class="att__status" role="status">Aucune donnée pour ces filtres.</p>
+    } @else {
+      <div class="att__table-wrapper">
+        <table mat-table [dataSource]="rows()">
+          <ng-container matColumnDef="label">
+            <th mat-header-cell *matHeaderCellDef>{{ kind === 'sessions' ? 'Séance' : kind === 'classes' ? 'Classe' : 'Apprenant' }}</th>
+            <td mat-cell *matCellDef="let r">
+              @if (kind === 'sessions') { {{ r.sessionTitle || 'Séance' }} — {{ r.classCodes }} }
+              @else if (kind === 'classes') { {{ r.classCode }} }
+              @else { {{ [r.firstName, r.lastName].join(' ').trim() || r.studentNumber || '—' }} }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="when">
+            <th mat-header-cell *matHeaderCellDef>Quand</th>
+            <td mat-cell *matCellDef="let r">{{ formatInstantUtc(r.startsAt) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="count">
+            <th mat-header-cell *matHeaderCellDef>Effectif</th>
+            <td mat-cell *matCellDef="let r">{{ r.studentCount }}</td>
+          </ng-container>
+          <ng-container matColumnDef="classCode">
+            <th mat-header-cell *matHeaderCellDef>Classe</th>
+            <td mat-cell *matCellDef="let r">{{ r.classCode || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="expected">
+            <th mat-header-cell *matHeaderCellDef>Attendu</th>
+            <td mat-cell *matCellDef="let r">{{ kind === 'sessions' ? r.expectedCount : r.totals.expectedHalfDays }}</td>
+          </ng-container>
+          <ng-container matColumnDef="present">
+            <th mat-header-cell *matHeaderCellDef>Présent</th>
+            <td mat-cell *matCellDef="let r">{{ kind === 'sessions' ? r.presentCount : r.totals.presentHalfDays }}</td>
+          </ng-container>
+          <ng-container matColumnDef="late">
+            <th mat-header-cell *matHeaderCellDef>Retards</th>
+            <td mat-cell *matCellDef="let r">{{ r.lateCount }}</td>
+          </ng-container>
+          <ng-container matColumnDef="absent">
+            <th mat-header-cell *matHeaderCellDef>Absent</th>
+            <td mat-cell *matCellDef="let r">{{ kind === 'sessions' ? r.absentCount : r.totals.absentHalfDays }}</td>
+          </ng-container>
+          <ng-container matColumnDef="excused">
+            <th mat-header-cell *matHeaderCellDef>Excusé</th>
+            <td mat-cell *matCellDef="let r">{{ r.totals.excusedHalfDays }}</td>
+          </ng-container>
+          <ng-container matColumnDef="unknown">
+            <th mat-header-cell *matHeaderCellDef>Indéterminé</th>
+            <td mat-cell *matCellDef="let r">{{ r.totals.unknownHalfDays }}</td>
+          </ng-container>
+          <ng-container matColumnDef="rate">
+            <th mat-header-cell *matHeaderCellDef>Taux présence</th>
+            <td mat-cell *matCellDef="let r">{{ percent(kind === 'sessions' ? r.attendanceRate : r.totals.attendanceRate) }}</td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns()"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns()"></tr>
+        </table>
+      </div>
+      <div class="att__pager">
+        <button mat-button type="button" (click)="previousPage()" [disabled]="page() === 0">Précédent</button>
+        <span class="att__meta">{{ total() }} ligne(s)</span>
+        <button mat-button type="button" (click)="nextPage()" [disabled]="(page() + 1) * 20 >= total()">Suivant</button>
+      </div>
+    }
+  }
+}

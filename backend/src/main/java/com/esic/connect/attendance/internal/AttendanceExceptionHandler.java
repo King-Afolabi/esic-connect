@@ -16,7 +16,12 @@ import java.util.UUID;
  * homogène. Messages contrôlés, sans jeton, code court, identifiant
  * interne ni détail d'infrastructure.
  */
-@RestControllerAdvice(assignableTypes = AttendanceController.class)
+@RestControllerAdvice(assignableTypes = {
+        AttendanceController.class,
+        AttendanceManagementController.class,
+        StudentAttendanceController.class,
+        AttendanceJustificationController.class,
+        AttendanceReportController.class})
 class AttendanceExceptionHandler {
 
     @ExceptionHandler(AttendanceException.class)
@@ -66,6 +71,61 @@ class AttendanceExceptionHandler {
                 status = HttpStatus.NOT_FOUND;
                 code = "SESSION_NOT_FOUND";
                 message = "Aucune séance ne correspond à cet identifiant.";
+            }
+            case CHECKPOINT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_CHECKPOINT_NOT_FOUND";
+                message = "Aucun point de contrôle ne correspond à cet identifiant.";
+            }
+            case RECORD_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_RECORD_NOT_FOUND";
+                message = "Aucune présence ne correspond à cet identifiant.";
+            }
+            case RECORD_INVALID_STATE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_RECORD_INVALID_STATE";
+                message = "L'état actuel de cette présence ne permet pas cette opération.";
+            }
+            case MANUAL_REASON_REQUIRED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_MANUAL_REASON_REQUIRED";
+                message = "Un motif est obligatoire pour une saisie manuelle.";
+            }
+            case CORRECTION_REASON_REQUIRED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_CORRECTION_REASON_REQUIRED";
+                message = "Un motif est obligatoire pour corriger une présence.";
+            }
+            case MANUAL_STATUS_INVALID -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_RECORD_INVALID_STATE";
+                message = "Ce statut ne peut pas être saisi manuellement.";
+            }
+            case JUSTIFICATION_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_JUSTIFICATION_NOT_FOUND";
+                message = "Aucun justificatif ne correspond à cet identifiant.";
+            }
+            case JUSTIFICATION_INVALID_STATE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_JUSTIFICATION_INVALID_STATE";
+                message = "L'état actuel de ce justificatif ne permet pas cette opération.";
+            }
+            case JUSTIFICATION_DECISION_REASON_REQUIRED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_JUSTIFICATION_DECISION_REASON_REQUIRED";
+                message = "Un motif est obligatoire pour refuser un justificatif.";
+            }
+            case REPORT_INVALID_FILTER -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_REPORT_INVALID_FILTER";
+                message = "Valeur de filtre de rapport invalide.";
+            }
+            case REPORT_INVALID_SORT -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_REPORT_INVALID_SORT";
+                message = "Champ ou direction de tri de rapport non autorisé.";
             }
             default -> {
                 status = HttpStatus.FORBIDDEN;

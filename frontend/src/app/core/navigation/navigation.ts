@@ -90,6 +90,24 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'how_to_reg',
     roles: ['STUDENT'],
   },
+  {
+    // Écran livré : espace « Mes présences » de l'apprenant (V10) —
+    // historique, dépôt et suivi d'un justificatif métier.
+    label: 'Mes présences',
+    path: '/my-attendance',
+    icon: 'fact_check',
+    roles: ['STUDENT'],
+  },
+  {
+    // Écran livré : suivi d'assiduité (V10) — synthèse, rapports par
+    // séance / classe / apprenant, file des justificatifs. Périmètre
+    // aligné sur `AttendanceManagementWeb.REPORT_ROLES` ; un
+    // `PEDAGOGICAL_MANAGER` reste filtré par périmètre côté serveur.
+    label: "Suivi d'assiduité",
+    path: '/attendance-management',
+    icon: 'insights',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
 ];
 
 /**

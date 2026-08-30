@@ -1,5 +1,7 @@
 package com.esic.connect.coursesession.internal;
 
+import com.esic.connect.coursesession.AttendanceCheckpointChangeAction;
+import com.esic.connect.coursesession.AttendanceCheckpointChangeEvent;
 import com.esic.connect.coursesession.CourseSessionChangeAction;
 import com.esic.connect.coursesession.CourseSessionChangeEvent;
 import com.esic.connect.coursesession.CourseSessionResourceType;
@@ -34,5 +36,11 @@ class CourseSessionChangePublisher {
     void publish(UUID sessionPublicId, CourseSessionChangeAction action, Long actorId, String detail) {
         eventPublisher.publishEvent(new CourseSessionChangeEvent(
                 CourseSessionResourceType.COURSE_SESSION, sessionPublicId, actorId, action, detail));
+    }
+
+    void publishCheckpoint(UUID sessionPublicId, UUID checkpointPublicId,
+                           AttendanceCheckpointChangeAction action, Long actorId, String detail) {
+        eventPublisher.publishEvent(new AttendanceCheckpointChangeEvent(
+                sessionPublicId, checkpointPublicId, actorId, action, detail));
     }
 }

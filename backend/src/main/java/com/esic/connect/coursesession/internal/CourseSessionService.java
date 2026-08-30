@@ -172,7 +172,15 @@ class CourseSessionService {
         Instant now = clock.instant();
         Long actorId = changePublisher.actorId(callerSubject);
         session.open(now, actorId);
-        checkpoint(session).open(now);
+        // Compat V9 : à l'ouverture de la séance, le point de contrôle
+        // START (le premier, créé avec la séance) est ouvert d'office.
+        // Les points de contrôle supplémentaires (V10) s'ouvrent
+        // individuellement.
+        firstCheckpoint(session).ifPresent(cp -> {
+            if (cp.isPlanned()) {
+                cp.open(now, actorId);
+            }
+        });
         changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.OPENED, actorId, null);
     }
 
@@ -186,7 +194,15 @@ class CourseSessionService {
         Instant now = clock.instant();
         Long actorId = changePublisher.actorId(callerSubject);
         session.close(now, actorId);
-        checkpoint(session).close(now);
+        // Tous les points de contrôle encore ouverts sont fermés avec la
+        // séance (V10). Les jetons Redis sont purgés à la réception de
+        // l'événement CLOSED côté module attendance.
+        checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId())
+                .forEach(cp -> {
+                    if (cp.isOpen()) {
+                        cp.close(now, actorId);
+                    }
+                });
         changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.CLOSED, actorId, null);
     }
 
@@ -199,10 +215,8 @@ class CourseSessionService {
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
     }
 
-    private AttendanceCheckpoint checkpoint(CourseSession session) {
-        return checkpointRepository.findByCourseSessionId(session.getId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Point de contrôle manquant pour une séance existante"));
+    private Optional<AttendanceCheckpoint> firstCheckpoint(CourseSession session) {
+        return checkpointRepository.findFirstByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId());
     }
 
     private void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {
@@ -290,14 +304,22 @@ class CourseSessionService {
                 .map(ref -> new CourseSessionResponse.SessionClassView(ref.publicId(), ref.code()))
                 .toList();
 
-        AttendanceCheckpoint checkpoint = checkpointRepository.findByCourseSessionId(session.getId()).orElse(null);
-        UUID checkpointPublicId = checkpoint != null ? checkpoint.getPublicId() : null;
-        boolean checkpointOpen = checkpoint != null && checkpoint.isOpen();
+        List<AttendanceCheckpoint> checkpoints = checkpointRepository
+                .findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId());
+        List<CourseSessionResponse.CheckpointView> checkpointViews = checkpoints.stream()
+                .map(CourseSessionResponse.CheckpointView::from)
+                .toList();
+        // Compat V9 : checkpointPublicId / checkpointOpen reflètent le
+        // premier point de contrôle (START).
+        AttendanceCheckpoint first = checkpoints.isEmpty() ? null : checkpoints.get(0);
+        UUID checkpointPublicId = first != null ? first.getPublicId() : null;
+        boolean checkpointOpen = first != null && first.isOpen();
 
         return new CourseSessionResponse(session.getPublicId(), session.getStatus(), session.getTitle(),
                 session.getExceptionReason(), teacherView, classViews, session.getStartsAt(), session.getEndsAt(),
                 session.getTimeZoneId(), session.getOpenedAt(), session.getClosedAt(),
-                checkpointPublicId, checkpointOpen, session.getCreatedAt(), session.getUpdatedAt());
+                checkpointPublicId, checkpointOpen, checkpointViews,
+                session.getCreatedAt(), session.getUpdatedAt());
     }
 
     private TeacherDirectory.TeacherRef requireEligibleTeacher(String teacherPublicId) {

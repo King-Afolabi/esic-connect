@@ -35,6 +35,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -231,6 +235,196 @@ class CourseSessionIntegrationTests {
     void studentCannotListSessions() {
         assertThat(status(HttpMethod.GET, "/api/v1/sessions", null, tokenFor(RoleCode.STUDENT)))
                 .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
+    // Points de contrôle (V10)
+    // ------------------------------------------------------------------
+
+    @Test
+    void checkpointLifecycleIsAuditedAndListed() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin);
+
+        // À l'ouverture, le point de contrôle START existe et est OUVERT.
+        List<Map<String, Object>> checkpoints = list("/api/v1/sessions/" + id + "/checkpoints", admin);
+        assertThat(checkpoints).hasSize(1);
+        assertThat(checkpoints.get(0).get("type")).isEqualTo("START");
+        assertThat(checkpoints.get(0).get("status")).isEqualTo("OPEN");
+        assertThat(checkpoints.get(0)).doesNotContainKey("id");
+
+        // Ajout d'un point de contrôle CUSTOM.
+        Map<String, Object> custom = created("/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "Retour de pause", "type", "CUSTOM"), admin);
+        String customId = (String) custom.get("publicId");
+        assertThat(custom.get("status")).isEqualTo("PLANNED");
+        assertThat(((Number) custom.get("displayOrder")).intValue()).isEqualTo(1);
+
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/open", null, admin);
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/close", null, admin);
+
+        // Un troisième point de contrôle, annulé.
+        String cancelledId = (String) created("/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "Point en trop", "type", "CUSTOM", "required", false), admin).get("publicId");
+        assertThat(status(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/checkpoints/" + cancelledId + "/cancel",
+                Map.of("reason", "erreur de saisie"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        List<Map<String, Object>> after = list("/api/v1/sessions/" + id + "/checkpoints", admin);
+        assertThat(after).extracting(cp -> cp.get("status"))
+                .containsExactly("OPEN", "CLOSED", "CANCELLED");
+
+        assertThat(auditActions(customId)).contains("CHECKPOINT_CREATED", "CHECKPOINT_OPENED", "CHECKPOINT_CLOSED");
+        assertThat(auditActions(cancelledId)).contains("CHECKPOINT_CREATED", "CHECKPOINT_CANCELLED");
+
+        // La fiche séance porte la liste des points de contrôle.
+        Map<String, Object> session = getMap("/api/v1/sessions/" + id, admin);
+        assertThat((List<?>) session.get("checkpoints")).hasSize(3);
+
+        // Fermeture de la séance -> le point de contrôle START ouvert est fermé.
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/close", null, admin);
+        assertThat(list("/api/v1/sessions/" + id + "/checkpoints", admin))
+                .extracting(cp -> cp.get("status"))
+                .containsExactly("CLOSED", "CLOSED", "CANCELLED");
+    }
+
+    @Test
+    void checkpointRulesAndForbiddenTransitionsAreRejected() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Séance PLANNED : on peut créer un point de contrôle, mais pas l'ouvrir.
+        String customId = (String) created("/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "Fin", "type", "END"), admin).get("publicId");
+        assertConflict(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/open",
+                admin, "ATT_CHECKPOINT_INVALID_STATE");
+
+        // Deux END actifs -> 400 ATT_CHECKPOINT_INVALID_TYPE.
+        ResponseEntity<Map<String, Object>> dupEnd = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/checkpoints", Map.of("label", "Fin bis", "type", "END"), admin);
+        assertThat(dupEnd.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(dupEnd.getBody().get("code")).isEqualTo("ATT_CHECKPOINT_INVALID_TYPE");
+
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin);
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/open", null, admin);
+        // Ouvrir deux fois -> 409.
+        assertConflict(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/open",
+                admin, "ATT_CHECKPOINT_INVALID_STATE");
+        // Annuler sans motif -> 400 (validation @NotBlank).
+        assertThat(exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/cancel", Map.of("reason", "  "), admin)
+                .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        // Fermer un point de contrôle inconnu -> 404 ATT_CHECKPOINT_NOT_FOUND.
+        ResponseEntity<Map<String, Object>> unknown = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/checkpoints/" + UUID.randomUUID() + "/close", null, admin);
+        assertThat(unknown.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(unknown.getBody().get("code")).isEqualTo("ATT_CHECKPOINT_NOT_FOUND");
+
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/close", null, admin);
+        // Séance CLOSED : plus de création de point de contrôle -> 409.
+        ResponseEntity<Map<String, Object>> onClosed = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/checkpoints", Map.of("label", "x", "type", "CUSTOM"), admin);
+        assertThat(onClosed.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(onClosed.getBody().get("code")).isEqualTo("ATT_CHECKPOINT_INVALID_STATE");
+    }
+
+    @Test
+    void checkpointManagementRolesAreEnforced() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        String schoolAdmin = tokenFor(RoleCode.SCHOOL_ADMINISTRATION);
+        // Lecture autorisée...
+        assertThat(rawStatus(HttpMethod.GET, "/api/v1/sessions/" + id + "/checkpoints", null, schoolAdmin))
+                .isEqualTo(HttpStatus.OK);
+        // ...mais pas la gestion.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "x", "type", "CUSTOM"), schoolAdmin)).isEqualTo(HttpStatus.FORBIDDEN);
+
+        // STUDENT : aucun accès.
+        assertThat(rawStatus(HttpMethod.GET, "/api/v1/sessions/" + id + "/checkpoints", null,
+                tokenFor(RoleCode.STUDENT))).isEqualTo(HttpStatus.FORBIDDEN);
+
+        // Un formateur non affecté à la séance -> 403.
+        Account otherTeacher = accountWithRoles(RoleCode.TEACHER);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "x", "type", "CUSTOM"), tokenFor(otherTeacher)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void concurrentCheckpointOpenAndCloseResolveToAllowedStateWithoutServerError() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin);
+        // Point de contrôle CUSTOM PLANNED : ouverture et fermeture lancées
+        // en parallèle. Une seule transition est valide depuis l'état
+        // courant ; l'autre est un conflit contrôlé, jamais un 500.
+        String cp = (String) created("/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "Retour de pause", "type", "CUSTOM"), admin).get("publicId");
+
+        String base = "/api/v1/sessions/" + id + "/checkpoints/" + cp;
+        Callable<HttpStatus> open = () -> (HttpStatus) exchange(HttpMethod.POST, base + "/open", null, admin)
+                .getStatusCode();
+        Callable<HttpStatus> close = () -> (HttpStatus) exchange(HttpMethod.POST, base + "/close", null, admin)
+                .getStatusCode();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<HttpStatus> statuses;
+        try {
+            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(open, close));
+            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+        assertThat(statuses).anyMatch(HttpStatus.NO_CONTENT::equals);
+
+        List<Map<String, Object>> after = list("/api/v1/sessions/" + id + "/checkpoints", admin);
+        Object cpStatus = after.stream().filter(c -> cp.equals(c.get("publicId"))).findFirst()
+                .orElseThrow().get("status");
+        assertThat(cpStatus).isIn("OPEN", "CLOSED");
+    }
+
+    private static HttpStatus join(Future<HttpStatus> future) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private List<Map<String, Object>> list(String path, String token) {
+        return restTemplate.exchange(
+                RequestEntity.get(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                }).getBody();
+    }
+
+    /** Statut d'une requête sans désérialiser le corps (utile pour les endpoints renvoyant un tableau). */
+    private HttpStatus rawStatus(HttpMethod method, String path, Map<String, Object> body, String token) {
+        RequestEntity.BodyBuilder builder = RequestEntity.method(method, URI.create(path));
+        if (token != null) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        RequestEntity<?> entity = body == null
+                ? builder.build()
+                : builder.contentType(MediaType.APPLICATION_JSON).body(body);
+        return (HttpStatus) restTemplate.exchange(entity, String.class).getStatusCode();
     }
 
     // ------------------------------------------------------------------

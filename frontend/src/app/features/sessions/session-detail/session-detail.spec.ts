@@ -7,12 +7,36 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { Role } from '../../../core/models/role';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
-import { CourseSessionResponse } from '../sessions.models';
+import { CheckpointView, CourseSessionResponse } from '../sessions.models';
 import { SessionDetail } from './session-detail';
 
 const GET_URL = '/api/v1/sessions/s-1';
 const ATTENDANCE_URL = '/api/v1/sessions/s-1/attendance';
-const TOKEN_URL = '/api/v1/sessions/s-1/attendance-token';
+const CANDIDATES_URL = '/api/v1/sessions/s-1/attendance/candidates';
+const EXPORT_URL = '/api/v1/sessions/s-1/attendance/export';
+const TOKEN_URL = '/api/v1/sessions/s-1/checkpoints/cp-1/attendance-token';
+
+const CANDIDATES = [
+  {
+    studentProfilePublicId: 'sp-1',
+    enrollmentPublicId: 'e-1',
+    studentNumber: 'ESIC-2026-001',
+    firstName: 'Bob',
+    lastName: 'Durand',
+    classCode: 'C1',
+  },
+];
+
+const CP_OPEN: CheckpointView = {
+  publicId: 'cp-1',
+  label: 'Arrivée',
+  type: 'START',
+  status: 'OPEN',
+  required: true,
+  displayOrder: 0,
+  openedAt: '2026-09-10T05:55:00Z',
+  closedAt: null,
+};
 
 const OPEN_SESSION: CourseSessionResponse = {
   publicId: 's-1',
@@ -28,6 +52,7 @@ const OPEN_SESSION: CourseSessionResponse = {
   closedAt: null,
   checkpointPublicId: 'cp-1',
   checkpointOpen: true,
+  checkpoints: [CP_OPEN],
   createdAt: '2026-09-01T10:00:00Z',
   updatedAt: '2026-09-10T05:55:00Z',
 };
@@ -38,6 +63,22 @@ const EMPTY_ATTENDANCE = {
   expectedCount: 2,
   presentCount: 0,
   records: [],
+  checkpoints: [
+    {
+      checkpointPublicId: 'cp-1',
+      label: 'Arrivée',
+      type: 'START',
+      status: 'OPEN',
+      required: true,
+      expectedCount: 2,
+      presentCount: 0,
+      lateCount: 0,
+      absentCount: 0,
+      excusedCount: 0,
+      derivedAbsentCount: 2,
+      records: [],
+    },
+  ],
 };
 
 const TOKEN = {
@@ -45,6 +86,7 @@ const TOKEN = {
   shortCode: 'ABCD2345',
   expiresAt: '2026-09-10T06:00:30Z',
   sessionPublicId: 's-1',
+  checkpointPublicId: 'cp-1',
   ttlSeconds: 30,
 };
 
@@ -55,6 +97,36 @@ interface DetailInternals {
   confirmClose: () => void;
   refreshToken: () => void;
   refreshAttendance: () => void;
+  toggleCheckpointForm: () => void;
+  submitCheckpoint: () => void;
+  checkpointForm: { patchValue: (v: Record<string, unknown>) => void };
+  toggleManualForm: () => void;
+  submitManual: () => void;
+  loadCandidates: () => void;
+  candidates: () => unknown[];
+  candidatesState: () => string;
+  manualForm: {
+    patchValue: (v: Record<string, unknown>) => void;
+    getRawValue: () => Record<string, unknown>;
+  };
+  exportAttendanceCsv: () => void;
+  startCancelCheckpoint: (cp: CheckpointView) => void;
+  startCancelRow: (id: string) => void;
+  checkpointCancelForm: { patchValue: (v: Record<string, unknown>) => void; value: unknown };
+  attendanceCancelForm: { patchValue: (v: Record<string, unknown>) => void; value: unknown };
+  checkpointCancelId: () => string | null;
+  attendanceCancelId: () => string | null;
+  toggleHistory: (id: string) => void;
+  showCheckpointForm: () => boolean;
+  showManualForm: () => boolean;
+  canManageCheckpoint: () => boolean;
+  canManageAttendance: () => boolean;
+  canReadAttendance: () => boolean;
+  pendingAction: () => 'open' | 'close' | null;
+  startCorrect: (id: string) => void;
+  submitCorrect: () => void;
+  correctForm: { patchValue: (v: Record<string, unknown>) => void };
+  correctRowId: () => string | null;
 }
 
 function setup(roles: Role[]) {
@@ -82,7 +154,6 @@ function setup(roles: Role[]) {
   return { fixture, http, internals, effectiveRoles };
 }
 
-/** Répond au GET séance + GET présences émis à l'initialisation. */
 function initialLoad(http: HttpTestingController, session = OPEN_SESSION): void {
   http.expectOne(GET_URL).flush(session);
   http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
@@ -97,8 +168,6 @@ describe('SessionDetail', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    // Le polling modéré des présences peut avoir émis des GET pendant les
-    // avances d'horloge simulée : on les draine avant la vérification.
     http.match(ATTENDANCE_URL).forEach((req) => {
       if (!req.cancelled) {
         req.flush(EMPTY_ATTENDANCE);
@@ -107,19 +176,26 @@ describe('SessionDetail', () => {
     http.verify();
   });
 
-  it('loads the session facts and the attendance roster', () => {
+  it('loads the session facts and the per-checkpoint attendance breakdown', () => {
     ({ fixture, http, internals } = setup(['ADMIN']));
     initialLoad(http);
     fixture.detectChanges();
     expect(text()).toContain('Rattrapage');
     expect(text()).toContain('Ouverte');
     expect(text()).toContain('Alice Martin');
-    expect(text()).toContain('0 présent(s) sur 2 attendu(s)');
+    expect(text()).toContain('0 présent(s)');
+    expect(text()).toContain('sur 2 attendu(s)');
   });
 
   it('shows the open button for a PLANNED session and opens it after confirmation', () => {
     ({ fixture, http, internals } = setup(['ADMIN']));
-    initialLoad(http, { ...OPEN_SESSION, status: 'PLANNED', openedAt: null, checkpointOpen: false });
+    initialLoad(http, {
+      ...OPEN_SESSION,
+      status: 'PLANNED',
+      openedAt: null,
+      checkpointOpen: false,
+      checkpoints: [{ ...CP_OPEN, status: 'PLANNED', openedAt: null }],
+    });
     fixture.detectChanges();
     expect(text()).toContain('Ouvrir la séance');
 
@@ -129,12 +205,11 @@ describe('SessionDetail', () => {
       status: 204,
       statusText: 'No Content',
     });
-    // reload
     http.expectOne(GET_URL).flush(OPEN_SESSION);
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
   });
 
-  it('issues an attendance token, shows the short code and a <qrcode>, never the token as text', () => {
+  it('issues a checkpoint token, shows the short code and a <qrcode>, never the token as text', () => {
     ({ fixture, http, internals } = setup(['TEACHER']));
     initialLoad(http);
     fixture.detectChanges();
@@ -156,7 +231,6 @@ describe('SessionDetail', () => {
     internals.refreshToken();
     http.expectOne(TOKEN_URL).flush(TOKEN);
 
-    // ttl = 30 s, renouvellement 3 s avant -> ~27 s
     vi.advanceTimersByTime(28_000);
     http.expectOne(TOKEN_URL).flush({ ...TOKEN, token: 'SECOND-TOKEN', shortCode: 'EFGH6789' });
     fixture.detectChanges();
@@ -173,11 +247,16 @@ describe('SessionDetail', () => {
     internals.startClose();
     internals.confirmClose();
     http.expectOne((r) => r.url.endsWith('/close')).flush(null, { status: 204, statusText: 'No Content' });
-    http.expectOne(GET_URL).flush({ ...OPEN_SESSION, status: 'CLOSED', closedAt: '2026-09-10T07:00:00Z', checkpointOpen: false });
+    http.expectOne(GET_URL).flush({
+      ...OPEN_SESSION,
+      status: 'CLOSED',
+      closedAt: '2026-09-10T07:00:00Z',
+      checkpointOpen: false,
+      checkpoints: [{ ...CP_OPEN, status: 'CLOSED', closedAt: '2026-09-10T07:00:00Z' }],
+    });
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
     fixture.detectChanges();
 
-    // Aucun renouvellement ne doit plus partir.
     vi.advanceTimersByTime(60_000);
     http.expectNone(TOKEN_URL);
     expect(text()).toContain("l'émargement est fermé");
@@ -207,7 +286,15 @@ describe('SessionDetail', () => {
     initialLoad(http);
     internals.refreshToken();
     http.expectOne(TOKEN_URL).flush(
-      { timestamp: 't', status: 503, code: 'ATT_TOKEN_BACKEND_UNAVAILABLE', message: 'Service momentanément indisponible.', path: '/', correlationId: null, details: [] },
+      {
+        timestamp: 't',
+        status: 503,
+        code: 'ATT_TOKEN_BACKEND_UNAVAILABLE',
+        message: 'Service momentanément indisponible.',
+        path: '/',
+        correlationId: null,
+        details: [],
+      },
       { status: 503, statusText: 'Service Unavailable' },
     );
     fixture.detectChanges();
@@ -224,16 +311,33 @@ describe('SessionDetail', () => {
     internals.refreshAttendance();
     http.expectOne(ATTENDANCE_URL).flush({
       ...EMPTY_ATTENDANCE,
-      presentCount: 1,
-      records: [
-        { studentProfilePublicId: 'sp', enrollmentPublicId: 'e', studentNumber: 'ESIC-1', firstName: 'Bob', lastName: 'Durand', recordedAt: '2026-09-10T06:01:00Z', source: 'SHORT_CODE' },
+      checkpoints: [
+        {
+          ...EMPTY_ATTENDANCE.checkpoints[0],
+          presentCount: 1,
+          derivedAbsentCount: 1,
+          records: [
+            {
+              attendancePublicId: 'a-1',
+              studentProfilePublicId: 'sp',
+              enrollmentPublicId: 'e',
+              studentNumber: 'ESIC-1',
+              firstName: 'Bob',
+              lastName: 'Durand',
+              status: 'PRESENT',
+              lateMinutes: null,
+              comment: null,
+              recordedAt: '2026-09-10T06:01:00Z',
+              source: 'SHORT_CODE',
+            },
+          ],
+        },
       ],
     });
     fixture.detectChanges();
     expect(text()).toContain('ESIC-1');
     expect(text()).toContain('Bob Durand');
 
-    // Un tick de polling (15 s) tant que la séance est ouverte.
     vi.advanceTimersByTime(15_000);
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
 
@@ -248,11 +352,9 @@ describe('SessionDetail', () => {
     ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
     initialLoad(http);
 
-    // Un tick de polling tant que le contexte permet la lecture.
     vi.advanceTimersByTime(15_000);
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
 
-    // Bascule vers un contexte sans droit de lecture de la page.
     effectiveRoles.set(['STUDENT']);
     fixture.detectChanges();
 
@@ -269,23 +371,271 @@ describe('SessionDetail', () => {
     internals.refreshToken();
     const req = http.expectOne(TOKEN_URL);
 
-    // Le contexte retire le droit de gestion pendant que l'émission est en vol.
     effectiveRoles.set(['STUDENT']);
     fixture.detectChanges();
 
     req.flush(TOKEN);
     fixture.detectChanges();
 
-    // La réponse obsolète n'affiche pas de QR et ne programme aucun renouvellement.
     expect((fixture.nativeElement as HTMLElement).querySelector('qrcode')).toBeNull();
     vi.advanceTimersByTime(60_000);
     http.expectNone(TOKEN_URL);
   });
 
-  it('renders a not-found panel on a 404 and a forbidden panel on a 403', () => {
+  it('creates a checkpoint and reloads the session', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.toggleCheckpointForm();
+    internals.checkpointForm.patchValue({ label: 'Retour de pause', type: 'CUSTOM', required: true });
+    internals.submitCheckpoint();
+
+    const post = http.expectOne((r) => r.url === '/api/v1/sessions/s-1/checkpoints' && r.method === 'POST');
+    expect(post.request.body).toMatchObject({ label: 'Retour de pause', type: 'CUSTOM' });
+    post.flush({});
+    http.expectOne(GET_URL).flush(OPEN_SESSION);
+    expect(internals.showCheckpointForm()).toBe(false);
+  });
+
+  it('loads the session candidates and records a manual attendance for the selected enrollment', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.toggleManualForm();
+    const candidates = http.expectOne((r) => r.url === CANDIDATES_URL && r.method === 'GET');
+    candidates.flush(CANDIDATES);
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('ready');
+    expect(internals.candidates()).toHaveLength(1);
+    // Le contrat client ne porte ni e-mail ni identifiant SQL.
+    expect(Object.keys(internals.candidates()[0] as object)).not.toContain('email');
+
+    internals.manualForm.patchValue({ enrollmentPublicId: 'e-1', status: 'ABSENT', comment: 'absent constaté' });
+    internals.submitManual();
+
+    const post = http.expectOne((r) => r.url === '/api/v1/sessions/s-1/attendance/manual' && r.method === 'POST');
+    expect(post.request.body).toMatchObject({
+      enrollmentPublicId: 'e-1',
+      checkpointPublicId: 'cp-1',
+      status: 'ABSENT',
+      comment: 'absent constaté',
+    });
+    post.flush({});
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    expect(internals.showManualForm()).toBe(false);
+    expect(internals.candidates()).toEqual([]);
+  });
+
+  it('surfaces empty / error / forbidden states for the manual candidates list', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush([]);
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('empty');
+    expect(text()).toContain('Aucune inscription active');
+
+    internals.loadCandidates();
+    http.expectOne(CANDIDATES_URL).flush(
+      { timestamp: 't', status: 403, code: 'ATT_OPERATION_FORBIDDEN', message: 'x', path: '/', correlationId: null, details: [] },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('forbidden');
+
+    internals.loadCandidates();
+    http.expectOne(CANDIDATES_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('error');
+  });
+
+  it('never mixes the checkpoint-cancel and attendance-cancel reason forms', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.startCancelCheckpoint(CP_OPEN);
+    internals.checkpointCancelForm.patchValue({ reason: 'point de contrôle en trop' });
+    internals.startCancelRow('a-9');
+
+    expect(internals.checkpointCancelId()).toBeNull();
+    expect(internals.attendanceCancelId()).toBe('a-9');
+    expect((internals.attendanceCancelForm.value as { reason: string }).reason).toBe('');
+
+    internals.attendanceCancelForm.patchValue({ reason: 'doublon' });
+    internals.startCancelCheckpoint(CP_OPEN);
+    expect((internals.checkpointCancelForm.value as { reason: string }).reason).toBe('');
+    expect(internals.attendanceCancelId()).toBeNull();
+  });
+
+  it('exports this session attendance as a CSV blob without putting anything in the URL', () => {
+    ({ fixture, http, internals } = setup(['SCHOOL_ADMINISTRATION']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    try {
+      internals.exportAttendanceCsv();
+      const req = http.expectOne((r) => r.url === EXPORT_URL && r.method === 'GET');
+      expect(req.request.responseType).toBe('blob');
+      expect(req.request.urlWithParams).toBe(EXPORT_URL);
+      req.flush(new Blob(['a;b\r\n'], { type: 'text/csv' }), {
+        headers: { 'content-disposition': 'attachment; filename="attendance-session_s-1.csv"' },
+      });
+      expect(clickSpy).toHaveBeenCalledOnce();
+      expect(revokeSpy).toHaveBeenCalledWith('blob:x');
+    } finally {
+      createUrlSpy.mockRestore();
+      revokeSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+  });
+
+  it('drops a manual-record success that lands after the manage right was lost', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush(CANDIDATES);
+    internals.manualForm.patchValue({ enrollmentPublicId: 'e-1', status: 'ABSENT', comment: 'x' });
+    internals.submitManual();
+    const post = http.expectOne('/api/v1/sessions/s-1/attendance/manual');
+
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+
+    post.flush({});
+    fixture.detectChanges();
+    // Aucun rafraîchissement de la liste des présences n'est déclenché.
+    http.expectNone(ATTENDANCE_URL);
+    const notifications = TestBed.inject(NotificationService);
+    expect(notifications.info).not.toHaveBeenCalledWith('Présence enregistrée.');
+    expect(internals.showManualForm()).toBe(false);
+  });
+
+  it('fetches the correction history of a row on demand', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    internals.toggleHistory('a-1');
+    const req = http.expectOne('/api/v1/sessions/s-1/attendance/a-1/history');
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        publicId: 'h-1',
+        action: 'CREATED_MANUALLY',
+        previousStatus: null,
+        newStatus: 'ABSENT',
+        previousLateMinutes: null,
+        newLateMinutes: null,
+        previousComment: null,
+        newComment: 'x',
+        reason: 'constat',
+        occurredAt: '2026-09-10T09:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+    expect(text()).toContain('Créée manuellement');
+  });
+
+  it('closes the checkpoint and manual forms when the active role context loses the manage right', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+    internals.toggleCheckpointForm();
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush(CANDIDATES);
+    expect(internals.showCheckpointForm()).toBe(true);
+
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(internals.showCheckpointForm()).toBe(false);
+    expect(internals.showManualForm()).toBe(false);
+    expect(internals.candidates()).toEqual([]);
+    expect(internals.attendanceCancelId()).toBeNull();
+  });
+
+  it('splits capabilities: SCHOOL_ADMINISTRATION manages attendance but not checkpoints or the QR', () => {
+    ({ fixture, http, internals } = setup(['SCHOOL_ADMINISTRATION']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    expect(internals.canManageCheckpoint()).toBe(false);
+    expect(internals.canManageAttendance()).toBe(true);
+    expect(internals.canReadAttendance()).toBe(true);
+
+    // Aucune commande de cycle de vie de séance ni section QR.
+    expect(text()).not.toContain('Fermer la séance');
+    expect(text()).not.toContain('Émargement en cours');
+    expect(fixture.nativeElement.querySelector('qrcode')).toBeNull();
+
+    // Les handlers de gestion de point de contrôle sont des no-op au clic.
+    internals.startClose();
+    expect(internals.pendingAction()).toBeNull();
+    internals.toggleCheckpointForm();
+    expect(internals.showCheckpointForm()).toBe(false);
+    internals.refreshToken();
+    http.expectNone(TOKEN_URL);
+    internals.startCancelCheckpoint(CP_OPEN);
+    expect(internals.checkpointCancelId()).toBeNull();
+
+    // La saisie manuelle est en revanche disponible et charge les candidats.
+    internals.toggleManualForm();
+    http.expectOne(CANDIDATES_URL).flush(CANDIDATES);
+    fixture.detectChanges();
+    expect(internals.candidatesState()).toBe('ready');
+    internals.manualForm.patchValue({ enrollmentPublicId: 'e-1', status: 'ABSENT', comment: 'absent' });
+    internals.submitManual();
+    http.expectOne('/api/v1/sessions/s-1/attendance/manual').flush({
+      attendancePublicId: 'a-1',
+      sessionPublicId: 's-1',
+      checkpointPublicId: 'cp-1',
+      status: 'ABSENT',
+      lateMinutes: null,
+      recordedAt: '2026-09-10T06:10:00Z',
+      source: 'MANUAL',
+    });
+    // Le succès déclenche un rafraîchissement de la liste des présences.
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    const notifications = TestBed.inject(NotificationService);
+    expect(notifications.info).toHaveBeenCalledWith('Présence enregistrée.');
+  });
+
+  it('re-checks the attendance-manage right at click time when the context changed', () => {
+    let effectiveRoles!: WritableSignal<Role[]>;
+    ({ fixture, http, internals, effectiveRoles } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+
+    effectiveRoles.set(['STUDENT']);
+    fixture.detectChanges();
+
+    internals.startCorrect('a-1');
+    expect(internals.correctRowId()).toBeNull();
+    internals.correctForm.patchValue({ status: 'PRESENT', reason: 'oubli' });
+    internals.submitCorrect();
+    http.expectNone((r) => r.url === '/api/v1/sessions/s-1/attendance/a-1/correct');
+  });
+
+  it('renders a not-found panel on a 404 and never touches browser storage', () => {
     ({ fixture, http, internals } = setup(['ADMIN']));
     http.expectOne(GET_URL).flush(
-      { timestamp: 't', status: 404, code: 'SESSION_NOT_FOUND', message: 'Introuvable.', path: '/', correlationId: null, details: [] },
+      {
+        timestamp: 't',
+        status: 404,
+        code: 'SESSION_NOT_FOUND',
+        message: 'Introuvable.',
+        path: '/',
+        correlationId: null,
+        details: [],
+      },
       { status: 404, statusText: 'Not Found' },
     );
     fixture.detectChanges();

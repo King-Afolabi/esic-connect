@@ -71,7 +71,31 @@ class CourseSessionConstraintsTests {
 
         CourseSession reloaded = sessionRepository.findById(saved.getId()).orElseThrow();
         assertThat(reloaded.getClasses()).hasSize(2);
-        assertThat(checkpointRepository.findByCourseSessionId(saved.getId())).isPresent();
+        assertThat(checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(saved.getId()))
+                .hasSize(1);
+    }
+
+    @Test
+    void checkpointOpenStateCheckRejectsClosedWithoutOpenedAt() {
+        CourseSession session = planned();
+        session.addClass(classAId);
+        CourseSession saved = sessionRepository.saveAndFlush(session);
+        AttendanceCheckpoint cp = new AttendanceCheckpoint(saved);
+        // CLOSED sans opened_at ni closed_at → viole
+        // chk_attendance_checkpoint_open_state.
+        org.springframework.test.util.ReflectionTestUtils.setField(cp, "status",
+                com.esic.connect.coursesession.AttendanceCheckpointStatus.CLOSED);
+        assertThrows(DataAccessException.class, () -> checkpointRepository.saveAndFlush(cp));
+    }
+
+    @Test
+    void checkpointCancelledIsAcceptedWithoutTimestamps() {
+        CourseSession session = planned();
+        session.addClass(classAId);
+        CourseSession saved = sessionRepository.saveAndFlush(session);
+        AttendanceCheckpoint cp = new AttendanceCheckpoint(saved);
+        cp.cancel("point de contrôle en trop", null);
+        assertDoesNotThrow(() -> checkpointRepository.saveAndFlush(cp));
     }
 
     @Test
@@ -91,13 +115,31 @@ class CourseSessionConstraintsTests {
     }
 
     @Test
-    void twoCheckpointsForSameSessionIsRejected() {
+    void secondCheckpointWithSameDisplayOrderIsRejected() {
+        // V10 : plus d'unicité (course_session_id) — plusieurs points de
+        // contrôle par séance sont autorisés — mais l'ordre d'affichage
+        // reste unique par séance (uq_attendance_checkpoint_order).
         CourseSession session = planned();
         session.addClass(classAId);
         CourseSession saved = sessionRepository.saveAndFlush(session);
-        checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved));
+        checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved)); // START, ordre 0
         assertThrows(DataIntegrityViolationException.class,
-                () -> checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved)));
+                () -> checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved))); // ordre 0 encore
+    }
+
+    @Test
+    void severalCheckpointsWithDistinctDisplayOrdersAreAccepted() {
+        CourseSession session = planned();
+        session.addClass(classAId);
+        CourseSession saved = sessionRepository.saveAndFlush(session);
+        checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved)); // START, ordre 0
+        checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved,
+                "Retour de pause", com.esic.connect.coursesession.AttendanceCheckpointType.CUSTOM, 1, true, null));
+        checkpointRepository.saveAndFlush(new AttendanceCheckpoint(saved,
+                "Fin de séance", com.esic.connect.coursesession.AttendanceCheckpointType.END, 2, false, null));
+        entityManager.clear();
+        assertThat(checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(saved.getId()))
+                .hasSize(3);
     }
 
     @Test
