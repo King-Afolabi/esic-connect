@@ -2,11 +2,17 @@ package com.esic.connect.enrollment.internal;
 
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.enrollment.EnrollmentDirectory;
+import com.esic.connect.identity.UserDirectory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Implémentation du port {@link EnrollmentDirectory}. Reste confinée à
@@ -23,11 +29,14 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
 
     private final EnrollmentRepository enrollmentRepository;
     private final ClassGroupDirectory classGroupDirectory;
+    private final UserDirectory userDirectory;
 
     DefaultEnrollmentDirectory(EnrollmentRepository enrollmentRepository,
-                               ClassGroupDirectory classGroupDirectory) {
+                               ClassGroupDirectory classGroupDirectory,
+                               UserDirectory userDirectory) {
         this.enrollmentRepository = enrollmentRepository;
         this.classGroupDirectory = classGroupDirectory;
+        this.userDirectory = userDirectory;
     }
 
     @Override
@@ -43,6 +52,61 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     @Transactional(readOnly = true)
     public Optional<EnrollmentRef> findByInternalId(long enrollmentInternalId) {
         return enrollmentRepository.findById(enrollmentInternalId).map(this::toRef);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EnrollmentRef> findActiveEnrollmentsForUserOn(UUID userPublicId, LocalDate date) {
+        return userDirectory.findByPublicId(userPublicId)
+                .map(user -> enrollmentRepository
+                        .findByStudentProfile_UserIdAndStatus(user.internalId(), EnrollmentStatus.ACTIVE))
+                .orElseGet(List::of)
+                .stream()
+                .filter(enrollment -> coversDate(enrollment, date))
+                .map(this::toRef)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<AttendeeRef> describeAttendee(long enrollmentInternalId) {
+        return enrollmentRepository.findById(enrollmentInternalId).map(enrollment -> {
+            StudentProfile profile = enrollment.getStudentProfile();
+            UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);
+            return new AttendeeRef(
+                    profile.getPublicId(),
+                    enrollment.getPublicId(),
+                    profile.getStudentNumber(),
+                    name != null ? name.firstName() : null,
+                    name != null ? name.lastName() : null);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countActiveEnrollmentsInClasses(Collection<UUID> classGroupPublicIds) {
+        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
+            return 0;
+        }
+        Set<Long> classInternalIds = classGroupPublicIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(classGroupDirectory::findByPublicId)
+                .filter(Optional::isPresent)
+                .map(ref -> ref.get().internalId())
+                .collect(Collectors.toUnmodifiableSet());
+        if (classInternalIds.isEmpty()) {
+            return 0;
+        }
+        return enrollmentRepository.countByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE);
+    }
+
+    private static boolean coversDate(Enrollment enrollment, LocalDate date) {
+        if (date == null) {
+            return true;
+        }
+        boolean startedByDate = !enrollment.getStartDate().isAfter(date);
+        boolean notYetEnded = enrollment.getEndDate() == null || !enrollment.getEndDate().isBefore(date);
+        return startedByDate && notYetEnded;
     }
 
     private EnrollmentRef toRef(Enrollment enrollment) {
