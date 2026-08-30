@@ -61,6 +61,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'school',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
+  {
+    // Écran livré : gestion et consultation de l'alternance (modèles de
+    // rythme, affectations aux classes, exceptions individuelles,
+    // résolution de contexte). Périmètre aligné sur
+    // `AlternationWeb.PATTERN_READ_ROLES` / `SCOPED_ROLES` ; l'écriture
+    // des modèles est restreinte plus finement par la route.
+    label: 'Alternance',
+    path: '/alternation',
+    icon: 'sync_alt',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
 ];
 
 /**

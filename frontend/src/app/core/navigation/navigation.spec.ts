@@ -26,6 +26,18 @@ describe('NAV_ITEMS', () => {
       'PEDAGOGICAL_MANAGER',
     ]);
   });
+
+  it('exposes /alternation as a real screen gated on AlternationWeb read roles', () => {
+    const alternation = NAV_ITEMS.find((i) => i.path === '/alternation');
+    expect(alternation).toBeDefined();
+    expect(alternation?.placeholder).toBeUndefined();
+    expect(alternation?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+    ]);
+  });
 });
 
 describe('visibleNavItems', () => {
@@ -65,6 +77,15 @@ describe('visibleNavItems', () => {
     }
     for (const role of ['TEACHER', 'STUDENT'] as const) {
       expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/academic');
+    }
+  });
+
+  it('shows /alternation for the alternation read roles, and hides it otherwise', () => {
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/alternation');
+    }
+    for (const role of ['TEACHER', 'STUDENT'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/alternation');
     }
   });
 

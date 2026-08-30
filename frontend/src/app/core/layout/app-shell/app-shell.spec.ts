@@ -45,17 +45,19 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Administration / Apprenants / Référentiels screens for an ADMIN', () => {
+  it('renders the dashboard and the delivered Administration / Apprenants / Référentiels / Alternance screens for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/administration',
       '/students',
       '/academic',
+      '/alternation',
     ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
     expect(text()).toContain('Référentiels');
+    expect(text()).toContain('Alternance');
   });
 
   it('shows Administration for SCHOOL_ADMINISTRATION but hides it from a STUDENT', () => {
@@ -74,12 +76,19 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard']);
   });
 
-  it('hides Apprenants but shows Référentiels for a PEDAGOGICAL_MANAGER', () => {
+  it('hides Apprenants but shows Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
     expect(hrefs).not.toContain('/students');
     expect(hrefs).toContain('/academic');
+    expect(hrefs).toContain('/alternation');
+  });
+
+  it('hides Alternance for a role outside the alternation read roles', () => {
+    roles.set(['TEACHER']);
+    fixture.detectChanges();
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/alternation');
   });
 
   it('hides Référentiels for a role outside AcademicWeb.READ_ROLES', () => {
