@@ -44,9 +44,10 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.ofList(service.sessionReport(from, to, classGroup), page, size);
+        return PageResponse.ofList(service.sessionReport(from, to, classGroup, sort), page, size);
     }
 
     @GetMapping("/classes")
@@ -55,9 +56,10 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.ofList(service.classReport(from, to, classGroup), page, size);
+        return PageResponse.ofList(service.classReport(from, to, classGroup, sort), page, size);
     }
 
     @GetMapping("/students")
@@ -67,9 +69,10 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
             @RequestParam(required = false) String studentProfile,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.ofList(service.studentReport(from, to, classGroup, studentProfile), page, size);
+        return PageResponse.ofList(service.studentReport(from, to, classGroup, studentProfile, sort), page, size);
     }
 
     @GetMapping("/summary")
@@ -89,8 +92,9 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
+            @RequestParam(required = false) String sort,
             @AuthenticationPrincipal Jwt caller) {
-        List<AttendanceReports.SessionRow> rows = service.sessionReport(from, to, classGroup);
+        List<AttendanceReports.SessionRow> rows = service.sessionReport(from, to, classGroup, sort);
         List<List<String>> body = new ArrayList<>();
         for (AttendanceReports.SessionRow r : rows) {
             body.add(List.of(str(r.sessionPublicId()), nz(r.sessionTitle()), str(r.startsAt()), str(r.endsAt()),
@@ -111,8 +115,9 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
+            @RequestParam(required = false) String sort,
             @AuthenticationPrincipal Jwt caller) {
-        List<AttendanceReports.ClassRow> rows = service.classReport(from, to, classGroup);
+        List<AttendanceReports.ClassRow> rows = service.classReport(from, to, classGroup, sort);
         List<List<String>> body = new ArrayList<>();
         for (AttendanceReports.ClassRow r : rows) {
             AttendanceReports.HalfDayTotals t = r.totals();
@@ -136,8 +141,9 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
             @RequestParam(required = false) String studentProfile,
+            @RequestParam(required = false) String sort,
             @AuthenticationPrincipal Jwt caller) {
-        List<AttendanceReports.StudentRow> rows = service.studentReport(from, to, classGroup, studentProfile);
+        List<AttendanceReports.StudentRow> rows = service.studentReport(from, to, classGroup, studentProfile, sort);
         List<List<String>> body = new ArrayList<>();
         for (AttendanceReports.StudentRow r : rows) {
             AttendanceReports.HalfDayTotals t = r.totals();

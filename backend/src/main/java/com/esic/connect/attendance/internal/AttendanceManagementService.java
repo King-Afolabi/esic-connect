@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -184,6 +185,72 @@ class AttendanceManagementService {
                 .toList();
     }
 
+    /**
+     * Candidats à une saisie manuelle : effectif nominatif {@code ACTIVE}
+     * des classes de la séance, dédupliqué par inscription
+     * (correctif PR #22 §2). Le contrôle fin est celui de la
+     * <em>consultation</em> ({@code AccessLevel.READ}) : jamais élargi par
+     * un paramètre client ; aucun apprenant d'une classe extérieure.
+     */
+    @Transactional(readOnly = true)
+    List<AttendanceCandidateResponse> candidates(String sessionPublicId, String callerSubject) {
+        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
+        java.util.LinkedHashMap<UUID, AttendanceCandidateResponse> byEnrollment = new java.util.LinkedHashMap<>();
+        for (EnrollmentDirectory.RosterEntry entry
+                : enrollmentDirectory.findActiveRosterForClasses(session.classGroupPublicIds())) {
+            if (entry.enrollmentPublicId() == null) {
+                continue;
+            }
+            byEnrollment.putIfAbsent(entry.enrollmentPublicId(), new AttendanceCandidateResponse(
+                    entry.studentProfilePublicId(), entry.enrollmentPublicId(), entry.studentNumber(),
+                    entry.firstName(), entry.lastName(), entry.classGroupCode()));
+        }
+        Comparator<AttendanceCandidateResponse> byName = Comparator
+                .comparing((AttendanceCandidateResponse c) -> nullSafe(c.lastName()),
+                        String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(c -> nullSafe(c.firstName()), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(c -> c.enrollmentPublicId().toString());
+        return byEnrollment.values().stream().sorted(byName).toList();
+    }
+
+    /** Contenu et nom de fichier d'un export CSV de séance (correctif PR #22 §8). */
+    record SessionCsv(String fileName, String content) {
+    }
+
+    /**
+     * Export CSV des présences d'une séance. Réutilise le contrôle fin de
+     * la consultation ({@code AccessLevel.READ}) — un formateur affecté
+     * exporte sa séance. Aucune donnée superflue, aucun identifiant SQL,
+     * aucune adresse électronique ; nom de fichier contrôlé.
+     */
+    @Transactional(readOnly = true)
+    SessionCsv exportSessionCsv(String sessionPublicId, String callerSubject) {
+        CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
+        List<List<String>> body = new java.util.ArrayList<>();
+        for (CheckpointRef cp : session.checkpoints()) {
+            for (AttendanceRecord record
+                    : recordRepository.findByAttendanceCheckpointIdOrderByRecordedAtAsc(cp.internalId())) {
+                EnrollmentDirectory.AttendeeRef attendee = enrollmentDirectory
+                        .describeAttendee(record.getEnrollmentId()).orElse(null);
+                body.add(List.of(
+                        nullSafe(cp.label()),
+                        attendee != null ? nullSafe(attendee.studentNumber()) : "",
+                        attendee != null ? nullSafe(attendee.firstName()) : "",
+                        attendee != null ? nullSafe(attendee.lastName()) : "",
+                        record.getStatus() != null ? record.getStatus().name() : "",
+                        record.getLateMinutes() != null ? record.getLateMinutes().toString() : "",
+                        nullSafe(record.getComment()),
+                        record.getRecordedAt() != null ? record.getRecordedAt().toString() : "",
+                        record.getSource() != null ? record.getSource().name() : ""));
+            }
+        }
+        String content = AttendanceCsvWriter.write(List.of(
+                "point_de_controle", "numero_etudiant", "prenom", "nom", "statut", "retard_minutes",
+                "commentaire", "enregistre_le", "canal"), body);
+        String fileName = "attendance-session_" + session.publicId() + ".csv";
+        return new SessionCsv(fileName, content);
+    }
+
     // ------------------------------------------------------------------
 
     private AttendanceRecordResponse toResponse(CourseSessionDirectory.SessionRef session, AttendanceRecord record) {
@@ -238,6 +305,10 @@ class AttendanceManagementService {
             throw new AttendanceException(AttendanceException.Kind.MANUAL_STATUS_INVALID);
         }
         return status;
+    }
+
+    private static String nullSafe(String value) {
+        return value == null ? "" : value;
     }
 
     private static String requireReason(String value, AttendanceException.Kind kind) {

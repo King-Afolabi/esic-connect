@@ -35,6 +35,8 @@
  * active de l'apprenant émargeur, effectif nominatif attendu),
  * {@link com.esic.connect.academic.AcademicScopeDirectory} (périmètre
  * pédagogique pour l'examen des justificatifs et les rapports),
+ * {@link com.esic.connect.academic.ClassGroupDirectory} (code
+ * fonctionnel lisible d'une classe dans les rapports — jamais l'UUID),
  * {@link com.esic.connect.alternation.AlternationDirectory} (contexte
  * SCHOOL / COMPANY / UNKNOWN d'une inscription à une date, pour les
  * rapports),

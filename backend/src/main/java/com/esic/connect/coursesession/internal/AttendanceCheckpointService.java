@@ -7,6 +7,7 @@ import com.esic.connect.coursesession.AttendanceCheckpointType;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
 import com.esic.connect.coursesession.SessionLifecycle;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -114,6 +115,7 @@ class AttendanceCheckpointService {
         }
         Long actorId = changePublisher.actorId(callerSubject);
         ctx.checkpoint().open(clock.instant(), actorId);
+        flushCheckpoint(ctx.checkpoint());
         changePublisher.publishCheckpoint(ctx.session().getPublicId(), ctx.checkpoint().getPublicId(),
                 AttendanceCheckpointChangeAction.OPENED, actorId, null);
     }
@@ -126,6 +128,7 @@ class AttendanceCheckpointService {
         }
         Long actorId = changePublisher.actorId(callerSubject);
         ctx.checkpoint().close(clock.instant(), actorId);
+        flushCheckpoint(ctx.checkpoint());
         changePublisher.publishCheckpoint(ctx.session().getPublicId(), ctx.checkpoint().getPublicId(),
                 AttendanceCheckpointChangeAction.CLOSED, actorId, null);
     }
@@ -144,6 +147,7 @@ class AttendanceCheckpointService {
         }
         Long actorId = changePublisher.actorId(callerSubject);
         ctx.checkpoint().cancel(reason, actorId);
+        flushCheckpoint(ctx.checkpoint());
         changePublisher.publishCheckpoint(ctx.session().getPublicId(), ctx.checkpoint().getPublicId(),
                 AttendanceCheckpointChangeAction.CANCELLED, actorId, null);
     }
@@ -151,6 +155,20 @@ class AttendanceCheckpointService {
     // ------------------------------------------------------------------
 
     private record Ctx(CourseSession session, AttendanceCheckpoint checkpoint) {
+    }
+
+    /**
+     * Flush explicite d'une transition de point de contrôle : une
+     * transition concurrente perdante ({@code @Version}) est retraduite en
+     * conflit contrôlé {@code ATT_CHECKPOINT_INVALID_STATE} (409), jamais
+     * un 500 (correctif PR #22 §3).
+     */
+    private void flushCheckpoint(AttendanceCheckpoint checkpoint) {
+        try {
+            checkpointRepository.saveAndFlush(checkpoint);
+        } catch (ObjectOptimisticLockingFailureException concurrent) {
+            throw new CourseSessionException(CourseSessionException.Kind.CHECKPOINT_INVALID_STATE);
+        }
     }
 
     private Ctx require(String sessionPublicId, String checkpointPublicId, AccessLevel level,

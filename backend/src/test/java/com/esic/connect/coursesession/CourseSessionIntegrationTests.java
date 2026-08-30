@@ -35,6 +35,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -356,6 +360,52 @@ class CourseSessionIntegrationTests {
         assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints",
                 Map.of("label", "x", "type", "CUSTOM"), tokenFor(otherTeacher)))
                 .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void concurrentCheckpointOpenAndCloseResolveToAllowedStateWithoutServerError() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin);
+        // Point de contrôle CUSTOM PLANNED : ouverture et fermeture lancées
+        // en parallèle. Une seule transition est valide depuis l'état
+        // courant ; l'autre est un conflit contrôlé, jamais un 500.
+        String cp = (String) created("/api/v1/sessions/" + id + "/checkpoints",
+                Map.of("label", "Retour de pause", "type", "CUSTOM"), admin).get("publicId");
+
+        String base = "/api/v1/sessions/" + id + "/checkpoints/" + cp;
+        Callable<HttpStatus> open = () -> (HttpStatus) exchange(HttpMethod.POST, base + "/open", null, admin)
+                .getStatusCode();
+        Callable<HttpStatus> close = () -> (HttpStatus) exchange(HttpMethod.POST, base + "/close", null, admin)
+                .getStatusCode();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<HttpStatus> statuses;
+        try {
+            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(open, close));
+            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+        assertThat(statuses).anyMatch(HttpStatus.NO_CONTENT::equals);
+
+        List<Map<String, Object>> after = list("/api/v1/sessions/" + id + "/checkpoints", admin);
+        Object cpStatus = after.stream().filter(c -> cp.equals(c.get("publicId"))).findFirst()
+                .orElseThrow().get("status");
+        assertThat(cpStatus).isIn("OPEN", "CLOSED");
+    }
+
+    private static HttpStatus join(Future<HttpStatus> future) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private List<Map<String, Object>> list(String path, String token) {

@@ -1,6 +1,7 @@
 package com.esic.connect.attendance.internal;
 
 import com.esic.connect.academic.AcademicScopeDirectory;
+import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.alternation.AlternationDirectory;
 import com.esic.connect.attendance.AttendanceStatus;
 import com.esic.connect.coursesession.AttendanceCheckpointStatus;
@@ -17,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -59,6 +59,7 @@ class AttendanceReportService {
     private final CourseSessionDirectory courseSessionDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
     private final AcademicScopeDirectory academicScope;
+    private final ClassGroupDirectory classGroupDirectory;
     private final AlternationDirectory alternationDirectory;
     private final UserDirectory userDirectory;
     private final AttendanceRecordRepository recordRepository;
@@ -68,6 +69,7 @@ class AttendanceReportService {
     AttendanceReportService(CourseSessionDirectory courseSessionDirectory,
                             EnrollmentDirectory enrollmentDirectory,
                             AcademicScopeDirectory academicScope,
+                            ClassGroupDirectory classGroupDirectory,
                             AlternationDirectory alternationDirectory,
                             UserDirectory userDirectory,
                             AttendanceRecordRepository recordRepository,
@@ -76,6 +78,7 @@ class AttendanceReportService {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.academicScope = academicScope;
+        this.classGroupDirectory = classGroupDirectory;
         this.alternationDirectory = alternationDirectory;
         this.userDirectory = userDirectory;
         this.recordRepository = recordRepository;
@@ -88,7 +91,8 @@ class AttendanceReportService {
     // ------------------------------------------------------------------
 
     @Transactional(readOnly = true)
-    List<AttendanceReports.SessionRow> sessionReport(Instant from, Instant to, String classGroupFilter) {
+    List<AttendanceReports.SessionRow> sessionReport(Instant from, Instant to, String classGroupFilter,
+                                                    String sort) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
         List<AttendanceReports.SessionRow> rows = new ArrayList<>();
         for (SessionRef session : scopedSessions(from, to, classFilter)) {
@@ -122,11 +126,11 @@ class AttendanceReportService {
                     session.endsAt(), classCodes(session), teacherName(session), checkpoints.size(),
                     expected, present, late, absent, excused, rate));
         }
-        return rows;
+        return AttendanceReportSort.sortSessions(rows, sort);
     }
 
     @Transactional(readOnly = true)
-    List<AttendanceReports.ClassRow> classReport(Instant from, Instant to, String classGroupFilter) {
+    List<AttendanceReports.ClassRow> classReport(Instant from, Instant to, String classGroupFilter, String sort) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
         List<SessionRef> sessions = scopedSessions(from, to, classFilter);
         Set<UUID> classes = scopedClasses(sessions, classFilter);
@@ -144,16 +148,15 @@ class AttendanceReportService {
                     }
                 }
             }
-            String code = roster.isEmpty() ? classPublicId.toString() : roster.get(0).classGroupCode();
+            String code = roster.isEmpty() ? classCode(classPublicId) : roster.get(0).classGroupCode();
             rows.add(new AttendanceReports.ClassRow(classPublicId, code, roster.size(), acc.toTotals()));
         }
-        rows.sort((a, b) -> a.classCode().compareToIgnoreCase(b.classCode()));
-        return rows;
+        return AttendanceReportSort.sortClasses(rows, sort);
     }
 
     @Transactional(readOnly = true)
     List<AttendanceReports.StudentRow> studentReport(Instant from, Instant to, String classGroupFilter,
-                                                     String studentProfileFilter) {
+                                                     String studentProfileFilter, String sort) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
         UUID studentFilter = parseOptionalUuid(studentProfileFilter);
         List<SessionRef> sessions = scopedSessions(from, to, classFilter);
@@ -178,8 +181,7 @@ class AttendanceReportService {
                         entry.classGroupCode(), acc.toTotals()));
             }
         }
-        rows.sort((a, b) -> nullSafe(a.lastName()).compareToIgnoreCase(nullSafe(b.lastName())));
-        return rows;
+        return AttendanceReportSort.sortStudents(rows, sort);
     }
 
     @Transactional(readOnly = true)
@@ -219,7 +221,7 @@ class AttendanceReportService {
 
     private void accrueHalfDays(Accrual acc, SessionRef session, long enrollmentInternalId,
                                 UUID enrollmentPublicId, Map<String, AttendanceRecord> recordIndex) {
-        ZoneId zone = safeZone(session.timeZoneId());
+        ZoneId zone = persistedZone(session.timeZoneId());
         LocalDate day = LocalDate.ofInstant(session.startsAt(), zone);
         AlternationDirectory.Axis axis = alternationDirectory
                 .resolveEnrollmentContext(enrollmentPublicId, day).effective();
@@ -369,8 +371,21 @@ class AttendanceReportService {
     private String classCodes(SessionRef session) {
         return session.classGroupPublicIds().stream()
                 .sorted()
-                .map(UUID::toString)
+                .map(this::classCode)
                 .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * Code fonctionnel lisible d'une classe (ex. {@code C-DEMO}) résolu
+     * via le port public {@link ClassGroupDirectory} — jamais l'UUID
+     * public comme libellé (correctif PR #22 §7). Repli {@code "?"} si la
+     * classe n'est plus résoluble (ne fuite pas l'identifiant SQL).
+     */
+    private String classCode(UUID classGroupPublicId) {
+        return classGroupDirectory.findByPublicId(classGroupPublicId)
+                .map(ClassGroupDirectory.ClassGroupRef::code)
+                .filter(code -> code != null && !code.isBlank())
+                .orElse("?");
     }
 
     private String teacherName(SessionRef session) {
@@ -385,11 +400,21 @@ class AttendanceReportService {
         return checkpointId + ":" + enrollmentId;
     }
 
-    private static ZoneId safeZone(String id) {
+    /**
+     * Résout le fuseau IANA <em>persisté</em> d'une séance. Une valeur
+     * invalide est un état interne corrompu (validée à l'écriture par
+     * {@code CourseSessionService}) : elle lève une erreur interne
+     * explicite plutôt que d'être remplacée silencieusement par UTC, ce
+     * qui classerait un point de contrôle dans la mauvaise demi-journée
+     * (correctif PR #22 §1 ; même convention que
+     * {@code AlternationContextService.persistedZone}). La valeur invalide
+     * n'est jamais exposée au client.
+     */
+    private static ZoneId persistedZone(String id) {
         try {
             return ZoneId.of(id);
         } catch (RuntimeException invalid) {
-            return ZoneOffset.UTC;
+            throw new IllegalStateException("Fuseau horaire persisté invalide pour une séance");
         }
     }
 
@@ -402,10 +427,6 @@ class AttendanceReportService {
         } catch (IllegalArgumentException notAUuid) {
             throw new AttendanceException(AttendanceException.Kind.REPORT_INVALID_FILTER);
         }
-    }
-
-    private static String nullSafe(String value) {
-        return value == null ? "" : value;
     }
 
     private static double round(double value) {

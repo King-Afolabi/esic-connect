@@ -78,6 +78,8 @@ class AttendanceIntegrationTests {
     private AuditEventRepository auditEventRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void useJdkClient() {
@@ -367,6 +369,184 @@ class AttendanceIntegrationTests {
     }
 
     // ------------------------------------------------------------------
+    // Candidats à la présence manuelle (correctif PR #22 §2)
+    // ------------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void manualAttendanceCandidatesListEnrolledStudentsOfTheSessionOnly() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 2);
+        // Une autre séance / classe : ses apprenants ne doivent jamais apparaître.
+        Fixture other = openSessionWithEnrolledStudents(admin, 1);
+
+        List<Map<String, Object>> candidates = listRaw(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/candidates", admin);
+        assertThat(candidates).hasSize(2);
+        assertThat(candidates).allSatisfy(c -> {
+            assertThat(c).doesNotContainKeys("email", "id", "userId", "studentUserId");
+            assertThat(c.get("enrollmentPublicId")).isNotNull();
+            assertThat(c.get("classCode")).isNotNull();
+        });
+        List<Object> enrollmentIds = candidates.stream().map(c -> c.get("enrollmentPublicId")).toList();
+        assertThat(enrollmentIds).containsExactlyInAnyOrderElementsOf(fx.enrollments());
+        assertThat(enrollmentIds).doesNotContainAnyElementsOf(other.enrollments());
+
+        // L'identifiant renvoyé est directement utilisable pour une saisie manuelle.
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", enrollmentIds.get(0), "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "absent au pointage"),
+                admin, HttpStatus.CREATED);
+
+        // STUDENT et anonyme : refusés.
+        assertThat(exchange(HttpMethod.GET,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/candidates", null,
+                tokenFor(fx.students().get(0))).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exchange(HttpMethod.GET,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/candidates", null, null)
+                .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void manualAttendanceCandidatesRespectTeacherSessionScope() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String path = "/api/v1/sessions/" + fx.sessionId() + "/attendance/candidates";
+        // Le formateur affecté à la séance y accède ; un autre formateur non.
+        assertThat(rawStatus(path, tokenFor(fx.teacher()))).isEqualTo(HttpStatus.OK);
+        assertThat(rawStatus(path, roleToken(RoleCode.TEACHER))).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private HttpStatus rawStatus(String path, String token) {
+        return (HttpStatus) restTemplate.exchange(
+                RequestEntity.get(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                String.class).getStatusCode();
+    }
+
+    // ------------------------------------------------------------------
+    // Concurrence déterministe (correctif PR #22 §3)
+    // ------------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void qrValidationAndManualRecordRaceKeepExactlyOneRecord() throws Exception {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+        String student = tokenFor(fx.students().get(0));
+
+        Callable<ResponseEntity<Map<String, Object>>> validate = () -> exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate", Map.of("shortCode", issued.get("shortCode")), student);
+        Callable<ResponseEntity<Map<String, Object>>> manual = () -> exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", fx.enrollments().get(0), "checkpointPublicId", cp,
+                        "status", "ABSENT", "comment", "conflit de course"), admin);
+
+        List<HttpStatus> statuses = bothConcurrently(validate, manual).stream()
+                .map(r -> (HttpStatus) r.getStatusCode()).toList();
+        assertThat(statuses).filteredOn(HttpStatus::is2xxSuccessful).hasSize(1);
+        assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+
+        Map<String, Object> roster = getMap("/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        List<Map<String, Object>> records = (List<Map<String, Object>>) roster.get("records");
+        assertThat(records).hasSize(1);
+    }
+
+    @Test
+    void twoConcurrentManualRecordsKeepExactlyOneRow() throws Exception {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        Map<String, Object> body = Map.of("enrollmentPublicId", fx.enrollments().get(0),
+                "checkpointPublicId", cp, "status", "ABSENT", "comment", "double saisie simultanée");
+
+        Callable<ResponseEntity<Map<String, Object>>> call = () -> exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/manual", body, admin);
+        List<ResponseEntity<Map<String, Object>>> results = bothConcurrently(call, call);
+        List<HttpStatus> statuses = results.stream().map(r -> (HttpStatus) r.getStatusCode()).toList();
+        assertThat(statuses).filteredOn(HttpStatus.CREATED::equals).hasSize(1);
+        assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        assertThat(results.stream().filter(r -> r.getStatusCode() == HttpStatus.CONFLICT).findFirst()
+                .orElseThrow().getBody().get("code")).isEqualTo("ATT_ALREADY_RECORDED");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> records = (List<Map<String, Object>>) getMap(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance", admin).get("records");
+        assertThat(records).hasSize(1);
+    }
+
+    @Test
+    void twoConcurrentCorrectionsYieldOneWinnerAndOneControlledConflict() throws Exception {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        String attId = (String) post("/api/v1/sessions/" + fx.sessionId() + "/attendance/manual",
+                Map.of("enrollmentPublicId", fx.enrollments().get(0), "checkpointPublicId", cp,
+                        "status", "PRESENT", "comment", "présent"),
+                admin, HttpStatus.CREATED).get("attendancePublicId");
+
+        String url = "/api/v1/sessions/" + fx.sessionId() + "/attendance/" + attId + "/correct";
+        Callable<ResponseEntity<Map<String, Object>>> toAbsent = () -> exchange(HttpMethod.POST, url,
+                Map.of("status", "ABSENT", "reason", "corrigé en absent"), admin);
+        Callable<ResponseEntity<Map<String, Object>>> toLate = () -> exchange(HttpMethod.POST, url,
+                Map.of("status", "LATE", "lateMinutes", 12, "reason", "corrigé en retard"), admin);
+
+        List<ResponseEntity<Map<String, Object>>> results = bothConcurrently(toAbsent, toLate);
+        List<HttpStatus> statuses = results.stream().map(r -> (HttpStatus) r.getStatusCode()).toList();
+        assertThat(statuses).filteredOn(HttpStatus.OK::equals).hasSize(1);
+        assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        assertThat(results.stream().filter(r -> r.getStatusCode() == HttpStatus.CONFLICT).findFirst()
+                .orElseThrow().getBody().get("code")).isEqualTo("ATT_RECORD_INVALID_STATE");
+
+        // Historique cohérent : une seule correction de statut appliquée.
+        List<Map<String, Object>> history = listRaw(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/" + attId + "/history", admin);
+        assertThat(history).extracting(h -> h.get("action"))
+                .containsExactly("CREATED_MANUALLY", "STATUS_CORRECTED");
+        Map<String, Object> finalRecord = getMap(
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) finalRecord.get("records");
+        assertThat(rows.get(0).get("status")).isIn("ABSENT", "LATE");
+    }
+
+    @Test
+    void twoConcurrentJustificationReviewsYieldOneDecisionAndOneControlledConflict() throws Exception {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        String cp = firstCheckpoint(admin, fx.sessionId());
+        post("/api/v1/sessions/" + fx.sessionId() + "/close", null, admin, HttpStatus.NO_CONTENT);
+
+        String student = tokenFor(fx.students().get(0));
+        String justifId = (String) post("/api/v1/me/attendance/justifications",
+                Map.of("checkpointPublicId", cp, "category", "MEDICAL", "comment", "certificat"),
+                student, HttpStatus.CREATED).get("publicId");
+
+        String reviewer = roleToken(RoleCode.SCHOOL_ADMINISTRATION);
+        String url = "/api/v1/attendance/justifications/" + justifId + "/review";
+        Callable<ResponseEntity<Map<String, Object>>> accept = () -> exchange(HttpMethod.POST, url,
+                Map.of("decision", "ACCEPTED"), reviewer);
+        Callable<ResponseEntity<Map<String, Object>>> reject = () -> exchange(HttpMethod.POST, url,
+                Map.of("decision", "REJECTED", "decisionReason", "pièce illisible"), reviewer);
+
+        List<HttpStatus> statuses = bothConcurrently(accept, reject).stream()
+                .map(r -> (HttpStatus) r.getStatusCode()).toList();
+        assertThat(statuses).filteredOn(HttpStatus.OK::equals).hasSize(1);
+        assertThat(statuses).filteredOn(HttpStatus.CONFLICT::equals).hasSize(1);
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+
+        Map<String, Object> settled = getMap(
+                "/api/v1/attendance/justifications/" + justifId, reviewer);
+        assertThat(settled.get("status")).isIn("ACCEPTED", "REJECTED");
+    }
+
+    // ------------------------------------------------------------------
     // Justificatifs + espace apprenant (V10)
     // ------------------------------------------------------------------
 
@@ -502,8 +682,56 @@ class AttendanceIntegrationTests {
         assertThat(rows).allSatisfy(r -> assertThat(r).doesNotContainKeys("email"));
 
         Map<String, Object> byClass = getMap("/api/v1/attendance/reports/classes"
-                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z", admin);
-        assertThat((List<?>) byClass.get("content")).isNotEmpty();
+                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z&classGroup=" + fx.classA(), admin);
+        List<Map<String, Object>> classRows = (List<Map<String, Object>>) byClass.get("content");
+        assertThat(classRows).isNotEmpty();
+        // Correctif §7 : le code lisible de la classe, jamais l'UUID public.
+        assertThat(classRows).allSatisfy(r -> {
+            assertThat(r.get("classCode")).isEqualTo("C1");
+            assertThat(String.valueOf(r.get("classCode"))).isNotEqualTo(fx.classA());
+        });
+
+        // Tri serveur borné : valide accepté, invalide -> 400 ATT_REPORT_INVALID_SORT.
+        assertThat(getMap("/api/v1/attendance/reports/students?from=2026-09-01T00:00:00Z"
+                + "&to=2026-09-30T00:00:00Z&classGroup=" + fx.classA() + "&sort=studentNumber,desc", admin))
+                .isNotNull();
+        ResponseEntity<Map<String, Object>> badSort = exchange(HttpMethod.GET,
+                "/api/v1/attendance/reports/students?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z"
+                        + "&classGroup=" + fx.classA() + "&sort=email,asc", null, admin);
+        assertThat(badSort.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(badSort.getBody().get("code")).isEqualTo("ATT_REPORT_INVALID_SORT");
+        ResponseEntity<Map<String, Object>> badDir = exchange(HttpMethod.GET,
+                "/api/v1/attendance/reports/sessions?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z"
+                        + "&sort=startsAt,sideways", null, admin);
+        assertThat(badDir.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(badDir.getBody().get("code")).isEqualTo("ATT_REPORT_INVALID_SORT");
+    }
+
+    @Test
+    void reportRejectsCorruptPersistedTimeZoneInsteadOfFabricatingTotals() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        post("/api/v1/sessions/" + fx.sessionId() + "/close", null, admin, HttpStatus.NO_CONTENT);
+        // Corruption d'un fuseau persisté (impossible via l'API : validé à
+        // l'écriture). Le rapport ne doit pas produire un résultat chiffré
+        // trompeur (correctif §1) : erreur interne contrôlée, jamais un 200.
+        int updated = jdbcTemplate.update(
+                "UPDATE course_session SET time_zone_id = ? WHERE public_id = UUID_TO_BIN(?)",
+                "Invalid/Zone", fx.sessionId());
+        assertThat(updated).isEqualTo(1);
+        try {
+            ResponseEntity<Map<String, Object>> report = exchange(HttpMethod.GET,
+                    "/api/v1/attendance/reports/summary?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z"
+                            + "&classGroup=" + fx.classA(), null, admin);
+            assertThat(report.getStatusCode().is2xxSuccessful()).isFalse();
+            assertThat(report.getStatusCode().is5xxServerError()).isTrue();
+        } finally {
+            // La base de test est partagée : restaurer un fuseau valide
+            // pour ne pas casser les rapports non bornés des autres tests.
+            jdbcTemplate.update(
+                    "UPDATE course_session SET time_zone_id = ? WHERE public_id = UUID_TO_BIN(?)",
+                    "Europe/Paris", fx.sessionId());
+        }
     }
 
     @Test
@@ -621,6 +849,29 @@ class AttendanceIntegrationTests {
     }
 
     private static HttpStatus get(Future<HttpStatus> future) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Exécute {@code a} et {@code b} <strong>réellement</strong> en
+     * parallèle (deux threads) et renvoie leurs résultats dans l'ordre
+     * de soumission — support des tests de concurrence §3.
+     */
+    private static <T> List<T> bothConcurrently(Callable<T> a, Callable<T> b) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<T>> futures = pool.invokeAll(List.of(a, b));
+            return List.of(joinFuture(futures.get(0)), joinFuture(futures.get(1)));
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static <T> T joinFuture(Future<T> future) {
         try {
             return future.get();
         } catch (Exception e) {

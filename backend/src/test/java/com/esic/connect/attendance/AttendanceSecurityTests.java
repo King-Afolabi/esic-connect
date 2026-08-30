@@ -165,6 +165,24 @@ class AttendanceSecurityTests {
     }
 
     @Test
+    void manualAttendanceCandidatesAndSessionExportMatrix() {
+        String session = "/api/v1/sessions/" + UUID.randomUUID();
+        for (String path : List.of(session + "/attendance/candidates", session + "/attendance/export")) {
+            // MANAGE = les 5 rôles de gestion (SCHOOL_ADMIN inclus) : franchissent le @PreAuthorize
+            // (séance inconnue -> 404 métier, jamais 403).
+            for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION,
+                    RoleCode.PEDAGOGICAL_MANAGER, RoleCode.TEACHER)) {
+                assertThat(rawStatus(HttpMethod.GET, path, null, tokenFor(role)))
+                        .as(path + " as " + role).isEqualTo(HttpStatus.NOT_FOUND);
+            }
+            assertThat(rawStatus(HttpMethod.GET, path, null, tokenFor(RoleCode.STUDENT)))
+                    .as(path + " as STUDENT").isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(rawStatus(HttpMethod.GET, path, null, null))
+                    .as(path + " anonymous").isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @Test
     void justificationReviewAndReportsMatrix() {
         String review = "/api/v1/attendance/justifications/" + UUID.randomUUID() + "/review";
         // Examen : ADMIN/SUPER_ADMIN/SCHOOL_ADMIN/PEDAGOGICAL_MANAGER ; TEACHER et STUDENT → 403.
