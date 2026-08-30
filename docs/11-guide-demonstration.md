@@ -315,7 +315,7 @@ du parcours d'émargement ci-dessus :
 ### 10.2 Vérifications relevées
 
 **Tranche V10 initiale (30 août 2026)** : back-end `./mvnw clean test` →
-532 tests ; front `npm test` → 444 tests ; scénario API V10 relevé en
+548 tests (2ᵉ passe PR #22 ; 532 puis 545 aux passes antérieures) ; front `npm test` → 454 tests ; scénario API V10 relevé en
 statuts HTTP (profil `demo`). Une démonstration `curl` manuelle sur base
 isolée n'avait alors pas été exécutée (le compte `esic_app` n'a pas
 `CREATE DATABASE`).

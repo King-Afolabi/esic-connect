@@ -1062,6 +1062,28 @@ hors des points de revue, aucune migration.
 | §4/§5 front | un `FormGroup` `cancelForm` partagé ; callbacks de succès non regardés | `checkpointCancelForm` / `attendanceCancelForm` séparés ; chaque callback de succès revérifie le droit effectif (pas de faux succès si le droit a été perdu pendant l'appel) ; `effect()` explicites dans `SessionDetail`, `JustificationQueue`, `MyAttendanceList`, `MyAttendanceDetail`. |
 | §9 démonstration | scénario API relevé, pas de run `curl` isolé | démonstration locale réelle exécutée contre le back-end (profil `demo`, schéma jetable `esic_pr22_verify` créé au compte root puis supprimé) — 15 étapes vertes + contrôle §1. Voir `docs/11-guide-demonstration.md` §10.2. |
 
-Vérifs : back-end `./mvnw clean test` → **545 tests, 0 échec**,
-`ModularityTests` vert ; front `npm run lint` OK, `npm test` →
-**451 tests, 0 échec**, `npm run build` 482,24 kB (< 500 kB).
+Vérifs 1ʳᵉ passe (état antérieur) : back-end `./mvnw clean test` →
+**545 tests, 0 échec** ; front `npm test` → **451 tests, 0 échec**.
+
+---
+
+## 12. Passe corrective de revue (PR #22) — 2ᵉ passe
+
+≤ 2 commits, aucune nouvelle fonctionnalité hors des points de revue,
+aucune migration.
+
+| Point | Avant | Après |
+|---|---|---|
+| §1 secret local exposé (hors commit) | rapport final : « aucun secret affiché » | **corrigé** : le contenu de `.env` a été affiché lors d'une exécution antérieure. Mots de passe **MySQL (`root` + `esic_app`) et Redis** locaux **rotés** le 2026-08-30T18:35:39Z, volumes préservés (schéma en version 10 intact) ; `.env` toujours ignoré par Git, jamais versionné ; aucun artefact de démo sensible ne subsiste. Aucun commit. |
+| §2 éligibilité des candidats | effectif **actif courant** des classes de la séance | borné à l'inscription **valable le jour de la séance** : `ACTIVE` + `[start_date, end_date]` couvrant la date locale (`startsAt` + fuseau persisté, aucun repli UTC). Nouveaux `EnrollmentDirectory.findRosterForClassesOn` / `isEnrollmentValidOn` ; même règle appliquée à la validation d'une saisie manuelle. |
+| §3 sécurité du endpoint candidats | seule la matrice `@PreAuthorize` du garde de séance était citée | matrice complète sur fixtures réelles : ADMIN 200, `SCHOOL_ADMINISTRATION` 200, `PEDAGOGICAL_MANAGER` in / out périmètre 200 / 403, `TEACHER` affecté / non 200 / 403, `STUDENT` 403, anonyme 401 (`candidatesEndpointEnforcesFineGrainedScopePerRole`). |
+| §4 capacités front `SessionDetail` | un seul `canManage()` pour tout | `canManageCheckpoint()` (points de contrôle + QR ; `SCHOOL_ADMINISTRATION` exclu), `canManageAttendance()` (saisie / correction / annulation + candidats ; `SCHOOL_ADMINISTRATION` inclus), `canReadAttendance()` ; chaque callback sensible revérifie sa capacité au clic. |
+| §5 `AttendanceSummary` + contexte actif | pas de `RoleContextService` | injecté ; jeton de chargement monotone : perte du droit actif → requête en cours invalidée, synthèse effacée, réponse tardive ignorée, plus aucune requête ; contexte retrouvé → rechargement propre. Même principe appliqué à `AttendanceReport` et à `JustificationQueue.load()`. |
+| §6 export CSV de séance | colonne libre `commentaire` incluse | colonne retirée (minimisation) ; neutralisation d'injection de formule conservée sur toutes les cellules. |
+| §7 documentation / rapport de sécurité | totaux `532` / `444` et « aucun secret affiché » | un seul jeu de totaux finaux (**548** back / **454** front) ; rapport de sécurité rectifié (exposition détectée, contenue, identifiants rotés). |
+| §8 validation | — | suite back-end complète sur base propre + suite front complète + lint + build + démo API sur base temporaire distincte puis nettoyage. |
+
+Vérifs 2ᵉ passe (état courant) : back-end `./mvnw clean test` →
+**548 tests, 0 échec** (532 puis 545 aux passes antérieures),
+`ModularityTests` vert, `V10` inchangée ; front `npm run lint` OK,
+`npm test` → **454 tests, 0 échec**, `npm run build` 482,24 kB (< 500 kB).

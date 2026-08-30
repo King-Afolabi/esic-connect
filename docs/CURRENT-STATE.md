@@ -25,8 +25,8 @@ Spring Modulith respectées. Rapport de conception :
 `docs/reports/ATTENDANCE_MANAGEMENT_DESIGN.md` (décisions figées + 6
 divergences documentées vs docs/02 & docs/04, + §10 « livraison réelle »).
 
-> **Passe corrective PR #22 (30 août 2026)** — 11 points de revue traités
-> en 3 commits sur la branche existante :
+> **Passe corrective PR #22 — 1ʳᵉ passe (30 août 2026, état antérieur)** —
+> 11 points de revue traités en 3 commits sur la branche existante :
 > - **§1** `AttendanceReportService` ne remplace plus silencieusement un
 >   `timeZoneId` persistant invalide par UTC : `persistedZone()` lève une
 >   erreur interne contrôlée (→ 500 générique, valeur jamais exposée),
@@ -59,13 +59,55 @@ divergences documentées vs docs/02 & docs/04, + §10 « livraison réelle »).
 >   (profil `demo`, schéma jetable `esic_pr22_verify` créé au compte root
 >   puis supprimé) — 15 étapes vertes (voir `docs/11-guide-demonstration.md`
 >   §10) ;
-> - vérifs : back-end `./mvnw clean test` → **545 tests, 0 échec**,
->   `ModularityTests` vert ; front `npm run lint` OK, `npm test` →
->   **451 tests, 0 échec**, `npm run build` 482,24 kB (< 500 kB).
+> - vérifs de cette passe (état antérieur) : back-end `./mvnw clean test`
+>   → **545 tests, 0 échec** ; front `npm test` → **451 tests, 0 échec**.
+>
+> **Passe corrective PR #22 — 2ᵉ passe (30 août 2026, état courant)** —
+> 8 points de revue en ≤ 2 commits, aucune nouvelle fonctionnalité,
+> aucune migration :
+> - **§1 (sécurité, hors commit)** : le contenu de `.env` a été affiché
+>   lors d'une exécution antérieure — l'affirmation « aucun secret
+>   affiché » est corrigée. Les mots de passe **MySQL (`root` + `esic_app`)
+>   et Redis** locaux ont été **rotés** le 2026-08-30T18:35:39Z en
+>   préservant les volumes (schéma en version 10 intact) ; `.env` reste
+>   ignoré par Git, jamais versionné ; aucun artefact de démonstration
+>   sensible ne subsiste. Aucun commit produit par cette étape.
+> - **§2** : l'éligibilité des candidats et la validation d'une saisie
+>   manuelle dépendent désormais de la **date locale de la séance**
+>   (`startsAt` + fuseau persisté ; aucun repli UTC silencieux) — nouveau
+>   `EnrollmentDirectory.findRosterForClassesOn` /
+>   `isEnrollmentValidOn` : une inscription débutant après la séance ou
+>   terminée avant est exclue et refusée, même si active aujourd'hui.
+> - **§3** : matrice de sécurité du endpoint des candidats exercée avec
+>   des fixtures réelles (ADMIN 200, `SCHOOL_ADMINISTRATION` 200,
+>   `PEDAGOGICAL_MANAGER` dans / hors périmètre 200 / 403, `TEACHER`
+>   affecté / non affecté 200 / 403, `STUDENT` 403, anonyme 401).
+> - **§4** : `SessionDetail` sépare `canManageCheckpoint()` (points de
+>   contrôle + QR ; `SCHOOL_ADMINISTRATION` exclu),
+>   `canManageAttendance()` (saisie manuelle / correction / annulation +
+>   candidats ; `SCHOOL_ADMINISTRATION` inclus) et `canReadAttendance()` ;
+>   chaque callback sensible revérifie sa capacité au clic.
+> - **§5** : `AttendanceSummary` (et `AttendanceReport`,
+>   `JustificationQueue`) injectent `RoleContextService` : perte du droit
+>   actif → requête en cours invalidée (jeton monotone), synthèse
+>   effacée, réponse tardive ignorée, plus aucune requête ; contexte
+>   retrouvé → rechargement propre.
+> - **§6** : l'export CSV de séance ne contient plus la colonne libre
+>   `commentaire` (minimisation) ; neutralisation d'injection de formule
+>   conservée sur toutes les cellules.
+> - **§7** : totaux de tests et rapport de sécurité assainis
+>   (ci-dessous et dans la PR).
+> - **§8** : suite back-end complète sur base propre + suite front
+>   complète + lint + build + démo API minimale sur base temporaire
+>   distincte, puis nettoyage.
+> - vérifs de cette passe (état courant) : back-end `./mvnw clean test`
+>   → **548 tests, 0 échec**, `ModularityTests` vert, `V10` inchangée ;
+>   front `npm run lint` OK, `npm test` → **454 tests, 0 échec**,
+>   `npm run build` **482,24 kB** (< 500 kB).
 
-**Back-end** (`./mvnw clean test` sur MySQL 8.4 / Redis 7 → **502 → 532 →
-545 tests, 0 échec**, `ModularityTests` vert, `V10` appliquée — schéma en
-version 10) :
+**Back-end** (`./mvnw clean test` sur MySQL 8.4 / Redis 7 → **548 tests,
+0 échec** (état courant ; 532 puis 545 aux passes antérieures),
+`ModularityTests` vert, `V10` appliquée — schéma en version 10) :
 
 - **V10** : `attendance_checkpoint` — retrait de l'unicité « un point de
   contrôle par séance », ajout `label` / `checkpoint_type`
@@ -136,9 +178,9 @@ version 10) :
   Security), jamais d'après un paramètre client.
 - `application.yml` : + `app.attendance.late-threshold`.
 
-**Front-end** (`npm test` → **416 → 444 → 451 tests, 0 échec** ;
-`npm run lint` OK ; `npm run build` **482,24 kB** brut / 122,57 kB
-transféré, seuil 500 kB) :
+**Front-end** (`npm test` → **454 tests, 0 échec** (état courant ; 444
+puis 451 aux passes antérieures) ; `npm run lint` OK ; `npm run build`
+**482,24 kB** brut / 122,57 kB transféré, seuil 500 kB) :
 
 - `sessions.models.ts` / `SessionsApiService` étendus (points de
   contrôle, jeton par point de contrôle, présence manuelle, correction,
@@ -181,8 +223,9 @@ transféré, seuil 500 kB) :
 **Limites** : contexte d'alternance `UNKNOWN` non compté comme absence
 (rapport « utile » ⇒ rythme d'alternance affecté à la classe) ;
 `TEACHER` hors rapports agrégés ; présence manuelle : sélecteur de
-candidats fondé sur l'effectif **actif** des classes de la séance (pas de
-filtrage par date fine — cohérent avec ce qu'accepte la saisie manuelle) ;
+candidats et validation bornés à l'inscription **valable le jour de la
+séance** (statut `ACTIVE` + période couvrant la date locale de la
+séance ; §2, 2ᵉ passe) ;
 justificatif = métadonnée (aucune pièce jointe) ; un `timeZoneId`
 persistant invalide fait échouer le rapport en 500 contrôlé plutôt que de
 produire des chiffres trompeurs (§1) ; pas de scan caméra, QR fixe,
@@ -2116,7 +2159,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Import apprenants | TODO |
 | Import planning | TODO |
 | Séances | IMPLEMENTED et TESTED — fusionné sur `main` via la PR #20 (`5874f5a`) (module `coursesession`, V9 ; séance **exceptionnelle** créée manuellement, motif obligatoire, formateur = compte `TEACHER` actif via port `identity.TeacherDirectory`, ≥ 1 classe ; cycle strict `PLANNED → OPEN → CLOSED` sans réouverture ; API `/api/v1/sessions` liste filtrée par périmètre + `/teachers` + détail + création + `/open` + `/close` ; contrôle fin `CourseSessionAccessGuard` (contexte Spring Security) : `ADMIN`/`SUPER_ADMIN` global, `SCHOOL_ADMINISTRATION` lecture seule, `PEDAGOGICAL_MANAGER` limité au périmètre, `TEACHER` seulement ses séances, `STUDENT` aucun accès ; audit `SESSION_CREATED`/`_OPENED`/`_CLOSED` ; port public `coursesession.CourseSessionDirectory`. `CourseSessionConstraintsTests` (7), `CourseSessionIntegrationTests` (6). Un seul point de contrôle par séance ; planning non livré) **V10 (branche non fusionnée)** : plusieurs points de contrôle par séance (`AttendanceCheckpointService` + `AttendanceCheckpointController`, cycle `PLANNED → OPEN → CLOSED`/`CANCELLED`, ordre d'affichage unique, ≤ 1 `START` / ≤ 1 `END` actif, motif obligatoire à l'annulation ; `SCHOOL_ADMINISTRATION` exclu de la gestion) ; ouverture de séance ouvre le `START`, fermeture ferme tous les points de contrôle ouverts ; événement `AttendanceCheckpointChangeEvent` audité (`CHECKPOINT_CREATED`/`_OPENED`/`_CLOSED`/`_CANCELLED`) ; `CourseSessionConstraintsTests` 7→10, `CourseSessionIntegrationTests` 6→9→10 (**PR #22** : `flushCheckpoint()` retraduit une transition concurrente perdante en `409 ATT_CHECKPOINT_INVALID_STATE`, jamais 500 ; test ouverture/fermeture concurrentes d'un point de contrôle). |
-| Émargement | IMPLEMENTED, TESTED et DÉMONTRÉ localement (API) — fusionné sur `main` via la PR #20 (`5874f5a`), validation manuelle locale du parcours fonctionnel frontend et API, sous le profil `demo`, réussie (connexion formateur et apprenants, ouverture, QR / code court, enregistrement des deux présences, anti-double présence, consultation du tableau, fermeture et refus de l'ancien code ; changements de contexte de rôle non applicables manuellement — comptes de démonstration mono-rôle —, couverts par les tests automatisés) (module `attendance`, V9 ; jeton dynamique **opaque** `SecureRandom` + **code court** dans **Redis** avec TTL court, rotation, purge à la fermeture ; QR encodant uniquement le jeton opaque ; `POST /api/v1/sessions/{id}/attendance-token` (formateur/gestionnaire, séance `OPEN`) ; `POST /api/v1/attendance/validate` (**`STUDENT` uniquement** ; apprenant résolu depuis le seul JWT ; inscription `ACTIVE` dans une classe de la séance, 0 ou >1 → refus) ; **anti-double présence par contrainte SQL `uq_attendance_record_checkpoint_enrollment`** (violation concurrente → `409 ATT_ALREADY_RECORDED`, jamais 500) ; `GET /api/v1/sessions/{id}/attendance` (effectif attendu + présents + lignes sans email ni id SQL) ; Redis KO → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` ; audit `ATTENDANCE_RECORDED` sans jeton/numéro/nom. **Revue PR #20** : `resolveSession` applique l'invariant du pointeur courant (`session -> token\ncode`) — une clé `token -> session` résiduelle n'est plus acceptée après rotation ou invalidation. `AttendanceRecordConstraintsTests` (4), `AttendanceTokenServiceTests` (18), `AttendanceIntegrationTests` (7 dont concurrence), `AttendanceSecurityTests` (4). **Scan caméra NON RÉALISÉ** ; parcours fiable = code court ; pas de présence manuelle, correction, justificatif, demi-journée, export) **V10 (branche non fusionnée)** : jeton émis **par point de contrôle** ; `validate` classe la présence `PRESENT`/`LATE` selon `app.attendance.late-threshold` (défaut `PT10M`) ; présence manuelle / correction / annulation logique avec historique append-only (`attendance_correction`, motif obligatoire, verrou optimiste → 409) ; justificatif métier SANS fichier (`attendance_justification`, dépôt / modif `PENDING` / examen ; `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE`) ; espace apprenant `GET /api/v1/me/attendance*` (absences dérivées non persistées) ; `AttendanceIntegrationTests` 7→15→23, `AttendanceSecurityTests` 4→7→9, `AttendanceTokenServiceTests` 18→19, `AttendanceRecordConstraintsTests` 4→7, `CourseSessionIntegrationTests` 9→10→11, nouveaux `AttendanceManagementConstraintsTests` (9) et `AttendanceReportSortTests` (4). **Correctifs PR #22** : `GET /api/v1/sessions/{id}/attendance/candidates` (candidats à la saisie manuelle : inscriptions actives des classes de la séance, dédupliquées, sans e-mail ni id SQL, contrôle fin = lecture des présences ; §2) ; `GET /api/v1/sessions/{id}/attendance/export` (CSV borné à la séance, formateur affecté autorisé, protections CSV, nom de fichier contrôlé ; §8) ; tests de concurrence déterministes (QR/code vs présence manuelle, deux corrections, deux examens de justificatif, deux créations manuelles → une écriture / un conflit contrôlé / aucun 500 ; §3). |
+| Émargement | IMPLEMENTED, TESTED et DÉMONTRÉ localement (API) — fusionné sur `main` via la PR #20 (`5874f5a`), validation manuelle locale du parcours fonctionnel frontend et API, sous le profil `demo`, réussie (connexion formateur et apprenants, ouverture, QR / code court, enregistrement des deux présences, anti-double présence, consultation du tableau, fermeture et refus de l'ancien code ; changements de contexte de rôle non applicables manuellement — comptes de démonstration mono-rôle —, couverts par les tests automatisés) (module `attendance`, V9 ; jeton dynamique **opaque** `SecureRandom` + **code court** dans **Redis** avec TTL court, rotation, purge à la fermeture ; QR encodant uniquement le jeton opaque ; `POST /api/v1/sessions/{id}/attendance-token` (formateur/gestionnaire, séance `OPEN`) ; `POST /api/v1/attendance/validate` (**`STUDENT` uniquement** ; apprenant résolu depuis le seul JWT ; inscription `ACTIVE` dans une classe de la séance, 0 ou >1 → refus) ; **anti-double présence par contrainte SQL `uq_attendance_record_checkpoint_enrollment`** (violation concurrente → `409 ATT_ALREADY_RECORDED`, jamais 500) ; `GET /api/v1/sessions/{id}/attendance` (effectif attendu + présents + lignes sans email ni id SQL) ; Redis KO → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` ; audit `ATTENDANCE_RECORDED` sans jeton/numéro/nom. **Revue PR #20** : `resolveSession` applique l'invariant du pointeur courant (`session -> token\ncode`) — une clé `token -> session` résiduelle n'est plus acceptée après rotation ou invalidation. `AttendanceRecordConstraintsTests` (4), `AttendanceTokenServiceTests` (18), `AttendanceIntegrationTests` (7 dont concurrence), `AttendanceSecurityTests` (4). **Scan caméra NON RÉALISÉ** ; parcours fiable = code court ; pas de présence manuelle, correction, justificatif, demi-journée, export) **V10 (branche non fusionnée)** : jeton émis **par point de contrôle** ; `validate` classe la présence `PRESENT`/`LATE` selon `app.attendance.late-threshold` (défaut `PT10M`) ; présence manuelle / correction / annulation logique avec historique append-only (`attendance_correction`, motif obligatoire, verrou optimiste → 409) ; justificatif métier SANS fichier (`attendance_justification`, dépôt / modif `PENDING` / examen ; `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE`) ; espace apprenant `GET /api/v1/me/attendance*` (absences dérivées non persistées) ; `AttendanceIntegrationTests` (25), `AttendanceSecurityTests` (8), `AttendanceTokenServiceTests` (19), `AttendanceRecordConstraintsTests` (7), `CourseSessionIntegrationTests` (10), `AttendanceManagementConstraintsTests` (9), `AttendanceReportSortTests` (4). **Correctifs PR #22** : `GET /api/v1/sessions/{id}/attendance/candidates` (candidats à la saisie manuelle : inscriptions actives des classes de la séance, dédupliquées, sans e-mail ni id SQL, contrôle fin = lecture des présences ; §2) ; `GET /api/v1/sessions/{id}/attendance/export` (CSV borné à la séance, formateur affecté autorisé, protections CSV, nom de fichier contrôlé ; §8) ; tests de concurrence déterministes (QR/code vs présence manuelle, deux corrections, deux examens de justificatif, deux créations manuelles → une écriture / un conflit contrôlé / aucun 500 ; §3). **2ᵉ passe PR #22** : éligibilité des candidats et validation manuelle bornées à l'inscription valable **le jour de la séance** (`EnrollmentDirectory.findRosterForClassesOn` / `isEnrollmentValidOn`, date locale = `startsAt` + fuseau persisté, aucun repli UTC) ; matrice de sécurité du endpoint des candidats sur fixtures réelles (ADMIN/`SCHOOL_ADMINISTRATION` 200, `PEDAGOGICAL_MANAGER` in/out périmètre 200/403, `TEACHER` affecté/non 200/403, `STUDENT` 403, anonyme 401) ; export CSV de séance **sans** colonne libre `commentaire`. |
 | Rapports | IMPLEMENTED et TESTED — branche `feature/attendance-management-and-reporting` (V10), NON fusionnée (module `attendance` : `AttendanceReportService` + `AttendanceReportController` — `GET /api/v1/attendance/reports/{sessions,classes,students,summary}` JSON paginé + `.../export` `text/csv` ; unité de calcul = demi-journée (docs/02 §24.2), point de contrôle classé matin / après-midi (< 13:00 local), demi-journée présente ⇔ tous ses points de contrôle obligatoires satisfaits, contexte d'alternance `COMPANY` exclu du dénominateur (port `alternation.AlternationDirectory`), `UNKNOWN` non satisfait compté à part jamais en absence, retards talliés à part ; `AttendanceCsvWriter` UTF-8+BOM séparateur `;` RFC 4180 + **neutralisation d'injection de formule** ; rôles `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` global + `PEDAGOGICAL_MANAGER` périmètre, `TEACHER` exclu ; audit `REPORT_EXPORTED` ; front `/attendance-management`). **Correctifs PR #22** : `safeZone()` → `persistedZone()` (fuseau persisté invalide → erreur interne contrôlée, jamais UTC silencieux ni chiffres trompeurs, §1) ; codes de classe lisibles via `academic.ClassGroupDirectory` (§7) ; paramètre `sort` borné par `AttendanceReportSort` (liste blanche par rapport, tri en mémoire avant pagination + tri secondaire stable, `400 ATT_REPORT_INVALID_SORT` sinon, §6) ; `AttendanceReportSortTests` (4), assertions de rapport / tri / fuseau ajoutées à `AttendanceIntegrationTests`. Rapport journalier / mensuel / annuel structurés du cahier : approche demi-journées livrée, mise en page officielle non implémentée) |
 | Audit | TESTED (persistance `audit_event` + écriture depuis flux métier réels : connexion réussie/refusée, émission d'invitation, activation de compte, suspension/réactivation/archivage d'un compte, attribution/retrait d'un rôle, changements du référentiel organisationnel — catégorie `ORGANIZATION` — et changements du référentiel académique — année/formation/niveau/promotion/classe **et affectations de responsable pédagogique (`PEDAGOGICAL_ASSIGNMENT_CREATED`/`_CLOSED`)**, catégorie `ACADEMIC` — **et changements du module inscriptions — `STUDENT_PROFILE_CREATED` / `ENROLLMENT_CREATED` / `_TRANSFERRED` / `_CLOSED`, catégorie `ENROLLMENT`** — **et changements du module alternance — `WORK_STUDY_PATTERN_CREATED` / `_UPDATED` / `_ARCHIVED` / `_RESTORED`, `CLASS_WORK_STUDY_PATTERN_ASSIGNED` / `_CLOSED`, `STUDENT_SCHEDULE_EXCEPTION_CREATED` / `_CANCELLED`, catégorie `ALTERNATION`** — **et changements des séances — `SESSION_CREATED` / `_OPENED` / `_CLOSED`, catégorie `COURSE_SESSION`** — **et émargements — `ATTENDANCE_RECORDED`, catégorie `ATTENDANCE`** — jamais de jeton, de code court, de numéro étudiant, de nom, de donnée sensible ni d'IP ; pour les actions d'administration, le compte/la ressource concernée est portée par `resource_public_id`, l'acteur par `actor_user_id`) |
 | FastAPI | TODO |
