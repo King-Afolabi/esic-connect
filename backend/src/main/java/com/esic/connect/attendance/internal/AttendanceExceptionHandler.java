@@ -20,7 +20,8 @@ import java.util.UUID;
         AttendanceController.class,
         AttendanceManagementController.class,
         StudentAttendanceController.class,
-        AttendanceJustificationController.class})
+        AttendanceJustificationController.class,
+        AttendanceReportController.class})
 class AttendanceExceptionHandler {
 
     @ExceptionHandler(AttendanceException.class)

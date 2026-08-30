@@ -122,6 +122,22 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                 .map(session -> toRef(session, classPublicIds(session)));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findSessionsInRange(Instant from, Instant to) {
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
+                .stream()
+                .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
     private SessionRef toRef(CourseSession session, Set<UUID> classPublicIds) {
         List<CheckpointRef> checkpoints = checkpointRepository
                 .findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId()).stream()

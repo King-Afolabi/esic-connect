@@ -69,6 +69,15 @@ public interface CourseSessionDirectory {
      */
     Optional<SessionRef> findSessionByCheckpointPublicId(UUID checkpointPublicId);
 
+    /**
+     * Toutes les séances dont le début tombe dans {@code [from, to]}
+     * ({@code null} = borne ouverte), <strong>sans</strong> contrôle
+     * d'accès — le module {@code attendance} filtre ensuite chaque séance
+     * par le périmètre pédagogique de l'appelant
+     * ({@code AcademicScopeDirectory}). Résultat trié par début de séance.
+     */
+    List<SessionRef> findSessionsInRange(Instant from, Instant to);
+
     /** Niveau d'accès demandé sur une séance. */
     enum AccessLevel {
         /** Consultation (séance + présences). {@code TEACHER} : sa séance uniquement. */

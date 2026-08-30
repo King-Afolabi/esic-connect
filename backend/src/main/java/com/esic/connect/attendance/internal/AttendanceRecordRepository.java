@@ -23,4 +23,6 @@ interface AttendanceRecordRepository extends JpaRepository<AttendanceRecord, Lon
     /** Présences de plusieurs points de contrôle pour plusieurs inscriptions (rapports, vue apprenant). */
     List<AttendanceRecord> findByAttendanceCheckpointIdInAndEnrollmentIdIn(
             Collection<Long> attendanceCheckpointIds, Collection<Long> enrollmentIds);
+
+    List<AttendanceRecord> findByAttendanceCheckpointIdIn(Collection<Long> attendanceCheckpointIds);
 }

@@ -77,7 +77,24 @@ class AlternationContextService {
                         AlternationException.Kind.ENROLLMENT_NOT_FOUND))
                 .orElseThrow(() -> new AlternationException(AlternationException.Kind.ENROLLMENT_NOT_FOUND));
         requireInScope(enrollment.classGroupPublicId());
+        return computeEnrollmentContext(enrollment, date);
+    }
 
+    /**
+     * Résolution du contexte effectif d'une inscription <strong>sans</strong>
+     * contrôle du périmètre de l'appelant : réservé au port public
+     * {@code alternation.AlternationDirectory} (le module {@code attendance}
+     * a déjà vérifié le périmètre de la séance / classe). Renvoie
+     * {@code null} si l'inscription est inconnue.
+     */
+    EnrollmentContextResponse resolveEnrollmentContextUnchecked(java.util.UUID enrollmentPublicId, LocalDate date) {
+        return enrollmentDirectory.findByPublicId(enrollmentPublicId)
+                .map(enrollment -> computeEnrollmentContext(enrollment, date))
+                .orElse(null);
+    }
+
+    private EnrollmentContextResponse computeEnrollmentContext(EnrollmentDirectory.EnrollmentRef enrollment,
+                                                              LocalDate date) {
         AlternationContext patternContext = AlternationContext.UNKNOWN;
         ContextSource source = ContextSource.NONE;
         if (enrollment.classGroupPublicId() != null) {

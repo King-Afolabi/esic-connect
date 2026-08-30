@@ -466,8 +466,74 @@ class AttendanceIntegrationTests {
     }
 
     // ------------------------------------------------------------------
+    // Rapports + export CSV (V10)
+    // ------------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void reportsAggregateHalfDaysFromRealAttendance() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 2);
+        // Un apprenant émarge (PRESENT), l'autre pas.
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+        post("/api/v1/attendance/validate", Map.of("shortCode", issued.get("shortCode")),
+                tokenFor(fx.students().get(0)), HttpStatus.OK);
+        post("/api/v1/sessions/" + fx.sessionId() + "/close", null, admin, HttpStatus.NO_CONTENT);
+
+        // La base de test est partagée : on borne le rapport à la classe
+        // fraîche de cette fixture.
+        Map<String, Object> summary = getMap("/api/v1/attendance/reports/summary"
+                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z&classGroup=" + fx.classA(), admin);
+        Map<String, Object> totals = (Map<String, Object>) summary.get("totals");
+        // Aucun rythme d'alternance affecté : contexte UNKNOWN. La
+        // demi-journée présente est comptée (expected + present) ; la
+        // demi-journée non émargée est signalée en "unknown", jamais en
+        // "absent" (design §4.C).
+        assertThat(((Number) totals.get("presentHalfDays")).longValue()).isEqualTo(1);
+        assertThat(((Number) totals.get("expectedHalfDays")).longValue()).isEqualTo(1);
+        assertThat(((Number) totals.get("unknownHalfDays")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(((Number) totals.get("absentHalfDays")).longValue()).isEqualTo(0);
+
+        Map<String, Object> byStudent = getMap("/api/v1/attendance/reports/students"
+                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z&classGroup=" + fx.classA(), admin);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) byStudent.get("content");
+        assertThat(rows).hasSize(2);
+        assertThat(rows).allSatisfy(r -> assertThat(r).doesNotContainKeys("email"));
+
+        Map<String, Object> byClass = getMap("/api/v1/attendance/reports/classes"
+                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z", admin);
+        assertThat((List<?>) byClass.get("content")).isNotEmpty();
+    }
+
+    @Test
+    void csvExportIsUtf8WithBomAndNeutralizesFormulaInjection() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        Map<String, Object> body = new java.util.HashMap<>(
+                sessionBody(teacher.publicId(), List.of(chain.classA())));
+        body.put("title", "=SUM(A1:A9)+cmd|'/c calc'");
+        created("/api/v1/sessions", body, admin);
+
+        String csv = getCsv("/api/v1/attendance/reports/sessions/export"
+                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z", admin);
+        assertThat(csv).startsWith("﻿"); // BOM UTF-8
+        assertThat(csv).contains("session_id;titre;debut"); // en-tête, séparateur ;
+        // La cellule commençant par '=' est neutralisée par une apostrophe en tête.
+        assertThat(csv).contains("'=SUM(A1:A9)+cmd");
+        assertThat(csv).doesNotContain(";=SUM(A1:A9)");
+    }
+
+    // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
+
+    private String getCsv(String path, String token) {
+        return restTemplate.exchange(
+                RequestEntity.get(URI.create(path)).header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                String.class).getBody();
+    }
 
     private String firstCheckpoint(String token, String sessionId) {
         Map<String, Object> session = getMap("/api/v1/sessions/" + sessionId, token);

@@ -33,8 +33,12 @@ final class AttendanceManagementWeb {
             "hasAnyRole('ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER','TEACHER')";
     static final String REVIEW_ROLES =
             "hasAnyRole('ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER')";
+    // Les rapports agrégés sont réservés aux rôles disposant d'un
+    // périmètre pédagogique ou global ; un TEACHER consulte les présences
+    // de ses séances via GET /sessions/{id}/attendance (décision §3 du
+    // rapport de conception).
     static final String REPORT_ROLES =
-            "hasAnyRole('ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER','TEACHER')";
+            "hasAnyRole('ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER')";
     static final String STUDENT_ROLE = "hasRole('STUDENT')";
 
     private AttendanceManagementWeb() {
