@@ -119,6 +119,73 @@ describe('SessionsApiService', () => {
     });
   });
 
+  // --- V10 : points de contrôle, présence manuelle, correction --------
+
+  it('listCheckpoints / createCheckpoint hit /sessions/{id}/checkpoints with the right method & body', () => {
+    service.listCheckpoints('s-1').subscribe();
+    const list = http.expectOne(`${BASE}/sessions/s-1/checkpoints`);
+    expect(list.request.method).toBe('GET');
+    list.flush([]);
+
+    service.createCheckpoint('s-1', { label: 'Fin', type: 'END', required: false }).subscribe();
+    const create = http.expectOne(`${BASE}/sessions/s-1/checkpoints`);
+    expect(create.request.method).toBe('POST');
+    expect(create.request.body).toEqual({ label: 'Fin', type: 'END', required: false });
+    create.flush({});
+  });
+
+  it('open / close / cancel checkpoint POST to the nested route (encoded), cancel carries the reason', () => {
+    service.openCheckpoint('s-1', 'cp 1').subscribe();
+    http.expectOne(`${BASE}/sessions/s-1/checkpoints/cp%201/open`).flush(null, { status: 204, statusText: 'No Content' });
+    service.closeCheckpoint('s-1', 'cp-1').subscribe();
+    http.expectOne(`${BASE}/sessions/s-1/checkpoints/cp-1/close`).flush(null, { status: 204, statusText: 'No Content' });
+    const cancel = () => {
+      service.cancelCheckpoint('s-1', 'cp-1', { reason: 'erreur' }).subscribe();
+      const req = http.expectOne(`${BASE}/sessions/s-1/checkpoints/cp-1/cancel`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ reason: 'erreur' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    };
+    cancel();
+  });
+
+  it('issueCheckpointToken POSTs to the per-checkpoint route with an empty body and no query params', () => {
+    service.issueCheckpointToken('s-1', 'cp-1').subscribe();
+    const req = http.expectOne(`${BASE}/sessions/s-1/checkpoints/cp-1/attendance-token`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.params.keys()).toEqual([]);
+    expect(req.request.body).toEqual({});
+    req.flush({ token: 'X', shortCode: 'Y', expiresAt: 't', sessionPublicId: 's-1', checkpointPublicId: 'cp-1', ttlSeconds: 30 });
+  });
+
+  it('recordManual / correct / cancel / history hit the attendance sub-routes with exact bodies', () => {
+    service
+      .recordManual('s-1', { enrollmentPublicId: 'e-1', checkpointPublicId: 'cp-1', status: 'ABSENT', comment: 'x' })
+      .subscribe();
+    const manual = http.expectOne(`${BASE}/sessions/s-1/attendance/manual`);
+    expect(manual.request.method).toBe('POST');
+    expect(manual.request.body).toEqual({
+      enrollmentPublicId: 'e-1',
+      checkpointPublicId: 'cp-1',
+      status: 'ABSENT',
+      comment: 'x',
+    });
+    manual.flush({});
+
+    service.correctAttendance('s-1', 'a-1', { status: 'PRESENT', reason: 'r' }).subscribe();
+    const correct = http.expectOne(`${BASE}/sessions/s-1/attendance/a-1/correct`);
+    expect(correct.request.body).toEqual({ status: 'PRESENT', reason: 'r' });
+    correct.flush({});
+
+    service.cancelAttendance('s-1', 'a-1', { reason: 'doublon' }).subscribe();
+    http.expectOne(`${BASE}/sessions/s-1/attendance/a-1/cancel`).flush({});
+
+    service.attendanceHistory('s-1', 'a-1').subscribe();
+    const history = http.expectOne(`${BASE}/sessions/s-1/attendance/a-1/history`);
+    expect(history.request.method).toBe('GET');
+    history.flush([]);
+  });
+
   it('never exposes a client parameter that could widen a teacher / manager scope', () => {
     service.listSessions({ status: 'OPEN' }).subscribe();
     const req = http.expectOne((r) => r.url === `${BASE}/sessions`);

@@ -13,3 +13,46 @@
   gap: 0.25rem;
   align-items: flex-start;
 }
+
+.sessions__chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--mat-sys-surface-variant, #e8eaed);
+}
+.sessions__chip[data-status='PRESENT'],
+.sessions__chip[data-status='OPEN'] { background: #d7f0dc; }
+.sessions__chip[data-status='LATE'],
+.sessions__chip[data-status='PLANNED'] { background: #fdeecb; }
+.sessions__chip[data-status='ABSENT'] { background: #f6d7d5; }
+.sessions__chip[data-status='EXCUSED_ABSENCE'] { background: #dbe6fb; }
+.sessions__chip[data-status='CANCELLED'],
+.sessions__chip[data-status='CLOSED'] { background: #e8eaed; }
+.sessions__chip[data-status='CANCELLED'] { text-decoration: line-through; }
+
+.sessions__cp-block {
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--mat-sys-outline-variant, #dadce0);
+}
+
+.sessions__checkbox {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.sessions__inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sessions__history {
+  margin: 0;
+  padding-left: 1.25rem;
+  li { margin-bottom: 0.5rem; }
+}

@@ -34,6 +34,7 @@ const SESSION: CourseSessionResponse = {
   closedAt: null,
   checkpointPublicId: 'cp-1',
   checkpointOpen: true,
+  checkpoints: [],
   createdAt: '2026-09-01T10:00:00Z',
   updatedAt: '2026-09-10T05:55:00Z',
 };

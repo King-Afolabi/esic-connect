@@ -1,0 +1,101 @@
+<h1 class="att__title">Justificatifs</h1>
+<nav class="att__crumbs" aria-label="Sections">
+  <a routerLink="../summary">Synthèse</a> ·
+  <a routerLink="../sessions">Par séance</a> ·
+  <a routerLink="../classes">Par classe</a> ·
+  <a routerLink="../students">Par apprenant</a>
+</nav>
+
+<div class="att__filter-actions">
+  <button mat-button type="button" (click)="setFilter('PENDING')" [disabled]="statusFilter() === 'PENDING'">En attente</button>
+  <button mat-button type="button" (click)="setFilter('ACCEPTED')" [disabled]="statusFilter() === 'ACCEPTED'">Acceptés</button>
+  <button mat-button type="button" (click)="setFilter('REJECTED')" [disabled]="statusFilter() === 'REJECTED'">Refusés</button>
+  <button mat-button type="button" (click)="setFilter('')" [disabled]="statusFilter() === ''">Tous</button>
+</div>
+
+@switch (state().kind) {
+  @case ('loading') { <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar> }
+  @case ('forbidden') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter cette file.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (rows().length === 0) {
+      <p class="att__status" role="status">Aucun justificatif dans cette vue.</p>
+    } @else {
+      <div class="att__table-wrapper">
+        <table mat-table [dataSource]="rows()">
+          <ng-container matColumnDef="student">
+            <th mat-header-cell *matHeaderCellDef>Apprenant</th>
+            <td mat-cell *matCellDef="let r">
+              {{ [r.firstName, r.lastName].join(' ').trim() || '—' }}<br />
+              <span class="att__meta">{{ r.studentNumber || '—' }} · {{ r.classCode || '—' }}</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="session">
+            <th mat-header-cell *matHeaderCellDef>Séance</th>
+            <td mat-cell *matCellDef="let r">
+              {{ r.sessionTitle || 'Séance' }}<br />
+              <span class="att__meta">{{ formatInstantUtc(r.sessionStartsAt) }} · {{ r.checkpointLabel || '—' }}</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="category">
+            <th mat-header-cell *matHeaderCellDef>Catégorie</th>
+            <td mat-cell *matCellDef="let r">
+              {{ categoryLabel(r.category) }}
+              @if (r.externalReference) { <br /><span class="att__meta">Réf. {{ r.externalReference }}</span> }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>État</th>
+            <td mat-cell *matCellDef="let r">
+              {{ justificationStatusLabel(r.status) }}
+              <br /><span class="att__meta">Présence : {{ attendanceStatusLabel(r.attendanceStatus) }}</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let r">
+              @if (r.status === 'PENDING' && canReview()) {
+                <button mat-button type="button" (click)="startReview(r)" [disabled]="submitting()">Examiner</button>
+              }
+              @if (reviewId() === r.publicId) {
+                <form class="att__reveal" [formGroup]="reviewForm" (ngSubmit)="submitReview()"
+                      role="group" aria-label="Examiner le justificatif">
+                  <p class="att__meta">{{ r.comment }}</p>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Décision</mat-label>
+                    <mat-select formControlName="decision">
+                      <mat-option value="ACCEPTED">Accepter</mat-option>
+                      <mat-option value="REJECTED">Refuser</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Motif (obligatoire en cas de refus)</mat-label>
+                    <input matInput formControlName="decisionReason" maxlength="500" />
+                  </mat-form-field>
+                  <div class="att__filter-actions">
+                    <button mat-flat-button type="submit" [disabled]="submitting()">Valider</button>
+                    <button mat-button type="button" (click)="cancelReview()" [disabled]="submitting()">Annuler</button>
+                  </div>
+                  @if (formError()) { <p class="att__inline-error" role="alert">{{ formError() }}</p> }
+                </form>
+              }
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+      </div>
+    }
+  }
+}

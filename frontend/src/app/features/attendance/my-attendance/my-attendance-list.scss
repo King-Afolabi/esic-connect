@@ -1,0 +1,167 @@
+:host {
+  display: block;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.att__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.att__subtitle {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.att__intro,
+.att__meta {
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+}
+
+.att__intro {
+  margin: 0 0 1.5rem;
+  max-width: 60ch;
+}
+
+.att__meta {
+  font-size: 0.85rem;
+}
+
+.att__crumbs {
+  margin-bottom: 1rem;
+}
+
+.att__filters,
+.att__filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.att__filters {
+  margin-bottom: 1.5rem;
+}
+
+.att__section {
+  margin-top: 1.5rem;
+}
+
+.att__table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+}
+
+.att__reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border: 1px solid var(--mat-sys-outline-variant, #dadce0);
+  border-radius: 8px;
+}
+
+.att__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--mat-sys-outline-variant, #dadce0);
+  border-radius: 8px;
+}
+
+.att__inline-error {
+  color: var(--mat-sys-error, #b3261e);
+  margin: 0;
+}
+
+.att__status {
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+}
+
+.att__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+
+  dt {
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--mat-sys-on-surface-variant, #5f6368);
+  }
+
+  dd {
+    margin: 0 0 0.5rem;
+  }
+}
+
+.att__history {
+  margin: 0;
+  padding-left: 1.25rem;
+
+  li {
+    margin-bottom: 0.5rem;
+  }
+}
+
+.att__pager {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.att__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.att__card-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0.25rem 0 0;
+}
+
+.att__inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+/* Chips de statut — le texte porte le sens, la couleur est un renfort. */
+.att__chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--mat-sys-surface-variant, #e8eaed);
+}
+
+.att__chip[data-status='PRESENT'] {
+  background: #d7f0dc;
+}
+.att__chip[data-status='LATE'] {
+  background: #fdeecb;
+}
+.att__chip[data-status='ABSENT'] {
+  background: #f6d7d5;
+}
+.att__chip[data-status='EXCUSED_ABSENCE'] {
+  background: #dbe6fb;
+}
+.att__chip[data-status='CANCELLED'] {
+  background: #e8eaed;
+  text-decoration: line-through;
+}

@@ -7,7 +7,6 @@
     <mat-progress-bar mode="indeterminate" aria-label="Chargement de la séance"></mat-progress-bar>
     <p class="sessions__status" role="status">Chargement de la séance…</p>
   }
-
   @case ('not-found') {
     <div class="sessions__panel" role="alert">
       <mat-icon aria-hidden="true">search_off</mat-icon>
@@ -15,7 +14,6 @@
       <a mat-stroked-button routerLink="/sessions">Retour à la liste</a>
     </div>
   }
-
   @case ('forbidden') {
     <div class="sessions__panel" role="alert">
       <mat-icon aria-hidden="true">lock</mat-icon>
@@ -23,7 +21,6 @@
       <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
     </div>
   }
-
   @case ('error') {
     <div class="sessions__panel" role="alert">
       <mat-icon aria-hidden="true">error_outline</mat-icon>
@@ -68,131 +65,344 @@
         <div class="sessions__reveal" role="group" aria-label="Confirmer l'ouverture">
           <p>L'ouverture rend l'émargement disponible pour les apprenants inscrits.</p>
           <div class="sessions__form-actions">
-            <button mat-flat-button type="button" (click)="confirmOpen()" [disabled]="submitting()">
-              Confirmer l'ouverture
-            </button>
-            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
-              Annuler
-            </button>
+            <button mat-flat-button type="button" (click)="confirmOpen()" [disabled]="submitting()">Confirmer l'ouverture</button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">Annuler</button>
           </div>
-          @if (actionError()) {
-            <p class="sessions__inline-error" role="alert">{{ actionError() }}</p>
-          }
+          @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
         </div>
       }
-
       @if (pendingAction() === 'close') {
         <div class="sessions__reveal" role="group" aria-label="Confirmer la fermeture">
-          <p>La fermeture est définitive : les jetons d'émargement deviennent invalides et aucune présence
-            ne pourra plus être enregistrée.</p>
+          <p>La fermeture est définitive : tous les points de contrôle ouverts sont fermés et les jetons
+            d'émargement deviennent invalides.</p>
           <div class="sessions__form-actions">
-            <button mat-flat-button type="button" (click)="confirmClose()" [disabled]="submitting()">
-              Confirmer la fermeture
-            </button>
-            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
-              Annuler
-            </button>
+            <button mat-flat-button type="button" (click)="confirmClose()" [disabled]="submitting()">Confirmer la fermeture</button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">Annuler</button>
           </div>
-          @if (actionError()) {
-            <p class="sessions__inline-error" role="alert">{{ actionError() }}</p>
-          }
+          @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
         </div>
       }
-
       @if (isClosed()) {
-        <p class="sessions__status" role="note">
-          Séance clôturée : l'émargement est fermé et le QR n'est plus disponible.
-        </p>
+        <p class="sessions__status" role="note">Séance clôturée : l'émargement est fermé.</p>
       }
 
-      @if (canShowQr()) {
+      <!-- Points de contrôle -->
+      <section class="sessions__section" aria-label="Points de contrôle">
+        <div class="sessions__header">
+          <h2 class="sessions__subtitle">Points de contrôle</h2>
+          @if (canManage() && !isClosed()) {
+            <button mat-stroked-button type="button" (click)="toggleCheckpointForm()">
+              <mat-icon aria-hidden="true">add</mat-icon> Ajouter
+            </button>
+          }
+        </div>
+
+        @if (showCheckpointForm()) {
+          <form class="sessions__reveal" [formGroup]="checkpointForm" (ngSubmit)="submitCheckpoint()"
+                role="group" aria-label="Nouveau point de contrôle">
+            <mat-form-field appearance="outline">
+              <mat-label>Libellé</mat-label>
+              <input matInput formControlName="label" maxlength="120" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Type</mat-label>
+              <mat-select formControlName="type">
+                <mat-option value="START">Arrivée</mat-option>
+                <mat-option value="CUSTOM">Intermédiaire</mat-option>
+                <mat-option value="END">Fin</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <label class="sessions__checkbox">
+              <input type="checkbox" formControlName="required" /> Obligatoire pour le calcul d'assiduité
+            </label>
+            <div class="sessions__form-actions">
+              <button mat-flat-button type="submit" [disabled]="rowBusy() || checkpointForm.invalid">Créer</button>
+              <button mat-button type="button" (click)="toggleCheckpointForm()" [disabled]="rowBusy()">Annuler</button>
+            </div>
+            @if (rowError()) { <p class="sessions__inline-error" role="alert">{{ rowError() }}</p> }
+          </form>
+        }
+
+        @if (checkpoints().length === 0) {
+          <p class="sessions__status" role="status">Aucun point de contrôle.</p>
+        } @else {
+          <div class="sessions__table-wrapper">
+            <table mat-table [dataSource]="checkpoints()">
+              <ng-container matColumnDef="label">
+                <th mat-header-cell *matHeaderCellDef>Libellé</th>
+                <td mat-cell *matCellDef="let cp">{{ cp.label }}</td>
+              </ng-container>
+              <ng-container matColumnDef="type">
+                <th mat-header-cell *matHeaderCellDef>Type</th>
+                <td mat-cell *matCellDef="let cp">{{ checkpointTypeLabel(cp.type) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Statut</th>
+                <td mat-cell *matCellDef="let cp">
+                  <span class="sessions__chip" [attr.data-status]="cp.status">{{ checkpointStatusLabel(cp.status) }}</span>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="required">
+                <th mat-header-cell *matHeaderCellDef>Obligatoire</th>
+                <td mat-cell *matCellDef="let cp">{{ cp.required ? 'Oui' : 'Non' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef>Actions</th>
+                <td mat-cell *matCellDef="let cp">
+                  @if (canManage()) {
+                    @if (cp.status === 'PLANNED' && isOpen()) {
+                      <button mat-button type="button" (click)="openCheckpoint(cp)" [disabled]="rowBusy()">Ouvrir</button>
+                    }
+                    @if (cp.status === 'OPEN') {
+                      <button mat-button type="button" (click)="closeCheckpoint(cp)" [disabled]="rowBusy()">Fermer</button>
+                    }
+                    @if (cp.status === 'PLANNED' || cp.status === 'OPEN') {
+                      <button mat-button type="button" (click)="startCancelCheckpoint(cp)" [disabled]="rowBusy()">Annuler</button>
+                    }
+                  }
+                  @if (checkpointCancelId() === cp.publicId) {
+                    <form class="sessions__inline-form" [formGroup]="cancelForm" (ngSubmit)="confirmCancelCheckpoint()">
+                      <mat-form-field appearance="outline">
+                        <mat-label>Motif d'annulation</mat-label>
+                        <input matInput formControlName="reason" maxlength="500" />
+                      </mat-form-field>
+                      <button mat-flat-button type="submit" [disabled]="rowBusy() || cancelForm.invalid">Confirmer</button>
+                      <button mat-button type="button" (click)="abortCancelCheckpoint()">Fermer</button>
+                    </form>
+                  }
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="checkpointColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: checkpointColumns"></tr>
+            </table>
+          </div>
+        }
+        @if (rowError() && !showCheckpointForm() && !checkpointCancelId()) {
+          <p class="sessions__inline-error" role="alert">{{ rowError() }}</p>
+        }
+      </section>
+
+      <!-- QR -->
+      @if (isOpen() && canManage()) {
         <section class="sessions__section" aria-label="QR code d'émargement">
           <h2 class="sessions__subtitle">Émargement en cours</h2>
-          <p class="sessions__intro">
-            Les apprenants scannent le QR ou saisissent le code court. Le code est renouvelé
-            automatiquement avant son expiration.
-          </p>
-
-          @if (tokenError()) {
-            <div class="sessions__panel" role="alert">
-              <mat-icon aria-hidden="true">error_outline</mat-icon>
-              <p>{{ tokenError() }}</p>
-              <button mat-stroked-button type="button" (click)="refreshToken()">Réessayer</button>
-            </div>
-          } @else if (!attendanceToken()) {
-            <button mat-flat-button type="button" (click)="refreshToken()" [disabled]="tokenLoading()">
-              Afficher un code d'émargement
-            </button>
+          @if (openCheckpoints().length === 0) {
+            <p class="sessions__status" role="status">Ouvrez un point de contrôle pour émettre un code d'émargement.</p>
           } @else {
-            <div class="sessions__qr">
-              <app-qr-display [value]="attendanceToken()!.token"></app-qr-display>
-              <div class="sessions__qr-meta">
-                <p class="sessions__meta">Code court</p>
-                <p class="sessions__code" aria-label="Code court d'émargement">
-                  {{ attendanceToken()!.shortCode }}
-                </p>
-                <p class="sessions__meta">
-                  Expire le {{ formatInstantUtc(attendanceToken()!.expiresAt) }}
-                </p>
-                <button mat-stroked-button type="button" (click)="refreshToken()" [disabled]="tokenLoading()">
-                  Renouveler maintenant
-                </button>
+            <mat-form-field appearance="outline">
+              <mat-label>Point de contrôle</mat-label>
+              <mat-select [value]="selectedCheckpoint()?.publicId" (valueChange)="selectCheckpoint($event)">
+                @for (cp of openCheckpoints(); track cp.publicId) {
+                  <mat-option [value]="cp.publicId">{{ cp.label }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            @if (tokenError()) {
+              <div class="sessions__panel" role="alert">
+                <mat-icon aria-hidden="true">error_outline</mat-icon>
+                <p>{{ tokenError() }}</p>
+                <button mat-stroked-button type="button" (click)="refreshToken()">Réessayer</button>
               </div>
-            </div>
+            } @else if (!attendanceToken()) {
+              <button mat-flat-button type="button" (click)="refreshToken()" [disabled]="tokenLoading()">
+                Afficher un code d'émargement
+              </button>
+            } @else {
+              <div class="sessions__qr">
+                <app-qr-display [value]="attendanceToken()!.token"></app-qr-display>
+                <div class="sessions__qr-meta">
+                  <p class="sessions__meta">Code court</p>
+                  <p class="sessions__code" aria-label="Code court d'émargement">{{ attendanceToken()!.shortCode }}</p>
+                  <p class="sessions__meta">Expire le {{ formatInstantUtc(attendanceToken()!.expiresAt) }}</p>
+                  <button mat-stroked-button type="button" (click)="refreshToken()" [disabled]="tokenLoading()">Renouveler maintenant</button>
+                </div>
+              </div>
+            }
           }
         </section>
       }
 
+      <!-- Présences par point de contrôle -->
       <section class="sessions__section" aria-label="Présences">
         <div class="sessions__header">
           <h2 class="sessions__subtitle">Présences</h2>
-          <button mat-stroked-button type="button" (click)="refreshAttendance()">
-            <mat-icon aria-hidden="true">refresh</mat-icon>
-            Rafraîchir
-          </button>
+          <div class="sessions__form-actions">
+            <button mat-stroked-button type="button" (click)="refreshAttendance()">
+              <mat-icon aria-hidden="true">refresh</mat-icon> Rafraîchir
+            </button>
+            @if (canManage()) {
+              <button mat-stroked-button type="button" (click)="toggleManualForm()">
+                <mat-icon aria-hidden="true">person_add</mat-icon> Saisie manuelle
+              </button>
+            }
+          </div>
         </div>
 
-        @if (attendanceSummary(); as summary) {
-          <p class="sessions__meta">
-            {{ summary.present }} présent(s) sur {{ summary.expected }} attendu(s).
-          </p>
+        @if (showManualForm()) {
+          <form class="sessions__reveal" [formGroup]="manualForm" (ngSubmit)="submitManual()"
+                role="group" aria-label="Présence manuelle">
+            <p class="sessions__meta">
+              Point de contrôle ciblé :
+              <strong>{{ (selectedCheckpoint() ?? checkpoints()[0])?.label || '—' }}</strong>.
+            </p>
+            <mat-form-field appearance="outline">
+              <mat-label>Identifiant public d'inscription</mat-label>
+              <input matInput formControlName="enrollmentPublicId" />
+              <mat-hint>Repli : l'effectif nominatif n'est pas exposé au formateur.</mat-hint>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Statut</mat-label>
+              <mat-select formControlName="status">
+                <mat-option value="PRESENT">Présent</mat-option>
+                <mat-option value="LATE">En retard</mat-option>
+                <mat-option value="ABSENT">Absent</mat-option>
+              </mat-select>
+            </mat-form-field>
+            @if (manualForm.controls.status.value === 'LATE') {
+              <mat-form-field appearance="outline">
+                <mat-label>Minutes de retard</mat-label>
+                <input matInput type="number" formControlName="lateMinutes" min="0" />
+              </mat-form-field>
+            }
+            <mat-form-field appearance="outline">
+              <mat-label>Motif / commentaire</mat-label>
+              <input matInput formControlName="comment" maxlength="500" />
+            </mat-form-field>
+            <div class="sessions__form-actions">
+              <button mat-flat-button type="submit" [disabled]="rowBusy() || manualForm.invalid">Enregistrer</button>
+              <button mat-button type="button" (click)="toggleManualForm()" [disabled]="rowBusy()">Annuler</button>
+            </div>
+            @if (rowError()) { <p class="sessions__inline-error" role="alert">{{ rowError() }}</p> }
+          </form>
         }
 
         @if (attendance().kind === 'loading') {
           <p class="sessions__status" role="status">Chargement des présences…</p>
         }
-        @if (attendanceError()) {
-          <p class="sessions__inline-error" role="alert">{{ attendanceError() }}</p>
+        @if (attendanceError()) { <p class="sessions__inline-error" role="alert">{{ attendanceError() }}</p> }
+
+        @for (block of attendanceBlocks(); track block.checkpointPublicId) {
+          <article class="sessions__cp-block">
+            <h3 class="sessions__subtitle">{{ block.label }}</h3>
+            <p class="sessions__meta">
+              {{ block.presentCount }} présent(s) · {{ block.lateCount }} retard(s) ·
+              {{ block.excusedCount }} excusé(s) · {{ block.derivedAbsentCount }} absent(s) dérivé(s)
+              sur {{ block.expectedCount }} attendu(s).
+            </p>
+            @if (block.records.length === 0) {
+              <p class="sessions__status" role="status">Aucune présence enregistrée.</p>
+            } @else {
+              <div class="sessions__table-wrapper">
+                <table mat-table [dataSource]="block.records">
+                  <ng-container matColumnDef="student">
+                    <th mat-header-cell *matHeaderCellDef>Apprenant</th>
+                    <td mat-cell *matCellDef="let row">{{ [row.firstName, row.lastName].join(' ').trim() || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="number">
+                    <th mat-header-cell *matHeaderCellDef>Numéro</th>
+                    <td mat-cell *matCellDef="let row">{{ row.studentNumber || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="status">
+                    <th mat-header-cell *matHeaderCellDef>Statut</th>
+                    <td mat-cell *matCellDef="let row">
+                      <span class="sessions__chip" [attr.data-status]="row.status">{{ attendanceStatusLabel(row.status) }}</span>
+                      @if (row.lateMinutes) { <span class="sessions__meta"> (+{{ row.lateMinutes }} min)</span> }
+                    </td>
+                  </ng-container>
+                  <ng-container matColumnDef="recordedAt">
+                    <th mat-header-cell *matHeaderCellDef>Heure</th>
+                    <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.recordedAt) }} · {{ sourceLabel(row.source) }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef>Actions</th>
+                    <td mat-cell *matCellDef="let row">
+                      @if (row.attendancePublicId) {
+                        <button mat-button type="button" (click)="toggleHistory(row.attendancePublicId)">Historique</button>
+                        @if (canManage() && row.status !== 'CANCELLED') {
+                          <button mat-button type="button" (click)="startCorrect(row.attendancePublicId)" [disabled]="rowBusy()">Corriger</button>
+                          <button mat-button type="button" (click)="startCancelRow(row.attendancePublicId)" [disabled]="rowBusy()">Annuler</button>
+                        }
+                      }
+                    </td>
+                  </ng-container>
+                  <tr mat-header-row *matHeaderRowDef="rosterColumns"></tr>
+                  <tr mat-row *matRowDef="let row; columns: rosterColumns"></tr>
+                </table>
+              </div>
+            }
+          </article>
         }
-        @if (attendance().kind === 'ready') {
-          @if (attendanceRows().length === 0) {
-            <p class="sessions__status" role="status">Aucune présence enregistrée pour l'instant.</p>
-          } @else {
-            <div class="sessions__table-wrapper">
-              <table mat-table [dataSource]="attendanceRows()">
-                <ng-container matColumnDef="student">
-                  <th mat-header-cell *matHeaderCellDef>Apprenant</th>
-                  <td mat-cell *matCellDef="let row">
-                    {{ [row.firstName, row.lastName].join(' ').trim() || '—' }}
-                  </td>
-                </ng-container>
-                <ng-container matColumnDef="number">
-                  <th mat-header-cell *matHeaderCellDef>Numéro étudiant</th>
-                  <td mat-cell *matCellDef="let row">{{ row.studentNumber || '—' }}</td>
-                </ng-container>
-                <ng-container matColumnDef="recordedAt">
-                  <th mat-header-cell *matHeaderCellDef>Heure</th>
-                  <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.recordedAt) }}</td>
-                </ng-container>
-                <ng-container matColumnDef="source">
-                  <th mat-header-cell *matHeaderCellDef>Canal</th>
-                  <td mat-cell *matCellDef="let row">{{ sourceLabel(row.source) }}</td>
-                </ng-container>
-                <tr mat-header-row *matHeaderRowDef="rosterColumns"></tr>
-                <tr mat-row *matRowDef="let row; columns: rosterColumns"></tr>
-              </table>
+
+        @if (correctRowId(); as rowId) {
+          <form class="sessions__reveal" [formGroup]="correctForm" (ngSubmit)="submitCorrect()"
+                role="group" aria-label="Corriger la présence">
+            <mat-form-field appearance="outline">
+              <mat-label>Nouveau statut (facultatif)</mat-label>
+              <mat-select formControlName="status">
+                <mat-option value="">Inchangé</mat-option>
+                <mat-option value="PRESENT">Présent</mat-option>
+                <mat-option value="LATE">En retard</mat-option>
+                <mat-option value="ABSENT">Absent</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Minutes de retard (facultatif)</mat-label>
+              <input matInput type="number" formControlName="lateMinutes" min="0" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Commentaire (facultatif)</mat-label>
+              <input matInput formControlName="comment" maxlength="500" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Motif de la correction</mat-label>
+              <input matInput formControlName="reason" maxlength="500" />
+            </mat-form-field>
+            <div class="sessions__form-actions">
+              <button mat-flat-button type="submit" [disabled]="rowBusy() || correctForm.invalid">Appliquer</button>
+              <button mat-button type="button" (click)="abortCorrect()" [disabled]="rowBusy()">Annuler</button>
             </div>
-          }
+            @if (rowError()) { <p class="sessions__inline-error" role="alert">{{ rowError() }}</p> }
+          </form>
+        }
+
+        @if (cancelRowId(); as rowId) {
+          <form class="sessions__reveal" [formGroup]="cancelForm" (ngSubmit)="confirmCancelRow()"
+                role="group" aria-label="Annuler la présence">
+            <p>L'annulation est logique : la ligne est conservée, l'historique est tracé.</p>
+            <mat-form-field appearance="outline">
+              <mat-label>Motif d'annulation</mat-label>
+              <input matInput formControlName="reason" maxlength="500" />
+            </mat-form-field>
+            <div class="sessions__form-actions">
+              <button mat-flat-button type="submit" [disabled]="rowBusy() || cancelForm.invalid">Confirmer l'annulation</button>
+              <button mat-button type="button" (click)="abortCancelRow()" [disabled]="rowBusy()">Annuler</button>
+            </div>
+            @if (rowError()) { <p class="sessions__inline-error" role="alert">{{ rowError() }}</p> }
+          </form>
+        }
+
+        @if (historyRowId(); as rowId) {
+          <div class="sessions__reveal" role="group" aria-label="Historique de la présence">
+            <h3 class="sessions__subtitle">Historique</h3>
+            @if (historyEntries().length === 0) {
+              <p class="sessions__status" role="status">Aucune entrée.</p>
+            } @else {
+              <ul class="sessions__history">
+                @for (entry of historyEntries(); track entry.publicId) {
+                  <li>
+                    <strong>{{ correctionActionLabel(entry.action) }}</strong> —
+                    {{ formatInstantUtc(entry.occurredAt) }}
+                    @if (entry.previousStatus || entry.newStatus) {
+                      · {{ entry.previousStatus || '—' }} → {{ entry.newStatus || '—' }}
+                    }
+                    <br /><span class="sessions__meta">Motif : {{ entry.reason }}</span>
+                  </li>
+                }
+              </ul>
+            }
+            <button mat-button type="button" (click)="toggleHistory(rowId)">Fermer</button>
+          </div>
         }
       </section>
     }
