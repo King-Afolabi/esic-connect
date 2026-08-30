@@ -58,9 +58,15 @@ interface Internals {
   cancelAction: () => void;
   confirm: () => void;
   reasonForm: { setValue: (v: { reason: string }) => void };
-  assignForm: { setValue: (v: { role: string; reason: string }) => void };
+  assignForm: {
+    setValue: (v: { role: string; reason: string }) => void;
+    valid: boolean;
+    controls: { role: { hasError: (code: string) => boolean } };
+  };
   assignableRoleOptions: () => Role[];
   pending: () => unknown;
+  roleFieldError: () => string | null;
+  actionError: () => string | null;
 }
 
 const notifications = { info: vi.fn(), error: vi.fn() };
@@ -76,7 +82,8 @@ async function setup(opts?: { user?: UserDetailResponse; effectiveRoles?: Role[]
   const effectiveRoles = signal<Role[]>(opts?.effectiveRoles ?? []);
   const session = signal<Session | null>({
     accessToken: 't',
-    subject: opts?.subject ?? 'caller-000',
+    // Distinguish "not provided" (default caller) from an explicit null subject.
+    subject: opts && 'subject' in opts ? (opts.subject ?? null) : 'caller-000',
     roles: [],
     email: 'caller@esic.test',
     expiresAt: Date.now() + 1_000_000,
@@ -278,6 +285,64 @@ describe('UserDetail — lifecycle actions', () => {
     http.verify();
   });
 
+  it('restore: SUSPENDED target → POST /restore { reason } → 204 → reloads → success shown', async () => {
+    const { harness, http, internals, userReq, button } = await setup({ effectiveRoles: ['ADMIN'] });
+    userReq().flush({ ...USER, status: 'SUSPENDED' });
+    harness.detectChanges();
+
+    internals().startAction('restore');
+    harness.detectChanges();
+    internals().reasonForm.setValue({ reason: '  retour de congé  ' });
+    internals().confirm();
+
+    const req = http.expectOne(`${USER_URL}/restore`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ reason: 'retour de congé' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+
+    userReq().flush(USER); // reload after success
+    harness.detectChanges();
+    expect(notifications.info).toHaveBeenCalledWith('Compte réactivé.');
+    expect(internals().pending()).toBeNull();
+    expect(button('Suspendre le compte')).toBeDefined();
+    http.verify();
+  });
+
+  it('surfaces USER_SELF_ACTION_FORBIDDEN (409) when the subject is unusable and the button was visible', async () => {
+    // No usable JWT subject → self detection fails → Suspendre stays visible.
+    const { harness, http, internals, userReq, text } = await setup({
+      effectiveRoles: ['ADMIN'],
+      subject: null,
+    });
+    userReq().flush(USER);
+    harness.detectChanges();
+    expect(text()).toContain('Suspendre le compte');
+
+    internals().startAction('suspend');
+    harness.detectChanges();
+    internals().reasonForm.setValue({ reason: 'tentative' });
+    internals().confirm();
+
+    http.expectOne(`${USER_URL}/suspend`).flush(
+      {
+        status: 409,
+        code: 'USER_SELF_ACTION_FORBIDDEN',
+        message: 'Vous ne pouvez pas appliquer cette opération à votre propre compte.',
+        path: '',
+        correlationId: null,
+        details: [],
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('votre propre compte');
+    expect(notifications.info).not.toHaveBeenCalled();
+    expect(internals().pending()).not.toBeNull();
+    http.expectNone((r) => r.method === 'GET'); // no reload
+    http.verify();
+  });
+
   it('warns that archiving closes active roles and prevents a double submit', async () => {
     const { harness, http, internals, userReq } = await setup({ effectiveRoles: ['ADMIN'] });
     userReq().flush(USER);
@@ -422,14 +487,18 @@ describe('UserDetail — role assignment', () => {
       { status: 400, statusText: 'Bad Request' },
     );
     harness.detectChanges();
-    // USER_ROLE_UNKNOWN is attached to the role field, not shown as a global error.
+    // USER_ROLE_UNKNOWN is attached to the role field (FormControl error), not a global error.
     expect(el().textContent).toContain('Code de rôle inconnu.');
-    const comp = internals() as unknown as {
-      roleFieldError: () => string | null;
-      actionError: () => string | null;
-    };
-    expect(comp.roleFieldError()).toBe('Code de rôle inconnu.');
-    expect(comp.actionError()).toBeNull();
+    expect(internals().roleFieldError()).toBe('Code de rôle inconnu.');
+    expect(internals().actionError()).toBeNull();
+    expect(internals().assignForm.controls.role.hasError('serverUnknown')).toBe(true);
+
+    // The user must pick another role: that clears the server error and re-enables submit.
+    internals().assignForm.setValue({ role: 'ADMIN', reason: 'x' });
+    harness.detectChanges();
+    expect(internals().roleFieldError()).toBeNull();
+    expect(internals().assignForm.controls.role.hasError('serverUnknown')).toBe(false);
+    expect(internals().assignForm.valid).toBe(true);
 
     internals().confirm();
     http.expectOne(`${USER_URL}/roles`).flush(
@@ -438,6 +507,64 @@ describe('UserDetail — role assignment', () => {
     );
     harness.detectChanges();
     expect(el().textContent).toContain('Ce rôle est déjà actif');
+    // A global error is not turned into a field error.
+    expect(internals().assignForm.controls.role.hasError('serverUnknown')).toBe(false);
+    expect(internals().roleFieldError()).toBeNull();
+    http.verify();
+  });
+
+  it('wires USER_ROLE_UNKNOWN to the role field via aria-describedby, not just adjacent text', async () => {
+    const { harness, http, internals, userReq, el } = await setup({ effectiveRoles: ['SUPER_ADMIN'] });
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startAssign();
+    harness.detectChanges();
+    internals().assignForm.setValue({ role: 'STUDENT', reason: 'x' });
+    internals().confirm();
+    http.expectOne(`${USER_URL}/roles`).flush(
+      { status: 400, code: 'USER_ROLE_UNKNOWN', message: 'Code de rôle inconnu.', path: '', correlationId: null, details: [] },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    const roleField = el().querySelector('mat-form-field') as HTMLElement;
+    const matError = roleField.querySelector('mat-error') as HTMLElement;
+    expect(matError).toBeTruthy();
+    expect(matError.textContent).toContain('Code de rôle inconnu.');
+
+    const errorId = matError.getAttribute('id');
+    expect(errorId).toBeTruthy();
+
+    const described = roleField.querySelector('[aria-describedby]') as HTMLElement;
+    expect(described).toBeTruthy();
+    expect((described.getAttribute('aria-describedby') ?? '').split(/\s+/)).toContain(errorId);
+  });
+
+  it('accepts a reason longer than 500 chars and posts it in full (no contractual cap on assign)', async () => {
+    const { harness, http, internals, userReq } = await setup({ effectiveRoles: ['ADMIN'] });
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startAssign();
+    harness.detectChanges();
+
+    const longReason = `motif détaillé ${'a'.repeat(900)}`; // > 500 chars, no leading/trailing space
+    expect(longReason.length).toBeGreaterThan(500);
+    internals().assignForm.setValue({ role: 'SCHOOL_ADMINISTRATION', reason: longReason });
+    harness.detectChanges();
+    expect(internals().assignForm.valid).toBe(true);
+
+    internals().confirm();
+    const req = http.expectOne(`${USER_URL}/roles`);
+    expect(req.request.body).toEqual({ role: 'SCHOOL_ADMINISTRATION', reason: longReason });
+    expect((req.request.body as { reason: string }).reason.length).toBe(longReason.length);
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    userReq().flush(USER);
+    harness.detectChanges();
+    expect(notifications.info).toHaveBeenCalledWith('Rôle attribué.');
     http.verify();
   });
 
@@ -493,6 +620,36 @@ describe('UserDetail — role revocation', () => {
     http.verify();
   });
 
+  it('surfaces USER_ROLE_NOT_ASSIGNED (409) without a false success or reload', async () => {
+    const { harness, http, internals, userReq, el } = await setup({ effectiveRoles: ['ADMIN'] });
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startRevoke('TEACHER');
+    harness.detectChanges();
+    internals().reasonForm.setValue({ reason: 'déjà retiré ailleurs' });
+    internals().confirm();
+
+    http.expectOne(`${USER_URL}/roles/TEACHER/revoke`).flush(
+      {
+        status: 409,
+        code: 'USER_ROLE_NOT_ASSIGNED',
+        message: "Ce rôle n'est pas actif pour ce compte.",
+        path: '',
+        correlationId: null,
+        details: [],
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    harness.detectChanges();
+
+    expect(el().textContent).toContain("Ce rôle n'est pas actif");
+    expect(notifications.info).not.toHaveBeenCalled();
+    expect(internals().pending()).not.toBeNull();
+    http.expectNone((r) => r.method === 'GET'); // no reload
+    http.verify();
+  });
+
   it('surfaces USER_LAST_ACTIVE_ROLE without a false success', async () => {
     const { harness, http, internals, userReq, el } = await setup({ effectiveRoles: ['ADMIN'] });
     userReq().flush(USER);
@@ -511,7 +668,7 @@ describe('UserDetail — role revocation', () => {
     http.verify();
   });
 
-  it('does not offer to revoke SUPER_ADMIN unless the context is SUPER_ADMIN', async () => {
+  it('does not offer to revoke any role of a SUPER_ADMIN-bearing target unless the context is SUPER_ADMIN', async () => {
     const withSuper: UserDetailResponse = {
       ...USER,
       roleAssignments: [
@@ -525,8 +682,8 @@ describe('UserDetail — role revocation', () => {
     const adminButtons = [...asAdmin.el().querySelectorAll('button')].filter((b) =>
       b.textContent?.trim().startsWith('Retirer'),
     );
-    // Only the ADMIN row is revocable, not SUPER_ADMIN.
-    expect(adminButtons.length).toBe(1);
+    // The target is protected: an ADMIN context revokes none of its roles (not even ADMIN).
+    expect(adminButtons.length).toBe(0);
 
     const asSuper = await setup({ effectiveRoles: ['SUPER_ADMIN'] });
     asSuper.flushUser(withSuper);
@@ -534,6 +691,92 @@ describe('UserDetail — role revocation', () => {
       b.textContent?.trim().startsWith('Retirer'),
     );
     expect(superButtons.length).toBe(2);
+  });
+});
+
+describe('UserDetail — SUPER_ADMIN target protection', () => {
+  const withSuperAdmin: UserDetailResponse = {
+    ...USER,
+    roleAssignments: [
+      { role: 'SUPER_ADMIN', active: true, validFrom: '2026-01-01T00:00:00Z', validUntil: null },
+      { role: 'ADMIN', active: true, validFrom: '2026-01-01T00:00:00Z', validUntil: null },
+    ],
+  };
+
+  it('ADMIN context + target holding an active SUPER_ADMIN role: no mutation is offered', async () => {
+    const { flushUser, text, el } = await setup({ effectiveRoles: ['ADMIN'] });
+    flushUser(withSuperAdmin);
+
+    expect(text()).not.toContain('Suspendre le compte');
+    expect(text()).not.toContain('Réactiver le compte');
+    expect(text()).not.toContain('Archiver le compte');
+    expect(text()).not.toContain('Attribuer un rôle');
+    expect([...el().querySelectorAll('button')].some((b) => b.textContent?.trim().startsWith('Retirer'))).toBe(
+      false,
+    );
+    expect(el().querySelector('form')).toBeNull();
+    // A concise note explains the requirement, without claiming it is a security guarantee.
+    expect(text()).toContain('requiert le rôle super administrateur');
+  });
+
+  it('ADMIN context cannot revoke the other (non SUPER_ADMIN) roles of a protected target', async () => {
+    const { flushUser, el, internals } = await setup({ effectiveRoles: ['ADMIN'] });
+    flushUser(withSuperAdmin);
+    // Even the ADMIN row carries no Retirer button.
+    expect([...el().querySelectorAll('button')].filter((b) => b.textContent?.trim().startsWith('Retirer'))).toHaveLength(
+      0,
+    );
+    // The actions column is not even rendered.
+    expect(internals().pending()).toBeNull();
+  });
+
+  it('SUPER_ADMIN context + same target: mutations are offered according to status', async () => {
+    const active = await setup({ effectiveRoles: ['SUPER_ADMIN'] });
+    active.flushUser(withSuperAdmin);
+    expect(active.text()).toContain('Suspendre le compte');
+    expect(active.text()).toContain('Archiver le compte');
+    expect(active.text()).toContain('Attribuer un rôle');
+    const revoke = [...active.el().querySelectorAll('button')].filter((b) =>
+      b.textContent?.trim().startsWith('Retirer'),
+    );
+    expect(revoke).toHaveLength(2); // SUPER_ADMIN + ADMIN, both revocable by a SUPER_ADMIN
+
+    const suspended = await setup({ effectiveRoles: ['SUPER_ADMIN'] });
+    suspended.flushUser({ ...withSuperAdmin, status: 'SUSPENDED' });
+    expect(suspended.text()).toContain('Réactiver le compte');
+    expect(suspended.text()).not.toContain('Suspendre le compte');
+  });
+
+  it('closes an open sensitive form when the context drops from SUPER_ADMIN to ADMIN on a protected target', async () => {
+    const { harness, effectiveRoles, internals, userReq, text } = await setup({
+      effectiveRoles: ['SUPER_ADMIN'],
+    });
+    userReq().flush(withSuperAdmin);
+    harness.detectChanges();
+
+    internals().startAction('suspend');
+    harness.detectChanges();
+    expect(internals().pending()).not.toBeNull();
+
+    effectiveRoles.set(['ADMIN']); // no longer sufficient for a SUPER_ADMIN-bearing target
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+
+    expect(internals().pending()).toBeNull();
+    expect(text()).toContain('requiert le rôle super administrateur');
+  });
+
+  it('an inactive (closed) SUPER_ADMIN assignment does not protect the target', async () => {
+    const { flushUser, text } = await setup({ effectiveRoles: ['ADMIN'] });
+    flushUser({
+      ...USER,
+      roleAssignments: [
+        { role: 'SUPER_ADMIN', active: false, validFrom: '2025-01-01T00:00:00Z', validUntil: '2026-01-01T00:00:00Z' },
+        { role: 'TEACHER', active: true, validFrom: '2026-01-01T00:00:00Z', validUntil: null },
+      ],
+    });
+    expect(text()).toContain('Suspendre le compte');
+    expect(text()).not.toContain('requiert le rôle super administrateur');
   });
 });
 

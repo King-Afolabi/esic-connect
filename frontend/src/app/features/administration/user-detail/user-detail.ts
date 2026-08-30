@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -122,12 +123,12 @@ export class UserDetail {
     ]),
   });
 
+  // `AssignRoleRequest.reason` n'a que `@NotBlank` côté back-end : aucune
+  // borne de longueur n'est appliquée ici (contrairement au motif des
+  // `AccountActionRequest`, plafonné à 500).
   protected readonly assignForm = this.formBuilder.group({
     role: this.formBuilder.control<Role | ''>('', [Validators.required]),
-    reason: this.formBuilder.control('', [
-      Validators.required,
-      Validators.maxLength(ACTION_REASON_MAX_LENGTH),
-    ]),
+    reason: this.formBuilder.control('', [Validators.required]),
   });
 
   protected readonly user = computed(() => {
@@ -148,6 +149,29 @@ export class UserDetail {
   );
   private readonly isSuperAdminContext = computed(() => this.effectiveRoles().includes('SUPER_ADMIN'));
 
+  /**
+   * La cible porte un rôle `SUPER_ADMIN` **actif** (calculé uniquement à
+   * partir des affectations reçues dans `UserDetailResponse`).
+   */
+  private readonly targetHoldsSuperAdmin = computed(() => {
+    const current = this.user();
+    return (
+      current !== null && current.roleAssignments.some((a) => a.active && a.role === 'SUPER_ADMIN')
+    );
+  });
+
+  /**
+   * Cible protégée : elle porte `SUPER_ADMIN` actif et le contexte
+   * effectif de l'appelant n'est pas `SUPER_ADMIN`. Le back-end
+   * (`UserManagementService.guardSuperAdminTarget`) refuserait alors
+   * **toute** mutation ; on n'en propose donc aucune. Ce masquage est
+   * purement ergonomique — il ne garantit rien : Spring Security reste
+   * l'autorité.
+   */
+  protected readonly isSuperAdminProtectedTarget = computed(
+    () => this.targetHoldsSuperAdmin() && !this.isSuperAdminContext(),
+  );
+
   /** Vrai si la fiche affichée est, de façon fiable, le compte de l'appelant. */
   protected readonly isSelf = computed(() => {
     const subject = this.auth.session()?.subject ?? null;
@@ -158,17 +182,34 @@ export class UserDetail {
   protected readonly isArchived = computed(() => this.user()?.status === 'ARCHIVED');
 
   protected readonly showSuspend = computed(
-    () => this.canLifecycle() && !this.isSelf() && this.user()?.status === 'ACTIVE',
+    () =>
+      this.canLifecycle() &&
+      !this.isSelf() &&
+      !this.isSuperAdminProtectedTarget() &&
+      this.user()?.status === 'ACTIVE',
   );
   protected readonly showRestore = computed(
-    () => this.canLifecycle() && !this.isSelf() && this.user()?.status === 'SUSPENDED',
+    () =>
+      this.canLifecycle() &&
+      !this.isSelf() &&
+      !this.isSuperAdminProtectedTarget() &&
+      this.user()?.status === 'SUSPENDED',
   );
   protected readonly showArchive = computed(
-    () => this.canManageRoles() && !this.isSelf() && this.user() !== null && !this.isArchived(),
+    () =>
+      this.canManageRoles() &&
+      !this.isSelf() &&
+      !this.isSuperAdminProtectedTarget() &&
+      this.user() !== null &&
+      !this.isArchived(),
   );
   /** Le retrait de rôle et le formulaire d'attribution partagent ce garde. */
   protected readonly canManageTargetRoles = computed(
-    () => this.canManageRoles() && this.user() !== null && !this.isArchived(),
+    () =>
+      this.canManageRoles() &&
+      !this.isSuperAdminProtectedTarget() &&
+      this.user() !== null &&
+      !this.isArchived(),
   );
 
   /** Rôles déjà actifs sur la cible (exclus de la sélection d'attribution). */
@@ -246,6 +287,13 @@ export class UserDetail {
 
   constructor() {
     this.load();
+    // Choisir un autre rôle lève l'erreur serveur rattachée au champ
+    // (`USER_ROLE_UNKNOWN`) : l'utilisateur peut alors resoumettre.
+    this.assignForm.controls.role.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      if (this.roleFieldError() !== null) {
+        this.clearRoleFieldError();
+      }
+    });
     // Un changement de contexte de rôle (ou de compte cible) doit fermer
     // un panneau devenu indisponible : on ne laisse jamais un formulaire
     // sensible ouvert pour une action que l'interface ne propose plus.
@@ -360,7 +408,7 @@ export class UserDetail {
         this.submitting.set(false);
         const view = toAdministrationError(error);
         if (view.field === 'role') {
-          this.roleFieldError.set(view.message);
+          this.setRoleFieldError(view.message);
         } else {
           this.actionError.set(view.message);
         }
@@ -370,7 +418,32 @@ export class UserDetail {
 
   private clearActionErrors(): void {
     this.actionError.set(null);
+    this.clearRoleFieldError();
+  }
+
+  /**
+   * Rattache un message d'erreur serveur au champ « rôle » : l'erreur
+   * `serverUnknown` du `FormControl` déclenche le `mat-error` du
+   * `mat-form-field`, lui-même relié au `mat-select` par
+   * `aria-describedby` (association réelle, pas un simple texte adjacent).
+   */
+  private setRoleFieldError(message: string): void {
+    this.roleFieldError.set(message);
+    const control = this.assignForm.controls.role;
+    control.setErrors({ ...(control.errors ?? {}), serverUnknown: message });
+    control.markAsTouched();
+  }
+
+  /** Retire l'erreur serveur « rôle » sans effacer les validations locales. */
+  private clearRoleFieldError(): void {
     this.roleFieldError.set(null);
+    const control = this.assignForm.controls.role;
+    const errors = control.errors;
+    if (errors && 'serverUnknown' in errors) {
+      const rest = { ...errors };
+      delete rest['serverUnknown'];
+      control.setErrors(Object.keys(rest).length > 0 ? rest : null);
+    }
   }
 
   private load(): void {

@@ -172,6 +172,16 @@
             aucune opération de cycle de vie ni de gestion de rôle n'est disponible.
           </p>
         </div>
+      } @else if (isSuperAdminProtectedTarget()) {
+        <div class="account__panel" role="note">
+          <mat-icon aria-hidden="true">admin_panel_settings</mat-icon>
+          <p>
+            La gestion de ce compte (suspension, réactivation, archivage, attribution
+            et retrait de rôle) requiert le rôle super administrateur ; ces actions ne
+            sont donc pas proposées ici. La consultation de la fiche et de l'historique
+            des rôles reste disponible.
+          </p>
+        </div>
       } @else if (canLifecycle() || canManageRoles()) {
         <section class="account__actions" aria-labelledby="actions-heading">
           <h2 id="actions-heading" class="account__section-title">Actions sur le compte</h2>
@@ -225,28 +235,18 @@
                       <mat-option [value]="option">{{ roleLabel(option) }}</mat-option>
                     }
                   </mat-select>
-                  @if (assignForm.controls.role.touched && assignForm.controls.role.invalid) {
+                  @if (assignForm.controls.role.hasError('serverUnknown')) {
+                    <mat-error>{{ assignForm.controls.role.getError('serverUnknown') }}</mat-error>
+                  } @else if (assignForm.controls.role.touched && assignForm.controls.role.invalid) {
                     <mat-error>Choisissez un rôle à attribuer.</mat-error>
                   }
                 </mat-form-field>
-                @if (roleFieldError()) {
-                  <p class="account__inline-error" role="alert">{{ roleFieldError() }}</p>
-                }
 
                 <mat-form-field appearance="outline" class="account__field">
                   <mat-label>Motif</mat-label>
-                  <textarea
-                    matInput
-                    formControlName="reason"
-                    rows="2"
-                    [maxlength]="reasonMaxLength"
-                    required
-                  ></textarea>
-                  <mat-hint align="end">
-                    {{ assignForm.controls.reason.value.length }} / {{ reasonMaxLength }}
-                  </mat-hint>
+                  <textarea matInput formControlName="reason" rows="2" required></textarea>
                   @if (assignForm.controls.reason.touched && assignForm.controls.reason.invalid) {
-                    <mat-error>Le motif est obligatoire ({{ reasonMaxLength }} caractères maximum).</mat-error>
+                    <mat-error>Le motif est obligatoire.</mat-error>
                   }
                 </mat-form-field>
 

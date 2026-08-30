@@ -111,6 +111,15 @@ describe('AdministrationApiService', () => {
       req.flush(null, { status: 204, statusText: 'No Content' });
     });
 
+    it('assignRole sends a reason longer than 500 chars verbatim (no truncation)', () => {
+      const reason = 'r'.repeat(650);
+      service.assignRole('u-1', { role: 'TEACHER', reason }).subscribe();
+      const req = http.expectOne('/api/v1/users/u-1/roles');
+      expect((req.request.body as { reason: string }).reason).toBe(reason);
+      expect((req.request.body as { reason: string }).reason.length).toBe(650);
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
     it('propagates a mutation error to the caller instead of swallowing it', () => {
       let status = 0;
       service.assignRole('u-1', { role: 'STUDENT', reason: 'x' }).subscribe({

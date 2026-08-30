@@ -49,30 +49,52 @@ choix des rôles proposés est dérivé de l'enum contractuelle `RoleCode`
 
 Fichiers touchés sous `frontend/src/app/features/administration/` :
 - `administration.models.ts` : +`AccountActionRequest`,
-  +`AssignRoleRequest`, +`ACTION_REASON_MAX_LENGTH` (500) ; en-tête de
+  +`AssignRoleRequest`, +`ACTION_REASON_MAX_LENGTH` (500 — **motif des
+  `AccountActionRequest` seulement** : suspension / réactivation /
+  archivage / retrait de rôle. `AssignRoleRequest.reason` ne porte que
+  `@NotBlank`, sans borne de longueur contractuelle) ; en-tête de
   fichier remis à jour (n'est plus « lecture seule ») ;
 - `administration-api.service.ts` : +`suspendUser`, `restoreUser`,
   `archiveUser`, `assignRole`, `revokeRole` (une méthode par endpoint
   réel ; `encodeURIComponent` sur `publicId` **et** `roleCode` ; corps
-  exact sans propriété superflue) ;
+  exact sans propriété superflue ; un motif d'attribution de plus de 500
+  caractères est transmis intégralement, sans troncature) ;
 - `administration-errors.ts` (nouveau) : `toAdministrationError` —
   s'appuie sur `normalizeHttpError` (messages `USER_*` du back-end déjà
-  sûrs), expose `{ status, code (USER_* ou null), message, field }` ;
-  seul `USER_ROLE_UNKNOWN` cible le champ `role`, tout le reste est un
-  message global ; `5xx` / code inconnu → message générique, `code`
-  `null` ;
+  sûrs), expose `{ status, code (USER_* connu ou null), message, field }`.
+  Les codes connus sont énumérés par une **liste blanche explicite**
+  (`USER_NOT_FOUND`, `USER_INVALID_STATE`, `USER_ROLE_ALREADY_ASSIGNED`,
+  `USER_ROLE_NOT_ASSIGNED`, `USER_LAST_ACTIVE_ROLE`,
+  `USER_SELF_ACTION_FORBIDDEN`, `USER_SUPER_ADMIN_PROTECTED`,
+  `USER_OPERATION_FORBIDDEN`, `USER_ROLE_UNKNOWN`, `USER_INVALID_SORT`,
+  `USER_INVALID_FILTER`) — **et non** un `startsWith('USER_')`, qui
+  laisserait passer un code futur ou inattendu. Seul `USER_ROLE_UNKNOWN`
+  cible le champ `role`, tout le reste est un message global. Tout code
+  hors liste (y compris un `USER_*` non listé) **et** tout `5xx` →
+  `code` / `field` à `null` et message générique sûr, sans jamais
+  afficher le message arbitraire de la réponse ;
 - `user-detail/` (`.ts` / `.html` / `.scss`) : la fiche gagne une
   section « Actions sur le compte » (boutons Suspendre / Réactiver /
   Archiver / Attribuer un rôle) et une colonne « actions » dans le
   tableau d'historique (bouton « Retirer » sur chaque affectation
   **active**). Confirmations **en ligne** (pas de dialogue) : motif
-  obligatoire (`textarea`, `maxlength=500`, compteur), description de
-  l'effet, avertissement explicite « l'archivage clôture tous les rôles
-  actifs », contrôles `disabled` pendant l'appel, double soumission
-  empêchée (`submitting()` + garde dans `confirm()`), bandeau succès
-  (`NotificationService.info`) puis rechargement de la fiche ; en cas
-  d'échec le message métier contrôlé s'affiche en ligne sans faux succès
-  ni rechargement, `USER_ROLE_UNKNOWN` étant rattaché au champ rôle.
+  obligatoire ; pour suspension / réactivation / archivage / retrait de
+  rôle le `textarea` porte `maxlength=500` + compteur (contrat
+  `AccountActionRequest`) ; pour **l'attribution de rôle**, le motif est
+  seulement requis, **sans `maxlength` ni compteur** (contrat
+  `AssignRoleRequest` = `@NotBlank` seul) — un motif > 500 caractères
+  part intégralement. Description de l'effet, avertissement explicite
+  « l'archivage clôture tous les rôles actifs », contrôles `disabled`
+  pendant l'appel, double soumission empêchée (`submitting()` + garde
+  dans `confirm()`), bandeau succès (`NotificationService.info`) puis
+  rechargement de la fiche ; en cas d'échec le message métier contrôlé
+  s'affiche en ligne sans faux succès ni rechargement.
+  `USER_ROLE_UNKNOWN` est rattaché **au champ rôle** via l'état d'erreur
+  du `FormControl` (`serverUnknown`) : le `mat-error` du
+  `mat-form-field` est relié au `mat-select` par `aria-describedby`
+  (association réelle) ; choisir un autre rôle lève l'erreur serveur et
+  réautorise la soumission ; une erreur globale n'est jamais transformée
+  en erreur de champ.
 
 Visibilité des actions (ergonomie seule — le back-end reste l'autorité) :
 - pilotée par `RoleContextService.effectiveRoles()` (contexte de rôle
@@ -88,6 +110,19 @@ Visibilité des actions (ergonomie seule — le back-end reste l'autorité) :
   Retirer sont masqués (le back-end renvoie `USER_SELF_ACTION_FORBIDDEN`)
   — l'**attribution** d'un rôle à soi-même **n'est pas** masquée car le
   back-end ne l'interdit pas ;
+- cible portant un rôle `SUPER_ADMIN` **actif** (calculé uniquement à
+  partir des `roleAssignments` de `UserDetailResponse`) : hors contexte
+  `SUPER_ADMIN`, **aucune** mutation n'est proposée (suspension,
+  réactivation, archivage, attribution de n'importe quel rôle, retrait
+  de n'importe quel rôle) — le back-end
+  (`UserManagementService.guardSuperAdminTarget`) les refuserait toutes.
+  Une note concise indique que la gestion de ce compte requiert le rôle
+  super administrateur, sans présenter le masquage comme une garantie de
+  sécurité ; la lecture de la fiche et de l'historique reste disponible.
+  Un contexte `SUPER_ADMIN` conserve les actions normalement permises
+  (sous réserve de l'auto-action, du statut et du dernier rôle actif).
+  Le passage du contexte `SUPER_ADMIN` à `ADMIN` ferme un formulaire
+  déjà ouvert sur une telle cible (via l'`effect()` de fermeture) ;
 - attribution : `SUPER_ADMIN` proposé seulement à un contexte
   `SUPER_ADMIN` ; les rôles déjà actifs sur la cible sont retirés de la
   liste (aide ergonomique, `USER_ROLE_ALREADY_ASSIGNED` reste géré) ;
@@ -122,41 +157,61 @@ terminal ; aucune information portée par la seule couleur ; tableau
 d'historique défilable (`overflow-x: auto`) ; formulaires utilisables sur
 petit écran (`flex-wrap`).
 
-Tests front : **291 → 323** (0 échec ; +32). Nouveaux :
-`administration-errors.spec.ts` (5 : message serveur sûr conservé + code
+Tests front : **291 → 336** (0 échec ; +45). Nouveaux / étendus :
+`administration-errors.spec.ts` (8 : message serveur sûr conservé + code
 `USER_*` ; auto-action / `SUPER_ADMIN` = message global ;
-`USER_ROLE_UNKNOWN` → champ `role` ; `5xx` masqué, aucun code métier ;
-code inconnu → vue générique). `administration-api.service.spec.ts` (+8 :
-`suspend` / `restore` / `archive` / `roles` / `roles/{code}/revoke` —
-URL exacte, `POST`, corps exact sans clé superflue, encodage de
+`USER_ROLE_UNKNOWN` → champ `role` ; `5xx` chaîne brute masqué ; `5xx`
+`ApiError` structuré portant une pseudo-trace masqué, aucun code
+métier ; code inconnu non `USER_*` → vue générique, message arbitraire
+non affiché ; code inconnu commençant par `USER_` → vue générique,
+message arbitraire non affiché). `administration-api.service.spec.ts`
+(+9 : `suspend` / `restore` / `archive` / `roles` / `roles/{code}/revoke`
+— URL exacte, `POST`, corps exact sans clé superflue, encodage de
 `publicId` **et** `roleCode`, complétion sur `204`, propagation d'une
-erreur ; une lecture pure n'émet aucun `POST`/`PATCH`/`PUT`/`DELETE`).
-`user-detail.spec.ts` (7 → 28 : lecture non-régression conservée ;
+erreur ; `assignRole` transmet un motif > 500 caractères verbatim ; une
+lecture pure n'émet aucun `POST`/`PATCH`/`PUT`/`DELETE`).
+`user-detail.spec.ts` (7 → 42 : lecture non-régression conservée ;
 Suspendre visible pour `ACTIVE` / Réactiver pour `SUSPENDED` ; archivage
 + attribution réservés à `ADMIN`/`SUPER_ADMIN`, `SCHOOL_ADMINISTRATION`
 suspend/réactive mais n'archive pas ; `ARCHIVED` → aucune `form`, note
 terminale ; motif requis + `maxlength=500` + corps exact + rechargement ;
-avertissement de clôture des rôles à l'archivage ; double soumission
-empêchée ; `USER_INVALID_STATE` / `USER_SUPER_ADMIN_PROTECTED` /
-`USER_OPERATION_FORBIDDEN` affichés sans faux succès ni rechargement ;
-liste exacte des rôles d'attribution, rôles actifs exclus, `SUPER_ADMIN`
-selon le contexte ; `USER_ROLE_ALREADY_ASSIGNED` global vs
-`USER_ROLE_UNKNOWN` sur le champ ; attribution à soi-même non masquée ;
+`restore` d'une cible `SUSPENDED` → `POST /restore { reason }` → `204` →
+rechargement → succès ; `USER_SELF_ACTION_FORBIDDEN` (409) quand le
+`subject` est indisponible et le bouton visible → message, aucun faux
+succès, aucun rechargement ; avertissement de clôture des rôles à
+l'archivage ; double soumission empêchée ; `USER_INVALID_STATE` /
+`USER_SUPER_ADMIN_PROTECTED` / `USER_OPERATION_FORBIDDEN` affichés sans
+faux succès ni rechargement ; liste exacte des rôles d'attribution,
+rôles actifs exclus, `SUPER_ADMIN` selon le contexte ; motif
+d'attribution > 500 caractères accepté et posté en entier ;
+`USER_ROLE_ALREADY_ASSIGNED` global vs `USER_ROLE_UNKNOWN` sur le champ
+(erreur `FormControl` `serverUnknown`, `hasError`, effacée au changement
+de rôle, resoumission possible, jamais transformée en erreur de champ) ;
+`USER_ROLE_UNKNOWN` réellement relié au `mat-select` par
+`aria-describedby` (id du `mat-error` présent dans l'attribut, pas un
+simple texte adjacent) ; attribution à soi-même non masquée ;
 « Retirer » seulement sur les affectations actives et pour
-`ADMIN`/`SUPER_ADMIN` ; `USER_LAST_ACTIVE_ROLE` sans faux succès ;
-retrait de `SUPER_ADMIN` masqué hors contexte `SUPER_ADMIN` ;
-auto-actions masquées quand le `subject` correspond ; un contexte non
-admin n'ouvre aucune action ; un panneau ouvert se ferme au changement de
-contexte ; `403` traité même bouton initialement visible ; rien en
-storage).
+`ADMIN`/`SUPER_ADMIN` ; `USER_ROLE_NOT_ASSIGNED` (409) sans faux succès
+ni rechargement ; `USER_LAST_ACTIVE_ROLE` sans faux succès ; cible
+portant `SUPER_ADMIN` actif — contexte `ADMIN` : aucune mutation, aucune
+`form`, note « requiert le rôle super administrateur », aucun bouton
+« Retirer » (même pour le rôle `ADMIN` de la cible) ; contexte
+`SUPER_ADMIN` : mutations proposées selon le statut, deux boutons
+« Retirer » ; `SUPER_ADMIN` → `ADMIN` ferme un formulaire ouvert sur une
+telle cible ; une affectation `SUPER_ADMIN` **clôturée** ne protège pas
+la cible ; auto-actions masquées quand le `subject` correspond ; un
+contexte non admin n'ouvre aucune action ; un panneau ouvert se ferme au
+changement de contexte ; `403` traité même bouton initialement visible ;
+rien en storage).
 
 Vérifs locales le 30 août 2026 (Node 24.13.0), depuis `frontend/` :
-`npm ci` → 149 paquets suivis, 0 vulnérabilité ;
-`npm test -- --watch=false` → **40 fichiers, 323 tests, 0 échec** ;
+`npm ci` réussi, 0 vulnérabilité ;
+`npm test -- --watch=false` → **40 fichiers, 336 tests, 0 échec** ;
 `npm run lint` → « All files pass linting » ;
-`npm run build` → bundle initial **479,35 kB brut / 122,11 kB
-transféré** (inchangé — `user-detail` est un chunk paresseux : 8,48 kB →
-21,82 kB brut, hors budget « initial » ; 0 alerte, seuil 500 kB) ;
+`npm run build` → bundle initial **479,36 kB brut / 122,12 kB
+transféré** (quasi inchangé — `user-detail` est un chunk paresseux :
+8,48 kB → 23,35 kB brut, hors budget « initial » ; 0 alerte, seuil
+500 kB) ;
 `git diff --check` → propre. Aucun script `format` réel dans
 `frontend/package.json` (bloc `prettier` présent mais aucune dépendance
 ni commande). `cd backend && ./mvnw test` non ré-exécuté : aucun fichier
@@ -1442,7 +1497,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Dépôt Git | INITIALISÉ (`main`, remote `origin` GitHub) |
 | Docker Compose | TESTED |
 | Spring Boot | TESTED (socle : démarrage du contexte, `mvn test` exécuté avec succès — aucune route ni entité métier) |
-| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; consultation des référentiels académiques (lecture seule) via PR #15 = `b47cfa3` ; administration des comptes utilisateurs (lecture seule) via PR #16 = `5d5e51d` ; gestion de l'alternance via PR #18 = `a79b5bf` ; **parcours d'écriture de l'administration des comptes (suspension / réactivation / archivage / attribution / retrait de rôle) sur branche `feature/frontend-user-administration-write`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, **`/administration` (placeholder REMPLACÉ par un écran réel : parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController.READ_ROLES` ; `''` → `UserList`, `:publicId` → `UserDetail`)**, `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), `/academic` (parent gardé `AcademicWeb.READ_ROLES` → `AcademicReferenceList`/`AcademicReferenceDetail`, `data.resource`), `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` ; référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) ; **administration des comptes : `AdministrationApiService` (lecture seule, 2 GET) consommant `GET /api/v1/users` (recherche `q` = email ou prénom ou nom, filtres `status` (`AccountStatus`) + `role` (affectation active, `RoleCode`), tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le défaut —, pagination ≤ 100, strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles actifs et clôturés) ; `UserList` + `UserDetail` ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; aucun endpoint ni champ inventé ; aucun `id` SQL / hash / jeton / trace affiché, `5xx` masqués par `normalizeHttpError`. **Parcours d'écriture (branche `feature/frontend-user-administration-write`, non fusionnée)** : `AdministrationApiService` gagne `suspendUser` / `restoreUser` / `archiveUser` / `assignRole` / `revokeRole` (une méthode par `POST` réel, corps exact `{ reason }` ou `{ role, reason }`, `encodeURIComponent` sur `publicId` et `roleCode`, `204`) ; `UserDetail` gagne une section « Actions sur le compte » (Suspendre `ACTIVE` / Réactiver `SUSPENDED` / Archiver / Attribuer un rôle) et un bouton « Retirer » sur chaque affectation active — confirmations **en ligne**, motif obligatoire (≤ 500), avertissement de clôture des rôles à l'archivage, `disabled` pendant l'appel, double soumission bloquée, `NotificationService.info` puis rechargement `GET /api/v1/users/{publicId}`, échec métier affiché en ligne sans faux succès ; visibilité pilotée par `RoleContextService.effectiveRoles()` (restreint, jamais n'élargit le JWT) + masquage des auto-actions si `subject` JWT = cible (sauf attribution, non interdite côté back-end) ; `ARCHIVED` = état terminal (note, aucune action) ; `SUPER_ADMIN` proposé/révocable seulement en contexte `SUPER_ADMIN` ; `effect()` fermant un panneau devenu indisponible ; `administration-errors.ts` (`toAdministrationError`) traduit `USER_NOT_FOUND` / `USER_INVALID_STATE` / `USER_ROLE_ALREADY_ASSIGNED` / `USER_ROLE_NOT_ASSIGNED` / `USER_LAST_ACTIVE_ROLE` / `USER_SELF_ACTION_FORBIDDEN` / `USER_SUPER_ADMIN_PROTECTED` / `USER_OPERATION_FORBIDDEN` / `USER_ROLE_UNKNOWN` (→ champ rôle) ; JWT et contexte en mémoire seule, rien en `localStorage` / `sessionStorage`** ; **gestion de l'alternance (`/alternation`) via PR #18 = `a79b5bf` — première tranche front-end avec écriture : parent gardé `roleGuard` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` (`AlternationWeb` lecture), garde d'écriture supplémentaire `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` sur `patterns/new` et `patterns/:publicId/edit` ; `AlternationApiService` (une méthode par endpoint réel des modèles de rythme, affectations de classe et exceptions individuelles) ; `PatternList`/`PatternForm` (création + édition, `code`/`type` figés en édition, `configuration` assemblée localement par type via `pattern-config.ts` — `companyDays` explicite même vide pour `CUSTOM` — validation finale serveur `ALT_INVALID_CONFIGURATION`)/`PatternDetail` (faits + `app-cycle-preview` accessible représentant la config, jamais une résolution de date + archiver/restaurer avec confirmation en ligne) ; `ClassPicker`/`ClassAlternation` (historique des affectations, affectation, clôture avec motif, sonde `GET .../classes/{id}/context` affichée telle quelle) ; `EnrollmentPicker`/`EnrollmentAlternation` (exceptions, création avec encodage heure locale + fuseau IANA → instant via `Intl` sans repli UTC ni conversion de fuseau, sémantique `[startAt, endAt)` affichée, annulation, sonde `GET .../enrollments/{id}/context`) ; limite back-end : `GET /api/v1/enrollments` fermé au `PEDAGOGICAL_MANAGER` → `EnrollmentPicker` propose une saisie directe d'identifiant en repli ; nav item « Alternance » (`sync_alt`) ; aucune écriture ni endpoint inventé ; 403 `ALT_FORBIDDEN` rendu « accès refusé »** ; 323 tests Vitest verts, `npm test` / `npm run build` (initial 479,35 kB brut / 122,11 kB transféré, < seuil 500 kB ; `user-detail` et les écrans d'alternance en chunks paresseux) / `npm run lint` verts en local le 30 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
+| Angular | IMPLEMENTED (socle `frontend/` fusionné via PR #11 = `6fa341f` ; activation de compte via PR #12 = `2ff7aa8` ; sélecteur de contexte de rôle (docs/02 §6.1, EF-AUTH-003) via PR #13 = `810c8a2` ; espace Apprenants via PR #14 = `1678399` ; consultation des référentiels académiques (lecture seule) via PR #15 = `b47cfa3` ; administration des comptes utilisateurs (lecture seule) via PR #16 = `5d5e51d` ; gestion de l'alternance via PR #18 = `a79b5bf` ; **parcours d'écriture de l'administration des comptes (suspension / réactivation / archivage / attribution / retrait de rôle) sur branche `feature/frontend-user-administration-write`, PR ouverte non fusionnée** — Angular 21.2 (framework/CLI 21.2.22, Material/CDK 21.2.14) / Node 24, zoneless, standalone, Angular Material ; routes `/login`, `/activation` (publique, sans garde), `/dashboard`, **`/administration` (placeholder REMPLACÉ par un écran réel : parent gardé `roleGuard`+`canActivateChild` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController.READ_ROLES` ; `''` → `UserList`, `:publicId` → `UserDetail`)**, `/students` (parent gardé `EnrollmentWeb.MANAGE_ROLES` → `StudentList`, `StudentProfile`), `/academic` (parent gardé `AcademicWeb.READ_ROLES` → `AcademicReferenceList`/`AcademicReferenceDetail`, `data.resource`), `/forbidden`, `**` ; `authGuard` / `guestGuard` / `roleGuard` ; intercepteurs jeton porteur + erreurs (endpoints publics d'activation exclus) ; jeton d'accès et contexte de rôle **en mémoire uniquement** (docs/07 §6, RG-085), aucun `localStorage` / `sessionStorage` ; jeton d'invitation lu depuis `?token=` puis retiré de l'URL ; activation `POST …/activate` → `204`, aucune connexion automatique ; tableau de bord = état de session **local** ; `RoleContextService` + `app-role-context-menu` visible seulement si ≥ 2 rôles ; espace Apprenants : `StudentsApiService` (lecture seule) consommant `GET /api/v1/student-profiles`·`/{id}`, `GET /api/v1/enrollments?student={id}`, `GET /api/v1/users/{id}` ; référentiels académiques : `AcademicApiService` (lecture seule, 10 GET) ; **administration des comptes : `AdministrationApiService` (lecture seule, 2 GET) consommant `GET /api/v1/users` (recherche `q` = email ou prénom ou nom, filtres `status` (`AccountStatus`) + `role` (affectation active, `RoleCode`), tri liste blanche `createdAt`/`lastLoginAt`/`email`/`lastName` — repli silencieux sur le défaut —, pagination ≤ 100, strictement l'API) et `GET /api/v1/users/{publicId}` (fiche + historique complet des rôles actifs et clôturés) ; `UserList` + `UserDetail` ; états chargement / vide / erreur+Réessayer / accès refusé (403 API) / introuvable (404) ; `mat-table` + `mat-sort` (liste blanche) + `mat-paginator` francisé ; aucun endpoint ni champ inventé ; aucun `id` SQL / hash / jeton / trace affiché, `5xx` masqués par `normalizeHttpError`. **Parcours d'écriture (branche `feature/frontend-user-administration-write`, non fusionnée)** : `AdministrationApiService` gagne `suspendUser` / `restoreUser` / `archiveUser` / `assignRole` / `revokeRole` (une méthode par `POST` réel, corps exact `{ reason }` ou `{ role, reason }`, `encodeURIComponent` sur `publicId` et `roleCode`, `204`) ; `UserDetail` gagne une section « Actions sur le compte » (Suspendre `ACTIVE` / Réactiver `SUSPENDED` / Archiver / Attribuer un rôle) et un bouton « Retirer » sur chaque affectation active — confirmations **en ligne**, motif obligatoire (`maxlength=500` + compteur pour suspension / réactivation / archivage / retrait ; **sans borne** pour l'attribution — `AssignRoleRequest.reason` = `@NotBlank` seul, un motif > 500 caractères part intégralement), avertissement de clôture des rôles à l'archivage, `disabled` pendant l'appel, double soumission bloquée, `NotificationService.info` puis rechargement `GET /api/v1/users/{publicId}`, échec métier affiché en ligne sans faux succès ; visibilité pilotée par `RoleContextService.effectiveRoles()` (restreint, jamais n'élargit le JWT) + masquage des auto-actions si `subject` JWT = cible (sauf attribution, non interdite côté back-end) ; **cible portant `SUPER_ADMIN` actif : hors contexte `SUPER_ADMIN`, toutes les mutations sont masquées** (note « requiert le rôle super administrateur », non présentée comme une garantie ; lecture inchangée ; `SUPER_ADMIN` → `ADMIN` ferme un formulaire ouvert) ; `ARCHIVED` = état terminal (note, aucune action) ; `SUPER_ADMIN` proposé/révocable seulement en contexte `SUPER_ADMIN` ; `effect()` fermant un panneau devenu indisponible ; `administration-errors.ts` (`toAdministrationError`) — **liste blanche explicite** de codes (pas de `startsWith('USER_')`) : `USER_NOT_FOUND` / `USER_INVALID_STATE` / `USER_ROLE_ALREADY_ASSIGNED` / `USER_ROLE_NOT_ASSIGNED` / `USER_LAST_ACTIVE_ROLE` / `USER_SELF_ACTION_FORBIDDEN` / `USER_SUPER_ADMIN_PROTECTED` / `USER_OPERATION_FORBIDDEN` / `USER_ROLE_UNKNOWN` (→ champ rôle, erreur `FormControl` reliée au `mat-select` par `aria-describedby`) / `USER_INVALID_SORT` / `USER_INVALID_FILTER` ; tout autre code (y compris un `USER_*` non listé) et tout `5xx` → `code`/`field` `null`, message générique, message brut jamais affiché ; JWT et contexte en mémoire seule, rien en `localStorage` / `sessionStorage`** ; **gestion de l'alternance (`/alternation`) via PR #18 = `a79b5bf` — première tranche front-end avec écriture : parent gardé `roleGuard` sur `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` (`AlternationWeb` lecture), garde d'écriture supplémentaire `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` sur `patterns/new` et `patterns/:publicId/edit` ; `AlternationApiService` (une méthode par endpoint réel des modèles de rythme, affectations de classe et exceptions individuelles) ; `PatternList`/`PatternForm` (création + édition, `code`/`type` figés en édition, `configuration` assemblée localement par type via `pattern-config.ts` — `companyDays` explicite même vide pour `CUSTOM` — validation finale serveur `ALT_INVALID_CONFIGURATION`)/`PatternDetail` (faits + `app-cycle-preview` accessible représentant la config, jamais une résolution de date + archiver/restaurer avec confirmation en ligne) ; `ClassPicker`/`ClassAlternation` (historique des affectations, affectation, clôture avec motif, sonde `GET .../classes/{id}/context` affichée telle quelle) ; `EnrollmentPicker`/`EnrollmentAlternation` (exceptions, création avec encodage heure locale + fuseau IANA → instant via `Intl` sans repli UTC ni conversion de fuseau, sémantique `[startAt, endAt)` affichée, annulation, sonde `GET .../enrollments/{id}/context`) ; limite back-end : `GET /api/v1/enrollments` fermé au `PEDAGOGICAL_MANAGER` → `EnrollmentPicker` propose une saisie directe d'identifiant en repli ; nav item « Alternance » (`sync_alt`) ; aucune écriture ni endpoint inventé ; 403 `ALT_FORBIDDEN` rendu « accès refusé »** ; 336 tests Vitest verts, `npm test` / `npm run build` (initial 479,36 kB brut / 122,12 kB transféré, < seuil 500 kB ; `user-detail` et les écrans d'alternance en chunks paresseux) / `npm run lint` verts en local le 30 août 2026. Non démontré de bout en bout avec le back-end en marche ; pas de restauration de session au rechargement) |
 | MySQL | TESTED (healthy, auth root et `esic_app` vérifiée) |
 | Redis | TESTED (healthy, auth vérifiée) |
 | Flyway | TESTED (V1 tables identité/audit, V2 seed des 6 rôles, V3 table `account_invitation`, V4 tables `site`/`building`/`room`/`site_network_range`, V5 tables `academic_year`/`program`/`program_level`/`promotion`/`class_group`, V6 table `pedagogical_assignment`, V7 tables `student_profile`/`enrollment`, V8 tables `work_study_pattern`/`class_work_study_pattern`/`student_schedule_exception` — migrations appliquées et vérifiées, schéma en version 8) |

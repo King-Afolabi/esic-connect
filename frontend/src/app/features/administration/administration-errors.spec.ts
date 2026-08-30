@@ -44,9 +44,34 @@ describe('toAdministrationError', () => {
     expect(view.message).not.toContain('stacktrace');
   });
 
-  it('falls back to a generic view for an unknown code', () => {
-    const view = toAdministrationError(apiError(418, 'SOMETHING_ELSE', 'weird'));
+  it('masks a 5xx even when its body is a structured ApiError carrying a message/trace', () => {
+    const view = toAdministrationError(
+      apiError(
+        500,
+        'USER_INVALID_STATE',
+        'NullPointerException at com.esic.connect.identity.internal.UserManagementService.suspend',
+      ),
+    );
+    expect(view.status).toBe(500);
     expect(view.code).toBeNull();
     expect(view.field).toBeNull();
+    expect(view.message).not.toContain('NullPointerException');
+    expect(view.message).not.toContain('com.esic.connect');
+  });
+
+  it('falls back to a generic view for an unknown code that is not USER_*', () => {
+    const view = toAdministrationError(apiError(418, 'SOMETHING_ELSE', 'weird arbitrary message'));
+    expect(view.code).toBeNull();
+    expect(view.field).toBeNull();
+    expect(view.message).not.toContain('weird arbitrary message');
+  });
+
+  it('falls back to a generic view for an unknown code that happens to start with USER_', () => {
+    const view = toAdministrationError(
+      apiError(400, 'USER_SOMETHING_UNKNOWN', 'do not show this arbitrary text'),
+    );
+    expect(view.code).toBeNull();
+    expect(view.field).toBeNull();
+    expect(view.message).not.toContain('do not show this arbitrary text');
   });
 });

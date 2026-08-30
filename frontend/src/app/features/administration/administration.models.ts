@@ -124,6 +124,9 @@ export type UserRoleFilter = Role;
 /**
  * Longueur maximale du motif d'une opération de cycle de vie ou de
  * retrait de rôle (`AccountActionRequest` — `@Size(max = 500)`).
+ *
+ * Ne s'applique **pas** à l'attribution de rôle : `AssignRoleRequest.reason`
+ * ne porte que `@NotBlank`, sans borne de longueur contractuelle.
  */
 export const ACTION_REASON_MAX_LENGTH = 500;
 
@@ -138,8 +141,9 @@ export interface AccountActionRequest {
 
 /**
  * Corps d'une attribution de rôle — `AssignRoleRequest`. `role` et
- * `reason` sont tous deux obligatoires (`@NotBlank`) ; un code de rôle
- * inconnu produit `400 USER_ROLE_UNKNOWN` côté serveur.
+ * `reason` sont tous deux obligatoires (`@NotBlank` uniquement — aucune
+ * longueur maximale n'est imposée au motif) ; un code de rôle inconnu
+ * produit `400 USER_ROLE_UNKNOWN` côté serveur.
  */
 export interface AssignRoleRequest {
   role: Role;
