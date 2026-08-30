@@ -1,0 +1,137 @@
+<nav class="alt__tabs" aria-label="Alternance">
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active" aria-current="page">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
+</nav>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement du modèle"></mat-progress-bar>
+    <p class="alt__status" role="status">Chargement du modèle…</p>
+  }
+
+  @case ('not-found') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucun modèle de rythme ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/alternation/patterns">Retour à la liste</a>
+    </div>
+  }
+
+  @case ('forbidden') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter ce modèle.</p>
+      <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="alt__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+
+  @case ('ready') {
+    @if (pattern(); as current) {
+      <div class="alt-list__header">
+        <h1 class="alt__title">{{ current.name }}</h1>
+        @if (canWrite) {
+          <div class="alt__form-actions">
+            @if (!isArchived()) {
+              <a mat-stroked-button [routerLink]="['/alternation/patterns', current.publicId, 'edit']">
+                <mat-icon aria-hidden="true">edit</mat-icon>
+                Modifier
+              </a>
+              <button mat-stroked-button type="button" (click)="startArchive()">Archiver</button>
+            } @else {
+              <button mat-stroked-button type="button" (click)="startRestore()">Restaurer</button>
+            }
+          </div>
+        }
+      </div>
+
+      <mat-card appearance="outlined" class="alt__card">
+        <mat-card-content>
+          <dl class="alt__facts">
+            <div><dt>Code</dt><dd>{{ current.code }}</dd></div>
+            <div><dt>Nom</dt><dd>{{ current.name }}</dd></div>
+            <div><dt>Type</dt><dd>{{ typeLabel(current.type) }}</dd></div>
+            <div>
+              <dt>Longueur du cycle</dt>
+              <dd>{{ current.cycleLengthWeeks ?? '—' }} semaine(s)</dd>
+            </div>
+            <div>
+              <dt>Description</dt>
+              <dd>{{ current.description || '—' }}</dd>
+            </div>
+            <div><dt>Statut</dt><dd>{{ statusLabel(current.status) }}</dd></div>
+            @if (current.status === 'ARCHIVED' && current.archiveReason) {
+              <div><dt>Motif d'archivage</dt><dd>{{ current.archiveReason }}</dd></div>
+            }
+            <div><dt>Créé le</dt><dd>{{ formatIsoDate(current.createdAt) }}</dd></div>
+            <div><dt>Modifié le</dt><dd>{{ formatIsoDate(current.updatedAt) }}</dd></div>
+          </dl>
+        </mat-card-content>
+      </mat-card>
+
+      @if (pendingAction() === 'archive') {
+        <form
+          class="alt__reveal"
+          role="group"
+          aria-label="Confirmer l'archivage"
+          [formGroup]="archiveForm"
+          (ngSubmit)="confirmArchive()"
+        >
+          <p>L'archivage retire le modèle de l'usage courant ; il pourra être restauré.</p>
+          <mat-form-field appearance="outline" class="alt__form-field">
+            <mat-label>Motif d'archivage</mat-label>
+            <input matInput formControlName="reason" maxlength="500" required />
+            @if (archiveForm.controls.reason.touched && archiveForm.controls.reason.invalid) {
+              <mat-error>Le motif est obligatoire (500 caractères maximum).</mat-error>
+            }
+          </mat-form-field>
+          <div class="alt__form-actions">
+            <button mat-flat-button type="submit" [disabled]="submitting()">Archiver</button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+              Annuler
+            </button>
+          </div>
+          @if (actionError()) {
+            <p class="alt__inline-error" role="alert">{{ actionError() }}</p>
+          }
+        </form>
+      }
+
+      @if (pendingAction() === 'restore') {
+        <div class="alt__reveal" role="group" aria-label="Confirmer la restauration">
+          <p>Restaurer ce modèle le rend de nouveau disponible pour l'affectation.</p>
+          <div class="alt__form-actions">
+            <button mat-flat-button type="button" (click)="confirmRestore()" [disabled]="submitting()">
+              Restaurer
+            </button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+              Annuler
+            </button>
+          </div>
+          @if (actionError()) {
+            <p class="alt__inline-error" role="alert">{{ actionError() }}</p>
+          }
+        </div>
+      }
+
+      <section class="alt__section" aria-label="Prévisualisation du cycle">
+        <h2 class="alt__subtitle">Cycle configuré</h2>
+        @if (canonicalConfig(); as cfg) {
+          <app-cycle-preview [config]="cfg"></app-cycle-preview>
+        }
+        <details class="alt__raw-config">
+          <summary>Configuration canonique (JSON)</summary>
+          <pre>{{ rawConfigJson() }}</pre>
+        </details>
+      </section>
+    }
+  }
+}

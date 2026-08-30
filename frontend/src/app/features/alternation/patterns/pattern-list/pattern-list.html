@@ -1,0 +1,144 @@
+<div class="alt-list__header">
+  <h1 class="alt__title">Modèles de rythme d'alternance</h1>
+  @if (canWrite) {
+    <a mat-flat-button routerLink="/alternation/patterns/new">
+      <mat-icon aria-hidden="true">add</mat-icon>
+      Nouveau modèle
+    </a>
+  }
+</div>
+<p class="alt__intro">
+  Modèles réutilisables de rythme (3 jours / 2 jours, semaine sur 4, personnalisé).
+  Sélectionnez un modèle pour consulter sa configuration et son cycle.
+</p>
+
+<nav class="alt__tabs" aria-label="Alternance">
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active" aria-current="page">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
+</nav>
+
+<form class="alt__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+  <mat-form-field appearance="outline" class="alt__filter">
+    <mat-label>Code ou nom</mat-label>
+    <input matInput type="search" formControlName="q" autocomplete="off" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="alt__filter">
+    <mat-label>Statut</mat-label>
+    <mat-select formControlName="status">
+      <mat-option [value]="''">Tous</mat-option>
+      @for (status of statuses; track status) {
+        <mat-option [value]="status">{{ statusLabel(status) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="alt__filter">
+    <mat-label>Type</mat-label>
+    <mat-select formControlName="type">
+      <mat-option [value]="''">Tous</mat-option>
+      @for (type of types; track type) {
+        <mat-option [value]="type">{{ typeLabel(type) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <div class="alt__filter-actions">
+    <button mat-flat-button type="submit">
+      <mat-icon aria-hidden="true">search</mat-icon>
+      Filtrer
+    </button>
+    <button mat-button type="button" (click)="resetFilters()">Réinitialiser</button>
+  </div>
+</form>
+
+@if (state().kind === 'loading') {
+  <mat-progress-bar mode="indeterminate" aria-label="Chargement des modèles de rythme"></mat-progress-bar>
+  <p class="alt__status" role="status">Chargement des modèles de rythme…</p>
+}
+
+@if (state().kind === 'forbidden') {
+  <div class="alt__panel" role="alert">
+    <mat-icon aria-hidden="true">lock</mat-icon>
+    <p>Vous n'êtes pas autorisé à consulter les modèles de rythme.</p>
+    <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+  </div>
+}
+
+@if (state().kind === 'error') {
+  <div class="alt__panel" role="alert">
+    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <p>{{ errorMessage() }}</p>
+    <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+  </div>
+}
+
+@if (state().kind === 'ready') {
+  @if (isEmpty()) {
+    <p class="alt__status" role="status">Aucun modèle de rythme ne correspond à votre recherche.</p>
+  } @else {
+    <div class="alt__table-wrapper">
+      <table
+        mat-table
+        [dataSource]="rows()"
+        matSort
+        [matSortActive]="sortField()"
+        [matSortDirection]="sortDirection()"
+        matSortDisableClear
+        (matSortChange)="onSortChange($event)"
+      >
+        <ng-container matColumnDef="code">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Code</th>
+          <td mat-cell *matCellDef="let row">{{ row.code }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Nom</th>
+          <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="type">
+          <th mat-header-cell *matHeaderCellDef>Type</th>
+          <td mat-cell *matCellDef="let row">{{ typeLabel(row.type) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Statut</th>
+          <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="updatedAt">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Modifié le</th>
+          <td mat-cell *matCellDef="let row">{{ row.updatedAt | date: 'dd/MM/yyyy' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef><span class="alt__sr-only">Actions</span></th>
+          <td mat-cell *matCellDef="let row">
+            <a
+              mat-button
+              color="primary"
+              [routerLink]="['/alternation/patterns', row.publicId]"
+              [attr.aria-label]="'Consulter le modèle ' + row.code"
+            >
+              Consulter
+            </a>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+    </div>
+
+    <mat-paginator
+      [length]="totalElements()"
+      [pageSize]="pageSize()"
+      [pageIndex]="pageIndex()"
+      [pageSizeOptions]="pageSizeOptions"
+      (page)="onPageChange($event)"
+      aria-label="Pagination des modèles de rythme"
+    ></mat-paginator>
+  }
+}
