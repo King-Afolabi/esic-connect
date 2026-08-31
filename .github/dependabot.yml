@@ -1,0 +1,70 @@
+# Mises à jour de dépendances automatisées (FINAL-006).
+#
+# Cadence hebdomadaire (le lundi), nombre de PR ouvertes plafonné pour
+# ne pas noyer la revue. Regroupe les montées de version mineures /
+# correctives par écosystème. Les montées majeures restent des PR
+# individuelles (revue au cas par cas).
+version: 2
+
+updates:
+  # --- Back-end : Maven -------------------------------------------------
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - backend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      backend-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # --- Front-end : npm ------------------------------------------------
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+          - "angular-eslint"
+      frontend-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # --- GitHub Actions ----------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "ci(deps)"

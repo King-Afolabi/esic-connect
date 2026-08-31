@@ -222,6 +222,18 @@ bash scripts/test/test-seed-demo.sh
 Totaux de référence du dernier audit : voir
 `docs/CURRENT-STATE.md` → « Résultats du dernier audit ».
 
+### Intégration continue (GitHub Actions)
+
+| Workflow | Déclencheur | Rôle |
+|---|---|---|
+| `backend-ci.yml` | push `main`, PR `main` | `./mvnw test` sur MySQL / Redis éphémères |
+| `frontend-ci.yml` | push/PR touchant `frontend/**` | `npm audit --audit-level=high`, `lint`, `test`, `build` |
+| `dependency-review.yml` | PR `main` | échec si une dépendance ajoutée/modifiée par la PR introduit une CVE ≥ `high` ou une licence interdite |
+| `dependabot.yml` | hebdomadaire | montées de version + alertes de sécurité (Maven, npm, GitHub Actions) |
+
+Tous les workflows : `permissions: contents: read`, sans secret, sans
+`pull_request_target`. Détail : `docs/07-securite-rgpd.md` §8.
+
 ---
 
 ## Comptes de démonstration

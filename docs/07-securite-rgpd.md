@@ -248,6 +248,33 @@ localStorage
 La CNIL recommande TLS 1.2 ou 1.3, la limitation des ports et des comptes
 de base nominatifs ou spécifiques à l’application. ([cnil.fr](https://www.cnil.fr/fr/securiser-vos-sites-web-vos-applications-et-vos-serveurs?utm_source=openai))
 
+## Chaîne d’approvisionnement des dépendances (checkpoint F4 — 31 août 2026)
+
+Contrôles réellement en place :
+
+| Contrôle | Portée | Fichier |
+|---|---|---|
+| **Dependabot** | montées de version + alertes de sécurité pour **Maven** (`/backend`), **npm** (`/frontend`) et **GitHub Actions** (`/`), cadence hebdomadaire, PR ouvertes plafonnées | `.github/dependabot.yml` |
+| **`actions/dependency-review-action@v4`** | sur chaque PR vers `main` : échec si une dépendance **ajoutée / modifiée** par la PR (Maven **ou** npm) introduit une vulnérabilité connue de sévérité ≥ `high`, ou une licence de la liste noire (`GPL-2.0`, `GPL-3.0`, `AGPL-3.0`) | `.github/workflows/dependency-review.yml` |
+| **`npm audit --audit-level=high`** | front-end : échec de la CI si une dépendance npm (dev ou prod) porte une vulnérabilité connue ≥ `high` | `.github/workflows/frontend-ci.yml` |
+
+Sécurité des workflows : tous en `permissions: contents: read`, avec
+`concurrency` + annulation, `timeout-minutes`, actions officielles
+épinglées sur une version majeure, **aucun secret**, **aucun
+`pull_request_target`**, **aucune exécution de code d’une PR non fiable
+avec des droits élevés**.
+
+**Écart assumé** : il n’y a **pas** de scan SCA de fond de *tout* l’arbre
+Maven (type OWASP Dependency-Check). Un tel scan exige aujourd’hui une
+clé d’API NVD et le téléchargement / la mise en cache d’une base CVE
+volumineuse ; sans stratégie de cache et de clé, le job serait
+fréquemment rouge pour des raisons d’indisponibilité réseau, ce qui
+nuirait à la CI. Le différentiel de PR (`dependency-review-action`,
+qui couvre Maven) + Dependabot (alertes de sécurité sur tout l’arbre)
+couvrent l’essentiel du risque pour un prototype. À planifier pour une
+mise en service réelle : `org.owasp:dependency-check-maven` en job
+planifié dédié, avec clé NVD en secret et cache de la base.
+
 ---
 
 # 9. Sécurité des fichiers
