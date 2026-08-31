@@ -43,6 +43,16 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # Aligne le client npm sur la version déclarée dans
+      # frontend/package.json (packageManager). Sans cela, le npm fourni
+      # avec Node 24 régénère un arbre différent et `npm ci` échoue sur
+      # des entrées de lockfile absentes.
+      - name: Align npm with package.json packageManager
+        run: |
+          npm install --global npm@11.6.2
+          node --version
+          npm --version
+
       - name: Install dependencies
         run: npm ci
 

@@ -32,9 +32,13 @@ checkpoint » l'était.
 | `c93f56d` | checkpoint F6 | `docs(demo): préparer la démonstration finale du projet (F6)` |
 | `e9e6a70` | clôture | `docs(finalization): rapport d'audit final du lot F2-F6` |
 
-À ces 6 commits s'ajoute le présent commit correctif
+À ces 6 commits s'ajoute le commit correctif
 `docs(finalization): corriger la synthèse finale du lot`, qui ne modifie
-que des fichiers `docs/` déjà présents.
+que des fichiers `docs/` déjà présents, puis le commit correctif CI
+`fix(ci): synchroniser npm et le lockfile frontend` (voir §2 « Correctif
+CI post-F6 » et §10) — workflow front-end + `frontend/package-lock.json`
+(2 entrées ajoutées) + ce rapport + `docs/10-journal-ia.md`, **aucune
+dépendance ni version applicative modifiée**.
 
 `git diff --stat main...c93f56d` (les 5 checkpoints seuls) : **39
 fichiers**, +6260 / −3739 (dont `docs/CURRENT-STATE.md` réduit de ~3900
@@ -133,6 +137,38 @@ Aucun commit temporaire, aucun `fixup`, aucun `squash`. Historique de
   checklist jury, §13 matrice, §11.8 vérification API réelle.
 - `README.md`, `docs/CURRENT-STATE.md`, `docs/09-matrice-rncp.md`,
   `docs/10-journal-ia.md` — F6.
+
+### Correctif CI post-F6 (`fix(ci): synchroniser npm et le lockfile frontend`)
+
+Deux échecs CI observés sur la PR #27, corrigés au minimum sans toucher
+au code applicatif :
+
+1. **`dependency-review`** — « Dependency review is not supported on this
+   repository. Please ensure that Dependency graph is enabled. » Le
+   **Dependency Graph doit être activé manuellement** dans les
+   paramètres GitHub du dépôt. Le workflow `dependency-review.yml` est
+   **conservé tel quel** — pas de suppression, pas de `continue-on-error`.
+2. **`frontend-ci`** — `npm ci` échouait : `frontend/package-lock.json`
+   ne contenait pas `@emnapi/core@1.11.3` ni `@emnapi/runtime@1.11.3`
+   (peer-dépendances de `@napi-rs/wasm-runtime`, tiré par l'optionnel
+   `@rolldown/binding-wasm32-wasi` ; entrées résolues sous Linux, absentes
+   d'un lock généré sous macOS).
+
+- `.github/workflows/frontend-ci.yml` — étape « Align npm with
+  package.json packageManager » (`npm install --global npm@11.6.2`,
+  = `packageManager` de `frontend/package.json`) insérée entre
+  `actions/setup-node` et `npm ci`, suivie de `node --version` /
+  `npm --version`.
+- `frontend/package-lock.json` — **+2 clés uniquement**
+  (`node_modules/@emnapi/core`, `node_modules/@emnapi/runtime` @ `1.11.3`),
+  obtenues via `npm@11.6.2 install --package-lock-only --os=linux
+  --cpu=x64 --libc=glibc` puis reportées manuellement. Diff sémantique
+  vs base : **0 clé supprimée, 0 clé modifiée**. `npm ci --os=linux
+  --cpu=x64 --libc=glibc` passe désormais (échouait avant).
+- Le lockfile a été (re)généré avec **la même version npm que la CI**
+  (11.6.2). Report manuel des seules entrées manquantes pour éviter les
+  bumps transitifs d'une régénération complète (`qs`,
+  `electron-to-chromium`, `@csstools/*`).
 
 ---
 
@@ -350,12 +386,15 @@ livrés) — `README.md`, `docs/12` §6, `docs/reports/PROJECT_FINAL_AUDIT.md`
    (le chemin d'import y échappe déjà).
 7. **Démonstration UI de bout en bout** — non rejouée automatiquement ;
    parcours API vérifié, composants front couverts par 475 tests.
-8. **Workflows CI F4** (dont `dependency-review`, FINAL-006) — non
-   encore exécutés sur GitHub, aucune PR ouverte. Le dépôt est
-   **public** : `dependency-review-action` est disponible sans GitHub
-   Advanced Security, mais son bon fonctionnement (graphe de
-   dépendances Maven + npm exploité, job vert) reste **à vérifier sur
-   la première PR**. Idem pour `npm audit --audit-level=high` en CI.
+8. **Workflows CI F4** (dont `dependency-review`, FINAL-006) — premier
+   run observé sur la PR #27. `dependency-review-action` échoue tant que
+   le **Dependency Graph du dépôt n'est pas activé manuellement**
+   (Settings → Security → Code security → *Dependency graph*) : « Please
+   ensure that Dependency graph is enabled ». Le workflow est conservé
+   (pas de `continue-on-error`) ; il redeviendra vert une fois le graphe
+   activé. `npm audit --audit-level=high` en CI : OK (0 vulnérabilité).
+   Le correctif CI post-F6 (§2) traite l'échec `frontend-ci`
+   (`npm ci` / lockfile `@emnapi`).
 
 ---
 
