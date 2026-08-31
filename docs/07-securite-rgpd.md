@@ -434,6 +434,33 @@ Les durées doivent être validées avec le référent RGPD et les obligations
 de l’établissement. Le RGPD impose une conservation limitée selon la
 finalité, pas une durée universelle. ([cnil.fr](https://www.cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees?utm_source=openai))
 
+## État d’implémentation de la purge (checkpoint F3 — 31 août 2026)
+
+Le tableau ci-dessus est une **cible**. Dans le code réellement fusionné
+sur `main`, **une seule purge automatique est implémentée**. Le reste est
+`DOCUMENTATION_ONLY` : il n’y a **pas** de tâche de purge, et il ne faut
+donc **pas** présenter le système comme « conforme RGPD » sur la
+limitation de conservation.
+
+| Donnée | Purge réelle ? | Détail |
+|---|---|---|
+| **Jobs d’import CSV (`student_import_*`)** | **OUI — implémentée et testée** | `StudentImportPurgeService` (`@Scheduled`, `app.import.student.purge-cron`, défaut 03:30) : jobs `SIMULATED` / `EXPIRED` échus + `CANCELLED` anciens supprimés en cascade ; jobs `APPLIED` anciens → lignes filles supprimées, en-tête et agrégats conservés ; `student_number_sequence` jamais purgée. Tests : `StudentImportPurgeTests`. |
+| **Fichier importé** | **N/A — jamais persisté** | le contenu CSV n’est jamais écrit sur disque ; seule l’empreinte SHA-256 est conservée (`CsvFileGuard`). |
+| Jetons / codes d’émargement (Redis) | **OUI — par TTL** | expiration Redis (`app.attendance.token-ttl`, défaut `PT30S`) + invalidation explicite à la fermeture de séance / du point de contrôle. Aucune persistance MySQL. |
+| Jetons d’invitation (`account_invitation`) | **NON** | TTL métier vérifié à l’usage, mais **aucune purge** des lignes `PENDING` échues (dette connue — cf. `docs/CURRENT-STATE.md`). |
+| Piste d’audit (`audit_event`) | **NON** | append-only, **aucune** rétention / archivage / anonymisation outillé. |
+| Présences, corrections, justificatifs | **NON** | aucune purge ni anonymisation ; conservation de fait illimitée en base. |
+| Comptes archivés | **NON** | statut `ARCHIVED` (pas de connexion), historique conservé ; **pas** de séparation en archivage intermédiaire ni d’anonymisation. |
+| Logs techniques du serveur | **NON géré ici** | dépend de la configuration d’exploitation (rotation logback / plateforme). |
+
+Conséquence : les exigences `docs/07` §14 (conservation limitée), §18
+(droits des personnes) et §39 du cahier des charges sont **partiellement
+couvertes** — une seule purge outillée. Pour une mise en service réelle,
+il faut : (1) une tâche `@Scheduled` de purge des invitations `PENDING`
+échues, (2) une politique de rétention outillée pour l’audit et les
+présences (archivage → purge / anonymisation), (3) des procédures pour
+les droits d’accès / rectification / effacement / export.
+
 ---
 
 # 15. Protection de l’IA

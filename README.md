@@ -172,6 +172,11 @@ OpenAPI au runtime : http://localhost:8080/v3/api-docs —
 Swagger UI : http://localhost:8080/swagger-ui.html —
 Santé : http://localhost:8080/actuator/health
 
+Aucun `openapi.json` n'est versionné (générer l'artefact au build
+imposerait un plugin qui démarre le contexte Spring). Pour un export à la
+demande, back-end démarré : `bash scripts/dump-openapi.sh` →
+`docs/openapi.json` (fichier ignoré par Git).
+
 ### 3. Front-end (port 4200)
 
 ```bash

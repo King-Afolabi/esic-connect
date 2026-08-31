@@ -1,7 +1,9 @@
-# Profil de test : pointe pour l'instant vers les mêmes conteneurs locaux
-# (compose.yaml) que le profil "local", faute de Testcontainers à ce stade
-# (non demandé pour ce socle). À remplacer par une base de test isolée
-# lorsque la suite de tests d'intégration sera construite.
+# Profil de test : pointe vers les mêmes conteneurs locaux (compose.yaml)
+# que le profil "local". La migration vers Testcontainers est
+# explicitement DIFFÉRÉE — motivation, contournement local et travail à
+# planifier dans docs/reports/TEST_ISOLATION_DECISION.md (FINAL-021).
+# En CI, l'isolation existe de fait : base éphémère `esic_connect_ci`
+# d'un service GitHub Actions jeté à chaque run.
 spring:
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC

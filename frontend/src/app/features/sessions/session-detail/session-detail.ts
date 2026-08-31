@@ -223,10 +223,21 @@ export class SessionDetail {
   protected readonly openCheckpoints = computed(() =>
     this.checkpoints().filter((cp) => cp.status === 'OPEN'),
   );
-  protected readonly selectedCheckpoint = computed(() => {
+  protected readonly selectedCheckpoint = computed<CheckpointView | null>(() => {
     const id = this.selectedCheckpointId();
-    return this.openCheckpoints().find((cp) => cp.publicId === id) ?? this.openCheckpoints()[0] ?? null;
+    const open = this.openCheckpoints();
+    return open.find((cp) => cp.publicId === id) ?? open[0] ?? null;
   });
+
+  /**
+   * Libellé du point de contrôle ciblé par la saisie manuelle : le point
+   * sélectionné, à défaut le premier de la séance, à défaut « — ». Calculé
+   * ici (et non dans le template) pour rester une expression `string` sans
+   * chaînage optionnel superflu (diagnostics `NG8107` / `NG8102`).
+   */
+  protected readonly manualTargetLabel = computed(
+    () => this.selectedCheckpoint()?.label ?? this.checkpoints()[0]?.label ?? '—',
+  );
   protected readonly canShowQr = computed(
     () => this.isOpen() && this.canManageCheckpoint() && !!this.selectedCheckpoint(),
   );

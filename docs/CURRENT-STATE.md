@@ -234,6 +234,19 @@ Ces chiffres **remplacent** tous les totaux intermédiaires (548 / 567 /
 de `docs/09-matrice-rncp.md`. Le lot F2 → F6 re-mesure et consigne les
 chiffres à jour dans `docs/reports/PROJECT_FINALIZATION_REPORT.md`.
 
+**Mise à jour F3 (31 août 2026)** — après le checkpoint F3 :
+- back-end `./mvnw clean test` → **682 tests, 0 échec** (inchangé — les 2
+  tests de mesure de performance ajoutés portent le tag JUnit `perf`,
+  **exclus** du run par défaut ; `./mvnw test -Pperf` les exécute) ;
+- front-end `npm test` → **475 tests, 0 échec** (471 → 475 : +2 fichiers
+  d'accessibilité `*.a11y.spec.ts` avec `axe-core`) ; `npm run lint` OK ;
+  `npm run build` **483,26 kB** — **les 2 avertissements `NG8107` /
+  `NG8102` de `session-detail.html` sont corrigés** ; `npm audit` → 0
+  vulnérabilité (`axe-core` ajouté en `devDependencies`) ;
+- mesures indicatives reproductibles : `docs/reports/PERF_NOTES.md` ;
+- décision Testcontainers : `docs/reports/TEST_ISOLATION_DECISION.md` ;
+- politique de rétention réelle vs cible : `docs/07-securite-rgpd.md` §14.
+
 ## Infrastructure
 
 `docker compose up -d` démarre `mysql` (8.4), `redis` (7.4), `mailpit`,
