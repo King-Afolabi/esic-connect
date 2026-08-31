@@ -356,7 +356,7 @@ class StudentImportSchemaConstraintsTests {
     @Test
     void sequenceNextValueCheckRejectsZero() {
         assertThrows(DataAccessException.class,
-                () -> sequenceRepository.saveAndFlush(new StudentNumberSequence(2026, 0, Instant.now())));
+                () -> sequenceRepository.saveAndFlush(new StudentNumberSequence(2901, 0, Instant.now())));
     }
 
     @Test
@@ -364,7 +364,7 @@ class StudentImportSchemaConstraintsTests {
         Instant now = Instant.now();
         entityManager.getEntityManager()
                 .createNativeQuery("INSERT INTO student_number_sequence (start_year, next_value, updated_at) "
-                        + "VALUES (2026, 5, :now)")
+                        + "VALUES (2902, 5, :now)")
                 .setParameter("now", now)
                 .executeUpdate();
         entityManager.flush();
@@ -372,7 +372,7 @@ class StudentImportSchemaConstraintsTests {
         assertThrows(ConstraintViolationException.class, () -> {
             entityManager.getEntityManager()
                     .createNativeQuery("INSERT INTO student_number_sequence (start_year, next_value, updated_at) "
-                            + "VALUES (2026, 7, :now)")
+                            + "VALUES (2902, 7, :now)")
                     .setParameter("now", now)
                     .executeUpdate();
             entityManager.flush();
@@ -384,19 +384,19 @@ class StudentImportSchemaConstraintsTests {
         Instant now = Instant.now();
         entityManager.getEntityManager()
                 .createNativeQuery("INSERT INTO student_number_sequence (start_year, next_value, updated_at) "
-                        + "VALUES (2027, 2, :now)")
+                        + "VALUES (2903, 2, :now)")
                 .setParameter("now", now)
                 .executeUpdate();
         entityManager.getEntityManager()
                 .createNativeQuery("INSERT INTO student_number_sequence (start_year, next_value, updated_at) "
-                        + "VALUES (2027, 2, :now) "
+                        + "VALUES (2903, 2, :now) "
                         + "ON DUPLICATE KEY UPDATE next_value = next_value + 1, updated_at = :now")
                 .setParameter("now", now)
                 .executeUpdate();
         entityManager.flush();
         entityManager.clear();
 
-        assertThat(sequenceRepository.findById(2027).orElseThrow().getNextValue()).isEqualTo(3);
+        assertThat(sequenceRepository.findById(2903).orElseThrow().getNextValue()).isEqualTo(3);
     }
 
     // ------------------------------------------------------------------
@@ -416,7 +416,7 @@ class StudentImportSchemaConstraintsTests {
                 "IMP_COLUMN_IGNORED", "colonne level_code ignorée", "level_code"));
         rowIssueRepository.saveAndFlush(new StudentImportRowIssue(row, StudentImportIssueSeverity.WARNING,
                 "IMP_PHONE_FORMAT", "téléphone non conforme", "phone", "abc", "+33102030405"));
-        sequenceRepository.saveAndFlush(new StudentNumberSequence(2026, 1, Instant.now()));
+        sequenceRepository.saveAndFlush(new StudentNumberSequence(2904, 1, Instant.now()));
         long jobId = job.getId();
         long rowId = row.getId();
         entityManager.clear();
@@ -442,7 +442,7 @@ class StudentImportSchemaConstraintsTests {
 
         assertThat(jobIssueRepository.countByJobId(jobId)).isEqualTo(1);
         assertThat(rowIssueRepository.countByRowId(rowId)).isEqualTo(1);
-        assertThat(sequenceRepository.findById(2026).orElseThrow().getNextValue()).isEqualTo(1);
+        assertThat(sequenceRepository.findById(2904).orElseThrow().getNextValue()).isEqualTo(1);
     }
 
     // ------------------------------------------------------------------

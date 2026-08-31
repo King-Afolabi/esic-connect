@@ -3,6 +3,21 @@ spring:
     name: esic-connect-backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+  servlet:
+    multipart:
+      # Import CSV des apprenants (rapport §8) : le seul téléversement du
+      # prototype. Bornes alignées sur `app.import.student.max-file-bytes`
+      # (2 MiB) ; le service re-vérifie la taille et retraduit un
+      # dépassement en `IMP_FILE_TOO_LARGE`.
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:2MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:3MB}
+      # Résolution paresseuse : le parsing du multipart (et donc un
+      # éventuel dépassement de taille) a lieu pendant l'exécution du
+      # contrôleur, ce qui permet à l'advice d'erreur du module
+      # `studentimport` de retraduire l'exception en `IMP_FILE_TOO_LARGE`
+      # (sinon elle est levée par le DispatcherServlet avant la résolution
+      # du contrôleur et retombe en 500 générique).
+      resolve-lazily: true
   flyway:
     locations: classpath:db/migration
   jpa:
@@ -67,3 +82,16 @@ app:
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}
   mail:
     from: ${APP_MAIL_FROM:no-reply@esic-connect.test}
+  import:
+    student:
+      # Import CSV contrôlé des apprenants (docs/02 §10 ; rapport
+      # STUDENT_CSV_IMPORT_DESIGN.md §8, §3.2). Décisions de prototype :
+      # limites conservatrices, rétention courte. Toute valeur invalide
+      # (durée <= 0, largeur hors 1..9, max-rows < 100) fait échouer le
+      # démarrage (StudentImportProperties).
+      max-rows: ${STUDENT_IMPORT_MAX_ROWS:500}
+      max-file-bytes: ${STUDENT_IMPORT_MAX_FILE_BYTES:2097152}
+      simulation-ttl: ${STUDENT_IMPORT_SIMULATION_TTL:P7D}
+      applied-rows-ttl: ${STUDENT_IMPORT_APPLIED_ROWS_TTL:P30D}
+      number-sequence-width: ${STUDENT_IMPORT_NUMBER_SEQUENCE_WIDTH:5}
+      number-alloc-max-retries: ${STUDENT_IMPORT_NUMBER_ALLOC_MAX_RETRIES:5}

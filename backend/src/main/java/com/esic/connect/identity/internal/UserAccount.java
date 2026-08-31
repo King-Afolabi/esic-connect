@@ -118,6 +118,25 @@ public class UserAccount extends BaseEntity {
         return phone;
     }
 
+    /**
+     * Renseigne l'auteur d'une création (import CSV des apprenants) —
+     * {@code created_by_id} / {@code updated_by_id} en une fois.
+     */
+    public void markCreatedBy(Long actorId) {
+        this.createdById = actorId;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Met à jour le seul téléphone (action {@code UPDATE_PROFILE} de
+     * l'import). L'identité civile (nom / prénom / e-mail) n'est jamais
+     * réécrite par l'import (rapport §12.H).
+     */
+    public void updatePhone(String phone, Long actorId) {
+        this.phone = phone;
+        this.updatedById = actorId;
+    }
+
     public AccountStatus getStatus() {
         return status;
     }

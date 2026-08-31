@@ -11,6 +11,10 @@ interface StudentProfileRepository
 
     Optional<StudentProfile> findByPublicId(UUID publicId);
 
+    Optional<StudentProfile> findByUserId(Long userId);
+
+    Optional<StudentProfile> findByStudentNumberIgnoreCase(String studentNumber);
+
     boolean existsByUserId(Long userId);
 
     boolean existsByStudentNumberIgnoreCase(String studentNumber);

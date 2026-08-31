@@ -53,6 +53,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
   },
   {
+    // Écran livré : import CSV contrôlé des apprenants (simulation puis
+    // confirmation). Périmètre aligné sur `StudentImportWeb.MANAGE_ROLES` ;
+    // un `PEDAGOGICAL_MANAGER` reste limité à son périmètre côté serveur.
+    label: 'Import apprenants',
+    path: '/students/import',
+    icon: 'upload_file',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
     // Écran livré : consultation en lecture seule du référentiel
     // académique (années scolaires → formations → niveaux → promotions →
     // classes). Périmètre aligné sur `AcademicWeb.READ_ROLES`.

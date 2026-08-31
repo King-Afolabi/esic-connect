@@ -4,6 +4,7 @@ import com.esic.connect.academic.ClassGroupDirectory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,9 +22,15 @@ import java.util.UUID;
 class DefaultClassGroupDirectory implements ClassGroupDirectory {
 
     private final ClassGroupRepository classGroupRepository;
+    private final ProgramRepository programRepository;
+    private final AcademicYearRepository academicYearRepository;
 
-    DefaultClassGroupDirectory(ClassGroupRepository classGroupRepository) {
+    DefaultClassGroupDirectory(ClassGroupRepository classGroupRepository,
+                               ProgramRepository programRepository,
+                               AcademicYearRepository academicYearRepository) {
         this.classGroupRepository = classGroupRepository;
+        this.programRepository = programRepository;
+        this.academicYearRepository = academicYearRepository;
     }
 
     @Override
@@ -39,6 +46,53 @@ class DefaultClassGroupDirectory implements ClassGroupDirectory {
     @Transactional(readOnly = true)
     public Optional<ClassGroupRef> findByInternalId(long classGroupInternalId) {
         return classGroupRepository.findById(classGroupInternalId).map(DefaultClassGroupDirectory::toRef);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ClassGroupResolution resolveForImport(String programCode, String classCode, String academicYearCode) {
+        String program = trimOrEmpty(programCode);
+        String klass = trimOrEmpty(classCode);
+        String year = trimOrEmpty(academicYearCode);
+
+        Program resolvedProgram = program.isEmpty() ? null
+                : programRepository.findByCodeIgnoreCase(program).orElse(null);
+        if (resolvedProgram == null) {
+            return ClassGroupResolution.Miss.PROGRAM_UNKNOWN;
+        }
+        AcademicYear resolvedYear = year.isEmpty() ? null
+                : academicYearRepository.findByCodeIgnoreCase(year).orElse(null);
+        if (resolvedYear == null) {
+            return ClassGroupResolution.Miss.ACADEMIC_YEAR_UNKNOWN;
+        }
+
+        List<ClassGroup> candidates = klass.isEmpty() ? List.of()
+                : classGroupRepository.findByCodeIgnoreCase(klass);
+        if (candidates.isEmpty()) {
+            return ClassGroupResolution.Miss.CLASS_UNKNOWN;
+        }
+        List<ClassGroup> inProgram = candidates.stream()
+                .filter(cg -> cg.getPromotion().getProgram().getId().equals(resolvedProgram.getId()))
+                .toList();
+        if (inProgram.isEmpty()) {
+            return ClassGroupResolution.Miss.CLASS_NOT_IN_PROGRAM;
+        }
+        ClassGroup classGroup = inProgram.stream()
+                .filter(cg -> cg.getPromotion().getAcademicYear().getId().equals(resolvedYear.getId()))
+                .findFirst()
+                .orElse(null);
+        if (classGroup == null) {
+            return ClassGroupResolution.Miss.CLASS_NOT_IN_YEAR;
+        }
+        ClassGroupRef ref = toRef(classGroup);
+        if (!ref.openForEnrollment()) {
+            return ClassGroupResolution.Miss.CHAIN_ARCHIVED;
+        }
+        return new ClassGroupResolution.Found(ref, resolvedYear.getStartDate().getYear());
+    }
+
+    private static String trimOrEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private static ClassGroupRef toRef(ClassGroup classGroup) {

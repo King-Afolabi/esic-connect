@@ -83,6 +83,18 @@ class StudentProfile extends BaseEntity {
         this.updatedById = actorId;
     }
 
+    /**
+     * Action {@code UPDATE_PROFILE} de l'import CSV : met à jour la seule
+     * situation d'alternance ({@code work_study} / {@code company_name}).
+     * L'identité civile, le numéro étudiant et la date de naissance ne
+     * sont jamais réécrits par l'import.
+     */
+    void updateAlternation(boolean workStudy, String companyName, Long actorId) {
+        this.workStudy = workStudy;
+        this.companyName = companyName;
+        this.updatedById = actorId;
+    }
+
     boolean isArchived() {
         return status == StudentProfileStatus.ARCHIVED;
     }

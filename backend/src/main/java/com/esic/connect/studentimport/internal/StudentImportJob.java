@@ -167,6 +167,33 @@ class StudentImportJob extends BaseEntity {
         return requestedById;
     }
 
+    /** Filtre de périmètre éventuel (rapport §8) — figé à la création. */
+    void applyScope(String programCode, String classCode) {
+        this.scopeProgramCode = programCode;
+        this.scopeClassCode = classCode;
+    }
+
+    /**
+     * Enregistre le bilan de la simulation (rapport §6) : compteurs de
+     * lignes et d'actions planifiées, et {@code confirmable} figé (RG-021 :
+     * {@code true} seulement si aucune anomalie bloquante ni erreur de
+     * ligne). Re-vérifié à la confirmation.
+     */
+    void recordSimulation(int totalRows, int validRows, int warningRows, int errorRows, int blockingIssueCount,
+                          int plannedCreateRows, int plannedUpdateRows, int plannedTransferRows,
+                          int plannedNoopRows) {
+        this.totalRows = totalRows;
+        this.validRows = validRows;
+        this.warningRows = warningRows;
+        this.errorRows = errorRows;
+        this.blockingIssueCount = blockingIssueCount;
+        this.plannedCreateRows = plannedCreateRows;
+        this.plannedUpdateRows = plannedUpdateRows;
+        this.plannedTransferRows = plannedTransferRows;
+        this.plannedNoopRows = plannedNoopRows;
+        this.confirmable = blockingIssueCount == 0 && errorRows == 0;
+    }
+
     String getScopeProgramCode() {
         return scopeProgramCode;
     }
@@ -179,8 +206,93 @@ class StudentImportJob extends BaseEntity {
         return totalRows;
     }
 
+    int getValidRows() {
+        return validRows;
+    }
+
+    int getWarningRows() {
+        return warningRows;
+    }
+
+    int getErrorRows() {
+        return errorRows;
+    }
+
+    int getBlockingIssueCount() {
+        return blockingIssueCount;
+    }
+
+    int getPlannedCreateRows() {
+        return plannedCreateRows;
+    }
+
+    int getPlannedUpdateRows() {
+        return plannedUpdateRows;
+    }
+
+    int getPlannedTransferRows() {
+        return plannedTransferRows;
+    }
+
+    int getPlannedNoopRows() {
+        return plannedNoopRows;
+    }
+
     boolean isConfirmable() {
         return confirmable;
+    }
+
+    /**
+     * Rafraîchit les anomalies après une re-validation qui invalide la
+     * simulation (rapport §9, §11) : compteurs recalculés,
+     * {@code confirmable} forcé à {@code false}. Le job reste
+     * {@code SIMULATED}.
+     */
+    void recordStaleRevalidation(int validRows, int warningRows, int errorRows,
+                                 int plannedCreateRows, int plannedUpdateRows, int plannedTransferRows,
+                                 int plannedNoopRows) {
+        this.validRows = validRows;
+        this.warningRows = warningRows;
+        this.errorRows = errorRows;
+        this.plannedCreateRows = plannedCreateRows;
+        this.plannedUpdateRows = plannedUpdateRows;
+        this.plannedTransferRows = plannedTransferRows;
+        this.plannedNoopRows = plannedNoopRows;
+        this.confirmable = false;
+    }
+
+    /**
+     * Transition {@code SIMULATED → APPLIED} dans la transaction unique de
+     * la confirmation (rapport §4.4). Enregistre le bilan appliqué et
+     * l'auteur ; aucune écriture autonome de statut.
+     */
+    void markApplied(Instant at, Long confirmedById, int appliedCreated, int appliedUpdated,
+                     int appliedTransferred, int appliedInvited, int appliedIgnored) {
+        this.status = StudentImportJobStatus.APPLIED;
+        this.confirmedAt = at;
+        this.confirmedById = confirmedById;
+        this.appliedCreated = appliedCreated;
+        this.appliedUpdated = appliedUpdated;
+        this.appliedTransferred = appliedTransferred;
+        this.appliedInvited = appliedInvited;
+        this.appliedIgnored = appliedIgnored;
+    }
+
+    boolean isExpiredAt(Instant reference) {
+        return status == StudentImportJobStatus.EXPIRED || !expiresAt.isAfter(reference);
+    }
+
+    /**
+     * Annulation explicite d'une simulation avant confirmation
+     * ({@code SIMULATED → CANCELLED}, rapport §3.4). Le job devient
+     * non confirmable et sera purgé (§12.C). L'auteur est réutilisé comme
+     * {@code confirmed_by_id} (colonne d'acteur de la transition finale).
+     */
+    void markCancelled(Instant at, Long actorId) {
+        this.status = StudentImportJobStatus.CANCELLED;
+        this.confirmedAt = at;
+        this.confirmedById = actorId;
+        this.confirmable = false;
     }
 
     Instant getSimulatedAt() {
@@ -189,6 +301,30 @@ class StudentImportJob extends BaseEntity {
 
     Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    Instant getConfirmedAt() {
+        return confirmedAt;
+    }
+
+    Integer getAppliedCreated() {
+        return appliedCreated;
+    }
+
+    Integer getAppliedUpdated() {
+        return appliedUpdated;
+    }
+
+    Integer getAppliedTransferred() {
+        return appliedTransferred;
+    }
+
+    Integer getAppliedInvited() {
+        return appliedInvited;
+    }
+
+    Integer getAppliedIgnored() {
+        return appliedIgnored;
     }
 
     Instant getCreatedAt() {

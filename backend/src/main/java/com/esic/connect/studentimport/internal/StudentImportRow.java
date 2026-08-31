@@ -126,8 +126,48 @@ class StudentImportRow extends BaseEntity {
         return rowNumber;
     }
 
+    String getInputLastName() {
+        return inputLastName;
+    }
+
+    String getInputFirstName() {
+        return inputFirstName;
+    }
+
     String getInputEmail() {
         return inputEmail;
+    }
+
+    String getInputPhone() {
+        return inputPhone;
+    }
+
+    String getInputFormationCode() {
+        return inputFormationCode;
+    }
+
+    String getInputClassCode() {
+        return inputClassCode;
+    }
+
+    String getInputAcademicYear() {
+        return inputAcademicYear;
+    }
+
+    String getInputStudentNumber() {
+        return inputStudentNumber;
+    }
+
+    LocalDate getInputBirthDate() {
+        return inputBirthDate;
+    }
+
+    Boolean getInputWorkStudy() {
+        return inputWorkStudy;
+    }
+
+    String getInputCompanyName() {
+        return inputCompanyName;
     }
 
     void setNormalizedIdentity(String lastName, String firstName, String email, String phone) {
@@ -141,6 +181,47 @@ class StudentImportRow extends BaseEntity {
         this.inputFormationCode = formationCode;
         this.inputClassCode = classCode;
         this.inputAcademicYear = academicYear;
+    }
+
+    void setNormalizedOptional(String studentNumber, LocalDate birthDate, Boolean workStudy, String companyName) {
+        this.inputStudentNumber = studentNumber;
+        this.inputBirthDate = birthDate;
+        this.inputWorkStudy = workStudy;
+        this.inputCompanyName = companyName;
+    }
+
+    void setRowStatus(StudentImportRowStatus rowStatus) {
+        this.rowStatus = rowStatus;
+    }
+
+    void setPlannedAction(StudentImportPlannedAction plannedAction) {
+        this.plannedAction = plannedAction;
+    }
+
+    void setResolution(UUID classPublicId, UUID userPublicId, UUID enrollmentPublicId) {
+        this.resolvedClassPublicId = classPublicId;
+        this.resolvedUserPublicId = userPublicId;
+        this.resolvedEnrollmentPublicId = enrollmentPublicId;
+    }
+
+    UUID getResolvedClassPublicId() {
+        return resolvedClassPublicId;
+    }
+
+    UUID getResolvedUserPublicId() {
+        return resolvedUserPublicId;
+    }
+
+    UUID getResolvedEnrollmentPublicId() {
+        return resolvedEnrollmentPublicId;
+    }
+
+    void setStudentNumberGenerated(boolean studentNumberGenerated) {
+        this.studentNumberGenerated = studentNumberGenerated;
+    }
+
+    void setAppliedOutcome(StudentImportRowOutcome appliedOutcome) {
+        this.appliedOutcome = appliedOutcome;
     }
 
     StudentImportRowStatus getRowStatus() {

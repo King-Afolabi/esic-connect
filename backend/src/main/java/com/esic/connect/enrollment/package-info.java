@@ -28,12 +28,16 @@
  * {@code enrollment.academic_year_id} sont de simples valeurs techniques
  * (clés étrangères SQL). Publie
  * {@link com.esic.connect.enrollment.EnrollmentChangeEvent}, consommé par
- * le module {@code audit}, et expose le port
+ * le module {@code audit}, et expose les ports
  * {@link com.esic.connect.enrollment.EnrollmentDirectory} (consommé par
  * {@code alternation} pour rattacher une exception de calendrier à une
- * inscription, sans partage d'entité JPA). Les types d'implémentation
- * résident dans {@code enrollment.internal} et ne sont pas visibles des
- * autres modules.
+ * inscription) et
+ * {@link com.esic.connect.enrollment.StudentEnrollmentProvisioner}
+ * (consommé par {@code studentimport} pour créer profils et inscriptions
+ * <em>dans la transaction unique</em> de la confirmation d'import —
+ * écriture directe, sans {@code EnrollmentPersister}, sans événement).
+ * Aucun partage d'entité JPA. Les types d'implémentation résident dans
+ * {@code enrollment.internal} et ne sont pas visibles des autres modules.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Enrollment")
 package com.esic.connect.enrollment;

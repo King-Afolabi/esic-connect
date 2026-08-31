@@ -11,5 +11,7 @@ interface AcademicYearRepository extends JpaRepository<AcademicYear, Long>,
 
     Optional<AcademicYear> findByPublicId(UUID publicId);
 
+    Optional<AcademicYear> findByCodeIgnoreCase(String code);
+
     boolean existsByCode(String code);
 }
