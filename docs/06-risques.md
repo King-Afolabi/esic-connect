@@ -162,6 +162,42 @@ et que les données ne peuvent pas être conservées indéfiniment.
 
 ---
 
+# 7bis. Risques du grand lot produit G1 (31 août 2026)
+
+Risques propres au **grand lot produit G1** (planning, cycle de vie des
+séances, notifications, tableaux de bord, pièces jointes, recette
+globale). Décisions d'atténuation détaillées dans
+`docs/reports/G1_ARCHITECTURE_DECISIONS.md`.
+
+| ID | Risque | P | I | Score | Réponse |
+|---|---|---:|---:|---:|---|
+| R-G1-01 | Publication de planning partielle (séances créées sans version, ou l'inverse) | 3 | 5 | 15 | Transaction unique tout-ou-rien, verrou `SELECT … FOR UPDATE`, port `coursesession` synchrone, test de rollback total (DEC-G1-001, DEC-G1-003) |
+| R-G1-02 | Duplication de séances à la (re)publication | 3 | 4 | 12 | Idempotence par `planning_entry.publicId` / `business_key`, contrainte unique, test de double publication (DEC-G1-002) |
+| R-G1-03 | Deux publications concurrentes du même job | 3 | 4 | 12 | Verrou de ligne ; seconde publication → idempotente ou `409` métier ; jamais `500` ; test de concurrence (DEC-G1-003) |
+| R-G1-04 | Séance `OPEN`/`CLOSED` réécrite par une nouvelle version de planning | 2 | 5 | 10 | Règle explicite : jamais de réécriture d'une séance `OPEN`/`CLOSED` ; supersession logique des seules séances `PLANNED` futures ; test par règle (DEC-G1-004) |
+| R-G1-05 | Couplage `planning` ↔ `coursesession.internal` (violation Modulith) | 3 | 4 | 12 | Port public `PlanningSessionWriter` uniquement, commande immuable, aucun partage d'entité JPA, `ModularityTests` vert à chaque commit (DEC-G1-001) |
+| R-G1-06 | Migration `planning` défectueuse / non rejouable | 2 | 5 | 10 | Migrations additives uniquement (`CREATE`/`ADD COLUMN` nullable), rejeu Flyway V1→Vn sur base vierge en test, `ddl-auto=validate` (DEC-G1-012) |
+| R-G1-07 | Perte d'un événement de notification (crash entre commit métier et écriture) | 3 | 3 | 9 | Écriture après commit en `REQUIRES_NEW`, `dedup_key` unique, tâche de réconciliation optionnelle, acceptation documentée (DEC-G1-007) |
+| R-G1-08 | Notification dupliquée | 3 | 2 | 6 | `dedup_key` = hachage (type, ressource, destinataire, événement) unique en base ; `DataIntegrityViolation` avalée (DEC-G1-007) |
+| R-G1-09 | Un échec de notification annule (rollback) l'opération métier | 2 | 5 | 10 | Transaction notification indépendante (`REQUIRES_NEW`, `AFTER_COMMIT`) ; test « rollback métier ⇒ 0 notification » et « échec notification ⇒ métier intact » (DEC-G1-007) |
+| R-G1-10 | Contenu sensible dans une notification (jeton, PII, IP, chemin, secret) | 3 | 5 | 15 | Corps neutre normé, revue, test de contenu ; destinataires dérivés serveur (DEC-G1-007) |
+| R-G1-11 | Incohérence base ↔ fichier pour une pièce jointe (fichier orphelin, ligne fantôme) | 3 | 3 | 9 | Séquence temporaire → validation → transaction DB `PENDING_STORAGE` → déplacement atomique → `STORED` ; compensation `@Scheduled` ; IHM ne montre que `STORED` (DEC-G1-009) |
+| R-G1-12 | Traversal de chemin via le nom de fichier client | 2 | 5 | 10 | `storageKey` aléatoire jamais dérivé du nom client ; garde anti-`..` ; stockage hors webroot ; test dédié (DEC-G1-008) |
+| R-G1-13 | Fichier malveillant / polyglotte accepté | 3 | 4 | 12 | Contrôle extension + MIME **+ magic bytes** ; rejet ZIP/OLE/exécutable ; MIME re-dérivé au téléchargement ; `Content-Disposition: attachment` + `nosniff` ; jamais de rendu HTML (DEC-G1-008, CDC §21.5) |
+| R-G1-14 | Stockage de contenu sensible en base | 2 | 4 | 8 | Contenu **jamais** en base : métadonnées MySQL + fichier hors base via port (DEC-G1-008) |
+| R-G1-15 | Volume disque non borné (pièces jointes) | 3 | 3 | 9 | Taille bornée (`JUSTIFICATION_MAX_FILE_BYTES`) ; dette de purge documentée (`docs/07-securite-rgpd.md`) ; suivi (DEC-G1-008) |
+| R-G1-16 | N+1 Hibernate dans les tableaux de bord | 4 | 3 | 12 | Requêtes agrégat dédiées bornées, jamais de collections JPA ; test compteur de requêtes sur ≥ 1 endpoint (DEC-G1-010) |
+| R-G1-17 | Régression sur les 686 tests back / 475 tests front | 3 | 5 | 15 | Suite complète re-exécutée à chaque bloc, `ModularityTests` vert, aucun test supprimé / `@Disabled` / `continue-on-error` |
+| R-G1-18 | Faux positifs de conflit à l'import (cours multi-classes) | 3 | 2 | 6 | Limite documentée (une ligne = une classe à l'import G1-B) ; contournement par `title` (DEC-G1-005) |
+| R-G1-19 | Session de travail trop longue / limite de contexte | 4 | 3 | 12 | Blocs indépendants commités séparément ; `G1_IMPLEMENTATION_PROGRESS.md` mis à jour à chaque fin de bloc ; jamais démarrer un bloc non finançable |
+| R-G1-20 | Reprise nocturne : suite back rouge dans la fenêtre `00:00–02:00 CEST` | 4 | 2 | 8 | Bug latent de fuseau (`EnrollmentService` zone système vs `AttendanceService` UTC) — **hors périmètre G1** ; contournement `TZ=UTC` (comme la CI) ; se résout de lui-même ; consigné dans `G1_IMPLEMENTATION_PROGRESS.md` §9 |
+| R-G1-21 | e2e Playwright incompatible / vulnérable / navigateur non téléchargeable | 3 | 2 | 6 | Vérif compat + `npm audit` avant ajout ; repli = démonstration API automatisée ; statut alors `PARTIAL`, jamais « e2e livré » (DEC-G1-011) |
+| R-G1-22 | Déploiement futur avec stockage éphémère (pièces jointes perdues) | 3 | 4 | 12 | Port de stockage abstrait ⇒ adaptateur objet S3-compatible substituable sans toucher au métier ; volume persistant identifié dans le rapport final (DEC-G1-008) |
+| R-G1-23 | Migration destructive impossible à rollback automatiquement | 1 | 5 | 5 | Aucune migration G1 n'est destructive (toutes additives) ; règle explicite (DEC-G1-012) |
+| R-G1-24 | Documentation en avance sur le code (statut « livré » sans preuve) | 3 | 5 | 15 | Statut porté à `IMPLEMENTED_AND_TESTED` uniquement si code présent + test exécuté + résultat consigné ; statuts ambigus interdits |
+
+---
+
 # 8. Suivi
 
 Chaque risque possède un état :

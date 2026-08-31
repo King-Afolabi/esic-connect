@@ -1575,6 +1575,119 @@ Personas :
 
 ---
 
+# 9bis. Grand lot produit G1 — montée en gamme fonctionnelle (31 août 2026)
+
+> Items du **grand lot produit G1**. Ils font évoluer le prototype vers
+> une application métier riche. Traçabilité complète :
+> `docs/reports/G1_REQUIREMENTS_TRACEABILITY.md` ; décisions :
+> `docs/reports/G1_ARCHITECTURE_DECISIONS.md` ; plan :
+> `docs/reports/G1_IMPLEMENTATION_PLAN.md` ; avancement :
+> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
+>
+> Statut initial (avant travaux) ci-dessous. Il est mis à jour **bloc par
+> bloc**, uniquement sur preuve (code présent + test exécuté + résultat
+> consigné).
+
+## G1-A — Interfaces Angular des API administratives existantes
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | EF-ROOM-001, EF-ACA-001..005, EF-USER-001..003, EF-AUTH-004 (CDC §44) |
+| Épics concernés | EP-03, EP-05, EP-06 |
+| Priorité | MUST |
+| Valeur métier | rendre utilisables les fonctions back-end déjà livrées mais absentes de l'IHM (organisation, référentiels académiques en écriture, affectations pédagogiques, profils / inscriptions / transferts, émission d'invitation) |
+| Risques | duplication de CRUD, dérive du périmètre de rôle par rapport au `@PreAuthorize` serveur, régression de navigation |
+| Critères d'acceptation | chaque écran reprend à l'identique les rôles du contrôleur ; états `400/401/403/404/409/5xx` gérés ; axe-core sur ≥ 1 formulaire ; aucune régression des 475 tests front |
+| Définition de fini | services + composants + routes + gardes testés ; `npm test` / `lint` / `build` / `audit` verts ; doc de traçabilité mise à jour |
+| Statut initial | `PARTIAL` (API livrées, écrans absents ou en lecture seule) |
+| Preuves attendues | `frontend/src/app/features/organization/**`, formulaires `academic`, `*.spec.ts`, capture du parcours |
+
+## G1-B — Module `planning` (import CSV → simulation → publication versionnée → séances)
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | EF-PLAN-001, EF-PLAN-002, EF-PLAN-003, EF-PLAN-004, EF-PLAN-005, EF-PLAN-007, EF-SES-001 ; RG-016, RG-030..RG-035 ; AC-007, AC-008 (CDC §43–§45) ; US-070, US-071, US-072, US-074, US-080 |
+| Épics concernés | EP-08, EP-09 |
+| Priorité | MUST |
+| Valeur métier | livrer le chaînon principal du parcours prioritaire de `CLAUDE.md`, aujourd'hui `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) |
+| Risques | publication partielle, duplication de séances, conflit concurrent, migration défectueuse, couplage `planning` ↔ `coursesession` (cf. `docs/06-risques.md` R-G1-01..R-G1-06) |
+| Critères d'acceptation | AC-007 (séances uniquement après publication), AC-008 (modification ⇒ nouvelle version) ; simulation sans écriture métier ; publication transactionnelle tout-ou-rien, idempotente, `409` sur conflit métier, jamais `500` ; `ModularityTests` vert |
+| Définition de fini | migration `V12` (+ `V13` partagée) ; module + port `coursesession.PlanningSessionWriter` ; endpoints terminés ; écrans `/planning/**` + `/my-planning` ; suite back (parseur, simulation, conflits, alternance, publication, rollback, idempotence, concurrence, versionnement, sécurité, audit) + front + axe-core ; docs |
+| Statut initial | `HORS_PÉRIMÈTRE_ASSUMÉ` → cible `IMPLEMENTED_AND_TESTED` |
+| Preuves attendues | `com.esic.connect.planning`, `V12`, tests nommés, `docs/demo-data/planning-demo.csv` |
+
+## G1-C — Cycle de vie avancé des séances
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | EF-SES-004, EF-SES-005 ; RG-012, RG-015 (CDC §43–§44) ; CDC §15.1 (modification d'une séance exceptionnelle) |
+| Épics concernés | EP-09 |
+| Priorité | SHOULD |
+| Valeur métier | modifier / annuler une séance exceptionnelle `PLANNED`, désigner un remplaçant, tracer l'historique |
+| Risques | modification d'une séance `OPEN`/`CLOSED`, absence dérivée d'une séance annulée, conflit concurrent |
+| Critères d'acceptation | `OPEN`/`CLOSED` non modifiables ; `CANCELLED` non ouvrable, sans jeton, sans absence dérivée ; motif obligatoire ; audité ; `409` métier ; séance issue d'un planning non modifiable structurellement (nouvelle version requise) |
+| Définition de fini | `V13` (`teacher_substitution`, colonnes) ; endpoints `PATCH`/`cancel`/`substitute`/`history` ; suite back (transitions, concurrence, sécurité, audit, planning vs exceptionnel) + front |
+| Statut initial | `NOT_IMPLEMENTED` |
+| Preuves attendues | `CourseSessionService.update/cancel`, `SubstitutionService`, tests |
+
+## G1-D — Centre de notifications métier persistantes
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | EF-NOTIF-001, EF-NOTIF-002 ; RG-033 (CDC §43–§44) ; CDC §14, §23 |
+| Épics concernés | EP-12 |
+| Priorité | SHOULD |
+| Valeur métier | informer les acteurs des événements (planning publié, séance modifiée / annulée, remplaçant, invitation, justificatif, import appliqué) dans un centre consultable |
+| Risques | perte d'événement, notification dupliquée, contenu sensible en base, rollback métier provoqué par un échec de notification |
+| Critères d'acceptation | notifications persistées **après commit**, transaction indépendante, idempotentes (`dedup_key`) ; un échec de notification ne rollback pas le métier ; destinataires dérivés serveur ; aucun jeton / PII / IP / chemin / secret ; isolation (AC-017) |
+| Définition de fini | `V14` (`notification`) ; listeners `AFTER_COMMIT` / `REQUIRES_NEW` ; endpoints `/me/notifications*` ; cloche + badge front ; suite back (after-commit, rollback métier, idempotence, destinataires, sécurité) + front |
+| Statut initial | `PARTIAL` (email d'activation seul) |
+| Preuves attendues | `com.esic.connect.notification` étendu, `V14`, tests |
+
+## G1-F — Tableaux de bord par rôle
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | CDC §25.1–§25.4 (contenus par rôle) ; AC-017 (cloisonnement apprenant) |
+| Épics concernés | EP-13 |
+| Priorité | SHOULD |
+| Valeur métier | remplacer le tableau de bord générique par des vues métier utiles à la démonstration jury |
+| Risques | N+1 Hibernate, métrique non reliée à une donnée réelle, fuite de périmètre |
+| Critères d'acceptation | chaque carte reliée à une requête agrégat bornée nommée dans le plan ; `readOnly` ; périmètre serveur ; absence de N+1 vérifiée sur ≥ 1 endpoint ; `401/403` |
+| Définition de fini | `GET /api/v1/me/dashboard` typé par rôle ; front cartes + listes ; suite back (par rôle, périmètre, bornes, vide, N+1) + front + axe-core |
+| Statut initial | `PARTIAL` (dashboard générique unique) |
+| Preuves attendues | endpoint + repositories de projection, `features/dashboard/**`, tests |
+
+## G1-E — Pièces jointes sécurisées des justificatifs
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | EF-JUS-001, EF-JUS-002 ; RG-071, RG-072, RG-073, RG-075, RG-076 (CDC §43) ; CDC §21.5 ; AC-014 |
+| Épics concernés | EP-11 |
+| Priorité | SHOULD |
+| Valeur métier | joindre une preuve (PDF/JPEG/PNG) à un justificatif métier, avec stockage sûr et téléchargement contrôlé |
+| Risques | traversal, fichier malveillant / polyglotte, stockage sensible, incohérence base / fichier, volume disque |
+| Critères d'acceptation | contrôle extension + MIME + magic bytes + taille (`413` > 5 Mo) ; nom neutralisé ; stockage **hors webroot** via port abstrait ; contenu jamais en base ; téléchargement `attachment` + `nosniff`, MIME re-dérivé ; accès = propriétaire / examinateur périmètre, sinon `403` ; compensation base ↔ fichier documentée et testée |
+| Définition de fini | `V15` (`justification_attachment`) ; port `JustificationFileStorage` + implémentation locale ; endpoints upload / liste / download / suppression logique ; suite back (formats, extension trompeuse, magic bytes, taille, traversal, accès croisé, en-têtes, rollback, nettoyage, audit) + front |
+| Statut initial | `PARTIAL` (justificatif métier sans fichier) |
+| Preuves attendues | `JustificationAttachment*`, `V15`, tests, `docs/demo-data/*` fictifs |
+
+## G1-G — Recette globale, tests e2e et documentation finale
+
+| Champ | Valeur |
+|---|---|
+| Exigences liées | CDC §46, §47 ; AC-007, AC-008, AC-017 |
+| Épics concernés | EP-17 |
+| Priorité | MUST |
+| Valeur métier | prouver le parcours complet et aligner toute la documentation sur l'état réel |
+| Risques | e2e instable, dépendance e2e vulnérable, documentation en avance sur le code |
+| Critères d'acceptation | parcours bout en bout exécuté (e2e Playwright **ou** démonstration API automatisée, statut honnête) ; totaux de tests re-mesurés et consignés ; README / CURRENT-STATE / docs 01–12 / matrices alignés ; addendum daté aux rapports historiques **sans réécriture** |
+| Définition de fini | `docs/demo-data/planning-demo.csv` + `planning-conflicts-demo.csv` + fichiers justificatifs fictifs ; seed idempotent étendu ; `G1_FINAL_REPORT.md` ; commits `docs(demo)` puis `docs(g1)` rapport |
+| Statut initial | `PARTIAL` (recette API partielle, §11.8 du guide de démo) |
+| Preuves attendues | `frontend/e2e/**` ou script API, `docs/reports/G1_FINAL_REPORT.md` |
+
+---
+
 # 10. Vue synthétique des priorités
 
 ## MUST
