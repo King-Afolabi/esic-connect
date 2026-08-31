@@ -194,6 +194,76 @@ vert (aucune dépendance inter-module ajoutée).
 d'`application.yml` est ajouté dès maintenant (la config multipart
 `spring.servlet.multipart.*` reste pour le checkpoint de l'API).
 
+### CP3 réalisé — lecture sécurisée du CSV (composants purs)
+
+**Périmètre strict CP3** : lecture et normalisation *technique* du
+fichier. Aucune écriture, aucun accès base, aucune règle métier (syntaxe
+d'e-mail, existence de classe, doublons, `planned_action` → CP4), aucun
+port, aucune API, aucun stockage du fichier, aucune migration. Composants
+purs testables sans contexte Spring.
+
+- **`RecognizedColumn`** — 11 colonnes du modèle réduit (rapport §12.A) :
+  6 obligatoires (`last_name`, `first_name`, `email`, `formation_code`,
+  `class_code`, `academic_year`) + 5 optionnelles (`phone`,
+  `student_number`, `birth_date`, `work_study`, `company_name`) ;
+  correspondance d'en-tête insensible à la casse et à l'ordre ;
+  `IGNORED_HEADERS` = `level_code` / `promotion_code` /
+  `work_study_pattern`.
+- **`CsvFileGuard`** — contrôles binaires *avant* parsing : extension
+  `.csv`, `Content-Type` restreint à une liste tolérante (vide / absent
+  toléré), rejet des contenus binaires (octet nul, magie `PK\x03\x04`
+  ZIP/XLSX, OLE2 `D0 CF 11 E0`, `%PDF`), taille bornée, décodage
+  **UTF-8 strict** (`CharsetDecoder` `REPORT`) → `IMP_ENCODING_INVALID`,
+  BOM toléré et retiré. Renvoie le contenu texte ; le fichier n'est
+  jamais écrit sur disque.
+- **`CsvParser`** — lecteur RFC 4180 maison : guillemets, guillemet
+  doublé, cellule multi-lignes entre guillemets, fins de ligne
+  `CRLF`/`LF`, séparateur `,`/`;` auto-détecté sur l'en-tête (celui qui
+  reconnaît le plus de colonnes ; égalité → `,`). Lignes entièrement
+  vides ignorées et non comptées ; `row_number` = ligne physique du
+  fichier (en-tête = 1). Produit `ParsedCsv` : séparateur, en-tête
+  classé (`RECOGNIZED`/`IGNORED`/`UNKNOWN`, en-tête reconnu en double →
+  `UNKNOWN`), colonnes obligatoires absentes, lignes de données
+  (`columnCountMismatch` si nb de cellules ≠ en-tête), indicateurs
+  `tooManyRows` / `noDataRows`. Aucune évaluation de cellule.
+- **`CsvValueNormalizer`** — normalisation technique (rapport §5.2) :
+  `trimToNull`, `collapseSpaces` (noms), `lowerCase` (e-mail),
+  `upperCase` (codes), `normalizePhone` (retire espaces/points/tirets/
+  parenthèses), `parseBirthDate` (`yyyy-MM-dd` **ou** `dd/MM/yyyy` →
+  `BirthDateResult{value, present, malformed}`), `parseWorkStudy`
+  (`true/false/oui/non/1/0/yes/no` → `WorkStudyResult{...}`),
+  `sanitizeFileName` (basename, `[^A-Za-z0-9._ -]`→`_`, point initial
+  retiré), `sha256Hex` (empreinte du contenu — contenu non conservé),
+  `truncateReceivedValue` (200 car., sauts de ligne aplatis, jamais dans
+  l'audit).
+- **`CsvRowNormalizer` → `NormalizedRow`** — mappe une ligne brute selon
+  l'en-tête et applique la normalisation champ par champ ; conserve les
+  valeurs brutes des cellules reconnues (`rawValues`) pour un futur
+  `received_value` d'anomalie ; expose les indicateurs de forme
+  (`birthDateMalformed`, `workStudyMalformed`, `phonePresent`,
+  `columnCountMismatch`). Aucune décision de gravité ici.
+
+**Tests CP3** (purs, 36) : `CsvFileGuardTests` (11 — extension, type,
+ZIP/OLE/PDF, octet nul, UTF-8 invalide, BOM, taille, fichier vide),
+`CsvParserTests` (14 — `,`/`;`, `CRLF`, guillemets doublés, cellule
+multi-lignes + n° de ligne physique, lignes vides ignorées,
+classification d'en-tête, en-tête reconnu en double → `UNKNOWN`,
+obligatoires absentes, écart de colonnes, `tooManyRows`, `noDataRows`,
+fichier blanc), `CsvValueNormalizerTests` (7),
+`CsvRowNormalizerTests` (4).
+
+**Vérifications (31 août 2026)** :
+`./mvnw test -Dtest='CsvFileGuardTests,CsvParserTests,CsvValueNormalizerTests,CsvRowNormalizerTests'`
+→ **36 tests, 0 échec**. Aucune frontière de module modifiée
+(`ModularityTests` non ré-exécuté — inchangé depuis CP2).
+
+**Écart avec la conception (CP3)** : le rapport §15 rangeait aussi « la
+dé-duplication fichier » et « la génération de numéro (pure) » au CP3 ; le
+découpage retenu place la dé-duplication et les règles de champ au CP4
+(« validation et simulation ») et le formatage de numéro au CP6 (seul
+checkpoint qui en a réellement besoin), pour éviter du code mort et deux
+implémentations concurrentes.
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text
