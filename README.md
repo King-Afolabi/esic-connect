@@ -1,0 +1,281 @@
+# ESIC Connect
+
+Preuve de concept d'une plateforme web de **planification pédagogique,
+d'émargement intelligent et de suivi de l'assiduité** pour l'ESIC
+(certification RNCP 39394). Monolithe modulaire Spring Boot + front-end
+Angular, infrastructure locale conteneurisée.
+
+Ce dépôt est un **prototype**. Il implémente un sous-ensemble cohérent du
+cahier des charges et **documente explicitement** ce qui n'est pas
+réalisé (voir « Périmètre non livré » ci-dessous).
+
+---
+
+## Périmètre livré
+
+Parcours implémenté et testé **au niveau API** de bout en bout :
+
+```text
+Import CSV des apprenants (simulation → confirmation)
+  → Création d'une séance exceptionnelle (manuelle)
+  → Ouverture de la séance par le formateur
+  → Émargement de l'apprenant (QR opaque + code court, Redis)
+  → Consultation des présences
+  → Correction motivée et auditée
+  → Rapport d'assiduité (demi-journées)
+  → Export CSV
+```
+
+Détail par capacité et statut : `docs/CURRENT-STATE.md`.
+Audit vérifiable et matrices d'exigences :
+`docs/reports/PROJECT_FINAL_AUDIT.md`.
+
+Autres briques livrées : authentification JWT, administration des comptes
+et des rôles, invitation / activation par email (Mailpit), référentiels
+organisationnel et académique, périmètre pédagogique, inscriptions
+historisées, rythmes d'alternance, justificatif métier (sans fichier),
+piste d'audit.
+
+## Périmètre non livré (décision de finalisation — assumée)
+
+Pour cette livraison de prototype, les éléments suivants **ne sont pas
+implémentés** et ne doivent jamais être présentés comme livrés :
+
+- **Import du planning → prévisualisation → publication → versionnement →
+  création automatique des séances depuis un planning.** Aucun module
+  `planning`, aucune table, aucun endpoint, aucun écran. Le prototype ne
+  permet que la **création manuelle de séances exceptionnelles**.
+  Exigences classées `HORS_PÉRIMÈTRE_ASSUMÉ` : **EF-PLAN-001 à
+  EF-PLAN-007, EF-SES-001, RG-016, AC-007, AC-008**. C'est la lacune la
+  plus visible du parcours prioritaire de `CLAUDE.md` ; elle est **assumée
+  et signalée** ici, dans `docs/01-cadrage.md`, `docs/02-cahier-des-charges.md`
+  et devra l'être en soutenance.
+- Séances : `PATCH`, annulation, affectation d'un remplaçant.
+- QR fixe de salle + contrôle réseau CIDR (référentiel présent, non
+  consommé) ; scan caméra mobile (code court uniquement).
+- WebAuthn / passkeys, MFA TOTP, anti-bot (Turnstile).
+- Réclamations / messagerie, départ anticipé, justificatif avec pièce
+  jointe, import Excel `.xlsx` / multifeuille.
+- Service IA (FastAPI, mapping de colonnes, score d'anomalie).
+- IoT / MQTT / Raspberry Pi (broker Mosquitto démarré, **aucun code**).
+- PWA installable / offline / notifications push.
+- Mot de passe oublié, `/auth/logout` + révocation de session (JWT
+  stateless assumé).
+- Déploiement cloud / staging / HTTPS / haute disponibilité.
+
+Liste complète et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md`
+§0.3 et §7.4.
+
+---
+
+## Architecture réelle
+
+- **Back-end** : Java 21, Spring Boot 3.5, Maven, **Spring Modulith 1.4**.
+  Monolithe modulaire — 12 modules :
+  `identity`, `organization`, `academic`, `enrollment`, `alternation`,
+  `coursesession`, `attendance`, `studentimport`, `notification`,
+  `audit`, `bootstrap`, `shared`. Frontières vérifiées par
+  `ModularityTests`.
+- **Base** : MySQL 8, schéma géré **uniquement** par Flyway (`V1` → `V11`,
+  schéma en version 11), `ddl-auto: validate`.
+- **Cache / données temporaires** : Redis 7 — consommé **uniquement**
+  pour les jetons d'émargement.
+- **Front-end** : Angular 21.2 (standalone, zoneless, signaux, lazy
+  routes), Angular Material. JWT et contexte de rôle **en mémoire seule**.
+- **Email** : SMTP local Mailpit.
+- **Sécurité** : Spring Security, JWT HS256 (signature + `exp` + `iss`),
+  `@EnableMethodSecurity` + `@PreAuthorize` sur toutes les routes non
+  publiques, contrôle de périmètre côté serveur.
+
+Modules `planning`, `claim`, `reporting`, `ai`, `iot` décrits dans
+`docs/03-architecture.md` §7 = **architecture cible non implémentée**.
+
+Architecture cible cloud (AWS) : documentée, **non déployée**
+(`docs/03-architecture.md` §37).
+
+---
+
+## Prérequis
+
+Versions réellement utilisées pour les vérifications :
+
+| Outil | Version | Note |
+|---|---|---|
+| Java (JDK) | **21** (Temurin / OpenJDK) | le build échoue avec une autre version majeure |
+| Maven | wrapper `./mvnw` fourni | pas d'installation Maven requise |
+| Node.js | **24** (testé 24.13.0) | |
+| npm | **11** (testé 11.6.2) | |
+| Docker + Docker Compose | Docker ≥ 24 | pour MySQL / Redis / Mailpit / Mosquitto |
+
+Si votre `java -version` par défaut n'est pas 21 :
+
+```bash
+export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"  # macOS/Homebrew — adapter
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+---
+
+## Installation
+
+```bash
+git clone <url-du-dépôt>
+cd projet_final
+cp .env.example .env
+```
+
+Éditez ensuite `.env` (fichier **non versionné**, jamais commité) :
+
+| Variable | Obligatoire | Valeur |
+|---|---|---|
+| `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `REDIS_PASSWORD` | oui | valeurs locales de votre choix (remplacer les `change-*`) |
+| `JWT_SECRET` | oui | chaîne aléatoire **≥ 32 octets** ; le back-end refuse de démarrer sinon |
+| `ESIC_DEMO_PASSWORD` | oui (profil `demo` seulement) | mot de passe des comptes fictifs, **≥ 12 caractères** |
+| `APP_ALLOWED_ORIGINS` | non | origine(s) autorisée(s) du front (défaut `http://localhost:4200`) |
+
+`.env.example` ne contient que des placeholders. **Ne jamais y mettre de
+secret réel** ni committer `.env`.
+
+Génération rapide d'un secret :
+
+```bash
+openssl rand -base64 48
+```
+
+---
+
+## Lancement
+
+### 1. Infrastructure (Docker)
+
+```bash
+docker compose config      # valider la syntaxe et les variables
+docker compose up -d       # mysql, redis, mailpit, mosquitto
+docker compose ps          # mysql / redis / mailpit doivent être "healthy"
+```
+
+Interface Mailpit : http://localhost:8025
+
+### 2. Back-end (port 8080)
+
+```bash
+cd backend
+set -a && source ../.env && set +a       # exporte les variables MySQL / Redis / JWT
+SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+```
+
+Le profil `demo` amorce 4 comptes fictifs (voir plus bas) **sans
+désactiver la sécurité**. Sans ce profil (`local`), aucun compte n'est
+créé.
+
+OpenAPI au runtime : http://localhost:8080/v3/api-docs —
+Swagger UI : http://localhost:8080/swagger-ui.html —
+Santé : http://localhost:8080/actuator/health
+
+### 3. Front-end (port 4200)
+
+```bash
+cd frontend
+npm ci
+npm start          # ng serve — http://localhost:4200
+```
+
+`ng serve` proxifie `/api` vers `http://localhost:8080`
+(`proxy.conf.json`) : aucune configuration CORS n'est nécessaire en
+local.
+
+### 4. Jeu de données de démonstration (optionnel)
+
+Après le démarrage du back-end en profil `demo` :
+
+```bash
+bash scripts/seed-demo.sh   # crée via l'API : site, formation, classe, 2 profils, 2 inscriptions, 1 séance PLANNED
+```
+
+---
+
+## Tests et vérifications
+
+```bash
+# Back-end (nécessite l'infra Docker + les variables .env)
+cd backend
+set -a && source ../.env && set +a
+./mvnw clean test            # BUILD SUCCESS attendu — voir docs/CURRENT-STATE.md pour le total de référence
+
+# Front-end
+cd frontend
+npm ci
+npm test -- --watch=false    # Vitest + jsdom
+npm run lint                 # angular-eslint
+npm run build                # build de production (budget initial 500 kB)
+npm audit                    # 0 vulnérabilité attendue
+
+# Non-régression du script de seed (faux curl déterministe)
+bash scripts/test/test-seed-demo.sh
+```
+
+Totaux de référence du dernier audit : voir
+`docs/CURRENT-STATE.md` → « Résultats du dernier audit ».
+
+---
+
+## Comptes de démonstration
+
+Créés par le profil `demo`. Domaine réservé `example.test` (données
+strictement fictives). **Le mot de passe n'est pas dans le dépôt** : il
+vaut la valeur de `ESIC_DEMO_PASSWORD` de votre `.env`.
+
+| Email | Rôle(s) | Usage |
+|---|---|---|
+| `admin@example.test` | `ADMIN` | administration des comptes, référentiels |
+| `formateur@example.test` | `TEACHER` | ouverture de séance, émargement, présences |
+| `apprenant1@example.test` | `STUDENT` | émargement, « mes présences » |
+| `apprenant2@example.test` | `STUDENT` | second émargement, anti-doublon |
+
+Les 4 comptes sont **mono-rôle** : le sélecteur de contexte de rôle
+(EF-AUTH-003) n'est pas démontrable manuellement avec ce jeu tel quel.
+Le checkpoint F6 de finalisation ajoute un compte multi-rôles dédié.
+
+---
+
+## Documentation
+
+| Fichier | Contenu |
+|---|---|
+| `docs/CURRENT-STATE.md` | **état courant réel** (court) : modules, migrations, capacités livrées / partielles / hors périmètre, résultats des tests |
+| `docs/reports/PROJECT_FINAL_AUDIT.md` | audit vérifiable (checkpoint F1) : matrices EF-* / RG-* / AC-*, endpoints, backlog `FINAL-*` |
+| `docs/reports/PROJECT_HISTORY.md` | chronologie détaillée archivée des tranches PR #1 → #26 |
+| `docs/01-cadrage.md` | vision, objectifs, acteurs, périmètre, contraintes |
+| `docs/02-cahier-des-charges.md` | exigences fonctionnelles et techniques |
+| `docs/03-architecture.md` | architecture réelle et cible |
+| `docs/04-modele-donnees.md` | modèle de données |
+| `docs/05-product-backlog.md` | backlog produit |
+| `docs/07-securite-rgpd.md` | sécurité et RGPD |
+| `docs/08-tests-recette.md` | plan de tests et recette |
+| `docs/09-matrice-rncp.md` | traçabilité RNCP 39394 (blocs BC01–BC04) |
+| `docs/10-journal-ia.md` | journal d'utilisation de l'IA |
+| `docs/11-guide-demonstration.md` | guide de démonstration pas à pas |
+| `CLAUDE.md` | règles de travail assisté par IA |
+
+---
+
+## Dépannage minimal
+
+| Symptôme | Cause probable / solution |
+|---|---|
+| Back-end : `JWT_SECRET` / `Failed to bind` au démarrage | `JWT_SECRET` absent ou < 32 octets dans `.env` ; `set -a && source ../.env && set +a` non exécuté |
+| Back-end : `ESIC_DEMO_PASSWORD ... obligatoire` | profil `demo` sans `ESIC_DEMO_PASSWORD` (≥ 12 caractères) dans `.env` |
+| Back-end : `Access denied for user` / `Communications link failure` | conteneurs pas démarrés / pas `healthy` (`docker compose ps`) ; mauvais `MYSQL_*` dans `.env` |
+| Back-end : erreur Flyway `validate` / version de schéma | base dans un état incohérent — `docker compose down -v` puis `up -d` recrée un volume vierge |
+| Build back-end échoue immédiatement | `java -version` ≠ 21 — exporter `JAVA_HOME` vers un JDK 21 |
+| Front : `/api/...` en 404 ou erreur réseau | back-end non lancé sur `:8080`, ou `npm start` pas utilisé (le proxy `/api` vient de `proxy.conf.json`) |
+| Front : session perdue au rechargement | comportement **attendu** — JWT en mémoire seule, pas de refresh token (prototype) |
+| Aucun email reçu | consulter Mailpit http://localhost:8025 ; l'envoi est asynchrone, un échec est seulement journalisé côté serveur |
+| `scripts/seed-demo.sh` en `401` | comptes `demo` non amorcés (profil `demo`) ou `ESIC_DEMO_PASSWORD` différent de celui utilisé au démarrage |
+
+---
+
+## Licence / usage
+
+Projet pédagogique. Données **strictement fictives** (`example.test`).
+Aucun secret n'est versionné.

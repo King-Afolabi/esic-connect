@@ -337,6 +337,24 @@ Sont exclus du prototype :
 \- suppression automatique d’un apprenant ;  
 \- reconnaissance biométrique effectuée par le serveur.  
   
+\### 4.5.1 Addendum de finalisation F2 (31 août 2026) — exclusion assumée de l’import du planning
+
+En complément de la liste ci-dessus, la livraison de finalisation
+**n’implémente pas** le domaine **planning** :
+
+\- import du planning (CSV), prévisualisation, correction de lignes,
+  publication, versionnement — **non implémentés** (EF-PLAN-001 à
+  EF-PLAN-007) ;
+\- création automatique des séances **depuis un planning publié** —
+  **non implémentée** (EF-SES-001, RG-016, AC-007, AC-008) ;
+\- seule la **création manuelle de séances exceptionnelles** est livrée
+  (module `coursesession`).
+
+Ces exigences sont classées `HORS_PÉRIMÈTRE_ASSUMÉ`. Elles restent
+décrites plus bas dans ce document comme **cible fonctionnelle**, sans
+qu’aucune ne soit réalisée. Le détail de l’écart est dans `README.md`,
+`docs/CURRENT-STATE.md` et `docs/reports/PROJECT_FINAL_AUDIT.md` §7.4.
+
 \---  
   
 \# 5. Terminologie  

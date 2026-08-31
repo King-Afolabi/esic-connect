@@ -444,6 +444,50 @@ iot            → attendance, coursesession, shared
 
 # 7. Modules du back-end
 
+> **État réel d'implémentation (checkpoint de finalisation F2,
+> 31 août 2026 — base `main` = `e44ccb1`).**
+>
+> Les sous-sections §7.1 à §7.16 décrivent le **découpage cible** issu de
+> la conception initiale. Le code réellement fusionné sur `main` contient
+> **12 modules Spring Modulith** (`ModularityTests` vert) :
+>
+> | Module réel (`com.esic.connect.`) | §7 correspondant | Migration(s) |
+> |---|---|---|
+> | `identity` | §7.1 | V1, V2, V3 |
+> | `organization` | **remplace §7.6 `room`** (site / bâtiment / salle / plage réseau CIDR) | V4 |
+> | `academic` | §7.2 (+ affectations pédagogiques et `AcademicScopeGuard`) | V5, V6 |
+> | `enrollment` | §7.3 | V7 |
+> | `alternation` | §7.4 | V8 |
+> | `coursesession` | §7.7 — **séances exceptionnelles manuelles uniquement** (pas de création depuis un planning) | V9, V10 |
+> | `attendance` | §7.8 (+ le justificatif métier **sans fichier** de §7.9 et une partie du reporting de §7.12) | V9, V10 |
+> | `studentimport` | **nouveau** — import CSV contrôlé des apprenants (non prévu explicitement en §7 ; parcours d'import de §7.3) | V11 |
+> | `notification` | §7.11 — email d'activation seulement, envoi asynchrone après commit, **pas de file persistante** | — |
+> | `audit` | §7.13 | V1 |
+> | `bootstrap` | **nouveau** — amorçage `demo` (comptes fictifs, profil `demo` uniquement) | — |
+> | `shared` | §7.16 | — |
+>
+> **Architecture cible non implémentée** (aucun package, aucune table,
+> aucun endpoint) :
+>
+> - **§7.5 `planning`** — import du planning, simulation, versions,
+>   publication, création automatique des séances, mapping intelligent.
+>   `HORS_PÉRIMÈTRE_ASSUMÉ` pour cette livraison (EF-PLAN-001..007,
+>   EF-SES-001, RG-016, AC-007, AC-008) — voir `README.md` et
+>   `docs/reports/PROJECT_FINAL_AUDIT.md` §7.4.
+> - **§7.9 `justification`** comme module autonome + **pièces jointes** —
+>   seule la métadonnée métier existe, portée par `attendance`.
+> - **§7.10 `claim`** — réclamations / messagerie.
+> - **§7.12 `reporting`** comme module autonome — les rapports et l'export
+>   CSV vivent dans `attendance` ; pas d'export Excel, pas de mise en
+>   page « officielle ».
+> - **§7.14 `ai`** — service FastAPI, mapping de colonnes, score.
+> - **§7.15 `iot`** — broker Mosquitto démarré par `compose.yaml`, aucun
+>   code back-end.
+>
+> Les §6.2, §6.5 et §6.6 (listes de modules et règles de dépendance)
+> décrivent également le découpage cible et ne sont pas alignées sur les
+> 12 modules réels ci-dessus.
+
 ## 7.1 `identity`
 
 Responsabilités :
@@ -511,10 +555,14 @@ Module Spring Modulith `com.esic.connect.alternation` livré et testé
   suppression) ;
 - résolution du contexte `SCHOOL` / `COMPANY` / `UNKNOWN` pour une classe
   ou une inscription et une date (déterministe, bornes inclusives).
-  **Différé** : aucun calcul d’assiduité — les modules `planning`,
-  `coursesession` et `attendance` n’existent pas ; la résolution
-  effective applique la seule priorité *structurelle* d’une exception
-  individuelle sur le rythme.
+  **Mise à jour F2** : les modules `coursesession` et `attendance`
+  **existent** (V9/V10, fusionnés) et le reporting d'assiduité consomme
+  la résolution de contexte via le port `alternation.AlternationDirectory`
+  (contexte `COMPANY` exclu du dénominateur). En revanche le module
+  `planning` **n'existe toujours pas** : les « demi-journées attendues »
+  reposent sur des séances exceptionnelles saisies à la main, et la
+  résolution effective applique la seule priorité *structurelle* d'une
+  exception individuelle sur le rythme.
 
 Dépendances inter-modules, **uniquement via ports publics** (frontières
 vérifiées par `ModularityTests`) :
