@@ -16,19 +16,32 @@ fin de lot**.
 
 ## 1. Commits produits
 
-Cinq commits de checkpoint, un par checkpoint, dans l'ordre :
+Le lot compte **6 commits intentionnels** en avance sur `main` :
+**5 commits de checkpoint** (un par checkpoint, F2 → F6) **+ 1 commit
+documentaire de clôture** (ce rapport, `e9e6a70`). Aucun décompte
+« 5 commits au total » ne doit être déduit de ce rapport : le nombre
+*total* de commits n'était pas contraint, seule la règle « un commit par
+checkpoint » l'était.
 
-| Commit | Titre |
-|---|---|
-| `d7d2bfe` | `docs(finalization): aligner la documentation sur l'état réel (F2)` |
-| `9de7612` | `test(finalization): renforcer les preuves de qualité (F3)` |
-| `e94a5f8` | `ci(security): contrôler les dépendances et permissions (F4)` |
-| `732da8a` | `security(finalization): durcir les échanges HTTP (F5)` |
-| `c93f56d` | `docs(demo): préparer la démonstration finale du projet (F6)` |
+| Commit | Type | Titre |
+|---|---|---|
+| `d7d2bfe` | checkpoint F2 | `docs(finalization): aligner la documentation sur l'état réel (F2)` |
+| `9de7612` | checkpoint F3 | `test(finalization): renforcer les preuves de qualité (F3)` |
+| `e94a5f8` | checkpoint F4 | `ci(security): contrôler les dépendances et permissions (F4)` |
+| `732da8a` | checkpoint F5 | `security(finalization): durcir les échanges HTTP (F5)` |
+| `c93f56d` | checkpoint F6 | `docs(demo): préparer la démonstration finale du projet (F6)` |
+| `e9e6a70` | clôture | `docs(finalization): rapport d'audit final du lot F2-F6` |
 
-`git diff --stat main...HEAD` : **39 fichiers**, +6260 / −3739 (dont
-`docs/CURRENT-STATE.md` réduit de ~3900 lignes, archivées dans
-`docs/reports/PROJECT_HISTORY.md`).
+À ces 6 commits s'ajoute le présent commit correctif
+`docs(finalization): corriger la synthèse finale du lot`, qui ne modifie
+que des fichiers `docs/` déjà présents.
+
+`git diff --stat main...c93f56d` (les 5 checkpoints seuls) : **39
+fichiers**, +6260 / −3739 (dont `docs/CURRENT-STATE.md` réduit de ~3900
+lignes, archivées dans `docs/reports/PROJECT_HISTORY.md`). Le commit de
+clôture `e9e6a70` ajoute ce seul rapport → `git diff --stat
+main...e9e6a70` : **40 fichiers**, +6643 / −3739. Le présent commit
+correctif ne touche que ce rapport (aucun nouveau fichier).
 
 Aucun commit temporaire, aucun `fixup`, aucun `squash`. Historique de
 `main` non réécrit. **Aucun push, aucune PR, aucune fusion.**
@@ -261,7 +274,7 @@ couverts par 475 tests Vitest. Le §11 est le mode opératoire du jour J.
 | FINAL-003 | Import planning + publication + séances absent | F2 (doc) | **HORS_PÉRIMÈTRE_ASSUMÉ, DOCUMENTÉ** — README, `docs/01` §23.5, `docs/02` §4.5.1, `docs/03` §7, `docs/12` §6. Non implémenté. |
 | FINAL-004 | `09-matrice-rncp.md` §6 incohérent | F2 | **CLÔTURÉ** — TR-023/024/003/004/005 corrigés |
 | FINAL-005 | `03-architecture.md` §7 modules faux | F2 | **CLÔTURÉ** — bloc « état réel » |
-| FINAL-006 | Aucun scan de dépendances en CI | F4 | **CLÔTURÉ (PARTIEL)** — Dependabot + dependency-review + `npm audit` ; pas de SCA Maven de fond (assumé) |
+| FINAL-006 | Aucun scan de dépendances en CI | F4 | **CLÔTURÉ (PARTIEL) — exécution CI À VÉRIFIER SUR LA PR** — workflows livrés (Dependabot + `dependency-review` + `npm audit`) ; dépôt **public**, donc `dependency-review-action` fonctionne **sans GitHub Advanced Security** ; **jamais exécuté sur GitHub** (aucune PR ouverte) ; pas de SCA Maven de fond (assumé). Ne pas considérer totalement clos avant un premier run de CI vert. |
 | FINAL-007 | CORS non configuré | F5 | **CLÔTURÉ** — implémenté + testé + vérifié live |
 | FINAL-008 | Pas de CSP / `Referrer-Policy` | F5 | **CLÔTURÉ** — ajoutées + `HttpSecurityHeadersIntegrationTests` |
 | FINAL-009 | Pas de mesure de perf reproductible | F3 | **CLÔTURÉ** — 2 tests `perf` + `PERF_NOTES.md` (chiffres réels) |
@@ -287,10 +300,13 @@ couverts par 475 tests Vitest. Le §11 est le mode opératoire du jour J.
 | FINAL-029 | Déploiement cloud AWS / staging / HTTPS / HA | — | **HORS_PÉRIMÈTRE_ASSUMÉ** — listé |
 | FINAL-030 | `/auth/logout` + révocation, mot de passe oublié | — | **HORS_PÉRIMÈTRE_ASSUMÉ** — listé |
 
-Récapitulatif : **17 clôturés**, **2 clôturés partiels** (FINAL-006,
-FINAL-015 / FINAL-020 minimal), **3 dettes assumées documentées**
+Récapitulatif (30 entrées, `FINAL-001..030`) : **16 clôturés**,
+**3 clôturés partiels / minimaux / documentaires** (FINAL-006,
+FINAL-015, FINAL-020), **3 dettes assumées ou différées, documentées**
 (FINAL-017, FINAL-019, FINAL-021), **8 hors périmètre assumé**
-(FINAL-003 + FINAL-024..030).
+(FINAL-003 + FINAL-024..030). Contrôle : 16 + 3 + 3 + 8 = 30.
+FINAL-006 est comptée parmi les « clôturés partiels » et **non** parmi
+les clôturés pleins, son exécution CI restant à vérifier.
 
 ---
 
@@ -334,8 +350,12 @@ livrés) — `README.md`, `docs/12` §6, `docs/reports/PROJECT_FINAL_AUDIT.md`
    (le chemin d'import y échappe déjà).
 7. **Démonstration UI de bout en bout** — non rejouée automatiquement ;
    parcours API vérifié, composants front couverts par 475 tests.
-8. **Workflows CI F4** — non encore exécutés sur GitHub (statut à
-   confirmer au premier run de PR).
+8. **Workflows CI F4** (dont `dependency-review`, FINAL-006) — non
+   encore exécutés sur GitHub, aucune PR ouverte. Le dépôt est
+   **public** : `dependency-review-action` est disponible sans GitHub
+   Advanced Security, mais son bon fonctionnement (graphe de
+   dépendances Maven + npm exploité, job vert) reste **à vérifier sur
+   la première PR**. Idem pour `npm audit --audit-level=high` en CI.
 
 ---
 
@@ -355,16 +375,23 @@ livrés) — `README.md`, `docs/12` §6, `docs/reports/PROJECT_FINAL_AUDIT.md`
 | 9.3.10 | Routes non publiques `@PreAuthorize` ; matrices `*SecurityTests` passent | **OUI** — inchangé + `HttpSecurityHeadersIntegrationTests` |
 | 9.3.11 | CORS restrictif configuré et testé **ou** absence justifiée | **OUI** — configuré + testé (F5) |
 | 9.3.12 | En-têtes de sécurité vérifiés par un test d'intégration ; CSP + `Referrer-Policy` ajoutés ou écart documenté | **OUI** — ajoutés + testés |
-| 9.3.13 | CI : au moins un contrôle automatique des dépendances vulnérables | **OUI** — dependency-review + `npm audit` (F4) |
+| 9.3.13 | CI : au moins un contrôle automatique des dépendances vulnérables | **OUI pour la configuration** — workflows `dependency-review` + `npm audit` livrés (F4) ; dépôt public, donc pas de dépendance à GitHub Advanced Security. **Exécution CI encore non observée** (aucune PR) → à confirmer au premier run vert : voir §10 point 8 et FINAL-006. |
 | 9.4.14 | Parcours `CLAUDE.md` démontrable de bout en bout **ou** chaque maillon non réalisé listé explicitement hors périmètre | **OUI (2ᵉ branche)** — import planning listé hors périmètre partout |
 | 9.4.15 | `docs/11` couvre connexion, import CSV (fichier d'exemple), séance + émargement + correction, rapport + export, résultats attendus | **OUI** — §11 + `docs/demo-data/` |
 | 9.4.16 | Sélecteur de contexte de rôle démontrable (compte multi-rôles) | **OUI** — `responsable@example.test` |
 | 9.4.17 | Données strictement fictives (`example.test`), vérifiées | **OUI** — CSV + comptes vérifiés |
 | 9.5.18 | Chaque bloc RNCP a au moins une preuve exécutable ou versionnée ; fonctions simulées / conçues marquées comme telles | **OUI** — `docs/09` (dont notes F5/F6), `docs/11` §13 |
 
-**Tous les critères de fin de projet sont satisfaits**, avec les
-réserves du §10 (dettes assumées et documentées, non bloquantes pour la
-soutenance d'un prototype).
+**Les critères de fin de projet sont satisfaits sur le fond** (code,
+tests, sécurité applicative, documentation), avec deux réserves
+explicites :
+
+1. le critère **9.3.13** n'est satisfait qu'au niveau de la
+   *configuration* CI — l'exécution réelle des workflows F4 (dont
+   `dependency-review`, FINAL-006) n'a **jamais eu lieu** et reste **à
+   vérifier sur la première PR** ;
+2. les autres réserves du §10 (dettes assumées et documentées, non
+   bloquantes pour la soutenance d'un prototype).
 
 ---
 
@@ -380,4 +407,7 @@ soutenance d'un prototype).
 - Aucun affaiblissement d'autorisation ou de validation.
 - Aucun wildcard CORS ; aucun workflow `pull_request_target` ; aucun
   traitement de code de PR avec permission d'écriture.
-- Exactement 5 commits de checkpoint (F2 → F6) + ce rapport d'audit.
+- 5 commits de checkpoint (F2 → F6) + 1 commit documentaire de clôture
+  (`e9e6a70`) = **6 commits intentionnels** ; le présent commit
+  correctif `docs/` s'y ajoute. Aucun nombre *total* de commits n'était
+  imposé — seulement « un commit par checkpoint ».
