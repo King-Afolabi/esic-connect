@@ -154,4 +154,28 @@ final class StudentImportResponses {
     record RowIssueResponse(String severity, String code, String message, String columnName,
                             String receivedValue, String suggestedValue) {
     }
+
+    /**
+     * Résultat d'une confirmation (rapport §8). {@code alreadyApplied} vaut
+     * {@code true} lorsqu'un job déjà {@code APPLIED} est reconfirmé : le
+     * bilan renvoyé est alors celui mémorisé, sans aucune nouvelle
+     * écriture (invariant T6).
+     *
+     * @param jobPublicId  identifiant public du job
+     * @param alreadyApplied {@code true} si le job était déjà appliqué
+     * @param created      comptes créés + invités
+     * @param updated      inscriptions d'un compte existant + mises à jour de profil
+     * @param transferred  changements de classe
+     * @param invited      invitations (r)émises
+     * @param ignored      lignes sans changement
+     */
+    record ConfirmationResultResponse(
+            UUID jobPublicId,
+            boolean alreadyApplied,
+            int created,
+            int updated,
+            int transferred,
+            int invited,
+            int ignored) {
+    }
 }

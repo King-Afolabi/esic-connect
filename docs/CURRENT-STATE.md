@@ -567,6 +567,55 @@ conserve `status`/`applied_created` mais perd `student_import_row` et
 `./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests,ModularityTests,EsicConnectApplicationTests,com.esic.connect.audit.**'`
 → **127 tests, 0 échec** ; `ModularityTests` vert.
 
+### CP8 réalisé — API de confirmation et cycle de vie
+
+**Périmètre strict CP8** : couche HTTP de la confirmation et de
+l'annulation. Aucune migration.
+
+- **`StudentImportController`** — deux endpoints ajoutés
+  (`@PreAuthorize(MANAGE_ROLES)`) :
+  - `POST /api/v1/student-imports/{publicId}/confirm` → **`200`**
+    `ConfirmationResultResponse` (jamais `201` : la ressource existe
+    déjà). Reconfirmation d'un job `APPLIED` → `200` +
+    `alreadyApplied = true` + bilan mémorisé (invariant T6). Erreurs :
+    `409 IMP_NOT_CONFIRMABLE` / `IMP_STALE_SIMULATION` (anomalies
+    rafraîchies persistées — le client recharge `/rows`) /
+    `IMP_SIMULATION_EXPIRED` / `IMP_JOB_CANCELLED`, `403 IMP_CONFIRM_FORBIDDEN`,
+    `404 IMP_JOB_NOT_FOUND`.
+  - `POST /api/v1/student-imports/{publicId}/cancel` → **`204`**. Erreurs :
+    `409 IMP_JOB_NOT_CANCELLABLE` (job non `SIMULATED`),
+    `403 IMP_JOB_FORBIDDEN`, `404 IMP_JOB_NOT_FOUND`.
+- **`StudentImportConfirmationService.cancel(...)`** (`@Transactional`) :
+  charge le job (404), contrôle fin de périmètre (`PEDAGOGICAL_MANAGER`
+  = son propre job → 403 sinon), `status != SIMULATED` →
+  `IMP_JOB_NOT_CANCELLABLE`, `job.markCancelled(now, actor)` + publication
+  `StudentImportChangeEvent(CANCELLED)` (audité `STUDENT_IMPORT_CANCELLED`
+  par le listener CP7).
+- `StudentImportJob.markCancelled(...)` (mutateur) +
+  `StudentImportResponses.ConfirmationResultResponse`
+  (`{ jobPublicId, alreadyApplied, created, updated, transferred,
+  invited, ignored }`).
+
+**Tests CP8** : `StudentImportLifecycleApiIntegrationTests` (5,
+`@SpringBootTest` + `TestRestTemplate`) — `confirm` → `200`
+`alreadyApplied=false`, `created=2`, job `APPLIED` ; reconfirmation →
+`200` `alreadyApplied=true`, même bilan (TI-012) ; `confirm` sur job non
+confirmable / expiré / annulé → `409` `IMP_NOT_CONFIRMABLE` /
+`IMP_SIMULATION_EXPIRED` / `IMP_JOB_CANCELLED` ; `cancel` d'un job
+`SIMULATED` → `204` puis statut `CANCELLED` ; `cancel` d'un job `APPLIED`
+→ `409 IMP_JOB_NOT_CANCELLABLE` ; `cancel` d'un job inconnu → `404` ;
+`401` anonyme, `403` `STUDENT`, `403` pour un `PEDAGOGICAL_MANAGER` sur
+le `confirm`/`cancel` du job d'un autre RP ; deux `confirm` HTTP
+concurrents → exactement **un** `200` non idempotent (10 comptes créés,
+jamais 20), l'autre `200` idempotent ou `409`, jamais `500`.
+
+**Vérifications (31 août 2026)** :
+`./mvnw test -Dtest='com.esic.connect.studentimport.**'` → **122 tests,
+0 échec** ; `ModularityTests` vert.
+
+**Écart avec la conception (CP8)** : `cancel` (rapport §15 → CP5) a été
+regroupé ici avec `confirm` (mutations d'état du job).
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text

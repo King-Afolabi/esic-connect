@@ -1,6 +1,8 @@
 package com.esic.connect.studentimport.internal;
 
 import com.esic.connect.identity.CurrentUserResolver;
+import com.esic.connect.studentimport.internal.StudentImportConfirmationService.ConfirmationResult;
+import com.esic.connect.studentimport.internal.StudentImportResponses.ConfirmationResultResponse;
 import com.esic.connect.studentimport.internal.StudentImportResponses.JobResponse;
 import com.esic.connect.studentimport.internal.StudentImportResponses.RowResponse;
 import org.springframework.http.HttpStatus;
@@ -38,13 +40,16 @@ import java.io.IOException;
 class StudentImportController {
 
     private final StudentImportSimulationService simulationService;
+    private final StudentImportConfirmationService confirmationService;
     private final StudentImportQueryService queryService;
     private final CurrentUserResolver currentUserResolver;
 
     StudentImportController(StudentImportSimulationService simulationService,
+                            StudentImportConfirmationService confirmationService,
                             StudentImportQueryService queryService,
                             CurrentUserResolver currentUserResolver) {
         this.simulationService = simulationService;
+        this.confirmationService = confirmationService;
         this.queryService = queryService;
         this.currentUserResolver = currentUserResolver;
     }
@@ -93,5 +98,26 @@ class StudentImportController {
                                    @AuthenticationPrincipal Jwt caller) {
         return queryService.rows(publicId, rowStatus, severity, action, page, size, sort,
                 StudentImportWeb.subject(caller));
+    }
+
+    /**
+     * Confirme une simulation — {@code 200} (jamais {@code 201} :
+     * la ressource existe déjà). Reconfirmation d'un job {@code APPLIED} →
+     * {@code 200} + {@code alreadyApplied = true} (invariant T6).
+     */
+    @PostMapping("/{publicId}/confirm")
+    @PreAuthorize(StudentImportWeb.MANAGE_ROLES)
+    ConfirmationResultResponse confirm(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
+        ConfirmationResult result = confirmationService.confirm(publicId, StudentImportWeb.subject(caller));
+        return new ConfirmationResultResponse(result.jobPublicId(), result.alreadyApplied(), result.created(),
+                result.updated(), result.transferred(), result.invited(), result.ignored());
+    }
+
+    /** Annule une simulation avant confirmation — {@code 204}. */
+    @PostMapping("/{publicId}/cancel")
+    @PreAuthorize(StudentImportWeb.MANAGE_ROLES)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void cancel(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
+        confirmationService.cancel(publicId, StudentImportWeb.subject(caller));
     }
 }

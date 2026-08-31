@@ -103,6 +103,32 @@ class StudentImportConfirmationService {
      * une transaction propre — plus aucun verrou détenu — puis on signale
      * {@code STALE_SIMULATION}.
      */
+    /**
+     * Annulation d'une simulation avant confirmation (rapport §8, §3.4).
+     * Seul un job {@code SIMULATED} est annulable ; un job {@code APPLIED}
+     * / {@code CANCELLED} / {@code EXPIRED} → {@code IMP_JOB_NOT_CANCELLABLE}.
+     * Périmètre contrôlé côté serveur ({@code PEDAGOGICAL_MANAGER} =
+     * son propre job).
+     */
+    @Transactional
+    void cancel(String jobPublicId, String callerSubject) {
+        StudentImportJob job = jobRepository
+                .findByPublicId(StudentImportWeb.parseUuid(jobPublicId,
+                        StudentImportException.Kind.JOB_NOT_FOUND))
+                .orElseThrow(() -> new StudentImportException(StudentImportException.Kind.JOB_NOT_FOUND));
+        Long actorId = requireCaller(callerSubject);
+        if (!academicScopeDirectory.hasGlobalScope() && !job.getRequestedById().equals(actorId)) {
+            throw new StudentImportException(StudentImportException.Kind.JOB_FORBIDDEN);
+        }
+        if (job.getStatus() != StudentImportJobStatus.SIMULATED) {
+            throw new StudentImportException(StudentImportException.Kind.JOB_NOT_CANCELLABLE);
+        }
+        job.markCancelled(clock.instant(), actorId);
+        jobRepository.save(job);
+        eventPublisher.publishEvent(new StudentImportChangeEvent(job.getPublicId(), actorId,
+                StudentImportChangeAction.CANCELLED, "job=" + job.getPublicId()));
+    }
+
     ConfirmationResult confirm(String jobPublicId, String callerSubject) {
         Attempt attempt = self.getObject().runConfirmation(jobPublicId, callerSubject);
         if (attempt.stale()) {

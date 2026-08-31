@@ -282,6 +282,19 @@ class StudentImportJob extends BaseEntity {
         return status == StudentImportJobStatus.EXPIRED || !expiresAt.isAfter(reference);
     }
 
+    /**
+     * Annulation explicite d'une simulation avant confirmation
+     * ({@code SIMULATED → CANCELLED}, rapport §3.4). Le job devient
+     * non confirmable et sera purgé (§12.C). L'auteur est réutilisé comme
+     * {@code confirmed_by_id} (colonne d'acteur de la transition finale).
+     */
+    void markCancelled(Instant at, Long actorId) {
+        this.status = StudentImportJobStatus.CANCELLED;
+        this.confirmedAt = at;
+        this.confirmedById = actorId;
+        this.confirmable = false;
+    }
+
     Instant getSimulatedAt() {
         return simulatedAt;
     }
