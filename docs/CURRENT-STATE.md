@@ -1,5 +1,18 @@
 # État courant — ESIC Connect
 
+> **⚠️ Audit de finalisation F1 (31 août 2026) — voir
+> [`docs/reports/PROJECT_FINAL_AUDIT.md`](reports/PROJECT_FINAL_AUDIT.md).**
+> Ce document est en cours de resynchronisation. Les mentions ci-dessous
+> de branches « non fusionnées / non poussées » pour les tranches **V10 —
+> gestion de l'assiduité** (PR #22, `35bd04b`) et **import CSV des
+> apprenants** (PR #23 `e8fd16d`, PR #24 `31acb09`, PR #25 `9c5affa`) sont
+> **obsolètes** : ces cinq PR sont **fusionnées sur `main`**, qui est
+> aujourd'hui à `9c5affa` (schéma Flyway en version 11). Chiffres de tests
+> à jour (run F1) : back-end `./mvnw clean test` → **682 tests, 0 échec** ;
+> front-end `npm test` → **471 tests, 0 échec** ; `npm run lint` OK ;
+> `npm run build` **483,26 kB** (< 500 kB). Le rapport d'audit fait foi
+> jusqu'à la réécriture (checkpoint F2).
+
 ## Dernière mise à jour
 
 ```text
@@ -9,7 +22,8 @@
 ## Dernier commit stable
 
 ```text
-5874f5a — Merge pull request #20 from King-Afolabi/feature/attendance-qr-demonstration, sur main
+9c5affa — feat(import): import CSV contrôlé des apprenants (CP2 à CP10) (#25), sur main
+(historique : 5874f5a = PR #20 ; 35bd04b = PR #22 / V10 ; e8fd16d, 31acb09, 9c5affa = PR #23-25 / import CSV V11)
 ```
 
 ## Tranche en cours — Import CSV contrôlé des apprenants (CP2 → CP10 réalisés)
