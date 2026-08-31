@@ -20,7 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <spring-modulith.version>1.4.12</spring-modulith.version>
-        <springdoc-openapi.version>2.9.0</springdoc-openapi.version>
+        <springdoc-openapi.version>3.1.0</springdoc-openapi.version>
         <!--
             Sélection des tests par tag JUnit (FINAL-009).
             Par défaut : on exécute tout SAUF le tag `perf` (mesures
