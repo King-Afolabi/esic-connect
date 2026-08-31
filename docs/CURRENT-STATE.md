@@ -425,6 +425,95 @@ l'administration globale), job inconnu → `404`, tri / filtre invalides →
 rapport §15) est déplacé au CP8 (« API de confirmation et cycle de
 vie »), avec `confirm` — les deux sont des mutations d'état du job.
 
+### CP6 réalisé — confirmation transactionnelle
+
+**Périmètre strict CP6** : service de confirmation. Aucun contrôleur HTTP
+(→ CP8), **aucun `StudentImportChangeEvent` ni listener d'audit** (→ CP7),
+aucune migration.
+
+- **`StudentNumberAllocator`** (rapport §3.2) : `allocate(startYear)` →
+  `student_number_sequence.bump` (native `INSERT ... ON DUPLICATE KEY
+  UPDATE` — verrou de ligne sur `start_year`, sérialise les
+  confirmations d'une même année, annulé au rollback) + relecture
+  **native** de `next_value` (contourne le cache L1 sans détacher les
+  autres entités) ; `format` = `ESIC-%04d-%0Nd` (largeur `numberSequenceWidth`) ;
+  `allocated ≥ 10^largeur` → `IMP_STUDENT_NUMBER_EXHAUSTED`.
+- **`StudentImportConfirmationService`** :
+  - `confirm(...)` — **entrée publique non transactionnelle** — délègue à
+    `runConfirmation` (via `ObjectProvider` self-proxy pour que
+    `@Transactional` s'applique).
+  - `runConfirmation` — **une seule transaction `@Transactional`
+    (`REQUIRED`)** : `findWithLockByPublicId` (`SELECT … FOR UPDATE`) ;
+    idempotence `APPLIED` → bilan mémorisé + `alreadyApplied = true`
+    (T6) ; `CANCELLED` → `IMP_JOB_CANCELLED` ; `expires_at` dépassé →
+    `IMP_SIMULATION_EXPIRED` ; non `SIMULATED` ou non `confirmable` →
+    `IMP_NOT_CONFIRMABLE` ; périmètre → `IMP_CONFIRM_FORBIDDEN` ;
+    **re-validation complète** (reconstruit `NormalizedRow` depuis les
+    colonnes persistées, re-`PlannedActionResolver.resolve` live) — une
+    ligne devenue `ERROR` ⇒ la transaction **commite sans rien
+    appliquer** (job intact) et retourne un « stale outcome » ;
+    sinon **application** ligne par ligne (ordre `rowNumber`) via
+    `identity.StudentAccountProvisioner.prepareStudentAccountAndInvitation`
+    (compte `PENDING_ACTIVATION` + rôle `STUDENT` + invitation, publie
+    `AccountInvitationIssuedEvent` — e-mail `AFTER_COMMIT` seulement, T4)
+    et `enrollment.StudentEnrollmentProvisioner` (profil / inscription /
+    transfert / patch contact) — **numéro pré-alloué puis testé libre
+    avant l'INSERT** (une collision au flush poisonnerait la transaction
+    unique ; nouvelle tentative bornée `numberAllocMaxRetries` faite
+    hors persistance ; épuisement → `IMP_STUDENT_NUMBER_ALLOC_FAILED`) ;
+    `job.markApplied(...)` + bilan `applied_*` dérivé des `applied_outcome`.
+    Toute exception d'application (`StudentAccountProvisioningException`,
+    collision d'unicité `DataIntegrityViolationException`) →
+    `IMP_STALE_SIMULATION` + **rollback total** (T3) : 0 compte / profil /
+    inscription / rôle / invitation, séquence non consommée, job
+    `SIMULATED`. Robustesse aux e-mails en double dans le fichier :
+    l'enrôlement passe systématiquement par `describeSituation` (la 2ᵉ
+    ligne voit le profil créé par la 1ʳᵉ → `SAME_CLASS` → NOOP).
+  - `confirm` retourne `ConfirmationResult(jobPublicId, alreadyApplied,
+    created, updated, transferred, invited, ignored)`.
+- **`StaleRevalidationPersister`** (`@Transactional(REQUIRES_NEW)`) —
+  persiste les anomalies **rafraîchies** (statuts de ligne + `row_issue`
+  + compteurs job + `confirmable=false`) ; appelé **après** que la
+  transaction de confirmation a commité sans rien appliquer (verrou
+  relâché — pas de deadlock avec le `SELECT … FOR UPDATE`). Ce
+  `REQUIRES_NEW` ne touche **que** `student_import_*` (jamais de donnée
+  métier) et est strictement postérieur à une re-validation en lecture
+  seule ⇒ ne viole pas l'esprit de l'invariant T2.
+
+**Tests CP6** (13) : `StudentNumberAllocatorTests` (3, `@DataJpaTest` —
+format, incrément consécutif par année, borne de largeur),
+`StudentImportConfirmationIntegrationTests` (7, `@SpringBootTest` — 100
+lignes → `APPLIED`, +100 `user_account` `PENDING_ACTIVATION` + rôle
+`STUDENT` + 100 `student_profile` (`ESIC-2026-00001..`) + 100
+`enrollment` + 100 `account_invitation` + 100 e-mails capturés +
+`next_value=101` ; reconfirmation → `alreadyApplied=true`, 0 nouvelle
+écriture, 0 e-mail (TI-012) ; `expires_at` passé → `SIMULATION_EXPIRED`,
+job `SIMULATED` ; statut `CANCELLED` → `JOB_CANCELLED` ; ligne e-mail
+invalide → `NOT_CONFIRMABLE` ; classe archivée entre simulation et
+confirmation → `STALE_SIMULATION`, 0 compte, job `SIMULATED`, 1 ligne
+`ERROR` persistée ; transfert conservant l'historique — ancienne
+inscription `TRANSFERRED`, nouvelle `ACTIVE`, **aucun doublon de
+compte** — TI-005/006, AC-005/006),
+`StudentImportConfirmationRollbackTests` (2, `@SpringBootTest` — échec
+sur la **dernière ligne** (son numéro devient pris juste avant la
+confirmation) → `STALE_SIMULATION`, **0 compte / profil / inscription /
+invitation créés par l'import** (rollback total de la ligne 1),
+`next_value` inchangé, 0 e-mail, job `SIMULATED` (§14.4) ; deux
+confirmations concurrentes (pool 2 threads) → exactement **un** jeu de
+20 comptes créés, l'autre `alreadyApplied` ou `StudentImportException`,
+jamais 40, jamais 500 (§14.6)).
+
+**Correctif collatéral** : `StudentImportSchemaConstraintsTests` (CP1)
+utilisait `start_year` `2026` / `2027` — les tests fonctionnels CP6
+commitent désormais une ligne `student_number_sequence` `2026` (base de
+test partagée). Le test de schéma bascule sur des années sentinelles
+`2901`–`2904` (la valeur n'a aucune importance pour un test de
+contrainte) ; comportement inchangé.
+
+**Vérifications (31 août 2026)** :
+`./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests,EsicConnectApplicationTests'`
+→ **120 tests, 0 échec** ; `ModularityTests` vert.
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text

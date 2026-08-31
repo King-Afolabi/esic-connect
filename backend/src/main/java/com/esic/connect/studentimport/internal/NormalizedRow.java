@@ -45,4 +45,35 @@ record NormalizedRow(
     boolean hasWorkStudyTrue() {
         return Boolean.TRUE.equals(workStudy);
     }
+
+    /**
+     * Reconstruit une ligne normalisée à partir des colonnes déjà
+     * persistées de {@link StudentImportRow}, pour la re-validation à la
+     * confirmation (rapport §4.4). Les indicateurs {@code *Malformed} sont
+     * {@code false} : la valeur stockée est déjà normalisée / analysée ;
+     * {@code rawValues} est vide (la valeur brute d'origine n'est pas
+     * conservée — minimisation).
+     */
+    static NormalizedRow fromPersistedRow(StudentImportRow row) {
+        return new NormalizedRow(
+                row.getRowNumber(),
+                false,
+                row.getInputLastName(),
+                row.getInputFirstName(),
+                row.getInputEmail(),
+                row.getInputPhone(),
+                row.getInputPhone() != null,
+                row.getInputFormationCode(),
+                row.getInputClassCode(),
+                row.getInputAcademicYear(),
+                row.getInputStudentNumber(),
+                row.getInputBirthDate(),
+                row.getInputBirthDate() != null,
+                false,
+                row.getInputWorkStudy(),
+                row.getInputWorkStudy() != null,
+                false,
+                row.getInputCompanyName(),
+                Map.of());
+    }
 }

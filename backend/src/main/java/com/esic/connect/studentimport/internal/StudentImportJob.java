@@ -242,6 +242,46 @@ class StudentImportJob extends BaseEntity {
         return confirmable;
     }
 
+    /**
+     * Rafraîchit les anomalies après une re-validation qui invalide la
+     * simulation (rapport §9, §11) : compteurs recalculés,
+     * {@code confirmable} forcé à {@code false}. Le job reste
+     * {@code SIMULATED}.
+     */
+    void recordStaleRevalidation(int validRows, int warningRows, int errorRows,
+                                 int plannedCreateRows, int plannedUpdateRows, int plannedTransferRows,
+                                 int plannedNoopRows) {
+        this.validRows = validRows;
+        this.warningRows = warningRows;
+        this.errorRows = errorRows;
+        this.plannedCreateRows = plannedCreateRows;
+        this.plannedUpdateRows = plannedUpdateRows;
+        this.plannedTransferRows = plannedTransferRows;
+        this.plannedNoopRows = plannedNoopRows;
+        this.confirmable = false;
+    }
+
+    /**
+     * Transition {@code SIMULATED → APPLIED} dans la transaction unique de
+     * la confirmation (rapport §4.4). Enregistre le bilan appliqué et
+     * l'auteur ; aucune écriture autonome de statut.
+     */
+    void markApplied(Instant at, Long confirmedById, int appliedCreated, int appliedUpdated,
+                     int appliedTransferred, int appliedInvited, int appliedIgnored) {
+        this.status = StudentImportJobStatus.APPLIED;
+        this.confirmedAt = at;
+        this.confirmedById = confirmedById;
+        this.appliedCreated = appliedCreated;
+        this.appliedUpdated = appliedUpdated;
+        this.appliedTransferred = appliedTransferred;
+        this.appliedInvited = appliedInvited;
+        this.appliedIgnored = appliedIgnored;
+    }
+
+    boolean isExpiredAt(Instant reference) {
+        return status == StudentImportJobStatus.EXPIRED || !expiresAt.isAfter(reference);
+    }
+
     Instant getSimulatedAt() {
         return simulatedAt;
     }

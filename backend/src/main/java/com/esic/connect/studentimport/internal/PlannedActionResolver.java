@@ -19,7 +19,8 @@ import java.util.UUID;
  * (rapport §3.3), en s'appuyant <strong>uniquement sur les ports
  * publics</strong> ({@link ClassGroupDirectory}, {@link AcademicScopeDirectory},
  * {@link StudentAccountProvisioner}, {@link StudentEnrollmentProvisioner}).
- * Aucune écriture. Une ligne déjà en {@code ERROR} de champ reste résolue
+ * Aucune écriture. Sert à la simulation <em>et</em> à la re-validation de
+ * la confirmation. Une ligne déjà en {@code ERROR} de champ reste résolue
  * pour la revue, mais son action est forcée à {@code NONE}.
  */
 @Component
@@ -43,12 +44,13 @@ class PlannedActionResolver {
     RowResolution resolve(NormalizedRow row, boolean rowAlreadyInError) {
         List<RowIssueDraft> issues = new ArrayList<>();
 
-        // 1. Résolution de la classe / année par codes fonctionnels.
         ClassGroupResolution resolution =
                 classGroupDirectory.resolveForImport(row.formationCode(), row.classCode(), row.academicYear());
         ClassGroupDirectory.ClassGroupRef classRef = null;
+        int startYear = 0;
         if (resolution instanceof ClassGroupResolution.Found found) {
             classRef = found.ref();
+            startYear = found.academicYearStartYear();
             if (!academicScopeDirectory.isClassInScope(classRef.publicId())) {
                 issues.add(RowIssueDraft.error(StudentImportIssueCodes.CLASS_OUT_OF_SCOPE,
                         "Cette classe n'est pas dans votre périmètre pédagogique.", "class_code", null));
@@ -58,109 +60,79 @@ class PlannedActionResolver {
             issues.add(missIssue((ClassGroupResolution.Miss) resolution));
         }
 
-        // Sans classe exploitable (ou ligne déjà en erreur), aucune action.
         if (classRef == null || rowAlreadyInError || hasError(issues)) {
-            return new RowResolution(StudentImportPlannedAction.NONE,
-                    classRef != null ? classRef.publicId() : null, null, null, false, issues);
+            return none(classRef, null, null, issues, startYear);
         }
 
-        // 2. Rapprochement du compte par e-mail.
         Optional<StudentAccountProvisioner.ExistingAccountView> account =
                 accountProvisioner.findByEmail(row.email());
-
         if (account.isEmpty()) {
-            return resolveNewAccount(row, classRef, issues);
+            return resolveNewAccount(row, classRef, startYear, issues);
         }
-        return resolveExistingAccount(row, classRef, account.get(), issues);
+        return resolveExistingAccount(row, account.get(), classRef, startYear, issues);
     }
 
     // ------------------------------------------------------------------
 
     private RowResolution resolveNewAccount(NormalizedRow row, ClassGroupDirectory.ClassGroupRef classRef,
-                                            List<RowIssueDraft> issues) {
-        boolean generated = false;
-        if (row.studentNumber() == null) {
-            generated = true;
-            issues.add(RowIssueDraft.info(StudentImportIssueCodes.STUDENT_NUMBER_WILL_BE_GENERATED,
-                    "Un numéro étudiant sera attribué automatiquement à la confirmation.", "student_number"));
-        } else if (enrollmentProvisioner.studentNumberTaken(row.studentNumber())) {
-            issues.add(RowIssueDraft.error(StudentImportIssueCodes.STUDENT_NUMBER_TAKEN,
-                    "Ce numéro étudiant est déjà attribué à un autre compte.", "student_number",
-                    CsvValueNormalizer.truncateReceivedValue(row.studentNumber())));
-        }
+                                            int startYear, List<RowIssueDraft> issues) {
+        boolean generated = flagStudentNumberForNewProfile(row, issues);
         if (hasError(issues)) {
-            return new RowResolution(StudentImportPlannedAction.NONE, classRef.publicId(), null, null, false, issues);
+            return none(classRef, null, null, issues, startYear);
         }
         return new RowResolution(StudentImportPlannedAction.CREATE_ACCOUNT_AND_ENROLL,
-                classRef.publicId(), null, null, generated, issues);
+                classRef.publicId(), null, null, generated, false, startYear, issues);
     }
 
-    private RowResolution resolveExistingAccount(NormalizedRow row, ClassGroupDirectory.ClassGroupRef classRef,
+    private RowResolution resolveExistingAccount(NormalizedRow row,
                                                  StudentAccountProvisioner.ExistingAccountView account,
+                                                 ClassGroupDirectory.ClassGroupRef classRef, int startYear,
                                                  List<RowIssueDraft> issues) {
-        switch (account.status()) {
-            case ARCHIVED, LOCKED, SUSPENDED -> {
-                issues.add(RowIssueDraft.error(StudentImportIssueCodes.ACCOUNT_NOT_USABLE,
-                        "Un compte existe pour cette adresse mais n'est pas exploitable (archivé / verrouillé / suspendu).",
-                        "email", null));
-                return new RowResolution(StudentImportPlannedAction.NONE, classRef.publicId(),
-                        account.publicId(), null, false, issues);
-            }
-            case PENDING_ACTIVATION, ACTIVE -> {
-                // suite ci-dessous
-            }
-            default -> {
-                // exhaustif
-            }
+        if (account.status() == StudentAccountProvisioner.StatusView.ARCHIVED
+                || account.status() == StudentAccountProvisioner.StatusView.LOCKED
+                || account.status() == StudentAccountProvisioner.StatusView.SUSPENDED) {
+            issues.add(RowIssueDraft.error(StudentImportIssueCodes.ACCOUNT_NOT_USABLE,
+                    "Un compte existe pour cette adresse mais n'est pas exploitable (archivé / verrouillé / suspendu).",
+                    "email", null));
+            return none(classRef, account.publicId(), null, issues, startYear);
         }
 
         Optional<StudentEnrollmentProvisioner.StudentProfileView> profile =
                 enrollmentProvisioner.findProfileByUser(account.publicId());
 
-        // Compte PENDING sans profil : on (ré)émettra l'invitation + créera le profil.
-        if (account.status() == StudentAccountProvisioner.StatusView.PENDING_ACTIVATION && profile.isEmpty()) {
-            boolean generated = flagStudentNumberForNewProfile(row, issues);
-            if (hasError(issues)) {
-                return new RowResolution(StudentImportPlannedAction.NONE, classRef.publicId(),
-                        account.publicId(), null, false, issues);
-            }
-            return new RowResolution(StudentImportPlannedAction.CREATE_ACCOUNT_AND_ENROLL,
-                    classRef.publicId(), account.publicId(), null, generated, issues);
-        }
-
-        // Compte actif (ou pending avec profil) sans profil : profil + inscription.
         if (profile.isEmpty()) {
             boolean generated = flagStudentNumberForNewProfile(row, issues);
             if (hasError(issues)) {
-                return new RowResolution(StudentImportPlannedAction.NONE, classRef.publicId(),
-                        account.publicId(), null, false, issues);
+                return none(classRef, account.publicId(), null, issues, startYear);
             }
-            return new RowResolution(StudentImportPlannedAction.ENROLL_EXISTING,
-                    classRef.publicId(), account.publicId(), null, generated, issues);
+            // Compte PENDING sans profil : (ré)émission d'invitation à la confirmation.
+            StudentImportPlannedAction action =
+                    account.status() == StudentAccountProvisioner.StatusView.PENDING_ACTIVATION
+                            ? StudentImportPlannedAction.CREATE_ACCOUNT_AND_ENROLL
+                            : StudentImportPlannedAction.ENROLL_EXISTING;
+            return new RowResolution(action, classRef.publicId(), account.publicId(), null, generated, false,
+                    startYear, issues);
         }
 
-        // Compte + profil : on ne recrée jamais le profil ; numéro du fichier divergent = ignoré.
         StudentEnrollmentProvisioner.StudentProfileView existingProfile = profile.get();
         if (row.studentNumber() != null && !row.studentNumber().equalsIgnoreCase(existingProfile.studentNumber())) {
             issues.add(RowIssueDraft.warning(StudentImportIssueCodes.STUDENT_NUMBER_TAKEN,
                     "Le profil existant conserve son numéro étudiant ; celui du fichier est ignoré.",
                     "student_number", CsvValueNormalizer.truncateReceivedValue(row.studentNumber())));
         }
+        boolean divergent = contactDivergent(row, account, existingProfile);
 
         StudentEnrollmentProvisioner.Situation situation =
                 enrollmentProvisioner.describeSituation(existingProfile.publicId(), classRef.publicId());
-
         return switch (situation.kind()) {
             case OTHER_CLASS_SAME_YEAR -> new RowResolution(StudentImportPlannedAction.TRANSFER_CLASS,
-                    classRef.publicId(), account.publicId(), situation.currentEnrollmentPublicId(), false, issues);
+                    classRef.publicId(), account.publicId(), situation.currentEnrollmentPublicId(), false,
+                    divergent, startYear, issues);
             case NONE -> new RowResolution(StudentImportPlannedAction.ENROLL_EXISTING,
-                    classRef.publicId(), account.publicId(), null, false, issues);
-            case SAME_CLASS -> {
-                boolean divergent = contactDivergent(row, account, existingProfile);
-                yield new RowResolution(
-                        divergent ? StudentImportPlannedAction.UPDATE_PROFILE : StudentImportPlannedAction.NONE,
-                        classRef.publicId(), account.publicId(), null, false, issues);
-            }
+                    classRef.publicId(), account.publicId(), null, false, divergent, startYear, issues);
+            case SAME_CLASS -> new RowResolution(
+                    divergent ? StudentImportPlannedAction.UPDATE_PROFILE : StudentImportPlannedAction.NONE,
+                    classRef.publicId(), account.publicId(), null, false, divergent, startYear, issues);
         };
     }
 
@@ -178,16 +150,20 @@ class PlannedActionResolver {
         return false;
     }
 
-    /** Divergence de téléphone / alternance / entreprise entre le fichier et le compte + profil existants. */
     private static boolean contactDivergent(NormalizedRow row, StudentAccountProvisioner.ExistingAccountView account,
                                             StudentEnrollmentProvisioner.StudentProfileView profile) {
-        boolean phoneDiff = row.phonePresent() && row.phone() != null
-                && !row.phone().equals(account.phone());
+        boolean phoneDiff = row.phonePresent() && row.phone() != null && !row.phone().equals(account.phone());
         boolean workStudyDiff = row.workStudyPresent() && row.workStudy() != null
                 && row.workStudy() != profile.workStudy();
-        boolean companyDiff = row.companyName() != null
-                && !row.companyName().equals(profile.companyName());
+        boolean companyDiff = row.companyName() != null && !row.companyName().equals(profile.companyName());
         return phoneDiff || workStudyDiff || companyDiff;
+    }
+
+    private static RowResolution none(ClassGroupDirectory.ClassGroupRef classRef, UUID userPublicId,
+                                     UUID enrollmentPublicId, List<RowIssueDraft> issues, int startYear) {
+        return new RowResolution(StudentImportPlannedAction.NONE,
+                classRef != null ? classRef.publicId() : null, userPublicId, enrollmentPublicId, false, false,
+                startYear, issues);
     }
 
     private static RowIssueDraft missIssue(ClassGroupResolution.Miss miss) {
@@ -217,6 +193,8 @@ class PlannedActionResolver {
      * @param resolvedUserPublicId        compte rapproché ({@code null} si aucun)
      * @param resolvedEnrollmentPublicId  inscription courante (pour {@code TRANSFER_CLASS})
      * @param studentNumberGenerated      {@code true} si le numéro sera généré à la confirmation
+     * @param contactDivergent            téléphone / alternance / entreprise divergents d'un profil existant
+     * @param academicYearStartYear       année civile de début (pour la génération de numéro)
      * @param issues                      anomalies produites par la résolution
      */
     record RowResolution(
@@ -225,6 +203,8 @@ class PlannedActionResolver {
             UUID resolvedUserPublicId,
             UUID resolvedEnrollmentPublicId,
             boolean studentNumberGenerated,
+            boolean contactDivergent,
+            int academicYearStartYear,
             List<RowIssueDraft> issues) {
     }
 }
