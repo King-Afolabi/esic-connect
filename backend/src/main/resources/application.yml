@@ -11,6 +11,13 @@ spring:
       # dépassement en `IMP_FILE_TOO_LARGE`.
       max-file-size: ${MULTIPART_MAX_FILE_SIZE:2MB}
       max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:3MB}
+      # Résolution paresseuse : le parsing du multipart (et donc un
+      # éventuel dépassement de taille) a lieu pendant l'exécution du
+      # contrôleur, ce qui permet à l'advice d'erreur du module
+      # `studentimport` de retraduire l'exception en `IMP_FILE_TOO_LARGE`
+      # (sinon elle est levée par le DispatcherServlet avant la résolution
+      # du contrôleur et retombe en 500 générique).
+      resolve-lazily: true
   flyway:
     locations: classpath:db/migration
   jpa:

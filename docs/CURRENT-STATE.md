@@ -12,14 +12,28 @@
 5874f5a — Merge pull request #20 from King-Afolabi/feature/attendance-qr-demonstration, sur main
 ```
 
-## Tranche en cours — Import CSV contrôlé des apprenants (checkpoints CP2+)
+## Tranche en cours — Import CSV contrôlé des apprenants (CP2 → CP10 réalisés)
 
 ```text
 Branche `feature/student-csv-import-implementation` (créée depuis `main`,
-HEAD = commit de fusion CP1 `31acb09` / PR #24). NON poussée, aucune PR
-ouverte. CP1 (schéma V11) est fusionné sur `main` via la PR #24.
-Implémentation CP2 → CP10 en cours sur cette branche, un commit par
-checkpoint, aucun push, aucune fusion.
+base = commit de fusion CP1 `31acb09` / PR #24). NON poussée, aucune PR
+ouverte, aucune fusion. CP1 (schéma V11) est fusionné sur `main` via la
+PR #24.
+
+CP2 → CP10 réalisés sur cette branche, **un commit par checkpoint** :
+  CP2  0b447e3  socle interne du module `studentimport`
+  CP3  daae044  lecture sécurisée du CSV (composants purs)
+  CP4  77efcf2  validation, ports d'import, simulation
+  CP5  ab344d9  API de simulation et de consultation
+  CP6  5fd56ca  confirmation transactionnelle + génération de numéro
+  CP7  4b7ee35  audit (AFTER_COMMIT + REQUIRES_NEW) et purge planifiée
+  CP8  9839266  API de confirmation et de cycle de vie
+  CP9  ca29b26  interface Angular d'import des apprenants
+  CP10  (ce commit)  recette complète et traçabilité
+
+Vérification globale : `./mvnw clean test` → 682 tests, 0 échec ;
+`npm test` → 471 tests, 0 échec ; `npm run lint` OK ; `npm run build`
+483,26 kB (< 500 kB). Migrations V1–V11 inchangées (schéma en version 11).
 ```
 
 Conception figée au **Checkpoint 0** (rapport `docs/reports/STUDENT_CSV_IMPORT_DESIGN.md`,
@@ -131,556 +145,181 @@ colonne `row_number` conservé (conception §7.3) mais **cité** en SQL et
 dans `@Column` car réservé en MySQL 8. `csv_separator` / `file_sha256`
 gardent `CHAR(1)` / `CHAR(64)` via `@JdbcTypeCode(SqlTypes.CHAR)`.
 
-### CP2 réalisé — socle interne du module `studentimport`
+### Réalisation CP2 → CP10 (synthèse)
 
-**Périmètre strict CP2** : uniquement les briques transverses du module,
-aucun parsing CSV, aucune API, aucune logique de simulation ou de
-confirmation, aucun port inter-module, aucun événement, aucun frontend.
-Aucune migration (V11 inchangée, schéma en version 11).
+> Le détail par checkpoint (décisions, écarts vs conception, comptes de
+> tests intermédiaires) vit dans les **messages de commit**,
+> `docs/10-journal-ia.md` et `docs/reports/STUDENT_CSV_IMPORT_DESIGN.md`.
+> Cette section ne garde que l'état consolidé de la tranche.
 
-- **`StudentImportWeb`** — constante `MANAGE_ROLES`
-  (`ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER`,
-  rapport §8/§9 ; `TEACHER`/`STUDENT` → 403 ; décision fine de périmètre
-  reportée au service) + helpers `parseUuid` (UUID mal formé → ressource
-  introuvable, jamais 500) et `subject(Jwt)`.
-- **`StudentImportException` + `Kind`** — 21 valeurs couvrant le
-  téléversement / la lecture du fichier
-  (`UNSUPPORTED_MEDIA_TYPE`, `FILE_TOO_LARGE`, `ENCODING_INVALID`,
-  `MISSING_COLUMN`, `TOO_MANY_ROWS`, `NO_DATA_ROWS`, `HEADER_UNREADABLE`),
-  la consultation (`JOB_NOT_FOUND`, `JOB_FORBIDDEN`, `INVALID_SORT`,
-  `INVALID_FILTER`, `SCOPE_FORBIDDEN`), le cycle de vie
-  (`NOT_CONFIRMABLE`, `STALE_SIMULATION`, `SIMULATION_EXPIRED`,
-  `JOB_CANCELLED`, `CONFIRM_FORBIDDEN`, `JOB_NOT_CANCELLABLE`) et la
-  génération de numéro (`STUDENT_NUMBER_ALLOC_FAILED`,
-  `STUDENT_NUMBER_EXHAUSTED`) ; porte un `detail` non sensible optionnel
-  (jamais une valeur de cellule).
-- **`StudentImportExceptionHandler`** —
-  `@RestControllerAdvice(basePackageClasses = StudentImportWeb.class)`
-  (portée limitée aux futurs contrôleurs du module, comme
-  `EnrollmentExceptionHandler`). Mappe chaque `Kind` → `ApiError` (code
-  HTTP + code `IMP_*` + `details[]` non sensibles) et retraduit
-  `MaxUploadSizeExceededException` → `413 IMP_FILE_TOO_LARGE`.
-- **`StudentImportIssueCodes`** — constantes `String` des `error_code`
-  d'anomalie persistés (`student_import_job_issue` /
-  `student_import_row_issue`) : structure, champs, résolution classe /
-  année, compte existant. Distinctes des `Kind` (qui déclenchent un code
-  HTTP).
-- **`StudentImportProperties`** (`@ConfigurationProperties(prefix =
-  "app.import.student")` + `@Validated`, record à valeurs par défaut) :
-  `maxRows` (≥ 100, défaut 500), `maxFileBytes` (défaut 2 MiB),
-  `simulationTtl` (P7D), `appliedRowsTtl` (P30D), `numberSequenceWidth`
-  (1..9, défaut 5), `numberAllocMaxRetries` (défaut 5) ; durée nulle ou
-  négative → échec de démarrage (posture du TTL d'invitation) ;
-  `numberSequenceUpperBound()` dérive `10^largeur`. Activé par
-  `StudentImportConfig` (`@EnableConfigurationProperties`, sans
-  `@ConfigurationPropertiesScan` global). Bloc `app.import.student` ajouté
-  à `application.yml` (variables d'environnement `STUDENT_IMPORT_*`,
-  valeurs par défaut = décisions de prototype).
+**Module Spring Modulith `studentimport`** (`com.esic.connect.studentimport`,
+implémentation confinée à `.internal`) — chaîne complète d'import CSV
+contrôlé des apprenants, phase simulation puis phase confirmation.
 
-**Tests CP2** : `StudentImportPropertiesTests` (4, purs — défauts, borne
-de séquence, refus de durée non positive), `StudentImportExceptionHandlerTests`
-(3, purs — mapping des 20 `Kind` HTTP-mappés, `details[]`, retraduction
-multipart).
+- **Lecture du fichier** (`CsvFileGuard` → `CsvParser` →
+  `CsvValueNormalizer` / `CsvRowNormalizer`, composants purs) : contrôles
+  binaires avant parsing (extension `.csv`, rejet ZIP/OLE2/PDF/octet nul),
+  décodage **UTF-8 strict** (BOM toléré), RFC 4180 maison (guillemets,
+  cellule multi-lignes, séparateur `,`/`;` auto-détecté sur l'en-tête),
+  11 colonnes reconnues (6 obligatoires), en-têtes `level_code` /
+  `promotion_code` / `work_study_pattern` **ignorés avec avertissement**.
+  Le fichier n'est **jamais** écrit sur disque ; seule l'empreinte
+  SHA-256 est conservée.
+- **Validation + résolution** (`StudentImportFieldValidator`,
+  `FileDuplicateDetector`, `PlannedActionResolver`) via les **ports
+  publics** `academic.ClassGroupDirectory.resolveForImport`,
+  `academic.AcademicScopeDirectory`, `identity.StudentAccountProvisioner`,
+  `enrollment.StudentEnrollmentProvisioner` — aucune dépendance vers un
+  `.internal` d'un autre module (`ModularityTests` vert). Calcul de
+  `planned_action` : `CREATE_ACCOUNT_AND_ENROLL` / `ENROLL_EXISTING` /
+  `TRANSFER_CLASS` / `UPDATE_PROFILE` / `NONE`.
+- **Simulation** (`StudentImportSimulationService`, `@Transactional`) :
+  garde structurelle (`MISSING_COLUMN` + détail / `TOO_MANY_ROWS` /
+  `NO_DATA_ROWS` / `HEADER_UNREADABLE` → 4xx, **aucun job persisté**),
+  puis job `SIMULATED` + lignes normalisées + anomalies dans les
+  **seules** tables `student_import_*` — **aucune écriture métier**
+  (invariant T1). `confirmable = (blocking == 0 && errorRows == 0)`.
+- **Confirmation** (`StudentImportConfirmationService`) : entrée publique
+  `confirm()` **non transactionnelle** déléguant à `runConfirmation()`
+  via self-proxy (`ObjectProvider`) → **une seule transaction métier**
+  `@Transactional` (`REQUIRED`). Dedans : `findWithLockByPublicId`
+  (`SELECT … FOR UPDATE`), idempotence `APPLIED` → bilan mémorisé +
+  `alreadyApplied = true` (T6), gardes `CANCELLED` / expiration /
+  `confirmable` / périmètre, **re-validation complète** (reconstruit
+  `NormalizedRow` depuis les colonnes persistées, re-résout) — une ligne
+  devenue `ERROR` ⇒ la transaction **commite sans rien appliquer** (job
+  intact, verrou relâché) puis `StaleRevalidationPersister`
+  (`@Transactional` simple, hors verrou) persiste les anomalies
+  rafraîchies et l'appel lève `IMP_STALE_SIMULATION`. Sinon application
+  ligne par ligne via les ports (tous `@Transactional` `REQUIRED`,
+  **jamais** `REQUIRES_NEW` — invariant T2) : compte
+  `PENDING_ACTIVATION` + rôle `STUDENT` + invitation
+  (`AccountInvitationIssuedEvent`, e-mail `AFTER_COMMIT` seulement — T4),
+  profil / inscription / transfert / patch contact. Toute exception
+  d'application (`StudentAccountProvisioningException`,
+  `DataIntegrityViolationException`) → `IMP_STALE_SIMULATION` +
+  **rollback total** (T3) : 0 compte / profil / inscription / rôle /
+  invitation, séquence non consommée, job `SIMULATED`.
+- **Numéro étudiant généré** (`StudentNumberAllocator`,
+  `student_number_sequence`) : `ESIC-{annéeDébut}-{NNNNN}`, allocation
+  atomique `INSERT … ON DUPLICATE KEY UPDATE` (verrou de ligne par
+  `start_year`) **dans** la transaction de confirmation. Le test
+  `studentNumberTaken` avant l'INSERT est une **optimisation** (nouvelle
+  tentative bornée `numberAllocMaxRetries`, hors persistance) ; une
+  collision SQL tardive n'est **pas** ré-essayée (transaction
+  rollback-only) → rollback total + `IMP_STALE_SIMULATION`. Borne de
+  largeur atteinte → `IMP_STUDENT_NUMBER_EXHAUSTED`.
+- **Audit** : `StudentImportChangeEvent` publié **dans** la transaction
+  → `audit.internal.StudentImportAuditListener`
+  (`@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`)
+  écrit `STUDENT_IMPORT_SIMULATED` / `_CONFIRMED` / `_CANCELLED`
+  (catégorie `STUDENT_IMPORT`, `resource_public_id` = job, **aucune
+  PII**) ; un rollback métier n'atteint jamais la phase `AFTER_COMMIT`
+  → aucune trace (T5). Purge `@Scheduled`
+  (`app.import.student.purge-cron`, défaut 03:30) : jobs
+  `SIMULATED`/`EXPIRED` échus + `CANCELLED` anciens supprimés (cascade) ;
+  jobs `APPLIED` anciens → lignes filles supprimées, en-tête et agrégats
+  `applied_*` conservés ; `student_number_sequence` jamais purgée.
+- **6 endpoints** `/api/v1/student-imports`, `@PreAuthorize(MANAGE_ROLES)`
+  (`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` /
+  `PEDAGOGICAL_MANAGER`) + décision fine de périmètre côté serveur
+  (`StudentImportQueryService` / `…ConfirmationService` : un
+  `PEDAGOGICAL_MANAGER` ne liste, ne consulte, ne confirme, n'annule que
+  **ses** jobs → `IMP_JOB_FORBIDDEN` / `IMP_CONFIRM_FORBIDDEN` sinon ;
+  filtre de périmètre par un appelant non global → `IMP_SCOPE_FORBIDDEN` ;
+  ligne hors périmètre → `ERROR IMP_CLASS_OUT_OF_SCOPE`) :
+  - `POST` multipart → simulation (`201`) ;
+  - `GET` liste (filtre `status`, tri `createdAt`, page ≤ 50) ;
+  - `GET /{publicId}` (synthèse + anomalies globales + `confirmable`) ;
+  - `GET /{publicId}/rows` (filtres `rowStatus` / `severity` / `action`,
+    tri `rowNumber`, page ≤ 100) ;
+  - `POST /{publicId}/confirm` → `200` `ConfirmationResultResponse`
+    (jamais `201`) ; `409 IMP_NOT_CONFIRMABLE` / `IMP_STALE_SIMULATION`
+    (anomalies rafraîchies persistées) / `IMP_SIMULATION_EXPIRED` /
+    `IMP_JOB_CANCELLED` ;
+  - `POST /{publicId}/cancel` → `204` ; `409 IMP_JOB_NOT_CANCELLABLE`.
+  `resolve-lazily: true` + handlers `MaxUploadSizeExceededException` /
+  `MultipartException` → `413 IMP_FILE_TOO_LARGE`. DTO sans `id` SQL,
+  sans jeton, sans hachage.
+- **Front Angular** `/students/import` (+ `/:publicId`),
+  `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER'])` :
+  téléversement (refus client extension / taille), `StudentImportHome`
+  (simulation → navigation vers la revue, imports récents),
+  `StudentImportReview` (cartes de synthèse, table des lignes paginée /
+  filtrée avec anomalies dépliables, confirmation en ligne, annulation,
+  gestion de `IMP_STALE_SIMULATION` → rechargement + blocage,
+  expiration / `403` → message contrôlé, perte du contexte de rôle
+  d'écriture → panneau fermé). `StudentImportApiService` (une méthode par
+  endpoint réel, jamais de jeton en URL), `toStudentImportError` (liste
+  blanche `KNOWN_IMP_CODES`, `5xx` / code inconnu → message générique).
+  JWT et contexte de rôle en mémoire seule ; rien en
+  `localStorage` / `sessionStorage`.
 
-**Vérifications (31 août 2026, OpenJDK 21, MySQL 8.4)** :
-`./mvnw test -Dtest='StudentImportPropertiesTests,StudentImportExceptionHandlerTests,StudentImportSchemaConstraintsTests,ModularityTests'`
-→ **30 tests, 0 échec** ; `EsicConnectApplicationTests` vert (contexte
-complet avec le nouveau `@ConfigurationProperties`). `ModularityTests`
-vert (aucune dépendance inter-module ajoutée).
+**Invariants T1–T6 — couverture de test**
 
-**Écart avec la conception (CP2)** : `StudentImportProperties` /
-`StudentImportConfig` (typage config) sont créés ici alors que le rapport
-§8 les évoquait au fil des checkpoints API ; le bloc `app.import.student`
-d'`application.yml` est ajouté dès maintenant (la config multipart
-`spring.servlet.multipart.*` reste pour le checkpoint de l'API).
+- **T1** — `StudentImportSimulationIntegrationTests` (comptages
+  `user_account` / `student_profile` / `enrollment` / `account_invitation`
+  inchangés sur 100 lignes).
+- **T2** — `StudentImportProvisionerContractTests` (réflexif :
+  `@Transactional` présent, jamais `REQUIRES_NEW` sur les écritures des
+  deux impls) + `runConfirmation` transaction unique ;
+  `StaleRevalidationPersister` en `@Transactional` simple, appelé hors
+  transaction et hors verrou.
+- **T3** —
+  `StudentImportConfirmationRollbackTests.aFailureOnTheLastRowRollsBackEveryEarlierRow` ;
+  `StudentImportConfirmationIntegrationTests.archivingTheClassBetweenSimulationAndConfirmationMakesItStale`
+  (chemin stale : job `SIMULATED`, 0 donnée métier, anomalie technique
+  rafraîchie persistée, 0 invitation / e-mail, `confirmable = false`,
+  aucun blocage).
+- **T4** — rollback : 0 e-mail capturé ; succès : e-mail capturé après
+  commit (`StudentImportConfirmationIntegrationTests`,
+  `StudentImportAuditIntegrationTests`).
+- **T5** — `StudentImportAuditIntegrationTests`
+  (`aRolledBackConfirmationWritesNoConfirmedAuditRow`) +
+  `StudentImportRecetteTests` (0 ligne d'audit `ACCOUNT_INVITATION_ISSUED`
+  après une confirmation, mais e-mail bien parti).
+- **T6** —
+  `StudentImportConfirmationIntegrationTests.reconfirmationIsIdempotent`,
+  `StudentImportConfirmationRollbackTests.twoConcurrentConfirmationsCreateExactlyOneSetOfAccounts`,
+  `StudentImportLifecycleApiIntegrationTests.twoConcurrentConfirmHttpCallsNeverDoubleApply`.
 
-### CP3 réalisé — lecture sécurisée du CSV (composants purs)
+**Périmètre `PEDAGOGICAL_MANAGER`** —
+`StudentImportApiIntegrationTests.aManagerOnlySeesItsOwnJobsAndGlobalStaffSeesAll`
+(liste filtrée, `get` / `rows` d'un autre → `403 IMP_JOB_FORBIDDEN`),
+`StudentImportLifecycleApiIntegrationTests` (`confirm` / `cancel` d'un
+autre → `403`), `StudentImportRecetteTests.aPedagogicalManagerOutsideItsScopeGetsClassOutOfScopeErrorsAndCannotConfirm`
+(lignes `ERROR IMP_CLASS_OUT_OF_SCOPE`, `confirm` → `409`). Les rôles
+globaux (`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`) conservent
+l'accès à tous les jobs.
 
-**Périmètre strict CP3** : lecture et normalisation *technique* du
-fichier. Aucune écriture, aucun accès base, aucune règle métier (syntaxe
-d'e-mail, existence de classe, doublons, `planned_action` → CP4), aucun
-port, aucune API, aucun stockage du fichier, aucune migration. Composants
-purs testables sans contexte Spring.
+**Vérification globale (31 août 2026, OpenJDK 21, MySQL 8.4, Redis 7 ;
+Node 24)** : `./mvnw clean test` → **BUILD SUCCESS, 682 tests, 0 échec**
+(`ModularityTests` vert, schéma en version 11) ; la suite finale exécute
+`AttendanceIntegrationTests` avec succès (25 tests, 0 échec) — les 7
+échecs `ATT_NOT_ENROLLED` observés au CP1 (sur l'arbre `e8fd16d`) ne s'y
+reproduisent pas ; cause non investiguée, aucun fichier `attendance` /
+`enrollment` / `coursesession` n'a été touché par CP2 → CP10.
+`npm test` → **471 tests, 0 échec** ; `npm run lint` OK ;
+`npm run build` → **483,26 kB** (< 500 kB). TP-004 / NFR-PERF-03 :
+simulation et confirmation d'un fichier de 100 apprenants < 1 s chacune
+sur MySQL local.
 
-- **`RecognizedColumn`** — 11 colonnes du modèle réduit (rapport §12.A) :
-  6 obligatoires (`last_name`, `first_name`, `email`, `formation_code`,
-  `class_code`, `academic_year`) + 5 optionnelles (`phone`,
-  `student_number`, `birth_date`, `work_study`, `company_name`) ;
-  correspondance d'en-tête insensible à la casse et à l'ordre ;
-  `IGNORED_HEADERS` = `level_code` / `promotion_code` /
-  `work_study_pattern`.
-- **`CsvFileGuard`** — contrôles binaires *avant* parsing : extension
-  `.csv`, `Content-Type` restreint à une liste tolérante (vide / absent
-  toléré), rejet des contenus binaires (octet nul, magie `PK\x03\x04`
-  ZIP/XLSX, OLE2 `D0 CF 11 E0`, `%PDF`), taille bornée, décodage
-  **UTF-8 strict** (`CharsetDecoder` `REPORT`) → `IMP_ENCODING_INVALID`,
-  BOM toléré et retiré. Renvoie le contenu texte ; le fichier n'est
-  jamais écrit sur disque.
-- **`CsvParser`** — lecteur RFC 4180 maison : guillemets, guillemet
-  doublé, cellule multi-lignes entre guillemets, fins de ligne
-  `CRLF`/`LF`, séparateur `,`/`;` auto-détecté sur l'en-tête (celui qui
-  reconnaît le plus de colonnes ; égalité → `,`). Lignes entièrement
-  vides ignorées et non comptées ; `row_number` = ligne physique du
-  fichier (en-tête = 1). Produit `ParsedCsv` : séparateur, en-tête
-  classé (`RECOGNIZED`/`IGNORED`/`UNKNOWN`, en-tête reconnu en double →
-  `UNKNOWN`), colonnes obligatoires absentes, lignes de données
-  (`columnCountMismatch` si nb de cellules ≠ en-tête), indicateurs
-  `tooManyRows` / `noDataRows`. Aucune évaluation de cellule.
-- **`CsvValueNormalizer`** — normalisation technique (rapport §5.2) :
-  `trimToNull`, `collapseSpaces` (noms), `lowerCase` (e-mail),
-  `upperCase` (codes), `normalizePhone` (retire espaces/points/tirets/
-  parenthèses), `parseBirthDate` (`yyyy-MM-dd` **ou** `dd/MM/yyyy` →
-  `BirthDateResult{value, present, malformed}`), `parseWorkStudy`
-  (`true/false/oui/non/1/0/yes/no` → `WorkStudyResult{...}`),
-  `sanitizeFileName` (basename, `[^A-Za-z0-9._ -]`→`_`, point initial
-  retiré), `sha256Hex` (empreinte du contenu — contenu non conservé),
-  `truncateReceivedValue` (200 car., sauts de ligne aplatis, jamais dans
-  l'audit).
-- **`CsvRowNormalizer` → `NormalizedRow`** — mappe une ligne brute selon
-  l'en-tête et applique la normalisation champ par champ ; conserve les
-  valeurs brutes des cellules reconnues (`rawValues`) pour un futur
-  `received_value` d'anomalie ; expose les indicateurs de forme
-  (`birthDateMalformed`, `workStudyMalformed`, `phonePresent`,
-  `columnCountMismatch`). Aucune décision de gravité ici.
+**Limites restantes**
 
-**Tests CP3** (purs, 36) : `CsvFileGuardTests` (11 — extension, type,
-ZIP/OLE/PDF, octet nul, UTF-8 invalide, BOM, taille, fichier vide),
-`CsvParserTests` (14 — `,`/`;`, `CRLF`, guillemets doublés, cellule
-multi-lignes + n° de ligne physique, lignes vides ignorées,
-classification d'en-tête, en-tête reconnu en double → `UNKNOWN`,
-obligatoires absentes, écart de colonnes, `tooManyRows`, `noDataRows`,
-fichier blanc), `CsvValueNormalizerTests` (7),
-`CsvRowNormalizerTests` (4).
-
-**Vérifications (31 août 2026)** :
-`./mvnw test -Dtest='CsvFileGuardTests,CsvParserTests,CsvValueNormalizerTests,CsvRowNormalizerTests'`
-→ **36 tests, 0 échec**. Aucune frontière de module modifiée
-(`ModularityTests` non ré-exécuté — inchangé depuis CP2).
-
-**Écart avec la conception (CP3)** : le rapport §15 rangeait aussi « la
-dé-duplication fichier » et « la génération de numéro (pure) » au CP3 ; le
-découpage retenu place la dé-duplication et les règles de champ au CP4
-(« validation et simulation ») et le formatage de numéro au CP6 (seul
-checkpoint qui en a réellement besoin), pour éviter du code mort et deux
-implémentations concurrentes.
-
-### CP4 réalisé — validation, ports d'import et simulation
-
-**Périmètre strict CP4** : règles de validation métier, ports publics
-inter-modules et service de simulation persistant **uniquement**
-`student_import_*` (invariant T1). Aucune écriture métier, aucun e-mail,
-aucun événement d'audit, aucun contrôleur HTTP, aucune migration (V11
-inchangée). Frontières Spring Modulith respectées (`studentimport` ne
-dépend que des types **publics** de `academic` / `identity` /
-`enrollment`).
-
-- **Port `academic.ClassGroupDirectory.resolveForImport(programCode,
-  classCode, academicYearCode)`** + type scellé `ClassGroupResolution`
-  (`Found(ref, academicYearStartYear)` / `Miss{PROGRAM_UNKNOWN,
-  ACADEMIC_YEAR_UNKNOWN, CLASS_UNKNOWN, CLASS_NOT_IN_PROGRAM,
-  CLASS_NOT_IN_YEAR, CHAIN_ARCHIVED}`). Impl `DefaultClassGroupDirectory`
-  (repos `findByCodeIgnoreCase` sur `Program` / `AcademicYear` /
-  `ClassGroup`, désambiguïsation formation → année, `openForEnrollment`
-  déjà existant pour `CHAIN_ARCHIVED`). Aucune décision de sécurité ici.
-- **Port `identity.StudentAccountProvisioner`** (+ `DefaultStudentAccountProvisioner`
-  confiné) : `findByEmail` (lecture, simulation),
-  `prepareStudentAccountAndInvitation` (**`@Transactional` `REQUIRED`**,
-  jamais `REQUIRES_NEW` ; crée `user_account PENDING_ACTIVATION` + rôle
-  `STUDENT` + `account_invitation` via `InvitationTokenService`, publie
-  `AccountInvitationIssuedEvent`, **jamais `AccountLifecycleEvent`** —
-  invariant T5), `updateStudentPhone` (action `UPDATE_PROFILE`). Compte
-  existant non `PENDING_ACTIVATION` → `StudentAccountProvisioningException`
-  (type public), aucune écriture. `AccountInvitationService.issue`
-  **inchangé** (parcours HTTP mono-compte).
-- **Port `enrollment.StudentEnrollmentProvisioner`** (+ `DefaultStudentEnrollmentProvisioner`
-  confiné) : lectures `findProfileByUser` / `findProfileByStudentNumber` /
-  `studentNumberTaken` / `describeSituation` (→ `Situation{NONE,
-  SAME_CLASS, OTHER_CLASS_SAME_YEAR}` + `currentEnrollmentPublicId`) ;
-  applications `provisionProfile` / `provisionEnrollment` /
-  `provisionTransfer` / `updateProfileAlternation` — **`@Transactional`
-  `REQUIRED`**, écriture directe `saveAndFlush`, **sans**
-  `EnrollmentPersister` (`REQUIRES_NEW`) et **sans**
-  `EnrollmentChangePublisher` (invariants T2 / T5). Le numéro étudiant
-  est **fourni par l'appelant** (jamais généré ici : la table
-  `student_number_sequence` appartient à `studentimport` — écart assumé
-  vs rapport §4.2, frontières Modulith ; l'allocation atomique est du
-  ressort du CP6).
-- **`studentimport`** : `StudentImportFieldValidator` (valeurs
-  obligatoires → `ERROR IMP_REQUIRED_VALUE_MISSING`, `IMP_COLUMN_COUNT`,
-  syntaxe e-mail → `ERROR IMP_EMAIL_INVALID`, téléphone / date de
-  naissance / booléen d'alternance → `WARNING`, entreprise recommandée
-  si `work_study=true`) ; `FileDuplicateDetector` (doublons e-mail /
-  numéro dans le fichier : charge identique → `WARNING` ×N, divergente →
-  `ERROR` ×N) ; `PlannedActionResolver` (`@Component`, ports publics
-  seulement — résout classe + périmètre + compte + situation → les
-  situations §3.3 : `CREATE_ACCOUNT_AND_ENROLL` / `ENROLL_EXISTING` /
-  `TRANSFER_CLASS` / `UPDATE_PROFILE` / `NONE`, `IMP_STUDENT_NUMBER_WILL_BE_GENERATED`
-  (INFO), `IMP_STUDENT_NUMBER_TAKEN` / `IMP_ACCOUNT_NOT_USABLE` /
-  `IMP_CLASS_OUT_OF_SCOPE` / `IMP_PROGRAM_UNKNOWN` … (ERROR)) ;
-  `StudentImportSimulationService` (`@Transactional` — garde de filtre de
-  périmètre `SCOPE_FORBIDDEN`, `CsvFileGuard` → `CsvParser`, garde
-  structurelle (`MISSING_COLUMN` + détail / `TOO_MANY_ROWS` /
-  `NO_DATA_ROWS` / `HEADER_UNREADABLE` → exception, **aucun job créé**),
-  persistance du job `SIMULATED` + lignes normalisées + anomalies +
-  `job_issue` `WARNING` pour colonnes ignorées / inconnues, bilan
-  `recordSimulation` avec `confirmable = (blocking == 0 && errorRows ==
-  0)`). Mutateurs ajoutés à `StudentImportJob` / `StudentImportRow`
-  (laissés minimaux au CP1).
-
-**Décisions / écarts documentés (CP4)** :
-- structural BLOCKING (colonne obligatoire absente, trop de lignes,
-  aucune donnée) → **exception 4xx, aucun job persisté** (aligné sur la
-  table d'erreurs §8 ; la ligne « confirmation → 409 » d'IMP-STU-03 est
-  alors sans objet) ;
-- filtre de job (`programCode` / `classCode`) : accepté et persisté pour
-  référence, mais **refusé (`IMP_SCOPE_FORBIDDEN`) pour un appelant non
-  global** ; le contrôle de périmètre **par ligne**
-  (`IMP_CLASS_OUT_OF_SCOPE`) reste l'autorité (rapport §9) ;
-- `SUSPENDED` ajouté à `LOCKED` / `ARCHIVED` comme compte « non
-  exploitable » (le rapport §3.3 ne nomme que les deux derniers) ;
-- `UPDATE_PROFILE` = action primaire uniquement pour `SAME_CLASS` +
-  divergence contact/alternance ; pour `ENROLL_EXISTING` /
-  `TRANSFER_CLASS` la mise à jour de contact est appliquée en plus par la
-  confirmation (CP6), l'action stockée restant la primaire ; bilan
-  `updated = UPDATE_PROFILE + ENROLL_EXISTING`.
-
-**Tests CP4** (37) : `StudentImportFieldValidatorTests` (8),
-`FileDuplicateDetectorTests` (4), `PlannedActionResolverTests` (10,
-Mockito), `StudentImportProvisionerContractTests` (3, réflexif —
-`@Transactional` présent, jamais `REQUIRES_NEW` sur les écritures des
-deux impls), `ClassGroupResolveForImportTests` (7, `@DataJpaTest` MySQL
-réel — chaque `Miss.*` + `Found` avec année de début),
-`StudentImportSimulationIntegrationTests` (3, `@SpringBootTest` — 100
-lignes valides → job `SIMULATED` confirmable, `planned_create_rows=100`,
-**`user_account` / `student_profile` / `enrollment` / `account_invitation`
-inchangés** (T1) ; colonne obligatoire absente → `IMP_MISSING_COLUMN`,
-aucun job ; filtre de périmètre par un `PEDAGOGICAL_MANAGER` →
-`IMP_SCOPE_FORBIDDEN`). `EsicConnectApplicationTests` vert,
-`ModularityTests` vert.
-
-**Vérifications (31 août 2026)** :
-`./mvnw test -Dtest='StudentImportFieldValidatorTests,FileDuplicateDetectorTests,PlannedActionResolverTests,StudentImportProvisionerContractTests,ClassGroupResolveForImportTests,StudentImportSimulationIntegrationTests,ModularityTests,EsicConnectApplicationTests'`
-→ **37 tests, 0 échec**.
-
-### CP5 réalisé — API de simulation et de consultation
-
-**Périmètre strict CP5** : couche HTTP de la **phase de simulation** et
-la **consultation**. Aucun endpoint de confirmation ni d'annulation
-(cycle de vie → CP8). Aucune migration.
-
-- **`application.yml`** : bloc `spring.servlet.multipart` (`max-file-size`
-  2 MB, `max-request-size` 3 MB ; variables `MULTIPART_*`). Le seul
-  téléversement du prototype.
-- **`StudentImportController`** (`/api/v1/student-imports`,
-  `@PreAuthorize(MANAGE_ROLES)`) :
-  - `POST` `multipart/form-data` (`file` + `programCode?` / `classCode?`)
-    → `201 JobResponse` — résout l'auteur via `CurrentUserResolver`,
-    appelle `StudentImportSimulationService.simulate`, renvoie le job
-    rechargé ;
-  - `GET` (query `status?`, `sort∈{createdAt}`, `page`, `size≤50`) →
-    `200 PageResponse<JobResponse>` ;
-  - `GET /{publicId}` → `200 JobResponse` (+ `summary` + `issues[]` +
-    `confirmable`) ;
-  - `GET /{publicId}/rows` (query `rowStatus?`, `severity?`, `action?`,
-    `sort∈{rowNumber}`, `page`, `size≤100`) →
-    `200 PageResponse<RowResponse>` (anomalies de ligne incluses, chargées
-    en une requête `IN`).
-- **`StudentImportQueryService`** : décision fine de périmètre côté
-  serveur — un appelant **sans accès global** (`PEDAGOGICAL_MANAGER`) ne
-  liste et ne consulte que **ses** jobs (`requested_by_id` = appelant) ;
-  job d'un autre → `403 IMP_JOB_FORBIDDEN` ; job inconnu / `public_id`
-  mal formé → `404 IMP_JOB_NOT_FOUND`. `StudentImportSpecifications` (+
-  `JpaSpecificationExecutor` sur job / row repos ; filtre `severity` =
-  sous-requête `exists` sur `student_import_row_issue`) ; valeur de filtre
-  hors énumération → `400 IMP_INVALID_FILTER` ; tri hors liste blanche →
-  `400 IMP_INVALID_SORT` (`StudentImportQuerySupport`).
-- **DTO** (`StudentImportResponses`) : `JobResponse` / `Summary` /
-  `AppliedSummary` (null tant que non appliqué) / `JobIssueResponse` /
-  `RowResponse` / `RowIssueResponse` — **aucun `id` SQL**, aucun jeton,
-  aucun hachage ; `receivedValue` tronqué rendu à la revue mais jamais à
-  l'audit. `PageResponse` local au module.
-- **`StudentImportExceptionHandler`** : `@Order(HIGHEST_PRECEDENCE)`
-  ajouté — sans lui, `shared.web.GlobalExceptionHandler` (advice global
-  non ordonné) était consulté avant l'advice du module (tri des
-  `@RestControllerAdvice` non ordonnés ⇒ « shared » avant
-  « studentimport ») et un `StudentImportException` retombait en 500. Les
-  autres modules y échappent par ordre alphabétique ; `@Order` rend le
-  comportement explicite.
-
-**Tests CP5** : `StudentImportApiIntegrationTests` (7, `@SpringBootTest`
-RANDOM_PORT + `TestRestTemplate` multipart) — téléversement → `201` sans
-`id` SQL, colonne obligatoire absente → `400 IMP_MISSING_COLUMN` (+
-`details` contenant `email`), contenu ZIP/XLSX → `415`, endpoint `rows`
-pagination + filtre `rowStatus`, `PEDAGOGICAL_MANAGER` ne voit que ses
-jobs (`403 IMP_JOB_FORBIDDEN` sur celui d'un autre, `200` pour
-l'administration globale), job inconnu → `404`, tri / filtre invalides →
-`400`, matrice `401` anonyme / `403` `STUDENT` / `403` `TEACHER`.
-`ModularityTests` + `EsicConnectApplicationTests` verts.
-
-**Vérifications (31 août 2026)** :
-`./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests'`
-→ **107 tests, 0 échec**.
-
-**Écart avec la conception (CP5)** : `cancel` (rangé au CP5 par le
-rapport §15) est déplacé au CP8 (« API de confirmation et cycle de
-vie »), avec `confirm` — les deux sont des mutations d'état du job.
-
-### CP6 réalisé — confirmation transactionnelle
-
-**Périmètre strict CP6** : service de confirmation. Aucun contrôleur HTTP
-(→ CP8), **aucun `StudentImportChangeEvent` ni listener d'audit** (→ CP7),
-aucune migration.
-
-- **`StudentNumberAllocator`** (rapport §3.2) : `allocate(startYear)` →
-  `student_number_sequence.bump` (native `INSERT ... ON DUPLICATE KEY
-  UPDATE` — verrou de ligne sur `start_year`, sérialise les
-  confirmations d'une même année, annulé au rollback) + relecture
-  **native** de `next_value` (contourne le cache L1 sans détacher les
-  autres entités) ; `format` = `ESIC-%04d-%0Nd` (largeur `numberSequenceWidth`) ;
-  `allocated ≥ 10^largeur` → `IMP_STUDENT_NUMBER_EXHAUSTED`.
-- **`StudentImportConfirmationService`** :
-  - `confirm(...)` — **entrée publique non transactionnelle** — délègue à
-    `runConfirmation` (via `ObjectProvider` self-proxy pour que
-    `@Transactional` s'applique).
-  - `runConfirmation` — **une seule transaction `@Transactional`
-    (`REQUIRED`)** : `findWithLockByPublicId` (`SELECT … FOR UPDATE`) ;
-    idempotence `APPLIED` → bilan mémorisé + `alreadyApplied = true`
-    (T6) ; `CANCELLED` → `IMP_JOB_CANCELLED` ; `expires_at` dépassé →
-    `IMP_SIMULATION_EXPIRED` ; non `SIMULATED` ou non `confirmable` →
-    `IMP_NOT_CONFIRMABLE` ; périmètre → `IMP_CONFIRM_FORBIDDEN` ;
-    **re-validation complète** (reconstruit `NormalizedRow` depuis les
-    colonnes persistées, re-`PlannedActionResolver.resolve` live) — une
-    ligne devenue `ERROR` ⇒ la transaction **commite sans rien
-    appliquer** (job intact) et retourne un « stale outcome » ;
-    sinon **application** ligne par ligne (ordre `rowNumber`) via
-    `identity.StudentAccountProvisioner.prepareStudentAccountAndInvitation`
-    (compte `PENDING_ACTIVATION` + rôle `STUDENT` + invitation, publie
-    `AccountInvitationIssuedEvent` — e-mail `AFTER_COMMIT` seulement, T4)
-    et `enrollment.StudentEnrollmentProvisioner` (profil / inscription /
-    transfert / patch contact) — **numéro pré-alloué puis testé libre
-    avant l'INSERT** (une collision au flush poisonnerait la transaction
-    unique ; nouvelle tentative bornée `numberAllocMaxRetries` faite
-    hors persistance ; épuisement → `IMP_STUDENT_NUMBER_ALLOC_FAILED`) ;
-    `job.markApplied(...)` + bilan `applied_*` dérivé des `applied_outcome`.
-    Toute exception d'application (`StudentAccountProvisioningException`,
-    collision d'unicité `DataIntegrityViolationException`) →
-    `IMP_STALE_SIMULATION` + **rollback total** (T3) : 0 compte / profil /
-    inscription / rôle / invitation, séquence non consommée, job
-    `SIMULATED`. Robustesse aux e-mails en double dans le fichier :
-    l'enrôlement passe systématiquement par `describeSituation` (la 2ᵉ
-    ligne voit le profil créé par la 1ʳᵉ → `SAME_CLASS` → NOOP).
-  - `confirm` retourne `ConfirmationResult(jobPublicId, alreadyApplied,
-    created, updated, transferred, invited, ignored)`.
-- **`StaleRevalidationPersister`** (`@Transactional(REQUIRES_NEW)`) —
-  persiste les anomalies **rafraîchies** (statuts de ligne + `row_issue`
-  + compteurs job + `confirmable=false`) ; appelé **après** que la
-  transaction de confirmation a commité sans rien appliquer (verrou
-  relâché — pas de deadlock avec le `SELECT … FOR UPDATE`). Ce
-  `REQUIRES_NEW` ne touche **que** `student_import_*` (jamais de donnée
-  métier) et est strictement postérieur à une re-validation en lecture
-  seule ⇒ ne viole pas l'esprit de l'invariant T2.
-
-**Tests CP6** (13) : `StudentNumberAllocatorTests` (3, `@DataJpaTest` —
-format, incrément consécutif par année, borne de largeur),
-`StudentImportConfirmationIntegrationTests` (7, `@SpringBootTest` — 100
-lignes → `APPLIED`, +100 `user_account` `PENDING_ACTIVATION` + rôle
-`STUDENT` + 100 `student_profile` (`ESIC-2026-00001..`) + 100
-`enrollment` + 100 `account_invitation` + 100 e-mails capturés +
-`next_value=101` ; reconfirmation → `alreadyApplied=true`, 0 nouvelle
-écriture, 0 e-mail (TI-012) ; `expires_at` passé → `SIMULATION_EXPIRED`,
-job `SIMULATED` ; statut `CANCELLED` → `JOB_CANCELLED` ; ligne e-mail
-invalide → `NOT_CONFIRMABLE` ; classe archivée entre simulation et
-confirmation → `STALE_SIMULATION`, 0 compte, job `SIMULATED`, 1 ligne
-`ERROR` persistée ; transfert conservant l'historique — ancienne
-inscription `TRANSFERRED`, nouvelle `ACTIVE`, **aucun doublon de
-compte** — TI-005/006, AC-005/006),
-`StudentImportConfirmationRollbackTests` (2, `@SpringBootTest` — échec
-sur la **dernière ligne** (son numéro devient pris juste avant la
-confirmation) → `STALE_SIMULATION`, **0 compte / profil / inscription /
-invitation créés par l'import** (rollback total de la ligne 1),
-`next_value` inchangé, 0 e-mail, job `SIMULATED` (§14.4) ; deux
-confirmations concurrentes (pool 2 threads) → exactement **un** jeu de
-20 comptes créés, l'autre `alreadyApplied` ou `StudentImportException`,
-jamais 40, jamais 500 (§14.6)).
-
-**Correctif collatéral** : `StudentImportSchemaConstraintsTests` (CP1)
-utilisait `start_year` `2026` / `2027` — les tests fonctionnels CP6
-commitent désormais une ligne `student_number_sequence` `2026` (base de
-test partagée). Le test de schéma bascule sur des années sentinelles
-`2901`–`2904` (la valeur n'a aucune importance pour un test de
-contrainte) ; comportement inchangé.
-
-**Vérifications (31 août 2026)** :
-`./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests,EsicConnectApplicationTests'`
-→ **120 tests, 0 échec** ; `ModularityTests` vert.
-
-### CP7 réalisé — audit et purge des imports
-
-**Périmètre strict CP7** : événement d'audit + listener + purge
-planifiée. Aucun contrôleur HTTP (→ CP8), aucune migration.
-
-- **`com.esic.connect.studentimport.StudentImportChangeEvent`** (record
-  public) + `StudentImportChangeAction` (`SIMULATED` / `CONFIRMED` /
-  `CANCELLED` / `EXPIRED`). Ne transporte **aucune donnée personnelle** :
-  `jobPublicId`, `actorUserId` (interne), action, `detail` non sensible
-  (`job=…;rows=…;confirmable=…` pour SIMULATED,
-  `job=…;created=…;updated=…;moved=…;invited=…;ignored=…` pour CONFIRMED).
-- Publication **dans la transaction** : `StudentImportSimulationService`
-  publie `SIMULATED` en fin de `simulate` ;
-  `StudentImportConfirmationService` publie `CONFIRMED` juste avant de
-  retourner (dans `runConfirmation`). Reconfirmation idempotente ⇒ pas de
-  ré-audit.
-- **`audit.internal.StudentImportAuditListener`** — **déviation volontaire**
-  du motif legacy : `@TransactionalEventListener(phase = AFTER_COMMIT)`
-  **+** `@Transactional(propagation = REQUIRES_NEW)`. Le listener n'est
-  invoqué qu'après le commit de la transaction émettrice ; si elle
-  rollback, la phase `AFTER_COMMIT` n'est jamais atteinte → **aucune
-  ligne d'audit** (invariant T5). La ligne `audit_event` (catégorie
-  `STUDENT_IMPORT`, action `STUDENT_IMPORT_SIMULATED` /
-  `STUDENT_IMPORT_CONFIRMED`, `resource_public_id` = job) est écrite dans
-  la transaction dédiée. Aucune dépendance vers `studentimport.internal`
-  (`ModularityTests` vert).
-- **`StudentImportPurgeService`** (`@Scheduled(cron =
-  "${app.import.student.purge-cron:0 30 3 * * *}")` — `@EnableScheduling`
-  ajouté à `StudentImportConfig` ; méthode `purge()` publique et
-  transactionnelle, testable directement). Décisions de prototype
-  (rapport §12.C) : jobs `SIMULATED` / `EXPIRED` dont `expires_at` est
-  dépassé + jobs `CANCELLED` plus vieux que `simulation-ttl` →
-  **supprimés** (chaîne `job_issue` / `row` / `row_issue` en
-  `ON DELETE CASCADE`) ; jobs `APPLIED` confirmés depuis plus de
-  `applied-rows-ttl` → **lignes filles supprimées, en-tête et agrégats
-  `applied_*` conservés** ; `student_number_sequence` jamais purgée.
-  Aucune donnée métier touchée.
-
-**Tests CP7** (5) : `StudentImportAuditIntegrationTests` (3,
-`@SpringBootTest` — simulation → 1 ligne `STUDENT_IMPORT_SIMULATED` sans
-PII ; confirmation committée → 1 ligne `STUDENT_IMPORT_CONFIRMED` visible
-après retour de l'appel, `detail` sans PII ; confirmation en rollback
-(collision dernière ligne) → **0 ligne `_CONFIRMED`** — §14.4 (a) /
-§14.3),
-`StudentImportPurgeTests` (2, `@SpringBootTest` — simulation expirée
-supprimée en cascade + job récent préservé ; job `APPLIED` ancien
-conserve `status`/`applied_created` mais perd `student_import_row` et
-`student_import_job_issue`).
-
-**Vérifications (31 août 2026)** :
-`./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests,ModularityTests,EsicConnectApplicationTests,com.esic.connect.audit.**'`
-→ **127 tests, 0 échec** ; `ModularityTests` vert.
-
-### CP8 réalisé — API de confirmation et cycle de vie
-
-**Périmètre strict CP8** : couche HTTP de la confirmation et de
-l'annulation. Aucune migration.
-
-- **`StudentImportController`** — deux endpoints ajoutés
-  (`@PreAuthorize(MANAGE_ROLES)`) :
-  - `POST /api/v1/student-imports/{publicId}/confirm` → **`200`**
-    `ConfirmationResultResponse` (jamais `201` : la ressource existe
-    déjà). Reconfirmation d'un job `APPLIED` → `200` +
-    `alreadyApplied = true` + bilan mémorisé (invariant T6). Erreurs :
-    `409 IMP_NOT_CONFIRMABLE` / `IMP_STALE_SIMULATION` (anomalies
-    rafraîchies persistées — le client recharge `/rows`) /
-    `IMP_SIMULATION_EXPIRED` / `IMP_JOB_CANCELLED`, `403 IMP_CONFIRM_FORBIDDEN`,
-    `404 IMP_JOB_NOT_FOUND`.
-  - `POST /api/v1/student-imports/{publicId}/cancel` → **`204`**. Erreurs :
-    `409 IMP_JOB_NOT_CANCELLABLE` (job non `SIMULATED`),
-    `403 IMP_JOB_FORBIDDEN`, `404 IMP_JOB_NOT_FOUND`.
-- **`StudentImportConfirmationService.cancel(...)`** (`@Transactional`) :
-  charge le job (404), contrôle fin de périmètre (`PEDAGOGICAL_MANAGER`
-  = son propre job → 403 sinon), `status != SIMULATED` →
-  `IMP_JOB_NOT_CANCELLABLE`, `job.markCancelled(now, actor)` + publication
-  `StudentImportChangeEvent(CANCELLED)` (audité `STUDENT_IMPORT_CANCELLED`
-  par le listener CP7).
-- `StudentImportJob.markCancelled(...)` (mutateur) +
-  `StudentImportResponses.ConfirmationResultResponse`
-  (`{ jobPublicId, alreadyApplied, created, updated, transferred,
-  invited, ignored }`).
-
-**Tests CP8** : `StudentImportLifecycleApiIntegrationTests` (5,
-`@SpringBootTest` + `TestRestTemplate`) — `confirm` → `200`
-`alreadyApplied=false`, `created=2`, job `APPLIED` ; reconfirmation →
-`200` `alreadyApplied=true`, même bilan (TI-012) ; `confirm` sur job non
-confirmable / expiré / annulé → `409` `IMP_NOT_CONFIRMABLE` /
-`IMP_SIMULATION_EXPIRED` / `IMP_JOB_CANCELLED` ; `cancel` d'un job
-`SIMULATED` → `204` puis statut `CANCELLED` ; `cancel` d'un job `APPLIED`
-→ `409 IMP_JOB_NOT_CANCELLABLE` ; `cancel` d'un job inconnu → `404` ;
-`401` anonyme, `403` `STUDENT`, `403` pour un `PEDAGOGICAL_MANAGER` sur
-le `confirm`/`cancel` du job d'un autre RP ; deux `confirm` HTTP
-concurrents → exactement **un** `200` non idempotent (10 comptes créés,
-jamais 20), l'autre `200` idempotent ou `409`, jamais `500`.
-
-**Vérifications (31 août 2026)** :
-`./mvnw test -Dtest='com.esic.connect.studentimport.**'` → **122 tests,
-0 échec** ; `ModularityTests` vert.
-
-**Écart avec la conception (CP8)** : `cancel` (rapport §15 → CP5) a été
-regroupé ici avec `confirm` (mutations d'état du job).
-
-### CP9 réalisé — interface Angular d'import des apprenants
-
-**Périmètre strict CP9** : écrans front-end. Aucun fichier back-end,
-migration ou `docs/01`–`docs/04` modifié ; aucune dépendance npm ajoutée.
-
-- **Routes** `frontend/src/app/features/students/import/` :
-  `/students/import` → `StudentImportHome`, `/students/import/:publicId`
-  → `StudentImportReview`. Déclarées **avant** `/students` et **hors de
-  son sous-arbre** :
-  `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER'])`
-  (le parent `/students` restreint ses enfants à trois rôles seulement ;
-  l'import est aussi ouvert au `PEDAGOGICAL_MANAGER`, limité à son
-  périmètre côté serveur). Entrée de navigation « Import apprenants »
-  (`upload_file`, 4 rôles).
-- **`StudentImportApiService`** — une méthode par endpoint réel
-  (`simulate` en `FormData` multipart — fichier transmis brut, jamais lu
-  côté navigateur ; `listJobs` / `getJob` / `listRows` / `confirm` /
-  `cancel`) ; jamais de jeton en URL ; `HttpParams` sans clé vide.
-- **`student-import.models.ts`** — miroir exact des DTO back-end + libellés
-  FR (`plannedAction`, `rowStatus`, statut de job, gravité).
-- **`student-import-errors.ts`** — `toStudentImportError` : **liste
-  blanche explicite** `KNOWN_IMP_CODES` (jamais `startsWith('IMP_')`) ;
-  code hors liste ou `5xx` → `code` `null` + message générique, jamais le
-  corps brut ; drapeaux `forbidden` / `notFound` / `stale` / `expired`.
-- **`StudentImportHome`** — `input[type=file]` `accept=".csv"` + refus
-  client (extension, taille > 2 Mo) ; codes de périmètre facultatifs ;
-  « Lancer la simulation » désactivé tant qu'aucun fichier valide ; barre
-  de progression ; `201` → navigation vers la revue ; anomalie globale →
-  message contrôlé (jamais le corps brut) ; `403` → « périmètre » ;
-  `mat-table` des imports récents (`GET /student-imports`). Formulaire
-  neutralisé si le contexte de rôle actif ne permet pas d'importer ;
-  réponse tardive ignorée dans ce cas.
-- **`StudentImportReview`** — cartes de synthèse (total, à créer / mettre
-  à jour / transférer / sans changement, avertissements, erreurs),
-  bandeau des anomalies globales, table des lignes (`GET .../rows`,
-  pagination serveur ≤ 100, filtres `rowStatus` / `severity` / `action`
-  remettant à la page 0, tri `rowNumber,asc`, anomalies dépliables avec
-  valeur reçue) ; confirmation **en ligne** avec récapitulatif chiffré,
-  bouton désactivé si `!confirmable`, double soumission bloquée, capacité
-  revérifiée au clic ; `200` → bandeau succès + bilan (`alreadyApplied`
-  → « déjà appliqué ») ; `409 IMP_STALE_SIMULATION` → rechargement
-  synthèse + lignes, bandeau « plus à jour », confirmation bloquée ;
-  `IMP_SIMULATION_EXPIRED` / `IMP_NOT_CONFIRMABLE` / `403` → message
-  contrôlé, aucun faux succès ; bouton « Annuler l'import » →
-  `POST .../cancel` → `204`. Perte du contexte de rôle d'écriture →
-  panneau fermé, actions masquées, réponse en vol ignorée.
-
-**Tests CP9** (17, Vitest) : `student-import-api.service.spec.ts` (4 —
-`FormData` + parts de périmètre conditionnels, params conditionnels,
-`encodeURIComponent`, `confirm`/`cancel` corps `{}` / `204`),
-`student-import-home.spec.ts` (5 — refus client `.csv` / taille, `submit`
-gaté puis navigation sur `201`, mapping d'anomalie globale sans corps
-brut, formulaire neutralisé hors contexte d'import, rien en storage),
-`student-import-review.spec.ts` (8 — chargement synthèse + lignes,
-filtres → page 0, confirmation → bilan mémorisé, `IMP_STALE_SIMULATION`
-→ rechargement + blocage, `IMP_SIMULATION_EXPIRED` → message sans faux
-succès, `cancel` → rechargement, perte du contexte → réponse tardive
-ignorée, rien en storage). Specs mis à jour : `app-shell.spec.ts`
-(entrée « Import apprenants » pour `ADMIN` et `PEDAGOGICAL_MANAGER`).
-
-**Vérifications (31 août 2026, Node 24)** : `npm test` → **471 tests, 0
-échec** (454 → 471) ; `npm run lint` → « All files pass linting » ;
-`npm run build` → bundle initial **483,26 kB** brut / 122,84 kB
-transféré (seuil 500 kB, aucune alerte). `./mvnw` non ré-exécuté (aucun
-fichier back-end modifié).
+- pas de test e2e Angular → Spring Boot (Vitest / `@SpringBootTest`
+  isolés) ; démonstration UI de bout en bout non exécutée
+  automatiquement ;
+- `UPDATE_PROFILE` limité à `work_study` / `company_name` (profil) +
+  `phone` (compte) ; l'identité civile d'un compte existant n'est jamais
+  réécrite ;
+- Excel `.xlsx` / classeur multifeuille, assistant IA de correspondance
+  de colonnes : hors périmètre (le modèle CSV `work_study_pattern` reste
+  ignoré avec avertissement) ;
+- purge `@Scheduled` : cadence quotidienne fixe, pas de fenêtre de
+  rétention par tenant ;
+- dette transactionnelle globale de l'audit (`@EventListener` +
+  `REQUIRES_NEW` des autres modules) : le chemin d'import y échappe (T5) ;
+  migration globale toujours à planifier.
 
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
@@ -2826,7 +2465,7 @@ n'existe pas encore de file persistante ni de reprise garantie
 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | TESTED (module `organization`, migration V4 ; CRUD + archivage/restauration site·bâtiment·salle, création + activation/désactivation plages réseau, aucun DELETE physique ; routes en public_id sous `/api/v1/sites`, `/api/v1/buildings/{id}`, `/api/v1/rooms/{id}`, `/api/v1/network-ranges/{id}` ; pagination max 100 + tri liste blanche ; unicités site.code / (site,code) / (site,cidr) active ; refus parent archivé, room.site=building.site, archivage bloqué si enfants actifs, code immuable ; ZoneId + ISO 3166-1 + CIDR IPv4/IPv6 validés ; `@PreAuthorize` lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN, plages réseau SUPER_ADMIN pour toute opération ; DTO sans id SQL ; audit `SITE_*`/`BUILDING_*`/`ROOM_*`/`SITE_NETWORK_RANGE_*` catégorie ORGANIZATION ; port public `identity.CurrentUserResolver` pour l'auteur des écritures) |
 | Inscriptions historiques (student_profile / enrollment) | TESTED (module `enrollment`, migration V7 ; `StudentProfile` (`user_id` valeur technique via `identity.UserDirectory`, unique ; `student_number` unique ; statut ACTIVE/ARCHIVED) et `Enrollment` (rattachements `class_group_id`/`academic_year_id` = valeurs techniques via nouveau port `academic.ClassGroupDirectory` ; `previous_enrollment_id` auto-référence ; `enrollment_source` MANUAL/CLASS_TRANSFER ; statuts docs/04 §13.1) ; **au plus une inscription ACTIVE par apprenant et par année scolaire** (RG-012 / docs/04 §13.3) : pré-contrôle applicatif + contrainte SQL `uq_enrollment_active_per_year` (colonnes générées) + isolation de la collision concurrente (bean `EnrollmentPersister` `@Transactional(REQUIRES_NEW)` pour `create`/`enroll` — retraduction hors transaction en échec ; `EnrollmentExceptionHandler` pour `transfer` — dont l'INSERT doit voir la clôture dans la même transaction), retraduite en 409 ciblé, jamais 500 ; changement de classe `POST …/{id}/transfer` clôturant l'ancienne inscription en TRANSFERRED (`end_date` inclusif, historique conservé — AC-006) et créant la nouvelle liée débutant `end_date` + 1 jour (aucun chevauchement de période) ; clôture `POST …/{id}/close` (COMPLETED/WITHDRAWN, motif obligatoire) ; `CHECK (end_date IS NULL OR end_date >= start_date)` ; routes en public_id sous `/api/v1/student-profiles` et `/api/v1/enrollments` (GET liste filtres + tri liste blanche + pagination max 100, GET détail, POST) réservées ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION (PEDAGOGICAL_MANAGER exclu tant qu'un port de périmètre pédagogique public n'existe pas ; TEACHER/STUDENT sans accès), aucun PATCH/DELETE/route nichée ; horloge `java.time.Clock` injectée ; DTO sans id SQL ; audit `STUDENT_PROFILE_CREATED`/`ENROLLMENT_CREATED`/`_TRANSFERRED`/`_CLOSED` catégorie `ENROLLMENT`. Import CSV, rythmes d'alternance, apprenants provisoires : hors périmètre de ce lot. |
 | Rythmes d'alternance (work_study_pattern / class_work_study_pattern / student_schedule_exception) | TESTED (module `alternation`, migration V8 ; modèles réutilisables de rythme — 4 `pattern_type`, `configuration_json` validé + canonicalisé par `AlternationConfigParser` (composant pur ; propriété inconnue / jour inconnu / intersection école-entreprise / nombre de semaines incohérent / index hors cycle → 400 `ALT_INVALID_CONFIGURATION`), round-trip canonique `parseCanonical(canonicalize(parse(...)))` corrigé et testé pour les 4 types (tolère les tableaux de jours vides que `canonicalize` produit, reste strict : 5 clés obligatoires, aucune propriété inconnue, index de semaine et intersections contrôlés) ; CRUD + archivage/restauration, `code` et `pattern_type` immuables ; affectation historisée à une classe (`class_group_id` valeur technique via `academic.ClassGroupDirectory`, `cycle_start_date` porté par l'affectation), `CHECK (valid_until IS NULL OR >= valid_from)`, non-chevauchement des périodes ACTIVE — adjacence stricte autorisée, pré-contrôle applicatif (course résiduelle sur périodes bornées documentée) —, unicité SQL de l'affectation ACTIVE « ouverte » par classe (`active_open_key` généré) + collision concurrente retraduite en 409 `ALT_OPEN_ASSIGNMENT_EXISTS` par `ClassAssignmentPersister` (`REQUIRES_NEW`), jamais 500 (deux créations HTTP simultanées → 1×201 / 1×409 / 0×500 / une seule ligne ACTIVE ouverte, vérifié) ; clôture explicite bornée (`effectiveDate >= valid_from`, `<= valid_until` s'il est fixé sinon 400 `ALT_INVALID_PERIOD` ; `< next.validFrom` de l'affectation suivante sinon 409 `ALT_ASSIGNMENT_CLOSE_CONFLICT` via requête repository déterministe), historique conservé ; exceptions individuelles (`enrollment_id` valeur technique via **nouveau port** `enrollment.EnrollmentDirectory`) — 4 `exception_type`, `ACTIVE`/`CANCELLED`, `CHECK (end_at > start_at)`, `time_zone_id` IANA validé, `reason` obligatoire ; chevauchement de **même type** refusé (pré-contrôle applicatif seul — deux exceptions concurrentes de même type peuvent encore être persistées, limite documentée) ; projection d'une exception sur un jour civil en sémantique demi-ouverte `[startAt, endAt)` par intersection d'intervalles dans le fuseau de l'exception (minuit exact et changement d'heure Europe/Paris gérés ; fuseau persisté invalide → erreur interne explicite, plus de repli UTC) ; résolution `SCHOOL`/`COMPANY`/`UNKNOWN` par classe et par inscription (`AlternationResolver`, service pur, déterministe — date < ancre / week-end / semaine non classifiée / absence d'affectation → `UNKNOWN`), résolution effective = priorité **structurelle** d'une exception `ON_SITE_REQUIRED`→`SCHOOL` / `COMPANY_PERIOD`→`COMPANY`, **aucun calcul d'assiduité** ; routes `/api/v1/alternation/...` (patterns, class-assignments, classes/{id}/assignments+context, student-exceptions, enrollments/{id}/exceptions+context), tri liste blanche → 400 `ALT_INVALID_SORT`, pagination ≤ 100, DTO sans id SQL, `ApiError` codes `ALT_*` ; `@PreAuthorize` — modèles : lecture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER, écriture ADMIN/SUPER_ADMIN/SCHOOL_ADMINISTRATION ; affectations + exceptions : + PEDAGOGICAL_MANAGER limité à son périmètre via **nouveau port** `academic.AcademicScopeDirectory` (hors périmètre → 403 `ALT_FORBIDDEN`) ; TEACHER/STUDENT → 403 ; audit `WORK_STUDY_PATTERN_*` / `CLASS_WORK_STUDY_PATTERN_ASSIGNED`/`_CLOSED` / `STUDENT_SCHEDULE_EXCEPTION_CREATED`/`_CANCELLED` catégorie `ALTERNATION` via `alternation.AlternationChangeEvent` → `audit.internal.AlternationAuditListener`. Exceptions collectives, `planning`/`coursesession`/`attendance`, calcul d'assiduité, frontend : hors périmètre de ce lot. Aucun seed métier en V8.) |
-| Import apprenants | IN_PROGRESS — CP1 sur `feature/student-csv-import-cp1` (non poussée). Conception CP0 figée (`docs/reports/STUDENT_CSV_IMPORT_DESIGN.md` R2, fusionnée PR #23 = `e8fd16d`). **CP1 = schéma V11 uniquement** : migration `V11__create_student_import_tables.sql` (tables `student_import_job` / `_job_issue` / `_row` / `_row_issue` + `student_number_sequence` ; chaîne `ON DELETE CASCADE` ; FK `RESTRICT` vers `user_account` ; `CHECK` statut / gravité / action / `file_size_bytes > 0` / `next_value > 0` ; `UNIQUE (student_import_job_id, `row_number`)` ; index purge / requêteur), module Spring Modulith `studentimport` (`package-info` `@ApplicationModule`, entités JPA `studentimport.internal` héritant `shared.BaseEntity`, enums, repositories `JpaRepository` en lecture simple), `StudentImportSchemaConstraintsTests` (`@DataJpaTest` MySQL réel, **19 tests, 0 échec**). `ModularityTests` vert ; suite `./mvnw clean test` → **567 tests** (+19), schéma en version 11 ; 7 échecs `AttendanceIntegrationTests` **pré-existants** (reproduits arbre ramené à `e8fd16d`), hors périmètre CP1. **Non implémenté** (CP2+) : parsing CSV, simulation, confirmation transactionnelle, ports `identity.StudentAccountProvisioner` / `enrollment.StudentEnrollmentProvisioner` / `academic.ClassGroupDirectory.resolveForImport`, génération fonctionnelle de `student_number`, endpoints REST, écrans Angular. |
+| Import apprenants | IMPLEMENTED et TESTED (backend + frontend) sur `feature/student-csv-import-implementation` (CP2 → CP10, un commit par checkpoint ; NON poussée, NON fusionnée). CP0 (conception R2) fusionné PR #23 ; CP1 (schéma V11) fusionné PR #24 = `31acb09`. Module Spring Modulith `studentimport` : lecture CSV sécurisée (RFC 4180 maison, UTF-8 strict, rejet ZIP/OLE2/PDF, BOM, séparateur `,`/`;` auto-détecté, fichier jamais écrit), validation de champ + dé-duplication fichier + résolution classe/année/compte via **ports publics** (`academic.ClassGroupDirectory.resolveForImport`, `identity.StudentAccountProvisioner`, `enrollment.StudentEnrollmentProvisioner`), calcul de `planned_action` (9 situations §3.3), **simulation** persistant uniquement `student_import_*` (invariant T1), **confirmation transactionnelle** unique (verrou `SELECT … FOR UPDATE`, re-validation, application via ports `REQUIRED` jamais `REQUIRES_NEW`, génération atomique de `student_number` `ESIC-{annéeDébut}-{NNNNN}`, idempotence `APPLIED` → `alreadyApplied=true` T6, rollback total T3, e-mail `AFTER_COMMIT` T4), audit `StudentImportChangeEvent` → `StudentImportAuditListener` (`@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`, aucune trace si rollback T5, aucune PII), purge `@Scheduled`. **6 endpoints** `/api/v1/student-imports` (`POST` multipart simulation, `GET` liste / détail / `rows` paginés-filtrés, `POST .../confirm` → `200`, `POST .../cancel` → `204`), `@PreAuthorize(MANAGE_ROLES)` + décision fine de périmètre `PEDAGOGICAL_MANAGER` = ses jobs. **Front Angular** `/students/import` (+ `/:publicId`) : téléversement, simulation, cartes de synthèse, table des lignes filtrable, confirmation en ligne, annulation, gestion de `IMP_STALE_SIMULATION` / expiration / perte de contexte de rôle. `./mvnw clean test` → **682 tests, 0 échec** (`ModularityTests` vert, schéma en version 11 ; la suite finale exécute `AttendanceIntegrationTests` avec succès — 25 tests, 0 échec) ; `npm test` → **471 tests, 0 échec**, `npm run lint` OK, `npm run build` **483,26 kB** (< 500 kB). Hors périmètre : Excel `.xlsx` / multifeuille, assistant IA de correspondance de colonnes, réécriture de l'identité civile d'un compte existant, rattachement d'un rythme d'alternance (`work_study_pattern` ignoré avec avertissement). |
 | Import planning | TODO |
 | Séances | IMPLEMENTED et TESTED — fusionné sur `main` via la PR #20 (`5874f5a`) (module `coursesession`, V9 ; séance **exceptionnelle** créée manuellement, motif obligatoire, formateur = compte `TEACHER` actif via port `identity.TeacherDirectory`, ≥ 1 classe ; cycle strict `PLANNED → OPEN → CLOSED` sans réouverture ; API `/api/v1/sessions` liste filtrée par périmètre + `/teachers` + détail + création + `/open` + `/close` ; contrôle fin `CourseSessionAccessGuard` (contexte Spring Security) : `ADMIN`/`SUPER_ADMIN` global, `SCHOOL_ADMINISTRATION` lecture seule, `PEDAGOGICAL_MANAGER` limité au périmètre, `TEACHER` seulement ses séances, `STUDENT` aucun accès ; audit `SESSION_CREATED`/`_OPENED`/`_CLOSED` ; port public `coursesession.CourseSessionDirectory`. `CourseSessionConstraintsTests` (7), `CourseSessionIntegrationTests` (6). Un seul point de contrôle par séance ; planning non livré) **V10 (branche non fusionnée)** : plusieurs points de contrôle par séance (`AttendanceCheckpointService` + `AttendanceCheckpointController`, cycle `PLANNED → OPEN → CLOSED`/`CANCELLED`, ordre d'affichage unique, ≤ 1 `START` / ≤ 1 `END` actif, motif obligatoire à l'annulation ; `SCHOOL_ADMINISTRATION` exclu de la gestion) ; ouverture de séance ouvre le `START`, fermeture ferme tous les points de contrôle ouverts ; événement `AttendanceCheckpointChangeEvent` audité (`CHECKPOINT_CREATED`/`_OPENED`/`_CLOSED`/`_CANCELLED`) ; `CourseSessionConstraintsTests` 7→10, `CourseSessionIntegrationTests` 6→9→10 (**PR #22** : `flushCheckpoint()` retraduit une transition concurrente perdante en `409 ATT_CHECKPOINT_INVALID_STATE`, jamais 500 ; test ouverture/fermeture concurrentes d'un point de contrôle). |
 | Émargement | IMPLEMENTED, TESTED et DÉMONTRÉ localement (API) — fusionné sur `main` via la PR #20 (`5874f5a`), validation manuelle locale du parcours fonctionnel frontend et API, sous le profil `demo`, réussie (connexion formateur et apprenants, ouverture, QR / code court, enregistrement des deux présences, anti-double présence, consultation du tableau, fermeture et refus de l'ancien code ; changements de contexte de rôle non applicables manuellement — comptes de démonstration mono-rôle —, couverts par les tests automatisés) (module `attendance`, V9 ; jeton dynamique **opaque** `SecureRandom` + **code court** dans **Redis** avec TTL court, rotation, purge à la fermeture ; QR encodant uniquement le jeton opaque ; `POST /api/v1/sessions/{id}/attendance-token` (formateur/gestionnaire, séance `OPEN`) ; `POST /api/v1/attendance/validate` (**`STUDENT` uniquement** ; apprenant résolu depuis le seul JWT ; inscription `ACTIVE` dans une classe de la séance, 0 ou >1 → refus) ; **anti-double présence par contrainte SQL `uq_attendance_record_checkpoint_enrollment`** (violation concurrente → `409 ATT_ALREADY_RECORDED`, jamais 500) ; `GET /api/v1/sessions/{id}/attendance` (effectif attendu + présents + lignes sans email ni id SQL) ; Redis KO → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` ; audit `ATTENDANCE_RECORDED` sans jeton/numéro/nom. **Revue PR #20** : `resolveSession` applique l'invariant du pointeur courant (`session -> token\ncode`) — une clé `token -> session` résiduelle n'est plus acceptée après rotation ou invalidation. `AttendanceRecordConstraintsTests` (4), `AttendanceTokenServiceTests` (18), `AttendanceIntegrationTests` (7 dont concurrence), `AttendanceSecurityTests` (4). **Scan caméra NON RÉALISÉ** ; parcours fiable = code court ; pas de présence manuelle, correction, justificatif, demi-journée, export) **V10 (branche non fusionnée)** : jeton émis **par point de contrôle** ; `validate` classe la présence `PRESENT`/`LATE` selon `app.attendance.late-threshold` (défaut `PT10M`) ; présence manuelle / correction / annulation logique avec historique append-only (`attendance_correction`, motif obligatoire, verrou optimiste → 409) ; justificatif métier SANS fichier (`attendance_justification`, dépôt / modif `PENDING` / examen ; `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE`) ; espace apprenant `GET /api/v1/me/attendance*` (absences dérivées non persistées) ; `AttendanceIntegrationTests` (25), `AttendanceSecurityTests` (8), `AttendanceTokenServiceTests` (19), `AttendanceRecordConstraintsTests` (7), `CourseSessionIntegrationTests` (10), `AttendanceManagementConstraintsTests` (9), `AttendanceReportSortTests` (4). **Correctifs PR #22** : `GET /api/v1/sessions/{id}/attendance/candidates` (candidats à la saisie manuelle : inscriptions actives des classes de la séance, dédupliquées, sans e-mail ni id SQL, contrôle fin = lecture des présences ; §2) ; `GET /api/v1/sessions/{id}/attendance/export` (CSV borné à la séance, formateur affecté autorisé, protections CSV, nom de fichier contrôlé ; §8) ; tests de concurrence déterministes (QR/code vs présence manuelle, deux corrections, deux examens de justificatif, deux créations manuelles → une écriture / un conflit contrôlé / aucun 500 ; §3). **2ᵉ passe PR #22** : éligibilité des candidats et validation manuelle bornées à l'inscription valable **le jour de la séance** (`EnrollmentDirectory.findRosterForClassesOn` / `isEnrollmentValidOn`, date locale = `startsAt` + fuseau persisté, aucun repli UTC) ; matrice de sécurité du endpoint des candidats sur fixtures réelles (ADMIN/`SCHOOL_ADMINISTRATION` 200, `PEDAGOGICAL_MANAGER` in/out périmètre 200/403, `TEACHER` affecté/non 200/403, `STUDENT` 403, anonyme 401) ; export CSV de séance **sans** colonne libre `commentaire`. |

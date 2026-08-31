@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -146,13 +147,27 @@ class StudentImportExceptionHandler {
 
     /**
      * Un fichier au-delà de {@code spring.servlet.multipart.max-file-size}
-     * est intercepté par le conteneur avant même le contrôleur : on le
-     * retraduit en {@code IMP_FILE_TOO_LARGE} plutôt qu'en 500 générique.
+     * (résolution paresseuse ⇒ l'exception est levée pendant l'exécution
+     * du contrôleur) : on le retraduit en {@code IMP_FILE_TOO_LARGE}
+     * plutôt qu'en 500 générique. Toute autre défaillance de parsing
+     * multipart ({@link MultipartException}) est traitée comme un fichier
+     * non exploitable.
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ApiError> handleMaxUpload(MaxUploadSizeExceededException ex, HttpServletRequest request) {
         return build(HttpStatus.PAYLOAD_TOO_LARGE, "IMP_FILE_TOO_LARGE",
                 "Le fichier dépasse la taille maximale autorisée.", request, List.of());
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    ResponseEntity<ApiError> handleMultipart(MultipartException ex, HttpServletRequest request) {
+        String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(java.util.Locale.ROOT);
+        if (message.contains("size") || message.contains("exceed") || message.contains("large")) {
+            return build(HttpStatus.PAYLOAD_TOO_LARGE, "IMP_FILE_TOO_LARGE",
+                    "Le fichier dépasse la taille maximale autorisée.", request, List.of());
+        }
+        return build(HttpStatus.BAD_REQUEST, "IMP_UNSUPPORTED_MEDIA_TYPE",
+                "Le fichier téléversé n'a pas pu être lu.", request, List.of());
     }
 
     private static List<String> details(Object detail) {
