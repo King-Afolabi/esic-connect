@@ -48,6 +48,9 @@ logs/
 report/generated/
 presentation/generated/
 
+# OpenAPI export (commodité de revue, non versionné — voir scripts/dump-openapi.sh)
+docs/openapi.json
+
 # Temporary imports
 tmp/
 temp/.claude/

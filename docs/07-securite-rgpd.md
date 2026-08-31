@@ -171,6 +171,30 @@ Adaptatif pour les apprenants :
 - verrouillage temporaire ;
 - notification de connexion inhabituelle.
 
+### État d’implémentation (checkpoint F5 — 31 août 2026)
+
+**`NOT_IMPLEMENTED` — dette assumée.** Il n’y a **aucune** limitation de
+débit sur `POST /api/v1/auth/login` ni sur les autres endpoints
+sensibles (réémission d’invitation, activation). Redis est présent mais
+n’est utilisé que pour les jetons d’émargement.
+
+Cette lacune a été **évaluée** au checkpoint F5 et **volontairement
+laissée en dette** : un limiteur correct exige un comportement *fail-safe*
+explicite en cas d’indisponibilité de Redis, des clés qui ne contiennent
+pas l’adresse e-mail en clair, un TTL borné, une réponse strictement
+uniforme (pas d’énumération de comptes), et une couverture de test
+sérieuse (dépassement, expiration, Redis KO) — un volume que ce lot de
+finalisation ne peut pas traiter sans risque pour les ~30 tests
+d’authentification existants. Mieux vaut l’absence claire qu’un
+pseudo-contrôle fragile.
+
+Le refus est déjà **uniforme** (même réponse pour e-mail inconnu / mauvais
+mot de passe / compte inactif, testé) et le hachage BCrypt ralentit
+intrinsèquement les tentatives. À implémenter pour une mise en service :
+filtre de rate-limit Redis (fenêtre fixe ou *token bucket*) sur
+`/auth/login`, avec les garanties ci-dessus, + Turnstile sur les
+formulaires publics.
+
 ---
 
 # 6. Sessions
@@ -247,6 +271,46 @@ localStorage
 
 La CNIL recommande TLS 1.2 ou 1.3, la limitation des ports et des comptes
 de base nominatifs ou spécifiques à l’application. ([cnil.fr](https://www.cnil.fr/fr/securiser-vos-sites-web-vos-applications-et-vos-serveurs?utm_source=openai))
+
+## État d’implémentation des contrôles API (checkpoint F5 — 31 août 2026)
+
+| Contrôle | État | Détail |
+|---|---|---|
+| Validation Jakarta, requêtes paramétrées (JPA), erreurs neutres, pagination, taille des corps bornée | `IMPLEMENTED_AND_TESTED` | `GlobalExceptionHandler`, `@Valid`, `spring.servlet.multipart` (2 MiB) |
+| **CORS restrictif** | `IMPLEMENTED_AND_TESTED` (F5) | `SecurityConfig.corsConfigurationSource` piloté par `app.security.cors.allowed-origins` (= `APP_ALLOWED_ORIGINS`) ; **jamais `*`** ; `allowCredentials=false` (jeton dans l’en-tête, pas de cookie) ; méthodes `GET/POST/PUT/PATCH/DELETE/OPTIONS` ; en-têtes `Authorization`, `Content-Type`, `Accept`, `X-Requested-With` ; appliqué à `/api/**`. Test : `HttpSecurityHeadersIntegrationTests` (origine listée acceptée, sinon `403`). |
+| **`Content-Security-Policy`** | `IMPLEMENTED_AND_TESTED` (F5) | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`. **Aucun `script-src 'unsafe-inline'` ni `'unsafe-eval'`.** `style-src 'unsafe-inline'` et `img-src data:` sont **nécessaires à Swagger UI** (springdoc) — écart assumé et limité à ce besoin ; l’app Angular est servie séparément et applique sa propre politique côté serveur web. |
+| **`Referrer-Policy`** | `IMPLEMENTED_AND_TESTED` (F5) | `no-referrer`. |
+| En-têtes par défaut Spring Security (`nosniff`, `X-Frame-Options: DENY`, anti-cache, HSTS sur HTTPS) | `IMPLEMENTED_AND_TESTED` | conservés (jamais désactivés) ; HSTS émis uniquement sur réponses HTTPS — non exigé sur HTTP local. |
+| Limitation de débit / rate-limiting | `NOT_IMPLEMENTED` | dette assumée — voir §5 « Anti-brute-force ». |
+| HTTPS hors local | `NOT_IMPLEMENTED` | pas de terminaison TLS dans le prototype (cible `docs/03` §37). |
+| OpenAPI sans secret | `IMPLEMENTED` | DTO sans `id` SQL / hash / jeton ; export runtime `scripts/dump-openapi.sh`. |
+
+## Chaîne d’approvisionnement des dépendances (checkpoint F4 — 31 août 2026)
+
+Contrôles réellement en place :
+
+| Contrôle | Portée | Fichier |
+|---|---|---|
+| **Dependabot** | montées de version + alertes de sécurité pour **Maven** (`/backend`), **npm** (`/frontend`) et **GitHub Actions** (`/`), cadence hebdomadaire, PR ouvertes plafonnées | `.github/dependabot.yml` |
+| **`actions/dependency-review-action@v4`** | sur chaque PR vers `main` : échec si une dépendance **ajoutée / modifiée** par la PR (Maven **ou** npm) introduit une vulnérabilité connue de sévérité ≥ `high`, ou une licence de la liste noire (`GPL-2.0`, `GPL-3.0`, `AGPL-3.0`) | `.github/workflows/dependency-review.yml` |
+| **`npm audit --audit-level=high`** | front-end : échec de la CI si une dépendance npm (dev ou prod) porte une vulnérabilité connue ≥ `high` | `.github/workflows/frontend-ci.yml` |
+
+Sécurité des workflows : tous en `permissions: contents: read`, avec
+`concurrency` + annulation, `timeout-minutes`, actions officielles
+épinglées sur une version majeure, **aucun secret**, **aucun
+`pull_request_target`**, **aucune exécution de code d’une PR non fiable
+avec des droits élevés**.
+
+**Écart assumé** : il n’y a **pas** de scan SCA de fond de *tout* l’arbre
+Maven (type OWASP Dependency-Check). Un tel scan exige aujourd’hui une
+clé d’API NVD et le téléchargement / la mise en cache d’une base CVE
+volumineuse ; sans stratégie de cache et de clé, le job serait
+fréquemment rouge pour des raisons d’indisponibilité réseau, ce qui
+nuirait à la CI. Le différentiel de PR (`dependency-review-action`,
+qui couvre Maven) + Dependabot (alertes de sécurité sur tout l’arbre)
+couvrent l’essentiel du risque pour un prototype. À planifier pour une
+mise en service réelle : `org.owasp:dependency-check-maven` en job
+planifié dédié, avec clé NVD en secret et cache de la base.
 
 ---
 
@@ -433,6 +497,33 @@ Proposition :
 Les durées doivent être validées avec le référent RGPD et les obligations
 de l’établissement. Le RGPD impose une conservation limitée selon la
 finalité, pas une durée universelle. ([cnil.fr](https://www.cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees?utm_source=openai))
+
+## État d’implémentation de la purge (checkpoint F3 — 31 août 2026)
+
+Le tableau ci-dessus est une **cible**. Dans le code réellement fusionné
+sur `main`, **une seule purge automatique est implémentée**. Le reste est
+`DOCUMENTATION_ONLY` : il n’y a **pas** de tâche de purge, et il ne faut
+donc **pas** présenter le système comme « conforme RGPD » sur la
+limitation de conservation.
+
+| Donnée | Purge réelle ? | Détail |
+|---|---|---|
+| **Jobs d’import CSV (`student_import_*`)** | **OUI — implémentée et testée** | `StudentImportPurgeService` (`@Scheduled`, `app.import.student.purge-cron`, défaut 03:30) : jobs `SIMULATED` / `EXPIRED` échus + `CANCELLED` anciens supprimés en cascade ; jobs `APPLIED` anciens → lignes filles supprimées, en-tête et agrégats conservés ; `student_number_sequence` jamais purgée. Tests : `StudentImportPurgeTests`. |
+| **Fichier importé** | **N/A — jamais persisté** | le contenu CSV n’est jamais écrit sur disque ; seule l’empreinte SHA-256 est conservée (`CsvFileGuard`). |
+| Jetons / codes d’émargement (Redis) | **OUI — par TTL** | expiration Redis (`app.attendance.token-ttl`, défaut `PT30S`) + invalidation explicite à la fermeture de séance / du point de contrôle. Aucune persistance MySQL. |
+| Jetons d’invitation (`account_invitation`) | **NON** | TTL métier vérifié à l’usage, mais **aucune purge** des lignes `PENDING` échues (dette connue — cf. `docs/CURRENT-STATE.md`). |
+| Piste d’audit (`audit_event`) | **NON** | append-only, **aucune** rétention / archivage / anonymisation outillé. |
+| Présences, corrections, justificatifs | **NON** | aucune purge ni anonymisation ; conservation de fait illimitée en base. |
+| Comptes archivés | **NON** | statut `ARCHIVED` (pas de connexion), historique conservé ; **pas** de séparation en archivage intermédiaire ni d’anonymisation. |
+| Logs techniques du serveur | **NON géré ici** | dépend de la configuration d’exploitation (rotation logback / plateforme). |
+
+Conséquence : les exigences `docs/07` §14 (conservation limitée), §18
+(droits des personnes) et §39 du cahier des charges sont **partiellement
+couvertes** — une seule purge outillée. Pour une mise en service réelle,
+il faut : (1) une tâche `@Scheduled` de purge des invitations `PENDING`
+échues, (2) une politique de rétention outillée pour l’audit et les
+présences (archivage → purge / anonymisation), (3) des procédures pour
+les droits d’accès / rectification / effacement / export.
 
 ---
 

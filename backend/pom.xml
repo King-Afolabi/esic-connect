@@ -21,6 +21,14 @@
         <java.version>21</java.version>
         <spring-modulith.version>1.4.12</spring-modulith.version>
         <springdoc-openapi.version>2.9.0</springdoc-openapi.version>
+        <!--
+            Sélection des tests par tag JUnit (FINAL-009).
+            Par défaut : on exécute tout SAUF le tag `perf` (mesures
+            chronométrées, non déterministes). Le profil `-Pperf`
+            surcharge ces deux propriétés pour n'exécuter QUE `perf`.
+        -->
+        <test.groups></test.groups>
+        <test.excludedGroups>perf</test.excludedGroups>
     </properties>
 
     <dependencyManagement>
@@ -127,6 +135,35 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!--
+                Les tests de mesure de performance (FINAL-009) portent le
+                tag JUnit `perf` et sont EXCLUS du `mvn test` par défaut
+                (voir les propriétés `test.groups` / `test.excludedGroups`).
+                Version du plugin gérée par spring-boot-starter-parent.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <groups>${test.groups}</groups>
+                    <excludedGroups>${test.excludedGroups}</excludedGroups>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            `./mvnw test -Pperf` : n'exécute QUE les tests taggés `perf`
+            (mesures reproductibles, voir docs/reports/PERF_NOTES.md).
+            `none` = tag qu'aucun test ne porte → exclusion neutralisée.
+        -->
+        <profile>
+            <id>perf</id>
+            <properties>
+                <test.groups>perf</test.groups>
+                <test.excludedGroups>none</test.excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

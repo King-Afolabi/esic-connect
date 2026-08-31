@@ -249,7 +249,7 @@
                 role="group" aria-label="Présence manuelle">
             <p class="sessions__meta">
               Point de contrôle ciblé :
-              <strong>{{ (selectedCheckpoint() ?? checkpoints()[0])?.label || '—' }}</strong>.
+              <strong>{{ manualTargetLabel() }}</strong>.
             </p>
             @if (candidatesState() === 'loading') {
               <p class="sessions__status" role="status">Chargement des inscrits de la séance…</p>

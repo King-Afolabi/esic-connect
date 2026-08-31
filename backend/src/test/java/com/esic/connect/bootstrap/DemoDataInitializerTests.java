@@ -12,8 +12,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * {@link DemoDataInitializer} — le mot de passe de démonstration est
- * obligatoire (≥ 12 caractères) et l'amorçage crée exactement quatre
- * comptes fictifs sur le domaine {@code example.test}.
+ * obligatoire (≥ 12 caractères) et l'amorçage crée exactement cinq
+ * comptes fictifs sur le domaine {@code example.test}, dont un compte
+ * multi-rôles ({@code PEDAGOGICAL_MANAGER} + {@code TEACHER}).
  */
 class DemoDataInitializerTests {
 
@@ -28,16 +29,20 @@ class DemoDataInitializerTests {
     }
 
     @Test
-    void provisionsExactlyFourFictionalAccounts() {
+    void provisionsExactlyFiveFictionalAccountsIncludingAMultiRoleOne() {
         DemoDataInitializer initializer = new DemoDataInitializer(provisioner, "demo-password-1234");
         initializer.run(new DefaultApplicationArguments());
 
-        assertThat(provisioner.calls.get()).isEqualTo(4);
+        assertThat(provisioner.calls.get()).isEqualTo(5);
         assertThat(provisioner.emails)
                 .containsExactlyInAnyOrder("admin@example.test", "formateur@example.test",
-                        "apprenant1@example.test", "apprenant2@example.test");
+                        "apprenant1@example.test", "apprenant2@example.test",
+                        "responsable@example.test");
         assertThat(provisioner.emails).allMatch(email -> email.endsWith("@example.test"));
-        assertThat(provisioner.roles).contains("ADMIN", "TEACHER", "STUDENT");
+        assertThat(provisioner.roles).contains("ADMIN", "TEACHER", "STUDENT", "PEDAGOGICAL_MANAGER");
+        // Le compte responsable cumule deux rôles (sélecteur de contexte, EF-AUTH-003).
+        assertThat(provisioner.rolesByEmail.get("responsable@example.test"))
+                .containsExactlyInAnyOrder("PEDAGOGICAL_MANAGER", "TEACHER");
         // Le mot de passe transmis n'est jamais journalisé par l'initialiseur.
         assertThat(provisioner.passwords).containsOnly("demo-password-1234");
     }
@@ -48,6 +53,7 @@ class DemoDataInitializerTests {
         final java.util.Set<String> emails = new java.util.HashSet<>();
         final java.util.Set<String> roles = new java.util.HashSet<>();
         final java.util.Set<String> passwords = new java.util.HashSet<>();
+        final java.util.Map<String, java.util.Set<String>> rolesByEmail = new java.util.HashMap<>();
 
         @Override
         public UUID ensureActiveAccount(String email, String firstName, String lastName,
@@ -55,6 +61,7 @@ class DemoDataInitializerTests {
             calls.incrementAndGet();
             emails.add(email);
             roles.addAll(roleCodes);
+            rolesByEmail.put(email, new java.util.HashSet<>(roleCodes));
             passwords.add(rawPassword);
             return UUID.randomUUID();
         }

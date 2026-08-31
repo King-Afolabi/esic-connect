@@ -64,6 +64,15 @@ app:
       # « un mois »). Configurable, doit rester strictement positive
       # (le démarrage échoue sinon, voir AccountInvitationService).
       token-ttl: ${INVITATION_TOKEN_TTL:P30D}
+    cors:
+      # Origines autorisées à appeler l'API depuis un navigateur
+      # (docs/07 §8 : « CORS restrictif »). Liste explicite séparée par
+      # des virgules ; jamais `*`. En local, `ng serve` proxifie `/api`
+      # (aucune requête cross-origin) — cette valeur ne sert qu'à un
+      # déploiement où le front est servi depuis un autre origin.
+      # Les identifiants (cookies) ne sont pas utilisés : le jeton
+      # circule dans l'en-tête `Authorization`, `allowCredentials=false`.
+      allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:4200}
   attendance:
     # Durée de vie d'un jeton dynamique / code court d'émargement dans
     # Redis (docs/02 §17.10 : « le code visuel peut changer toutes les

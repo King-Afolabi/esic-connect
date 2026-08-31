@@ -1355,6 +1355,27 @@ Spring Boot API
 \- intégration complète à Teams ;  
 \- décision disciplinaire automatisée.  
   
+\### 23.5 Addendum de finalisation F2 (31 août 2026) — réduction de périmètre assumée
+
+Au terme du prototype, la décision suivante est **prise, assumée et
+signalée au jury** :
+
+\- l’**import du planning**, sa prévisualisation, sa publication, son
+  versionnement et la **création automatique des séances depuis un
+  planning** ne sont **pas implémentés** ;
+\- le prototype ne permet que la **création manuelle de séances
+  exceptionnelles** ;
+\- les exigences **EF-PLAN-001 à EF-PLAN-007, EF-SES-001, RG-016, AC-007
+  et AC-008** sont classées `HORS_PÉRIMÈTRE_ASSUMÉ` pour cette livraison ;
+\- cette réduction ne doit jamais être présentée comme une livraison de
+  la fonctionnalité planning.
+
+Le parcours prioritaire de `CLAUDE.md` (« Import planning → Publication →
+Création des séances ») est donc **incomplet** dans ce prototype. Voir
+`README.md` (« Périmètre non livré »), `docs/CURRENT-STATE.md`
+(« Hors périmètre assumé ») et `docs/reports/PROJECT_FINAL_AUDIT.md`
+§7.4.
+
 \---  
   
 \## 24. Règles de gestion principales  

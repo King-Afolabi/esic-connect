@@ -1,0 +1,48 @@
+name: dependency-review
+
+# Contrôle de chaîne d'approvisionnement (FINAL-006).
+#
+# Sur chaque pull request vers `main`, compare les dépendances
+# AJOUTÉES / MODIFIÉES par la PR (Maven + npm, via le graphe de
+# dépendances GitHub) et échoue si l'une introduit une vulnérabilité
+# connue de sévérité >= high, ou une licence interdite.
+#
+# Ce n'est PAS un scan complet périodique de tout l'arbre existant :
+# c'est un garde-fou différentiel sur ce qu'une PR change. Le scan de
+# fond est assuré par Dependabot (.github/dependabot.yml) et, côté
+# front-end, par `npm audit` dans frontend-ci.yml.
+#
+# Sécurité du workflow :
+#   - déclencheur `pull_request` (jamais `pull_request_target`) ;
+#   - permissions minimales : `contents: read` seulement ;
+#   - aucun secret, aucune exécution de code de la PR ;
+#   - action officielle GitHub épinglée sur une version majeure.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # Résumé dans le récapitulatif de job uniquement : pas de
+          # commentaire sur la PR => pas besoin de `pull-requests: write`.
+          comment-summary-in-pr: never
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0

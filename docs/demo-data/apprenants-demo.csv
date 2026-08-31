@@ -1,0 +1,12 @@
+last_name,first_name,email,phone,formation_code,class_code,academic_year
+Bernard,Camille,camille.bernard.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Nguyen,Alex,alex.nguyen.demo@example.test,0600000002,PRG-DEMO,C-DEMO,AY-DEMO
+Kowalski,Ines,ines.kowalski.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Diop,Mathis,mathis.diop.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Rossi,Jade,jade.rossi.demo@example.test,0600000005,PRG-DEMO,C-DEMO,AY-DEMO
+Andersen,Tom,tom.andersen.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Silva,Manon,manon.silva.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Fischer,Hugo,hugo.fischer.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Kowalski,Ines,ines.kowalski.demo@example.test,,PRG-DEMO,C-DEMO,AY-DEMO
+Martin,Lea,pas-une-adresse-email,,PRG-DEMO,C-DEMO,AY-DEMO
+Petit,Noe,noe.petit.demo@example.test,,PRG-DEMO,C-INEXISTANTE,AY-DEMO

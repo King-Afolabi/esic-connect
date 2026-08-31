@@ -17,10 +17,17 @@ import java.util.Set;
  * touche à aucune donnée métier réelle et ne s'exécute jamais sous
  * {@code local}, {@code test} ou en production.
  *
- * <p>Le référentiel académique, les profils apprenants, les inscriptions
- * et une séance {@code PLANNED} sont créés séparément par
+ * <p>Le référentiel académique, les profils apprenants, les inscriptions,
+ * une séance {@code PLANNED} et l'affectation du responsable pédagogique
+ * à la formation de démonstration sont créés séparément par
  * {@code scripts/seed-demo.sh} via les API REST réelles (avec le compte
  * {@code ADMIN} ci-dessous).
+ *
+ * <p>Le compte {@code responsable@example.test} porte <strong>deux
+ * rôles</strong> ({@code PEDAGOGICAL_MANAGER} + {@code TEACHER}) afin de
+ * rendre démontrable le <em>sélecteur de contexte de rôle</em>
+ * (EF-AUTH-003). Le cumul de rôles n'élargit jamais le JWT : Spring
+ * Security reste l'autorité.
  */
 @Component
 @Profile("demo")
@@ -38,6 +45,10 @@ class DemoDataInitializer implements ApplicationRunner {
             new DemoAccount("apprenant1@example.test", "Lina", "Sow", Set.of("STUDENT"));
     private static final DemoAccount STUDENT_TWO =
             new DemoAccount("apprenant2@example.test", "Noah", "Mercier", Set.of("STUDENT"));
+    /** Compte multi-rôles : démontre le sélecteur de contexte de rôle (EF-AUTH-003). */
+    private static final DemoAccount RESPONSIBLE =
+            new DemoAccount("responsable@example.test", "Sofia", "Traoré",
+                    Set.of("PEDAGOGICAL_MANAGER", "TEACHER"));
 
     private final DemoAccountProvisioner provisioner;
     private final String demoPassword;
@@ -55,15 +66,15 @@ class DemoDataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        for (DemoAccount account : Set.of(ADMIN, TEACHER, STUDENT_ONE, STUDENT_TWO)) {
+        for (DemoAccount account : Set.of(ADMIN, TEACHER, STUDENT_ONE, STUDENT_TWO, RESPONSIBLE)) {
             provisioner.ensureActiveAccount(account.email(), account.firstName(), account.lastName(),
                     demoPassword, account.roles());
         }
         // Le mot de passe n'est jamais journalisé.
-        log.info("Amorçage demo : 4 comptes fictifs synchronisés "
-                + "(admin / formateur / 2 apprenants) — statut ACTIVE et mot de passe "
-                + "aligné sur la valeur courante de ESIC_DEMO_PASSWORD. "
-                + "Complétez avec scripts/seed-demo.sh.");
+        log.info("Amorçage demo : 5 comptes fictifs synchronisés "
+                + "(admin / formateur / 2 apprenants / responsable pédagogique multi-rôles) — "
+                + "statut ACTIVE et mot de passe aligné sur la valeur courante de "
+                + "ESIC_DEMO_PASSWORD. Complétez avec scripts/seed-demo.sh.");
     }
 
     private record DemoAccount(String email, String firstName, String lastName, Set<String> roles) {
