@@ -247,6 +247,29 @@ chiffres à jour dans `docs/reports/PROJECT_FINALIZATION_REPORT.md`.
 - décision Testcontainers : `docs/reports/TEST_ISOLATION_DECISION.md` ;
 - politique de rétention réelle vs cible : `docs/07-securite-rgpd.md` §14.
 
+**Mise à jour F5 (31 août 2026)** — durcissement HTTP :
+- **CORS restrictif implémenté** (`SecurityConfig.corsConfigurationSource`,
+  piloté par `APP_ALLOWED_ORIGINS`, jamais `*`, `allowCredentials=false`,
+  méthodes et en-têtes limités) — `NOT_IMPLEMENTED` → `IMPLEMENTED_AND_TESTED` ;
+- **`Content-Security-Policy` + `Referrer-Policy: no-referrer`** ajoutées
+  explicitement (`script-src 'self'`, pas d'`unsafe-eval` ; `style-src`
+  et `img-src data:` tolérants pour Swagger UI, documenté) ;
+- test d'intégration `HttpSecurityHeadersIntegrationTests` (4) : en-têtes
+  par défaut Spring Security (`nosniff`, `X-Frame-Options: DENY`,
+  anti-cache) + CSP + `Referrer-Policy` présents ; HSTS **non exigé** en
+  HTTP ; CORS accepté depuis une origine listée, **rejeté (403) sinon** ;
+- javadoc `SecurityConfig` corrigée (26 contrôleurs, `@PreAuthorize` par
+  module) ;
+- **rate-limiting `/auth/login` : `NOT_IMPLEMENTED` — dette assumée**
+  (`docs/07` §5) : un limiteur *fail-safe*, sans énumération de comptes,
+  testé, dépasse le périmètre de ce lot ; refus déjà uniforme + BCrypt ;
+- **écrans manquants** (gestion des salles, affectation d'un responsable
+  pédagogique, écritures `academic` / `enrollment`, émission
+  d'invitation) : `NOT_IMPLEMENTED` — endpoints API livrés, **dette
+  assumée** (F1 §3.2) ;
+- back-end `./mvnw clean test` re-vérifié après F5 (voir
+  `docs/reports/PROJECT_FINALIZATION_REPORT.md`).
+
 ## Infrastructure
 
 `docker compose up -d` démarre `mysql` (8.4), `redis` (7.4), `mailpit`,

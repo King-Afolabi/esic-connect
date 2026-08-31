@@ -171,6 +171,30 @@ Adaptatif pour les apprenants :
 - verrouillage temporaire ;
 - notification de connexion inhabituelle.
 
+### État d’implémentation (checkpoint F5 — 31 août 2026)
+
+**`NOT_IMPLEMENTED` — dette assumée.** Il n’y a **aucune** limitation de
+débit sur `POST /api/v1/auth/login` ni sur les autres endpoints
+sensibles (réémission d’invitation, activation). Redis est présent mais
+n’est utilisé que pour les jetons d’émargement.
+
+Cette lacune a été **évaluée** au checkpoint F5 et **volontairement
+laissée en dette** : un limiteur correct exige un comportement *fail-safe*
+explicite en cas d’indisponibilité de Redis, des clés qui ne contiennent
+pas l’adresse e-mail en clair, un TTL borné, une réponse strictement
+uniforme (pas d’énumération de comptes), et une couverture de test
+sérieuse (dépassement, expiration, Redis KO) — un volume que ce lot de
+finalisation ne peut pas traiter sans risque pour les ~30 tests
+d’authentification existants. Mieux vaut l’absence claire qu’un
+pseudo-contrôle fragile.
+
+Le refus est déjà **uniforme** (même réponse pour e-mail inconnu / mauvais
+mot de passe / compte inactif, testé) et le hachage BCrypt ralentit
+intrinsèquement les tentatives. À implémenter pour une mise en service :
+filtre de rate-limit Redis (fenêtre fixe ou *token bucket*) sur
+`/auth/login`, avec les garanties ci-dessus, + Turnstile sur les
+formulaires publics.
+
 ---
 
 # 6. Sessions
@@ -247,6 +271,19 @@ localStorage
 
 La CNIL recommande TLS 1.2 ou 1.3, la limitation des ports et des comptes
 de base nominatifs ou spécifiques à l’application. ([cnil.fr](https://www.cnil.fr/fr/securiser-vos-sites-web-vos-applications-et-vos-serveurs?utm_source=openai))
+
+## État d’implémentation des contrôles API (checkpoint F5 — 31 août 2026)
+
+| Contrôle | État | Détail |
+|---|---|---|
+| Validation Jakarta, requêtes paramétrées (JPA), erreurs neutres, pagination, taille des corps bornée | `IMPLEMENTED_AND_TESTED` | `GlobalExceptionHandler`, `@Valid`, `spring.servlet.multipart` (2 MiB) |
+| **CORS restrictif** | `IMPLEMENTED_AND_TESTED` (F5) | `SecurityConfig.corsConfigurationSource` piloté par `app.security.cors.allowed-origins` (= `APP_ALLOWED_ORIGINS`) ; **jamais `*`** ; `allowCredentials=false` (jeton dans l’en-tête, pas de cookie) ; méthodes `GET/POST/PUT/PATCH/DELETE/OPTIONS` ; en-têtes `Authorization`, `Content-Type`, `Accept`, `X-Requested-With` ; appliqué à `/api/**`. Test : `HttpSecurityHeadersIntegrationTests` (origine listée acceptée, sinon `403`). |
+| **`Content-Security-Policy`** | `IMPLEMENTED_AND_TESTED` (F5) | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`. **Aucun `script-src 'unsafe-inline'` ni `'unsafe-eval'`.** `style-src 'unsafe-inline'` et `img-src data:` sont **nécessaires à Swagger UI** (springdoc) — écart assumé et limité à ce besoin ; l’app Angular est servie séparément et applique sa propre politique côté serveur web. |
+| **`Referrer-Policy`** | `IMPLEMENTED_AND_TESTED` (F5) | `no-referrer`. |
+| En-têtes par défaut Spring Security (`nosniff`, `X-Frame-Options: DENY`, anti-cache, HSTS sur HTTPS) | `IMPLEMENTED_AND_TESTED` | conservés (jamais désactivés) ; HSTS émis uniquement sur réponses HTTPS — non exigé sur HTTP local. |
+| Limitation de débit / rate-limiting | `NOT_IMPLEMENTED` | dette assumée — voir §5 « Anti-brute-force ». |
+| HTTPS hors local | `NOT_IMPLEMENTED` | pas de terminaison TLS dans le prototype (cible `docs/03` §37). |
+| OpenAPI sans secret | `IMPLEMENTED` | DTO sans `id` SQL / hash / jeton ; export runtime `scripts/dump-openapi.sh`. |
 
 ## Chaîne d’approvisionnement des dépendances (checkpoint F4 — 31 août 2026)
 
