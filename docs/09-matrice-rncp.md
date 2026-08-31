@@ -159,6 +159,24 @@ Une exigence décrite n’est pas automatiquement réalisée.
 > dans `docs/CURRENT-STATE.md` et `docs/reports/PROJECT_FINAL_AUDIT.md`
 > §4. Le lot de finalisation F2 → F6 les re-mesure et les consigne dans
 > `docs/reports/PROJECT_FINALIZATION_REPORT.md`.
+>
+> **Note F5/F6 (31 août 2026)** :
+> - **BC03** — en-têtes HTTP durcis (`Content-Security-Policy`,
+>   `Referrer-Policy`) et **CORS restrictif** (`APP_ALLOWED_ORIGINS`,
+>   jamais `*`) désormais implémentés et testés
+>   (`SecurityConfig`, `HttpSecurityHeadersIntegrationTests`) ; contrôle
+>   des dépendances en CI (`.github/dependabot.yml`,
+>   `dependency-review.yml`, `npm audit`). Rate-limiting `/auth/login` :
+>   dette assumée documentée (`docs/07` §5).
+> - **BC02** — EF-AUTH-003 (sélecteur de contexte de rôle) : un 5ᵉ compte
+>   de démonstration multi-rôles (`responsable@example.test`,
+>   `PEDAGOGICAL_MANAGER` + `TEACHER`) le rend **démontrable**
+>   (`DemoDataInitializer`, `scripts/seed-demo.sh`).
+> - TR-024 (import CSV) : parcours **API exécuté en direct** le 31 août
+>   2026 (`docs/11` §11.8, statuts HTTP) ; jeu de données
+>   `docs/demo-data/apprenants-demo.csv`.
+> - Nouveau livrable : `docs/12-guide-utilisateur.md` (parcours par
+>   rôle).
 
 ## Avancement vérifié — 28 août 2026
 

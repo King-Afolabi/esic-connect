@@ -270,6 +270,28 @@ chiffres à jour dans `docs/reports/PROJECT_FINALIZATION_REPORT.md`.
 - back-end `./mvnw clean test` re-vérifié après F5 (voir
   `docs/reports/PROJECT_FINALIZATION_REPORT.md`).
 
+**Mise à jour F6 (31 août 2026)** — démonstration jury :
+- **5ᵉ compte de démonstration** `responsable@example.test`
+  (`PEDAGOGICAL_MANAGER` + `TEACHER`) → sélecteur de contexte de rôle
+  (EF-AUTH-003) enfin **démontrable** ; `DemoDataInitializer` passe de 4
+  à 5 comptes (test `DemoDataInitializerTests` mis à jour) ;
+  `scripts/seed-demo.sh` affecte ce compte à `PRG-DEMO` (idempotent) ;
+- jeu de données `docs/demo-data/apprenants-demo.csv` (fictif,
+  `example.test`) + `docs/demo-data/README.md` (résultats de simulation
+  **réellement observés**) ;
+- `docs/12-guide-utilisateur.md` (nouveau) : parcours par rôle
+  (`SUPER_ADMIN` / `ADMIN` / `SCHOOL_ADMINISTRATION` /
+  `PEDAGOGICAL_MANAGER` / `TEACHER` / `STUDENT`), écrans visibles,
+  limites, erreurs attendues, endpoints sans écran, hors périmètre ;
+- `docs/11-guide-demonstration.md` : scénario bout en bout §11
+  (import CSV → séance → émargement → rapport → export + sélecteur de
+  contexte), **checklist jury §12**, **matrice fonctionnalité × preuve
+  §13** ; **parcours API du §11 exécuté en direct** (§11.8, statuts HTTP
+  relevés) ; la démonstration **UI** de bout en bout reste
+  `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` ;
+- back-end `./mvnw clean test` re-vérifié après F6 (total dans
+  `docs/reports/PROJECT_FINALIZATION_REPORT.md`).
+
 ## Infrastructure
 
 `docker compose up -d` démarre `mysql` (8.4), `redis` (7.4), `mailpit`,

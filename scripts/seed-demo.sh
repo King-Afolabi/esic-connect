@@ -123,7 +123,8 @@ echo "Amorçage de démonstration via $API"
 TEACHER_ID="$(user_id 'formateur@example.test')"
 STUDENT1_ID="$(user_id 'apprenant1@example.test')"
 STUDENT2_ID="$(user_id 'apprenant2@example.test')"
-for v in TEACHER_ID STUDENT1_ID STUDENT2_ID; do
+RESP_ID="$(user_id 'responsable@example.test')"
+for v in TEACHER_ID STUDENT1_ID STUDENT2_ID RESP_ID; do
   [ -n "${!v}" ] || { echo "Compte $v introuvable. Lancez d'abord le back-end en profil demo." >&2; exit 1; }
 done
 
@@ -150,6 +151,20 @@ say "promotion   $PROMO_ID"
 CLASS_ID="$(ensure_by_code /class-groups 'C-DEMO' \
   "{\"promotionPublicId\":\"$PROMO_ID\",\"programLevelPublicId\":\"$LEVEL_ID\",\"sitePublicId\":\"$SITE_ID\",\"code\":\"C-DEMO\",\"name\":\"Classe démo\"}")"
 say "classe      $CLASS_ID"
+
+# Affectation du responsable pédagogique (responsable@example.test) à la
+# formation de démonstration : rend son périmètre exploitable et permet
+# de démontrer le sélecteur de contexte de rôle (PEDAGOGICAL_MANAGER +
+# TEACHER). Idempotent : un 409 ACAD_PRIMARY_MANAGER_EXISTS = déjà fait.
+ensure_primary_manager() {
+  local rc
+  http_post /pedagogical-assignments \
+    "{\"programPublicId\":\"$PROGRAM_ID\",\"userPublicId\":\"$RESP_ID\",\"type\":\"PRIMARY_MANAGER\",\"reason\":\"Démonstration\"}" \
+    --allow-conflict >/dev/null && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || [ "$rc" -eq 9 ] || exit "$rc"
+}
+ensure_primary_manager
+say "responsable pédagogique affecté à PRG-DEMO"
 
 # Profils apprenants (numéro étudiant = code fixe).
 ensure_profile() {

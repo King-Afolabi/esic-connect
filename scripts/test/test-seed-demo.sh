@@ -65,7 +65,7 @@ if [ "$method" = POST ]; then
   esac
   if [ "${FAKE_MODE:-clean}" = exists ]; then
     case "$path" in
-      /sites|/programs|/programs/*/levels|/academic-years|/promotions|/class-groups|/student-profiles)
+      /sites|/programs|/programs/*/levels|/academic-years|/promotions|/class-groups|/student-profiles|/pedagogical-assignments)
         emit 409 '{"status":409,"code":"DUPLICATE","message":"already exists","path":"x","details":[]}'
         exit 0 ;;
     esac
@@ -117,14 +117,18 @@ assert_no_double_post
 [ "$(count_post '/sessions')" = 1 ] || { cat "$CALLLOG"; fail "séance POSTée $(count_post '/sessions') fois (attendu 1)"; }
 [ "$(count_post '/student-profiles')" = 2 ] || fail "profils POSTés $(count_post '/student-profiles') fois (attendu 2)"
 [ "$(count_post '/enrollments')" = 2 ] || fail "inscriptions POSTées $(count_post '/enrollments') fois (attendu 2)"
-echo "Scénario 1 (vierge) : OK — 1 séance créée, aucun double POST."
+[ "$(count_post '/pedagogical-assignments')" = 1 ] || fail "affectation RP POSTée $(count_post '/pedagogical-assignments') fois (attendu 1)"
+echo "Scénario 1 (vierge) : OK — 1 séance créée, 1 affectation RP, aucun double POST."
 
 # --- Scénario 2 : base déjà amorcée ------------------------------------
 run_seed exists
 assert_no_double_post
 [ "$(count_post '/sessions')" = 0 ] || { cat "$CALLLOG"; fail "séance re-POSTée alors qu'elle existe"; }
 [ "$(count_post '/enrollments')" = 0 ] || fail "inscription re-POSTée alors qu'elle existe"
-echo "Scénario 2 (ré-exécution) : OK — aucune séance ni inscription supplémentaire."
+# L'affectation RP est re-POSTée (409 ACAD_PRIMARY_MANAGER_EXISTS toléré),
+# jamais deux fois pour un même appel logique.
+[ "$(count_post '/pedagogical-assignments')" = 1 ] || fail "affectation RP POSTée $(count_post '/pedagogical-assignments') fois (attendu 1)"
+echo "Scénario 2 (ré-exécution) : OK — aucune séance ni inscription supplémentaire, affectation RP en 409 toléré."
 
 # Aucun jeton réel ne doit transiter dans le journal.
 ! grep -qi 'bearer\|accessToken' "$CALLLOG" || fail "journal contient un jeton"

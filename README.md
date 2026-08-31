@@ -244,14 +244,23 @@ vaut la valeur de `ESIC_DEMO_PASSWORD` de votre `.env`.
 
 | Email | Rôle(s) | Usage |
 |---|---|---|
-| `admin@example.test` | `ADMIN` | administration des comptes, référentiels |
-| `formateur@example.test` | `TEACHER` | ouverture de séance, émargement, présences |
-| `apprenant1@example.test` | `STUDENT` | émargement, « mes présences » |
+| `admin@example.test` | `ADMIN` | administration des comptes, import CSV, création de séance |
+| `formateur@example.test` | `TEACHER` | ouverture de séance, QR / code court, présences |
+| `apprenant1@example.test` | `STUDENT` | émargement, « mes présences », justificatif |
 | `apprenant2@example.test` | `STUDENT` | second émargement, anti-doublon |
+| `responsable@example.test` | `PEDAGOGICAL_MANAGER` + `TEACHER` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
 
-Les 4 comptes sont **mono-rôle** : le sélecteur de contexte de rôle
-(EF-AUTH-003) n'est pas démontrable manuellement avec ce jeu tel quel.
-Le checkpoint F6 de finalisation ajoute un compte multi-rôles dédié.
+Le compte `responsable@example.test` est **multi-rôles** : après
+connexion, le sélecteur de contexte apparaît et permet de basculer entre
+« gérer mes formations » et « mes séances de formateur ». Le cumul de
+rôles **n'élargit jamais** le JWT (Spring Security reste l'autorité).
+`scripts/seed-demo.sh` l'affecte à la formation `PRG-DEMO` pour rendre
+son périmètre exploitable.
+
+Jeu de données d'import : `docs/demo-data/apprenants-demo.csv` (voir
+`docs/demo-data/README.md`). Scénario de démonstration bout en bout :
+`docs/11-guide-demonstration.md` §11. Guide par rôle :
+`docs/12-guide-utilisateur.md`.
 
 ---
 
@@ -271,7 +280,10 @@ Le checkpoint F6 de finalisation ajoute un compte multi-rôles dédié.
 | `docs/08-tests-recette.md` | plan de tests et recette |
 | `docs/09-matrice-rncp.md` | traçabilité RNCP 39394 (blocs BC01–BC04) |
 | `docs/10-journal-ia.md` | journal d'utilisation de l'IA |
-| `docs/11-guide-demonstration.md` | guide de démonstration pas à pas |
+| `docs/11-guide-demonstration.md` | guide de démonstration pas à pas (+ checklist jury §12, matrice §13) |
+| `docs/12-guide-utilisateur.md` | ce que chaque rôle peut faire dans l'application |
+| `docs/demo-data/` | jeu de données CSV fictif pour la démonstration de l'import |
+| `docs/reports/PERF_NOTES.md` · `TEST_ISOLATION_DECISION.md` | mesures de performance ; décision Testcontainers |
 | `CLAUDE.md` | règles de travail assisté par IA |
 
 ---

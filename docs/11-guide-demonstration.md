@@ -1,14 +1,24 @@
-# Guide de démonstration — Parcours d'émargement
+# Guide de démonstration — ESIC Connect (prototype)
 
-Ce guide décrit une démonstration **locale** du parcours
-« séance exceptionnelle → ouverture → émargement → présences → fermeture »
-(modules back-end `coursesession` et `attendance`, front-end `/sessions`
-et `/attendance`).
+Ce guide décrit une démonstration **locale** du parcours livré :
 
-Toutes les commandes ci-dessous ont été exécutées le 30 août 2026 sur
-macOS (Docker Desktop, OpenJDK 21, Node 24). Le scénario API a été relevé
-en statuts HTTP réels ; la démonstration UI de bout en bout se fait
-manuellement dans deux navigateurs (ou deux fenêtres privées).
+- §7 — **séance exceptionnelle → ouverture → émargement → présences →
+  fermeture** (modules `coursesession`, `attendance` ; front `/sessions`,
+  `/attendance`) ;
+- §10 — tranche V10 (points de contrôle multiples, présence manuelle,
+  correction, justificatif, rapports) ;
+- §11 — parcours **bout en bout** ajouté au checkpoint F6 :
+  **import CSV des apprenants → séance → émargement → rapport → export**
+  + sélecteur de contexte de rôle ;
+- §12 — **checklist jury** ; §13 — **matrice fonctionnalité × preuve**.
+
+Les commandes des §1 à §10 ont été exécutées les 30 et 31 août 2026 sur
+macOS (Docker Desktop, OpenJDK 21, Node 24) ; les scénarios API ont été
+relevés en statuts HTTP réels. Le **parcours API du §11** a été exécuté
+en direct le 31 août 2026 (§11.8). La **démonstration UI de bout en bout**
+(navigateur) n'a **pas** été rejouée automatiquement : toute étape non
+exécutée le jour J est `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`, jamais
+« démontrée ».
 
 ---
 
@@ -75,15 +85,16 @@ export SPRING_PROFILES_ACTIVE=demo
 ```
 
 Au démarrage, `DemoDataInitializer` (actif **uniquement** sous le profil
-`demo`) crée 4 comptes fictifs et journalise :
+`demo`) crée 5 comptes fictifs et journalise :
 
 ```
-Amorçage demo : 4 comptes fictifs synchronisés (admin / formateur / 2 apprenants)
-— statut ACTIVE et mot de passe aligné sur la valeur courante de ESIC_DEMO_PASSWORD. …
+Amorçage demo : 5 comptes fictifs synchronisés (admin / formateur / 2 apprenants /
+responsable pédagogique multi-rôles) — statut ACTIVE et mot de passe aligné sur la
+valeur courante de ESIC_DEMO_PASSWORD. …
 ```
 
 > **Base MySQL persistante.** Le volume MySQL survit d'un démarrage à
-> l'autre. À **chaque** amorçage sous le profil `demo`, les 4 comptes
+> l'autre. À **chaque** amorçage sous le profil `demo`, les 5 comptes
 > fictifs sont *resynchronisés* : leur statut est ramené à `ACTIVE`
 > (suspension éventuelle levée) et leur mot de passe est réaligné sur la
 > valeur **courante** de `ESIC_DEMO_PASSWORD` — le hachage n'est réécrit
@@ -104,10 +115,13 @@ API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD='demo-password-1234' \
 ```
 
 Le script est **idempotent** : il crée (ou récupère) un site, une
-formation, un niveau, une année, une promotion, une classe `C-DEMO`, deux
-profils apprenants, deux inscriptions et **une séance `PLANNED`**. Une
-seconde exécution affiche les mêmes identifiants et « séance … (déjà
-présente, PLANNED) ».
+formation `PRG-DEMO`, un niveau, une année `AY-DEMO`, une promotion, une
+classe `C-DEMO`, deux profils apprenants, deux inscriptions, **une séance
+`PLANNED`** et l'**affectation du responsable pédagogique**
+(`responsable@example.test`) à `PRG-DEMO` (rend son périmètre exploitable
+et démontrable le sélecteur de contexte de rôle). Une seconde exécution
+affiche les mêmes identifiants et « séance … (déjà présente, PLANNED) » ;
+l'affectation du responsable revient en `409` toléré.
 
 Chaque appel logique n'émet **qu'une seule requête POST** : le helper
 `http_post` effectue une requête unique (corps dans un fichier temporaire
@@ -150,16 +164,24 @@ npm start        # http://localhost:4200 (proxifie /api vers :8080)
 
 Toutes les adresses sont **fictives** (domaine réservé `example.test`).
 Mot de passe commun : la valeur de `ESIC_DEMO_PASSWORD` (par défaut du
-guide : `demo-password-1234`). Elle est réappliquée aux 4 comptes à
+guide : `demo-password-1234`). Elle est réappliquée aux **5 comptes** à
 chaque démarrage sous le profil `demo` (voir l'encadré § 4.2), même sur
 une base MySQL déjà peuplée par une session précédente.
 
-| Rôle | Adresse |
-|---|---|
-| `ADMIN` | `admin@example.test` |
-| `TEACHER` | `formateur@example.test` |
-| `STUDENT` | `apprenant1@example.test` |
-| `STUDENT` | `apprenant2@example.test` |
+| Rôle(s) | Adresse | Usage |
+|---|---|---|
+| `ADMIN` | `admin@example.test` | administration, import CSV, création de séance |
+| `TEACHER` | `formateur@example.test` | ouverture de séance, QR / code court, présences |
+| `STUDENT` | `apprenant1@example.test` | émargement, « mes présences », justificatif |
+| `STUDENT` | `apprenant2@example.test` | second émargement, anti-doublon |
+| `PEDAGOGICAL_MANAGER` + `TEACHER` | `responsable@example.test` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+
+Le compte `responsable@example.test` porte **deux rôles** : après
+connexion, le **sélecteur de contexte** apparaît en haut à droite et
+permet de basculer entre « gérer mes formations » et « mes séances de
+formateur ». Le cumul de rôles **n'élargit jamais** le JWT ; le
+sélecteur ne fait que **restreindre** l'affichage — Spring Security
+reste l'autorité.
 
 ---
 
@@ -239,7 +261,7 @@ courant** → `200`.
 | Back-end refuse de démarrer, `JWT_SECRET doit contenir au moins 32 octets` | `JWT_SECRET` absent / trop court | Refaire l'étape 3 dans le shell qui lance `spring-boot:run`. |
 | Back-end refuse de démarrer, `ESIC_DEMO_PASSWORD … obligatoire` | Variable absente ou < 12 caractères | `export ESIC_DEMO_PASSWORD='…'` (≥ 12 caractères). |
 | `503 ATT_TOKEN_BACKEND_UNAVAILABLE` à l'émission d'un jeton | Redis arrêté / injoignable | `docker compose up -d redis` ; vérifier `docker compose ps`. |
-| `scripts/seed-demo.sh` : « Échec de connexion ADMIN » | Back-end pas en profil `demo`, `ESIC_DEMO_PASSWORD` différent entre le back-end et le script, ou back-end lancé avant la mise à jour de la variable | Vérifier `SPRING_PROFILES_ACTIVE=demo` et la **même** valeur `ESIC_DEMO_PASSWORD` des deux côtés, puis **redémarrer le back-end** : l'amorçage `demo` réaligne alors les 4 comptes sur cette valeur (base MySQL déjà peuplée incluse). |
+| `scripts/seed-demo.sh` : « Échec de connexion ADMIN » | Back-end pas en profil `demo`, `ESIC_DEMO_PASSWORD` différent entre le back-end et le script, ou back-end lancé avant la mise à jour de la variable | Vérifier `SPRING_PROFILES_ACTIVE=demo` et la **même** valeur `ESIC_DEMO_PASSWORD` des deux côtés, puis **redémarrer le back-end** : l'amorçage `demo` réaligne alors les 5 comptes sur cette valeur (base MySQL déjà peuplée incluse). |
 | Back-end : `Too many connections` (MySQL) | Trop de contextes / connexions | `docker compose restart mysql`. |
 | `Le code d'émargement a expiré` | TTL court (30 s) | Le formateur ré-affiche un code (« Renouveler maintenant »). |
 | Émargement refusé : « Vous n'êtes pas inscrit à une classe de cette séance » | Apprenant sans inscription active dans une classe de la séance | Ré-exécuter `scripts/seed-demo.sh` (crée les inscriptions dans `C-DEMO`). |
@@ -398,3 +420,206 @@ isolée n'avait alors pas été exécutée (le compte `esic_app` n'a pas
   `500` contrôlé (valeur jamais exposée) plutôt que de produire des
   chiffres trompeurs — état interne corrompu, non atteignable par l'API
   (correctif PR #22 §1).
+
+---
+
+## 11. Scénario « import CSV → séance → émargement → rapport » (bout en bout)
+
+Ce scénario couvre le parcours réellement livré. **Il n'y a pas d'import
+de planning** : la séance est créée manuellement (séance exceptionnelle).
+
+### 11.1 Préparation
+
+1. Infra + back-end en profil `demo` + `scripts/seed-demo.sh` (§4).
+2. Front-end démarré (`npm start`), navigateur en **fenêtre privée**.
+3. Fichier d'import : `docs/demo-data/apprenants-demo.csv` (11 lignes de
+   données : 8 valides pour `C-DEMO`, 1 doublon interne, 1 e-mail
+   invalide, 1 classe inexistante — voir `docs/demo-data/README.md`).
+   Pour montrer une confirmation **réussie**, préparer une copie
+   **réduite aux 8 premières lignes de données** :
+   ```bash
+   head -n 9 docs/demo-data/apprenants-demo.csv > /tmp/apprenants-demo-ok.csv
+   ```
+
+### 11.2 Import — simulation et revue
+
+1. Se connecter en `admin@example.test`.
+2. **Import apprenants** → téléverser `apprenants-demo.csv`.
+3. La **simulation** s'exécute sans rien créer. Résultat observé
+   (`summary`) : `total 11, valid 7, warning 2, error 2`, job
+   **non confirmable**. À l'écran :
+   - 7 lignes `VALID` (`CREATE_ACCOUNT_AND_ENROLL`) ;
+   - 2 lignes `WARNING` « e-mail dupliqué dans le fichier »
+     (`IMP_EMAIL_DUPLICATE_IN_FILE` — **avertissement**, la ligne reste
+     planifiée) ;
+   - 1 ligne `ERROR` « adresse e-mail invalide » (`IMP_EMAIL_INVALID`) ;
+   - 1 ligne `ERROR` « classe introuvable » (`IMP_CLASS_UNKNOWN`) ;
+   - le job est **non confirmable** (au moins une ligne en erreur).
+4. Montrer les filtres (statut de ligne / gravité) et le dépliage des
+   anomalies. **Capture** recommandée.
+
+### 11.3 Import — confirmation
+
+5. Téléverser la version réduite `/tmp/apprenants-demo-ok.csv`
+   (`head -n 9 …`, 8 lignes de données valides) → nouvelle simulation :
+   `summary total 8, valid 8, error 0`, job **confirmable**.
+6. **Confirmer**. Bilan observé (`appliedSummary`) : `created 8,
+   invited 8, ignored 0` — 8 comptes `PENDING_ACTIVATION` + 8
+   inscriptions dans `C-DEMO`.
+7. Ouvrir **Mailpit** (http://localhost:8025) : 8 e-mails d'activation.
+8. Relancer la confirmation du même job → **`200` + `alreadyApplied:
+   true`**, aucun doublon (idempotence).
+
+### 11.4 Séance et émargement
+
+9. Toujours en `admin@example.test` : **Séances → Nouvelle séance**.
+   Formateur `formateur@example.test`, classe `C-DEMO`, une date, un
+   motif. La séance est `PLANNED`.
+10. Se connecter en `formateur@example.test` (autre onglet privé) :
+    **Séances** → ouvrir la séance (`OPEN`). Afficher le **QR** + le
+    **code court**.
+11. Se connecter en `apprenant1@example.test` : **Émargement** → saisir
+    le code court → présence enregistrée (`PRESENT`). Re-saisir →
+    `ATT_ALREADY_RECORDED`.
+12. `apprenant2@example.test` : émarger de même.
+13. Côté formateur : la liste des présences se met à jour (2/2).
+14. **Correction** : le formateur corrige une présence (motif
+    obligatoire) → l'historique montre l'ancienne et la nouvelle valeur,
+    l'auteur, la date, le motif.
+15. Le formateur **exporte le CSV** de la séance, puis **ferme** la
+    séance. Un émargement ultérieur avec l'ancien code → `409`.
+
+### 11.5 Rapport
+
+16. Se connecter en `admin@example.test` (ou `responsable@example.test`
+    en contexte « gérer mes formations ») : **Suivi d'assiduité** →
+    rapport par classe / par apprenant. Montrer le calcul en
+    demi-journées et l'**export CSV**.
+
+### 11.6 Sélecteur de contexte de rôle (EF-AUTH-003)
+
+17. Se connecter en `responsable@example.test`. Le **sélecteur de
+    contexte** apparaît (2 rôles). Basculer « gérer mes formations » ↔
+    « mes séances de formateur » et montrer que la navigation change,
+    **sans** que les droits réels changent (un accès hors périmètre
+    reste `403`).
+
+### 11.7 Équivalent API (si l'UI est indisponible)
+
+Le parcours émargement en statuts HTTP est déjà décrit au §7.2. Pour
+l'import : `POST /api/v1/student-imports` (multipart) → `201` +
+`publicId` ; `GET /api/v1/student-imports/{id}` → synthèse +
+`confirmable` ; `GET …/{id}/rows` → lignes + anomalies ;
+`POST …/{id}/confirm` → `200` + bilan (`409 IMP_NOT_CONFIRMABLE` si
+lignes en erreur) ; `POST …/{id}/cancel` → `204`.
+
+### 11.8 Vérification API réellement exécutée (31 août 2026, checkpoint F6)
+
+Back-end en profil `demo` (MySQL 8.4 + Redis 7 locaux), après
+`scripts/seed-demo.sh`. Statuts HTTP et champs non sensibles relevés
+(aucun mot de passe, JWT, jeton ni code court réel affiché) :
+
+| Étape | Appel | Résultat observé |
+|---|---|---|
+| seed | `scripts/seed-demo.sh` | site / `PRG-DEMO` / `C-DEMO` / 2 profils / 2 inscriptions / séance `PLANNED` / **responsable affecté à `PRG-DEMO`** |
+| import — simulation complète | `POST /student-imports` (`apprenants-demo.csv`) | `201` ; `summary { total 11, valid 7, warning 2, error 2 }` ; `confirmable=false` |
+| import — lignes | `GET …/{id}/rows` | 7 `VALID`, 2 `WARNING` (`IMP_EMAIL_DUPLICATE_IN_FILE`), 2 `ERROR` (`IMP_EMAIL_INVALID` ligne 11, `IMP_CLASS_UNKNOWN` ligne 12) |
+| import — simulation réduite | `POST /student-imports` (`head -n 9`) | `201` ; `summary { total 8, valid 8, error 0 }` ; `confirmable=true` |
+| import — confirmation | `POST …/{id}/confirm` | **`200`** ; `appliedSummary { created 8, invited 8, ignored 0 }` ; job `APPLIED` |
+| import — reconfirmation | `POST …/{id}/confirm` | **`200`** ; `alreadyApplied=true` (idempotence) |
+| e-mails | Mailpit `GET /api/v1/messages` | **8** messages d'activation |
+| séance | `POST /sessions/{id}/open` (formateur) | `204` |
+| jeton | `POST /sessions/{id}/attendance-token` | `200` ; `shortCode` 8 car., `ttlSeconds=30` |
+| émargement | `POST /attendance/validate` `{shortCode}` (apprenant1) | `200` ; `status=PRESENT`, `source=SHORT_CODE` |
+| anti-doublon | `POST /attendance/validate` (re-soumission) | **`409`** |
+| rapports | `GET /attendance/reports/classes` · `…/students` | `200` / `200` |
+| export CSV | `GET /attendance/reports/classes/export` | `200` ; `Content-Type: text/csv;charset=UTF-8` ; `Content-Disposition: attachment; filename="…"` ; `X-Content-Type-Options: nosniff` |
+| multi-rôles | `responsable@example.test` → `GET /sessions` · `GET /student-imports` | `200` / `200` (les deux contextes de rôle sont exploitables) |
+| en-têtes durcis (F5) | `GET /api/v1/sessions` sans jeton | `401` + `CSP`, `Referrer-Policy: no-referrer`, `nosniff`, `X-Frame-Options: DENY`, anti-cache ; **pas de HSTS** (HTTP) |
+| CORS (F5) | `OPTIONS /api/v1/sessions` `Origin: http://localhost:4200` / `http://evil.example` | `200` + `Access-Control-Allow-Origin` / **`403`** |
+
+Back-end arrêté proprement en fin de vérification ; infrastructure Docker
+laissée en l'état. **La démonstration UI de bout en bout (navigateur) n'a
+pas été rejouée automatiquement** — les composants front sont couverts
+par 475 tests Vitest ; le §11 est le mode opératoire pour le jour J.
+
+---
+
+## 12. Checklist de démonstration jury
+
+Avant la séance :
+
+- [ ] `docker compose up -d` → `mysql` / `redis` / `mailpit` **healthy**
+      (`docker compose ps`).
+- [ ] `JWT_SECRET` (≥ 32 o) et `ESIC_DEMO_PASSWORD` (≥ 12 c) **exportés
+      dans le shell** du back-end (jamais commités).
+- [ ] Back-end lancé en **profil `demo`**, démarrage sans erreur
+      (message « 5 comptes fictifs synchronisés »).
+- [ ] `scripts/seed-demo.sh` exécuté (site / `PRG-DEMO` / `C-DEMO` /
+      profils / inscriptions / séance `PLANNED` / affectation RP).
+- [ ] Front-end lancé (`npm start`), ouvert en **fenêtre de navigation
+      privée** (session en mémoire : un rechargement déconnecte).
+- [ ] `docs/demo-data/apprenants-demo.csv` accessible + la version
+      réduite `/tmp/apprenants-demo-ok.csv` préparée.
+- [ ] Les 5 comptes de démonstration testés (connexion OK).
+- [ ] Mailpit ouvert (http://localhost:8025), boîte vidée.
+
+Réinitialiser entre deux démonstrations :
+
+- [ ] Base repartie de zéro si besoin : `docker compose down -v` puis
+      `up -d` (volume MySQL recréé), relancer back-end + `seed-demo.sh`.
+
+Solutions de secours :
+
+- [ ] **Mailpit indisponible** : l'envoi d'e-mail est asynchrone et un
+      échec est seulement journalisé ; la création des comptes n'est
+      **pas** bloquée — poursuivre la démo, montrer les comptes créés.
+- [ ] **Redis indisponible** : l'émission d'un jeton d'émargement renvoie
+      `503 ATT_TOKEN_BACKEND_UNAVAILABLE` (jamais de validation
+      dégradée) — relancer le conteneur `redis` et réessayer.
+- [ ] **UI instable** : basculer sur le parcours API (§7.2 et §11.7),
+      statuts HTTP à l'appui.
+
+Ne jamais, pour la démonstration :
+
+- [ ] contourner la sécurité (désactiver un `@PreAuthorize`, forcer un
+      rôle, éditer un JWT) ;
+- [ ] utiliser une adresse e-mail ou un identifiant **réel** ;
+- [ ] présenter comme livrées les fonctions listées « non implémenté »
+      (§13 et `docs/12-guide-utilisateur.md` §6).
+
+---
+
+## 13. Matrice finale — fonctionnalité × preuve
+
+| Fonctionnalité | Démo manuelle | Test automatisé | Preuve | Hors périmètre |
+|---|:--:|:--:|---|:--:|
+| Connexion + rôles (JWT) | §7 / §11 | `Authentication*Tests` | — | |
+| Sélecteur de contexte de rôle | §11.6 | `role-context*.spec` | compte `responsable@example.test` | |
+| Administration des comptes (R/W) | possible | `UserManagement*Tests`, `user-detail.spec` | — | |
+| Invitation + activation | §11.3 (Mailpit) | `AccountInvitation*Tests`, `account-activation.spec` | Mailpit | |
+| Import CSV apprenants (simulation) | §11.2 | `StudentImportSimulationIntegrationTests` + 16 autres | `docs/demo-data/apprenants-demo.csv` | |
+| Import CSV apprenants (confirmation, idempotence, rollback) | §11.3 | `StudentImportConfirmation{Integration,Rollback}Tests` | — | |
+| Référentiels académiques | consultation UI | `Academic*Tests` | `seed-demo.sh` (via API) | |
+| Périmètre pédagogique | §11.6 (403 hors périmètre) | `PedagogicalScopeIntegrationTests` | affectation par `seed-demo.sh` | |
+| Inscriptions + changement de classe | via import | `Enrollment*Tests` | — | |
+| Alternance (rythmes, affectations, exceptions) | UI `/alternation` | `Alternation*Tests` | — | |
+| Séance exceptionnelle + cycle `PLANNED→OPEN→CLOSED` | §11.4 | `CourseSession*Tests` | — | |
+| Émargement (QR opaque + code court, Redis, rotation, anti-doublon) | §11.4 | `AttendanceToken*Tests`, `AttendanceIntegrationTests` (25) | §7.2 statuts HTTP | |
+| Présence manuelle / correction / annulation (historique) | §11.4 (14) | `AttendanceManagementConstraintsTests` | — | |
+| Justificatif métier (sans pièce jointe) | UI `/my-attendance` | `AttendanceIntegrationTests` | — | pièce jointe |
+| Rapports d'assiduité (demi-journées) + export CSV | §11.5 | `AttendanceReport*Tests` | — | mise en page « officielle », PDF, Excel |
+| En-têtes HTTP durcis + CORS | — | `HttpSecurityHeadersIntegrationTests` | — | |
+| Piste d'audit | inspection SQL | `*AuditIntegrationTests` | — | écran de consultation |
+| Mesures de performance | — | `-Pperf` (2 tests) | `docs/reports/PERF_NOTES.md` | garantie contractuelle |
+| Accessibilité outillée | — | `*.a11y.spec.ts` (axe-core, 2 écrans) | — | audit complet (contraste, lecteur d'écran) |
+| **Import du planning → publication → séances** | — | — | — | **✔ (non implémenté)** |
+| WebAuthn / MFA / anti-bot | — | — | — | **✔** |
+| IoT / MQTT / IA (FastAPI) | — | — | — | **✔** |
+| PWA / offline / notifications push | — | — | — | **✔** |
+| Réclamations, départ anticipé, QR fixe, scan caméra | — | — | — | **✔** |
+
+Le **parcours API du §11** a été exécuté en direct le 31 août 2026
+(statuts HTTP relevés au §11.8). La **démonstration UI de bout en bout**
+(navigateur) reste `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` : ne jamais
+l'annoncer comme « démontrée » sans l'avoir rejouée le jour J.
