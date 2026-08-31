@@ -362,6 +362,69 @@ aucun job ; filtre de périmètre par un `PEDAGOGICAL_MANAGER` →
 `./mvnw test -Dtest='StudentImportFieldValidatorTests,FileDuplicateDetectorTests,PlannedActionResolverTests,StudentImportProvisionerContractTests,ClassGroupResolveForImportTests,StudentImportSimulationIntegrationTests,ModularityTests,EsicConnectApplicationTests'`
 → **37 tests, 0 échec**.
 
+### CP5 réalisé — API de simulation et de consultation
+
+**Périmètre strict CP5** : couche HTTP de la **phase de simulation** et
+la **consultation**. Aucun endpoint de confirmation ni d'annulation
+(cycle de vie → CP8). Aucune migration.
+
+- **`application.yml`** : bloc `spring.servlet.multipart` (`max-file-size`
+  2 MB, `max-request-size` 3 MB ; variables `MULTIPART_*`). Le seul
+  téléversement du prototype.
+- **`StudentImportController`** (`/api/v1/student-imports`,
+  `@PreAuthorize(MANAGE_ROLES)`) :
+  - `POST` `multipart/form-data` (`file` + `programCode?` / `classCode?`)
+    → `201 JobResponse` — résout l'auteur via `CurrentUserResolver`,
+    appelle `StudentImportSimulationService.simulate`, renvoie le job
+    rechargé ;
+  - `GET` (query `status?`, `sort∈{createdAt}`, `page`, `size≤50`) →
+    `200 PageResponse<JobResponse>` ;
+  - `GET /{publicId}` → `200 JobResponse` (+ `summary` + `issues[]` +
+    `confirmable`) ;
+  - `GET /{publicId}/rows` (query `rowStatus?`, `severity?`, `action?`,
+    `sort∈{rowNumber}`, `page`, `size≤100`) →
+    `200 PageResponse<RowResponse>` (anomalies de ligne incluses, chargées
+    en une requête `IN`).
+- **`StudentImportQueryService`** : décision fine de périmètre côté
+  serveur — un appelant **sans accès global** (`PEDAGOGICAL_MANAGER`) ne
+  liste et ne consulte que **ses** jobs (`requested_by_id` = appelant) ;
+  job d'un autre → `403 IMP_JOB_FORBIDDEN` ; job inconnu / `public_id`
+  mal formé → `404 IMP_JOB_NOT_FOUND`. `StudentImportSpecifications` (+
+  `JpaSpecificationExecutor` sur job / row repos ; filtre `severity` =
+  sous-requête `exists` sur `student_import_row_issue`) ; valeur de filtre
+  hors énumération → `400 IMP_INVALID_FILTER` ; tri hors liste blanche →
+  `400 IMP_INVALID_SORT` (`StudentImportQuerySupport`).
+- **DTO** (`StudentImportResponses`) : `JobResponse` / `Summary` /
+  `AppliedSummary` (null tant que non appliqué) / `JobIssueResponse` /
+  `RowResponse` / `RowIssueResponse` — **aucun `id` SQL**, aucun jeton,
+  aucun hachage ; `receivedValue` tronqué rendu à la revue mais jamais à
+  l'audit. `PageResponse` local au module.
+- **`StudentImportExceptionHandler`** : `@Order(HIGHEST_PRECEDENCE)`
+  ajouté — sans lui, `shared.web.GlobalExceptionHandler` (advice global
+  non ordonné) était consulté avant l'advice du module (tri des
+  `@RestControllerAdvice` non ordonnés ⇒ « shared » avant
+  « studentimport ») et un `StudentImportException` retombait en 500. Les
+  autres modules y échappent par ordre alphabétique ; `@Order` rend le
+  comportement explicite.
+
+**Tests CP5** : `StudentImportApiIntegrationTests` (7, `@SpringBootTest`
+RANDOM_PORT + `TestRestTemplate` multipart) — téléversement → `201` sans
+`id` SQL, colonne obligatoire absente → `400 IMP_MISSING_COLUMN` (+
+`details` contenant `email`), contenu ZIP/XLSX → `415`, endpoint `rows`
+pagination + filtre `rowStatus`, `PEDAGOGICAL_MANAGER` ne voit que ses
+jobs (`403 IMP_JOB_FORBIDDEN` sur celui d'un autre, `200` pour
+l'administration globale), job inconnu → `404`, tri / filtre invalides →
+`400`, matrice `401` anonyme / `403` `STUDENT` / `403` `TEACHER`.
+`ModularityTests` + `EsicConnectApplicationTests` verts.
+
+**Vérifications (31 août 2026)** :
+`./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests'`
+→ **107 tests, 0 échec**.
+
+**Écart avec la conception (CP5)** : `cancel` (rangé au CP5 par le
+rapport §15) est déplacé au CP8 (« API de confirmation et cycle de
+vie »), avec `confirm` — les deux sont des mutations d'état du job.
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text

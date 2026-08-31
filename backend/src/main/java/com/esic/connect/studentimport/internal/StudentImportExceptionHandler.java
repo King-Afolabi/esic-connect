@@ -2,6 +2,8 @@ package com.esic.connect.studentimport.internal;
 
 import com.esic.connect.shared.web.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,6 +24,7 @@ import java.util.UUID;
  * {@code enrollment.internal.EnrollmentExceptionHandler} se restreint à
  * ses contrôleurs).
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackageClasses = StudentImportWeb.class)
 class StudentImportExceptionHandler {
 

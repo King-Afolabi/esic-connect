@@ -250,6 +250,30 @@ class StudentImportJob extends BaseEntity {
         return expiresAt;
     }
 
+    Instant getConfirmedAt() {
+        return confirmedAt;
+    }
+
+    Integer getAppliedCreated() {
+        return appliedCreated;
+    }
+
+    Integer getAppliedUpdated() {
+        return appliedUpdated;
+    }
+
+    Integer getAppliedTransferred() {
+        return appliedTransferred;
+    }
+
+    Integer getAppliedInvited() {
+        return appliedInvited;
+    }
+
+    Integer getAppliedIgnored() {
+        return appliedIgnored;
+    }
+
     Instant getCreatedAt() {
         return createdAt;
     }
