@@ -167,6 +167,33 @@ class StudentImportJob extends BaseEntity {
         return requestedById;
     }
 
+    /** Filtre de périmètre éventuel (rapport §8) — figé à la création. */
+    void applyScope(String programCode, String classCode) {
+        this.scopeProgramCode = programCode;
+        this.scopeClassCode = classCode;
+    }
+
+    /**
+     * Enregistre le bilan de la simulation (rapport §6) : compteurs de
+     * lignes et d'actions planifiées, et {@code confirmable} figé (RG-021 :
+     * {@code true} seulement si aucune anomalie bloquante ni erreur de
+     * ligne). Re-vérifié à la confirmation.
+     */
+    void recordSimulation(int totalRows, int validRows, int warningRows, int errorRows, int blockingIssueCount,
+                          int plannedCreateRows, int plannedUpdateRows, int plannedTransferRows,
+                          int plannedNoopRows) {
+        this.totalRows = totalRows;
+        this.validRows = validRows;
+        this.warningRows = warningRows;
+        this.errorRows = errorRows;
+        this.blockingIssueCount = blockingIssueCount;
+        this.plannedCreateRows = plannedCreateRows;
+        this.plannedUpdateRows = plannedUpdateRows;
+        this.plannedTransferRows = plannedTransferRows;
+        this.plannedNoopRows = plannedNoopRows;
+        this.confirmable = blockingIssueCount == 0 && errorRows == 0;
+    }
+
     String getScopeProgramCode() {
         return scopeProgramCode;
     }
@@ -177,6 +204,38 @@ class StudentImportJob extends BaseEntity {
 
     int getTotalRows() {
         return totalRows;
+    }
+
+    int getValidRows() {
+        return validRows;
+    }
+
+    int getWarningRows() {
+        return warningRows;
+    }
+
+    int getErrorRows() {
+        return errorRows;
+    }
+
+    int getBlockingIssueCount() {
+        return blockingIssueCount;
+    }
+
+    int getPlannedCreateRows() {
+        return plannedCreateRows;
+    }
+
+    int getPlannedUpdateRows() {
+        return plannedUpdateRows;
+    }
+
+    int getPlannedTransferRows() {
+        return plannedTransferRows;
+    }
+
+    int getPlannedNoopRows() {
+        return plannedNoopRows;
     }
 
     boolean isConfirmable() {

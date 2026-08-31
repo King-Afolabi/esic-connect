@@ -264,6 +264,104 @@ découpage retenu place la dé-duplication et les règles de champ au CP4
 checkpoint qui en a réellement besoin), pour éviter du code mort et deux
 implémentations concurrentes.
 
+### CP4 réalisé — validation, ports d'import et simulation
+
+**Périmètre strict CP4** : règles de validation métier, ports publics
+inter-modules et service de simulation persistant **uniquement**
+`student_import_*` (invariant T1). Aucune écriture métier, aucun e-mail,
+aucun événement d'audit, aucun contrôleur HTTP, aucune migration (V11
+inchangée). Frontières Spring Modulith respectées (`studentimport` ne
+dépend que des types **publics** de `academic` / `identity` /
+`enrollment`).
+
+- **Port `academic.ClassGroupDirectory.resolveForImport(programCode,
+  classCode, academicYearCode)`** + type scellé `ClassGroupResolution`
+  (`Found(ref, academicYearStartYear)` / `Miss{PROGRAM_UNKNOWN,
+  ACADEMIC_YEAR_UNKNOWN, CLASS_UNKNOWN, CLASS_NOT_IN_PROGRAM,
+  CLASS_NOT_IN_YEAR, CHAIN_ARCHIVED}`). Impl `DefaultClassGroupDirectory`
+  (repos `findByCodeIgnoreCase` sur `Program` / `AcademicYear` /
+  `ClassGroup`, désambiguïsation formation → année, `openForEnrollment`
+  déjà existant pour `CHAIN_ARCHIVED`). Aucune décision de sécurité ici.
+- **Port `identity.StudentAccountProvisioner`** (+ `DefaultStudentAccountProvisioner`
+  confiné) : `findByEmail` (lecture, simulation),
+  `prepareStudentAccountAndInvitation` (**`@Transactional` `REQUIRED`**,
+  jamais `REQUIRES_NEW` ; crée `user_account PENDING_ACTIVATION` + rôle
+  `STUDENT` + `account_invitation` via `InvitationTokenService`, publie
+  `AccountInvitationIssuedEvent`, **jamais `AccountLifecycleEvent`** —
+  invariant T5), `updateStudentPhone` (action `UPDATE_PROFILE`). Compte
+  existant non `PENDING_ACTIVATION` → `StudentAccountProvisioningException`
+  (type public), aucune écriture. `AccountInvitationService.issue`
+  **inchangé** (parcours HTTP mono-compte).
+- **Port `enrollment.StudentEnrollmentProvisioner`** (+ `DefaultStudentEnrollmentProvisioner`
+  confiné) : lectures `findProfileByUser` / `findProfileByStudentNumber` /
+  `studentNumberTaken` / `describeSituation` (→ `Situation{NONE,
+  SAME_CLASS, OTHER_CLASS_SAME_YEAR}` + `currentEnrollmentPublicId`) ;
+  applications `provisionProfile` / `provisionEnrollment` /
+  `provisionTransfer` / `updateProfileAlternation` — **`@Transactional`
+  `REQUIRED`**, écriture directe `saveAndFlush`, **sans**
+  `EnrollmentPersister` (`REQUIRES_NEW`) et **sans**
+  `EnrollmentChangePublisher` (invariants T2 / T5). Le numéro étudiant
+  est **fourni par l'appelant** (jamais généré ici : la table
+  `student_number_sequence` appartient à `studentimport` — écart assumé
+  vs rapport §4.2, frontières Modulith ; l'allocation atomique est du
+  ressort du CP6).
+- **`studentimport`** : `StudentImportFieldValidator` (valeurs
+  obligatoires → `ERROR IMP_REQUIRED_VALUE_MISSING`, `IMP_COLUMN_COUNT`,
+  syntaxe e-mail → `ERROR IMP_EMAIL_INVALID`, téléphone / date de
+  naissance / booléen d'alternance → `WARNING`, entreprise recommandée
+  si `work_study=true`) ; `FileDuplicateDetector` (doublons e-mail /
+  numéro dans le fichier : charge identique → `WARNING` ×N, divergente →
+  `ERROR` ×N) ; `PlannedActionResolver` (`@Component`, ports publics
+  seulement — résout classe + périmètre + compte + situation → les
+  situations §3.3 : `CREATE_ACCOUNT_AND_ENROLL` / `ENROLL_EXISTING` /
+  `TRANSFER_CLASS` / `UPDATE_PROFILE` / `NONE`, `IMP_STUDENT_NUMBER_WILL_BE_GENERATED`
+  (INFO), `IMP_STUDENT_NUMBER_TAKEN` / `IMP_ACCOUNT_NOT_USABLE` /
+  `IMP_CLASS_OUT_OF_SCOPE` / `IMP_PROGRAM_UNKNOWN` … (ERROR)) ;
+  `StudentImportSimulationService` (`@Transactional` — garde de filtre de
+  périmètre `SCOPE_FORBIDDEN`, `CsvFileGuard` → `CsvParser`, garde
+  structurelle (`MISSING_COLUMN` + détail / `TOO_MANY_ROWS` /
+  `NO_DATA_ROWS` / `HEADER_UNREADABLE` → exception, **aucun job créé**),
+  persistance du job `SIMULATED` + lignes normalisées + anomalies +
+  `job_issue` `WARNING` pour colonnes ignorées / inconnues, bilan
+  `recordSimulation` avec `confirmable = (blocking == 0 && errorRows ==
+  0)`). Mutateurs ajoutés à `StudentImportJob` / `StudentImportRow`
+  (laissés minimaux au CP1).
+
+**Décisions / écarts documentés (CP4)** :
+- structural BLOCKING (colonne obligatoire absente, trop de lignes,
+  aucune donnée) → **exception 4xx, aucun job persisté** (aligné sur la
+  table d'erreurs §8 ; la ligne « confirmation → 409 » d'IMP-STU-03 est
+  alors sans objet) ;
+- filtre de job (`programCode` / `classCode`) : accepté et persisté pour
+  référence, mais **refusé (`IMP_SCOPE_FORBIDDEN`) pour un appelant non
+  global** ; le contrôle de périmètre **par ligne**
+  (`IMP_CLASS_OUT_OF_SCOPE`) reste l'autorité (rapport §9) ;
+- `SUSPENDED` ajouté à `LOCKED` / `ARCHIVED` comme compte « non
+  exploitable » (le rapport §3.3 ne nomme que les deux derniers) ;
+- `UPDATE_PROFILE` = action primaire uniquement pour `SAME_CLASS` +
+  divergence contact/alternance ; pour `ENROLL_EXISTING` /
+  `TRANSFER_CLASS` la mise à jour de contact est appliquée en plus par la
+  confirmation (CP6), l'action stockée restant la primaire ; bilan
+  `updated = UPDATE_PROFILE + ENROLL_EXISTING`.
+
+**Tests CP4** (37) : `StudentImportFieldValidatorTests` (8),
+`FileDuplicateDetectorTests` (4), `PlannedActionResolverTests` (10,
+Mockito), `StudentImportProvisionerContractTests` (3, réflexif —
+`@Transactional` présent, jamais `REQUIRES_NEW` sur les écritures des
+deux impls), `ClassGroupResolveForImportTests` (7, `@DataJpaTest` MySQL
+réel — chaque `Miss.*` + `Found` avec année de début),
+`StudentImportSimulationIntegrationTests` (3, `@SpringBootTest` — 100
+lignes valides → job `SIMULATED` confirmable, `planned_create_rows=100`,
+**`user_account` / `student_profile` / `enrollment` / `account_invitation`
+inchangés** (T1) ; colonne obligatoire absente → `IMP_MISSING_COLUMN`,
+aucun job ; filtre de périmètre par un `PEDAGOGICAL_MANAGER` →
+`IMP_SCOPE_FORBIDDEN`). `EsicConnectApplicationTests` vert,
+`ModularityTests` vert.
+
+**Vérifications (31 août 2026)** :
+`./mvnw test -Dtest='StudentImportFieldValidatorTests,FileDuplicateDetectorTests,PlannedActionResolverTests,StudentImportProvisionerContractTests,ClassGroupResolveForImportTests,StudentImportSimulationIntegrationTests,ModularityTests,EsicConnectApplicationTests'`
+→ **37 tests, 0 échec**.
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text

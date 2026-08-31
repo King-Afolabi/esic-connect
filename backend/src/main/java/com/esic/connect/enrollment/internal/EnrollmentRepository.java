@@ -13,6 +13,8 @@ interface EnrollmentRepository
 
     Optional<Enrollment> findByPublicId(UUID publicId);
 
+    List<Enrollment> findByStudentProfile_PublicIdAndStatus(UUID studentProfilePublicId, EnrollmentStatus status);
+
     List<Enrollment> findByStudentProfile_UserIdAndStatus(Long userId, EnrollmentStatus status);
 
     List<Enrollment> findByStudentProfile_UserId(Long userId);

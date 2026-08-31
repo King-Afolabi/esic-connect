@@ -15,6 +15,13 @@ interface ClassGroupRepository extends JpaRepository<ClassGroup, Long>,
 
     Optional<ClassGroup> findByPublicId(UUID publicId);
 
+    /**
+     * Classes portant ce code (sans tenir compte de la casse) — le code
+     * n'est unique que dans une promotion, l'import doit donc désambiguïser
+     * par formation puis par année ({@code resolveForImport}).
+     */
+    List<ClassGroup> findByCodeIgnoreCase(String code);
+
     boolean existsByPromotionIdAndCode(Long promotionId, String code);
 
     boolean existsByPromotionIdAndStatus(Long promotionId, AcademicStatus status);

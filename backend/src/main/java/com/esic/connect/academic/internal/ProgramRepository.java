@@ -10,5 +10,7 @@ interface ProgramRepository extends JpaRepository<Program, Long>, JpaSpecificati
 
     Optional<Program> findByPublicId(UUID publicId);
 
+    Optional<Program> findByCodeIgnoreCase(String code);
+
     boolean existsByCode(String code);
 }
