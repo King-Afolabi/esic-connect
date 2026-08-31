@@ -45,11 +45,12 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Administration / Apprenants / Référentiels / Alternance / Séances screens for an ADMIN', () => {
+  it('renders the dashboard and the delivered Administration / Apprenants / Import / Référentiels / Alternance / Séances screens for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/administration',
       '/students',
+      '/students/import',
       '/academic',
       '/alternation',
       '/sessions',
@@ -58,6 +59,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
+    expect(text()).toContain('Import apprenants');
     expect(text()).toContain('Référentiels');
     expect(text()).toContain('Alternance');
     expect(text()).toContain('Séances');
@@ -89,11 +91,12 @@ describe('AppShell', () => {
     ]);
   });
 
-  it('hides Apprenants but shows Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {
+  it('hides Apprenants but shows Import apprenants, Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
     expect(hrefs).not.toContain('/students');
+    expect(hrefs).toContain('/students/import');
     expect(hrefs).toContain('/academic');
     expect(hrefs).toContain('/alternation');
   });

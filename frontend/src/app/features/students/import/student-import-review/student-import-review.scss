@@ -1,0 +1,124 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.page__meta {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.7));
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 7rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border-radius: 0.5rem;
+}
+
+.card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.card--warn {
+  border-color: var(--mat-sys-tertiary, #7d5260);
+}
+
+.card--error {
+  border-color: var(--mat-sys-error, #b3261e);
+}
+
+.panel {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}
+
+.panel--error {
+  background: var(--mat-sys-error-container, #f9dedc);
+  color: var(--mat-sys-on-error-container, #410e0b);
+}
+
+.panel--warn {
+  background: var(--mat-sys-tertiary-container, #ffd8e4);
+  color: var(--mat-sys-on-tertiary-container, #31111d);
+}
+
+.panel--ok {
+  background: var(--mat-sys-secondary-container, #e8def8);
+  color: var(--mat-sys-on-secondary-container, #1d192b);
+}
+
+.panel--note {
+  background: var(--mat-sys-surface-variant, #e7e0ec);
+  color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.7));
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.confirm-panel {
+  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  background: var(--mat-sys-surface-variant, #e7e0ec);
+  font-size: 0.85rem;
+}
+
+.chip--error {
+  background: var(--mat-sys-error-container, #f9dedc);
+  color: var(--mat-sys-on-error-container, #410e0b);
+}
+
+.chip--warning {
+  background: var(--mat-sys-tertiary-container, #ffd8e4);
+  color: var(--mat-sys-on-tertiary-container, #31111d);
+}
+
+.detail-row td {
+  padding-block: 0;
+}
+
+.issue-list {
+  margin: 0.5rem 0;
+}

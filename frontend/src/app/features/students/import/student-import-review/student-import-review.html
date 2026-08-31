@@ -1,0 +1,246 @@
+<section class="page">
+  <header class="page__header">
+    <h1>Revue d'un import</h1>
+    <a mat-stroked-button routerLink="/students/import">← Retour à la liste des imports</a>
+  </header>
+
+  @switch (jobState().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    }
+    @case ('forbidden') {
+      <p class="panel panel--error" role="alert">Vous n'êtes pas autorisé à consulter cet import.</p>
+    }
+    @case ('not-found') {
+      <p class="panel panel--note" role="note">Aucun import ne correspond à cet identifiant.</p>
+    }
+    @case ('error') {
+      <div class="panel panel--error" role="alert">
+        <p>Le chargement a échoué.</p>
+        <button mat-button color="primary" type="button" (click)="retryJob()">Réessayer</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (job(); as j) {
+        <p class="page__meta">
+          {{ j.fileName }} · {{ jobStatusLabel(j.status) }} · simulé le {{ j.simulatedAt | date: 'short' }}
+        </p>
+
+        <div class="cards">
+          <div class="card"><span class="card__value">{{ j.summary.total }}</span><span>Lignes</span></div>
+          <div class="card"><span class="card__value">{{ j.summary.plannedCreate }}</span><span>À créer</span></div>
+          <div class="card"><span class="card__value">{{ j.summary.plannedUpdate }}</span><span>À mettre à jour</span></div>
+          <div class="card"><span class="card__value">{{ j.summary.plannedTransfer }}</span><span>À transférer</span></div>
+          <div class="card"><span class="card__value">{{ j.summary.plannedNoop }}</span><span>Sans changement</span></div>
+          <div class="card card--warn"><span class="card__value">{{ j.summary.warning }}</span><span>Avertissements</span></div>
+          <div class="card card--error"><span class="card__value">{{ j.summary.error }}</span><span>Erreurs</span></div>
+        </div>
+
+        @if (j.issues.length > 0) {
+          <div class="panel panel--warn" role="note">
+            <strong>Anomalies globales</strong>
+            <ul>
+              @for (issue of j.issues; track issue.code + issue.message) {
+                <li>[{{ severityLabel(issue.severity) }}] {{ issue.message }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (!confirmable() && j.status === 'SIMULATED') {
+          <p class="panel panel--note" role="note">
+            Cette simulation n'est pas confirmable en l'état : corrigez le fichier et relancez un import.
+          </p>
+        }
+
+        <!-- Confirmation / annulation -->
+        @if (canWrite() && j.status === 'SIMULATED') {
+          <div class="actions">
+            @switch (confirmState().kind) {
+              @case ('idle') {
+                <button mat-flat-button color="primary" type="button"
+                        [disabled]="!confirmable()" (click)="openConfirm()">
+                  Confirmer l'import
+                </button>
+                <button mat-stroked-button type="button" (click)="cancel()">Annuler l'import</button>
+              }
+              @case ('panel') {
+                <div class="panel confirm-panel" role="group" aria-label="Confirmation de l'import">
+                  <h3>Confirmer l'application ?</h3>
+                  <p>
+                    {{ j.summary.plannedCreate }} compte(s) créé(s) + invité(s),
+                    {{ j.summary.plannedUpdate }} inscription(s) / mise(s) à jour,
+                    {{ j.summary.plannedTransfer }} transfert(s),
+                    {{ j.summary.plannedNoop }} sans changement.
+                  </p>
+                  <button mat-flat-button color="primary" type="button" (click)="confirm()">Confirmer</button>
+                  <button mat-button type="button" (click)="closeConfirm()">Retour</button>
+                </div>
+              }
+              @case ('running') {
+                <mat-progress-bar mode="indeterminate" aria-label="Traitement"></mat-progress-bar>
+              }
+              @case ('done') {
+                <div class="panel panel--ok" role="status">
+                  @if (confirmState().kind === 'done') {
+                    @if ($any(confirmState()).result.alreadyApplied) {
+                      <p>Cet import était déjà appliqué. Bilan mémorisé :</p>
+                    } @else {
+                      <p>Import appliqué.</p>
+                    }
+                    <p>
+                      {{ $any(confirmState()).result.created }} créé(s),
+                      {{ $any(confirmState()).result.updated }} mis à jour,
+                      {{ $any(confirmState()).result.transferred }} transféré(s),
+                      {{ $any(confirmState()).result.invited }} invitation(s),
+                      {{ $any(confirmState()).result.ignored }} sans changement.
+                    </p>
+                  }
+                  <a mat-button color="primary" routerLink="/students/import">Retour à la liste</a>
+                </div>
+              }
+              @case ('stale') {
+                <div class="panel panel--warn" role="alert">
+                  <p>
+                    La simulation n'est plus à jour : des lignes sont devenues invalides.
+                    Consultez les anomalies rafraîchies ci-dessous, puis relancez un import.
+                  </p>
+                </div>
+              }
+              @case ('error') {
+                <div class="panel panel--error" role="alert">
+                  <p>{{ $any(confirmState()).message }}</p>
+                  <button mat-button type="button" (click)="closeConfirm()">Fermer</button>
+                </div>
+              }
+            }
+          </div>
+        }
+      }
+    }
+  }
+
+  <!-- Table des lignes -->
+  <h2>Lignes</h2>
+  <form class="filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+    <mat-form-field appearance="outline">
+      <mat-label>Statut de ligne</mat-label>
+      <mat-select formControlName="rowStatus">
+        <mat-option value="">Tous</mat-option>
+        @for (status of rowStatuses; track status) {
+          <mat-option [value]="status">{{ rowStatusLabel(status) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Gravité d'anomalie</mat-label>
+      <mat-select formControlName="severity">
+        <mat-option value="">Toutes</mat-option>
+        @for (severity of severities; track severity) {
+          <mat-option [value]="severity">{{ severityLabel(severity) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Action</mat-label>
+      <mat-select formControlName="action">
+        <mat-option value="">Toutes</mat-option>
+        @for (action of plannedActions; track action) {
+          <mat-option [value]="action">{{ plannedActionLabel(action) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-stroked-button type="submit">Filtrer</button>
+    <button mat-button type="button" (click)="resetFilters()">Réinitialiser</button>
+  </form>
+
+  @switch (rowsState().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement des lignes"></mat-progress-bar>
+    }
+    @case ('error') {
+      <div class="panel panel--error" role="alert">
+        <p>{{ $any(rowsState()).message }}</p>
+        <button mat-button color="primary" type="button" (click)="retryRows()">Réessayer</button>
+      </div>
+    }
+    @case ('ready') {
+      <div class="table-scroll">
+        <table mat-table [dataSource]="rows()">
+          <ng-container matColumnDef="rowNumber">
+            <th mat-header-cell *matHeaderCellDef>N°</th>
+            <td mat-cell *matCellDef="let row">{{ row.rowNumber }}</td>
+          </ng-container>
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Nom</th>
+            <td mat-cell *matCellDef="let row">{{ row.lastName }} {{ row.firstName }}</td>
+          </ng-container>
+          <ng-container matColumnDef="email">
+            <th mat-header-cell *matHeaderCellDef>E-mail</th>
+            <td mat-cell *matCellDef="let row">{{ row.email }}</td>
+          </ng-container>
+          <ng-container matColumnDef="classCode">
+            <th mat-header-cell *matHeaderCellDef>Classe cible</th>
+            <td mat-cell *matCellDef="let row">{{ row.classCode }}</td>
+          </ng-container>
+          <ng-container matColumnDef="plannedAction">
+            <th mat-header-cell *matHeaderCellDef>Action</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="chip">{{ plannedActionLabel(row.plannedAction) }}</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="rowStatus">
+            <th mat-header-cell *matHeaderCellDef>Statut</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="chip chip--{{ row.rowStatus.toLowerCase() }}">
+                {{ rowStatusLabel(row.rowStatus) }}
+              </span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="issues">
+            <th mat-header-cell *matHeaderCellDef>Anomalies</th>
+            <td mat-cell *matCellDef="let row">
+              @if (row.issues.length > 0) {
+                <button mat-button type="button" (click)="toggleRow(row.rowNumber)"
+                        [attr.aria-expanded]="expandedRow() === row.rowNumber">
+                  {{ row.issues.length }} anomalie(s)
+                </button>
+              } @else {
+                <span>—</span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="detail">
+            <td mat-cell *matCellDef="let row" [attr.colspan]="displayedColumns.length">
+              @if (expandedRow() === row.rowNumber) {
+                <ul class="issue-list">
+                  @for (issue of row.issues; track issue.code + issue.message) {
+                    <li>
+                      <strong>[{{ severityLabel(issue.severity) }}]</strong>
+                      @if (issue.columnName) { <em>{{ issue.columnName }}</em> — }
+                      {{ issue.message }}
+                      @if (issue.receivedValue) { (reçu : « {{ issue.receivedValue }} ») }
+                      @if (issue.suggestedValue) { → attendu : {{ issue.suggestedValue }} }
+                    </li>
+                  }
+                </ul>
+              }
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: ['detail']; when: isExpanded" class="detail-row"></tr>
+        </table>
+      </div>
+      <mat-paginator
+        [length]="totalRows()"
+        [pageIndex]="pageIndex()"
+        [pageSize]="pageSize()"
+        [pageSizeOptions]="pageSizeOptions"
+        (page)="onPageChange($event)"
+      ></mat-paginator>
+    }
+  }
+</section>

@@ -140,6 +140,39 @@ export const routes: Routes = [
         ],
       },
       {
+        // Import CSV contrôlé des apprenants
+        // (`com.esic.connect.studentimport`, `StudentImportWeb.MANAGE_ROLES`).
+        // Déclaré AVANT `students` et hors de son sous-arbre : le parent
+        // `students` restreint ses enfants à
+        // `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` (lecture des
+        // profils), alors que l'import est aussi ouvert au
+        // `PEDAGOGICAL_MANAGER` (limité à son périmètre côté serveur ; un
+        // `403 IMP_*` est rendu « accès refusé »).
+        path: 'students/import',
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'])],
+        canActivateChild: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Import des apprenants — ${APP_NAME}`,
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/students/import/student-import-home/student-import-home').then(
+                (m) => m.StudentImportHome,
+              ),
+          },
+          {
+            path: ':publicId',
+            title: `Revue d'un import — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/students/import/student-import-review/student-import-review').then(
+                (m) => m.StudentImportReview,
+              ),
+          },
+        ],
+      },
+      {
         // Périmètre de rôles aligné sur `EnrollmentWeb.MANAGE_ROLES`
         // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`).
         // Le garde ne fait que masquer la navigation : Spring Security

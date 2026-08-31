@@ -616,6 +616,72 @@ jamais 20), l'autre `200` idempotent ou `409`, jamais `500`.
 **Écart avec la conception (CP8)** : `cancel` (rapport §15 → CP5) a été
 regroupé ici avec `confirm` (mutations d'état du job).
 
+### CP9 réalisé — interface Angular d'import des apprenants
+
+**Périmètre strict CP9** : écrans front-end. Aucun fichier back-end,
+migration ou `docs/01`–`docs/04` modifié ; aucune dépendance npm ajoutée.
+
+- **Routes** `frontend/src/app/features/students/import/` :
+  `/students/import` → `StudentImportHome`, `/students/import/:publicId`
+  → `StudentImportReview`. Déclarées **avant** `/students` et **hors de
+  son sous-arbre** :
+  `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER'])`
+  (le parent `/students` restreint ses enfants à trois rôles seulement ;
+  l'import est aussi ouvert au `PEDAGOGICAL_MANAGER`, limité à son
+  périmètre côté serveur). Entrée de navigation « Import apprenants »
+  (`upload_file`, 4 rôles).
+- **`StudentImportApiService`** — une méthode par endpoint réel
+  (`simulate` en `FormData` multipart — fichier transmis brut, jamais lu
+  côté navigateur ; `listJobs` / `getJob` / `listRows` / `confirm` /
+  `cancel`) ; jamais de jeton en URL ; `HttpParams` sans clé vide.
+- **`student-import.models.ts`** — miroir exact des DTO back-end + libellés
+  FR (`plannedAction`, `rowStatus`, statut de job, gravité).
+- **`student-import-errors.ts`** — `toStudentImportError` : **liste
+  blanche explicite** `KNOWN_IMP_CODES` (jamais `startsWith('IMP_')`) ;
+  code hors liste ou `5xx` → `code` `null` + message générique, jamais le
+  corps brut ; drapeaux `forbidden` / `notFound` / `stale` / `expired`.
+- **`StudentImportHome`** — `input[type=file]` `accept=".csv"` + refus
+  client (extension, taille > 2 Mo) ; codes de périmètre facultatifs ;
+  « Lancer la simulation » désactivé tant qu'aucun fichier valide ; barre
+  de progression ; `201` → navigation vers la revue ; anomalie globale →
+  message contrôlé (jamais le corps brut) ; `403` → « périmètre » ;
+  `mat-table` des imports récents (`GET /student-imports`). Formulaire
+  neutralisé si le contexte de rôle actif ne permet pas d'importer ;
+  réponse tardive ignorée dans ce cas.
+- **`StudentImportReview`** — cartes de synthèse (total, à créer / mettre
+  à jour / transférer / sans changement, avertissements, erreurs),
+  bandeau des anomalies globales, table des lignes (`GET .../rows`,
+  pagination serveur ≤ 100, filtres `rowStatus` / `severity` / `action`
+  remettant à la page 0, tri `rowNumber,asc`, anomalies dépliables avec
+  valeur reçue) ; confirmation **en ligne** avec récapitulatif chiffré,
+  bouton désactivé si `!confirmable`, double soumission bloquée, capacité
+  revérifiée au clic ; `200` → bandeau succès + bilan (`alreadyApplied`
+  → « déjà appliqué ») ; `409 IMP_STALE_SIMULATION` → rechargement
+  synthèse + lignes, bandeau « plus à jour », confirmation bloquée ;
+  `IMP_SIMULATION_EXPIRED` / `IMP_NOT_CONFIRMABLE` / `403` → message
+  contrôlé, aucun faux succès ; bouton « Annuler l'import » →
+  `POST .../cancel` → `204`. Perte du contexte de rôle d'écriture →
+  panneau fermé, actions masquées, réponse en vol ignorée.
+
+**Tests CP9** (17, Vitest) : `student-import-api.service.spec.ts` (4 —
+`FormData` + parts de périmètre conditionnels, params conditionnels,
+`encodeURIComponent`, `confirm`/`cancel` corps `{}` / `204`),
+`student-import-home.spec.ts` (5 — refus client `.csv` / taille, `submit`
+gaté puis navigation sur `201`, mapping d'anomalie globale sans corps
+brut, formulaire neutralisé hors contexte d'import, rien en storage),
+`student-import-review.spec.ts` (8 — chargement synthèse + lignes,
+filtres → page 0, confirmation → bilan mémorisé, `IMP_STALE_SIMULATION`
+→ rechargement + blocage, `IMP_SIMULATION_EXPIRED` → message sans faux
+succès, `cancel` → rechargement, perte du contexte → réponse tardive
+ignorée, rien en storage). Specs mis à jour : `app-shell.spec.ts`
+(entrée « Import apprenants » pour `ADMIN` et `PEDAGOGICAL_MANAGER`).
+
+**Vérifications (31 août 2026, Node 24)** : `npm test` → **471 tests, 0
+échec** (454 → 471) ; `npm run lint` → « All files pass linting » ;
+`npm run build` → bundle initial **483,26 kB** brut / 122,84 kB
+transféré (seuil 500 kB, aucune alerte). `./mvnw` non ré-exécuté (aucun
+fichier back-end modifié).
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text
