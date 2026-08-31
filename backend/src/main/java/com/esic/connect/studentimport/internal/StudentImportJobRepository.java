@@ -5,6 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,4 +24,13 @@ interface StudentImportJobRepository
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<StudentImportJob> findWithLockByPublicId(UUID publicId);
+
+    // --- Purge planifiée (rapport §12.C, §7.6) ---
+
+    List<StudentImportJob> findByStatusInAndExpiresAtBefore(Collection<StudentImportJobStatus> statuses,
+                                                            Instant cutoff);
+
+    List<StudentImportJob> findByStatusAndCreatedAtBefore(StudentImportJobStatus status, Instant cutoff);
+
+    List<StudentImportJob> findByStatusAndConfirmedAtBefore(StudentImportJobStatus status, Instant cutoff);
 }

@@ -514,6 +514,59 @@ contrainte) ; comportement inchangé.
 `./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests,EsicConnectApplicationTests'`
 → **120 tests, 0 échec** ; `ModularityTests` vert.
 
+### CP7 réalisé — audit et purge des imports
+
+**Périmètre strict CP7** : événement d'audit + listener + purge
+planifiée. Aucun contrôleur HTTP (→ CP8), aucune migration.
+
+- **`com.esic.connect.studentimport.StudentImportChangeEvent`** (record
+  public) + `StudentImportChangeAction` (`SIMULATED` / `CONFIRMED` /
+  `CANCELLED` / `EXPIRED`). Ne transporte **aucune donnée personnelle** :
+  `jobPublicId`, `actorUserId` (interne), action, `detail` non sensible
+  (`job=…;rows=…;confirmable=…` pour SIMULATED,
+  `job=…;created=…;updated=…;moved=…;invited=…;ignored=…` pour CONFIRMED).
+- Publication **dans la transaction** : `StudentImportSimulationService`
+  publie `SIMULATED` en fin de `simulate` ;
+  `StudentImportConfirmationService` publie `CONFIRMED` juste avant de
+  retourner (dans `runConfirmation`). Reconfirmation idempotente ⇒ pas de
+  ré-audit.
+- **`audit.internal.StudentImportAuditListener`** — **déviation volontaire**
+  du motif legacy : `@TransactionalEventListener(phase = AFTER_COMMIT)`
+  **+** `@Transactional(propagation = REQUIRES_NEW)`. Le listener n'est
+  invoqué qu'après le commit de la transaction émettrice ; si elle
+  rollback, la phase `AFTER_COMMIT` n'est jamais atteinte → **aucune
+  ligne d'audit** (invariant T5). La ligne `audit_event` (catégorie
+  `STUDENT_IMPORT`, action `STUDENT_IMPORT_SIMULATED` /
+  `STUDENT_IMPORT_CONFIRMED`, `resource_public_id` = job) est écrite dans
+  la transaction dédiée. Aucune dépendance vers `studentimport.internal`
+  (`ModularityTests` vert).
+- **`StudentImportPurgeService`** (`@Scheduled(cron =
+  "${app.import.student.purge-cron:0 30 3 * * *}")` — `@EnableScheduling`
+  ajouté à `StudentImportConfig` ; méthode `purge()` publique et
+  transactionnelle, testable directement). Décisions de prototype
+  (rapport §12.C) : jobs `SIMULATED` / `EXPIRED` dont `expires_at` est
+  dépassé + jobs `CANCELLED` plus vieux que `simulation-ttl` →
+  **supprimés** (chaîne `job_issue` / `row` / `row_issue` en
+  `ON DELETE CASCADE`) ; jobs `APPLIED` confirmés depuis plus de
+  `applied-rows-ttl` → **lignes filles supprimées, en-tête et agrégats
+  `applied_*` conservés** ; `student_number_sequence` jamais purgée.
+  Aucune donnée métier touchée.
+
+**Tests CP7** (5) : `StudentImportAuditIntegrationTests` (3,
+`@SpringBootTest` — simulation → 1 ligne `STUDENT_IMPORT_SIMULATED` sans
+PII ; confirmation committée → 1 ligne `STUDENT_IMPORT_CONFIRMED` visible
+après retour de l'appel, `detail` sans PII ; confirmation en rollback
+(collision dernière ligne) → **0 ligne `_CONFIRMED`** — §14.4 (a) /
+§14.3),
+`StudentImportPurgeTests` (2, `@SpringBootTest` — simulation expirée
+supprimée en cascade + job récent préservé ; job `APPLIED` ancien
+conserve `status`/`applied_created` mais perd `student_import_row` et
+`student_import_job_issue`).
+
+**Vérifications (31 août 2026)** :
+`./mvnw test -Dtest='com.esic.connect.studentimport.**,ClassGroupResolveForImportTests,ModularityTests,EsicConnectApplicationTests,com.esic.connect.audit.**'`
+→ **127 tests, 0 échec** ; `ModularityTests` vert.
+
 ## Tranche précédente — Gestion de l'assiduité et reporting (V10, fusionnée PR #22)
 
 ```text

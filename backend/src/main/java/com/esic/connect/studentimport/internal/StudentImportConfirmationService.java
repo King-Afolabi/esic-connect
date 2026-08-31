@@ -9,10 +9,13 @@ import com.esic.connect.identity.StudentAccountProvisioner;
 import com.esic.connect.identity.StudentAccountProvisioner.NewStudentAccount;
 import com.esic.connect.identity.StudentAccountProvisioner.PreparedAccount;
 import com.esic.connect.identity.StudentAccountProvisioningException;
+import com.esic.connect.studentimport.StudentImportChangeAction;
+import com.esic.connect.studentimport.StudentImportChangeEvent;
 import com.esic.connect.studentimport.internal.PlannedActionResolver.RowResolution;
 import com.esic.connect.studentimport.internal.StaleRevalidationPersister.RevalidatedRow;
 import com.esic.connect.studentimport.internal.StudentImportIssueDrafts.RowIssueDraft;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +63,7 @@ class StudentImportConfirmationService {
     private final AcademicScopeDirectory academicScopeDirectory;
     private final StudentImportProperties properties;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
     private final ObjectProvider<StudentImportConfirmationService> self;
 
     StudentImportConfirmationService(StudentImportJobRepository jobRepository,
@@ -73,6 +77,7 @@ class StudentImportConfirmationService {
                                      AcademicScopeDirectory academicScopeDirectory,
                                      StudentImportProperties properties,
                                      Clock clock,
+                                     ApplicationEventPublisher eventPublisher,
                                      ObjectProvider<StudentImportConfirmationService> self) {
         this.jobRepository = jobRepository;
         this.rowRepository = rowRepository;
@@ -85,6 +90,7 @@ class StudentImportConfirmationService {
         this.academicScopeDirectory = academicScopeDirectory;
         this.properties = properties;
         this.clock = clock;
+        this.eventPublisher = eventPublisher;
         this.self = self;
     }
 
@@ -161,6 +167,15 @@ class StudentImportConfirmationService {
         job.markApplied(now, actorId, totals.created, totals.updated, totals.transferred, totals.invited,
                 totals.ignored);
         jobRepository.save(job);
+
+        // Publié DANS la transaction de confirmation : StudentImportAuditListener
+        // (AFTER_COMMIT + REQUIRES_NEW) n'écrit la ligne d'audit qu'après le commit ;
+        // si la confirmation rollback, aucune trace (invariant T5).
+        eventPublisher.publishEvent(new StudentImportChangeEvent(job.getPublicId(), actorId,
+                StudentImportChangeAction.CONFIRMED,
+                "job=" + job.getPublicId() + ";created=" + totals.created + ";updated=" + totals.updated
+                        + ";moved=" + totals.transferred + ";invited=" + totals.invited
+                        + ";ignored=" + totals.ignored));
         return Attempt.applied(ConfirmationResult.applied(job));
     }
 

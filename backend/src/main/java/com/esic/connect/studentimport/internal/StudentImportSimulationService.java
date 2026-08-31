@@ -1,8 +1,11 @@
 package com.esic.connect.studentimport.internal;
 
 import com.esic.connect.academic.AcademicScopeDirectory;
+import com.esic.connect.studentimport.StudentImportChangeAction;
+import com.esic.connect.studentimport.StudentImportChangeEvent;
 import com.esic.connect.studentimport.internal.PlannedActionResolver.RowResolution;
 import com.esic.connect.studentimport.internal.StudentImportIssueDrafts.RowIssueDraft;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +36,7 @@ class StudentImportSimulationService {
     private final StudentImportRowIssueRepository rowIssueRepository;
     private final AcademicScopeDirectory academicScopeDirectory;
     private final PlannedActionResolver plannedActionResolver;
+    private final ApplicationEventPublisher eventPublisher;
 
     StudentImportSimulationService(StudentImportProperties properties,
                                    Clock clock,
@@ -41,7 +45,8 @@ class StudentImportSimulationService {
                                    StudentImportRowRepository rowRepository,
                                    StudentImportRowIssueRepository rowIssueRepository,
                                    AcademicScopeDirectory academicScopeDirectory,
-                                   PlannedActionResolver plannedActionResolver) {
+                                   PlannedActionResolver plannedActionResolver,
+                                   ApplicationEventPublisher eventPublisher) {
         this.properties = properties;
         this.clock = clock;
         this.jobRepository = jobRepository;
@@ -50,6 +55,7 @@ class StudentImportSimulationService {
         this.rowIssueRepository = rowIssueRepository;
         this.academicScopeDirectory = academicScopeDirectory;
         this.plannedActionResolver = plannedActionResolver;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -101,7 +107,15 @@ class StudentImportSimulationService {
 
         job.recordSimulation(counters.total, counters.valid, counters.warning, counters.error, 0,
                 counters.plannedCreate, counters.plannedUpdate, counters.plannedTransfer, counters.plannedNoop);
-        return jobRepository.save(job);
+        StudentImportJob saved = jobRepository.save(job);
+
+        // Publié DANS la transaction de simulation ; l'audit est écrit par
+        // StudentImportAuditListener en AFTER_COMMIT (la simulation commite toujours).
+        eventPublisher.publishEvent(new StudentImportChangeEvent(saved.getPublicId(),
+                command.requesterInternalId(), StudentImportChangeAction.SIMULATED,
+                "job=" + saved.getPublicId() + ";rows=" + counters.total
+                        + ";confirmable=" + saved.isConfirmable()));
+        return saved;
     }
 
     // ------------------------------------------------------------------
