@@ -67,4 +67,45 @@ final class PlanningResponses {
             String receivedValue,
             String message) {
     }
+
+    /** Résultat d'une publication. */
+    record PublicationResponse(
+            UUID jobPublicId,
+            UUID versionPublicId,
+            int versionNumber,
+            boolean alreadyPublished) {
+    }
+
+    /** Une version de planning (liste / détail). */
+    record VersionResponse(
+            UUID publicId,
+            UUID schedulePublicId,
+            UUID classGroupPublicId,
+            UUID academicYearPublicId,
+            int versionNumber,
+            String status,
+            int entryCount,
+            String changeSummary,
+            UUID replacedByVersionPublicId,
+            Instant publishedAt,
+            Instant createdAt) {
+    }
+
+    /** Une entrée (créneau) d'une version de planning. */
+    record VersionEntryResponse(
+            UUID publicId,
+            String slotKey,
+            String title,
+            Instant startsAt,
+            Instant endsAt,
+            String timeZoneId,
+            String roomCode,
+            UUID sessionPublicId) {
+    }
+
+    /** Détail d'une version : en-tête + ses entrées. */
+    record VersionDetailResponse(
+            VersionResponse version,
+            List<VersionEntryResponse> entries) {
+    }
 }

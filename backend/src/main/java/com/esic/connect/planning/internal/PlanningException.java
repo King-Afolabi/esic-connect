@@ -33,6 +33,8 @@ class PlanningException extends RuntimeException {
         INVALID_JOB_STATE,
         /** Job expiré : nouvel import requis. */
         JOB_EXPIRED,
+        /** Échec inattendu de la publication après re-validation (DEC-G1-003) : job passé FAILED. */
+        PUBLICATION_FAILED,
         /** Champ ou direction de tri hors liste blanche. */
         INVALID_SORT,
         /** Valeur de filtre invalide. */

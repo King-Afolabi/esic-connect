@@ -42,15 +42,18 @@ class PlanningImportController {
 
     private final PlanningSimulationService simulationService;
     private final PlanningQueryService queryService;
+    private final PlanningPublicationOrchestrator publicationOrchestrator;
     private final CurrentUserResolver currentUserResolver;
     private final AcademicScopeDirectory academicScopeDirectory;
 
     PlanningImportController(PlanningSimulationService simulationService,
                             PlanningQueryService queryService,
+                            PlanningPublicationOrchestrator publicationOrchestrator,
                             CurrentUserResolver currentUserResolver,
                             AcademicScopeDirectory academicScopeDirectory) {
         this.simulationService = simulationService;
         this.queryService = queryService;
+        this.publicationOrchestrator = publicationOrchestrator;
         this.currentUserResolver = currentUserResolver;
         this.academicScopeDirectory = academicScopeDirectory;
     }
@@ -91,6 +94,31 @@ class PlanningImportController {
                                            @AuthenticationPrincipal Jwt caller) {
         return queryService.rows(publicId, requesterInternalId(caller),
                 academicScopeDirectory.hasGlobalScope(), page, size, sort);
+    }
+
+    /**
+     * Publie une simulation (EF-PLAN-004 ; AC-007) — {@code 200} (jamais
+     * {@code 201} : le job existe déjà). Transaction atomique + port
+     * {@code coursesession.PlanningSessionWriter} (DEC-G1-001/003).
+     * Republication d'un job déjà {@code PUBLISHED} → {@code 200} +
+     * {@code alreadyPublished = true} (idempotent). Conflit métier
+     * (ligne bloquante, périmètre, état) → {@code 409} contrôlé, jamais
+     * {@code 500}.
+     */
+    @PostMapping("/{publicId}/publish")
+    @PreAuthorize(PlanningWeb.MANAGE_ROLES)
+    PlanningResponses.PublicationResponse publish(@PathVariable String publicId,
+                                                  @AuthenticationPrincipal Jwt caller) {
+        UUID jobId;
+        try {
+            jobId = UUID.fromString(publicId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new PlanningException(PlanningException.Kind.JOB_NOT_FOUND);
+        }
+        PlanningPublicationService.PublicationResult result = publicationOrchestrator.publish(
+                jobId, requesterInternalId(caller), academicScopeDirectory.hasGlobalScope());
+        return new PlanningResponses.PublicationResponse(jobId, result.versionPublicId(),
+                result.versionNumber(), result.alreadyPublished());
     }
 
     /** Annule une simulation avant publication — {@code 204}. Idempotent. */

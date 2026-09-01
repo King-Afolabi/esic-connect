@@ -94,6 +94,11 @@ class PlanningExceptionHandler {
                 code = "PLAN_JOB_EXPIRED";
                 message = "Cette simulation a expiré : relancez un import.";
             }
+            case PUBLICATION_FAILED -> {
+                status = HttpStatus.CONFLICT;
+                code = "PLAN_PUBLICATION_FAILED";
+                message = "La publication a échoué et a été annulée : relancez un import.";
+            }
             case INVALID_SORT -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "PLAN_INVALID_SORT";

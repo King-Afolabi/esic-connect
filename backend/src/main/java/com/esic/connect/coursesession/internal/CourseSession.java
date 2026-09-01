@@ -115,8 +115,47 @@ class CourseSession extends BaseEntity {
         this.status = SessionLifecycle.PLANNED;
     }
 
+    /**
+     * Séance d'origine <strong>planning</strong> (V13, DEC-G1-001) :
+     * pas de motif d'exception, {@code planningEntryPublicId} renseigné.
+     * Créée par {@link DefaultPlanningSessionWriter} à la publication d'un
+     * planning.
+     */
+    static CourseSession fromPlanningEntry(java.util.UUID planningEntryPublicId, Long teacherUserId,
+                                           String title, Instant startsAt, Instant endsAt, String timeZoneId) {
+        CourseSession session = new CourseSession(teacherUserId, title, startsAt, endsAt, timeZoneId, null);
+        session.planningEntryPublicId = planningEntryPublicId;
+        return session;
+    }
+
     void markCreatedBy(Long actorId) {
         this.createdById = actorId;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Met à jour les propriétés modifiables d'une séance d'origine
+     * planning encore {@code PLANNED} (DEC-G1-004 règle 5). Ne touche ni
+     * au statut, ni au lien d'origine.
+     */
+    void applyPlanningUpdate(Long teacherUserId, String title, Instant startsAt, Instant endsAt,
+                             String timeZoneId, Long actorId) {
+        this.teacherUserId = teacherUserId;
+        this.title = title;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+        this.timeZoneId = timeZoneId;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Marque une séance planning {@code PLANNED} comme retirée par une
+     * republication (DEC-G1-004 règle 4). Aucune suppression physique ;
+     * le statut reste {@code PLANNED} tant que l'état {@code CANCELLED}
+     * n'existe pas (G1-C).
+     */
+    void markSupersededByScheduling(Long actorId) {
+        this.supersededByScheduling = true;
         this.updatedById = actorId;
     }
 

@@ -30,6 +30,15 @@ final class CourseSessionSpecifications {
     }
 
     /**
+     * Exclut les séances d'origine planning retirées par une republication
+     * ({@code superseded_by_scheduling = true} — DEC-G1-004 règle 4) : elles
+     * ne sont plus affichées dans les listes de séances.
+     */
+    static Specification<CourseSession> notSupersededByScheduling() {
+        return (root, query, cb) -> cb.isFalse(root.get("supersededByScheduling"));
+    }
+
+    /**
      * Séances possédant au moins une classe rattachée dont l'identifiant
      * interne figure dans {@code classGroupInternalIds}. {@code distinct}
      * évite les doublons dus au {@code join}.

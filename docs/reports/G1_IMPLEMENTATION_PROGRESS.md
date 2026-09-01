@@ -139,7 +139,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | `f3691bd` — `docs(g1): figer les exigences et décisions d'architecture` |
 | G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | `01a6068` — `fix(g1): stabiliser les dates métier et corriger le socle` |
 | G1-A | Interfaces Angular des API existantes | `IMPLEMENTED_FULL_SUITE_GREEN` (référentiel organisationnel livré ; écritures `academic`/`enrollment`/affectations/invitation = dette assumée, cf. plan §3.1) | `2cf1416` — `feat(frontend): exposer les parcours administratifs existants` |
-| G1-B | Module `planning` complet | `IN_PROGRESS` — checkpoints **schéma + modèle** (`e4793e7`) **et simulation CSV** verts ; publication atomique / versionnement / UI = checkpoints suivants | `e4793e7` + _ce commit : `feat(planning): simuler les imports CSV de planning`_ |
+| G1-B | Module `planning` complet | `IN_PROGRESS` — back-end **complet** (schéma `e4793e7`, simulation `24cc9f5`, **publication atomique + versionnement** ce commit) ; reste = écrans Angular `/planning/**` | `e4793e7` + `24cc9f5` + _ce commit : `feat(planning): publier des plannings versionnés en séances`_ |
 | G1-C | Cycle de vie avancé des séances | `NOT_STARTED` | — |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
@@ -410,58 +410,117 @@ Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
   avertissements d'alternance (`DEC-G1-006`), purge `@Scheduled`, écrans
   Angular `/planning/**`.
 
+## Bloc G1-B — checkpoint publication + versionnement (1er septembre 2026)
+
+- **HEAD de départ** : `24cc9f5`.
+- **État** : back-end du module `planning` **fonctionnellement complet**
+  (`IMPLEMENTED_TARGETED_TESTS_GREEN`) ; reste = écrans Angular
+  `/planning/**` (checkpoint `feat(frontend): ajouter le parcours
+  planning`).
+- **Fichiers back ajoutés** :
+  - `coursesession/PlanningSessionWriter.java` déjà présent (schéma) —
+    **implémenté** par `coursesession/internal/DefaultPlanningSessionWriter`
+    (création / réutilisation / supersession de `course_session` d'origine
+    planning, idempotence par identifiant de créneau stable, jamais de
+    réécriture d'une séance `OPEN`/`CLOSED`, `@Transactional(MANDATORY)`) ;
+  - `coursesession/internal/CourseSession` : `fromPlanningEntry(...)`,
+    `applyPlanningUpdate(...)`, `markSupersededByScheduling(...)` ;
+    `CourseSessionRepository` : `findByPlanningEntryPublicId`,
+    `findPlanningSessionsForClass` (JPQL) ;
+    `CourseSessionSpecifications.notSupersededByScheduling()` +
+    `CourseSessionService.list` l'applique (une séance supersédée n'est
+    plus listée — DEC-G1-004 règle 4) ;
+  - `planning/PlanningPublishedEvent.java` (public, pour G1-D) ;
+  - `planning/internal/` : `PlanningChangePublisher`,
+    `PlanningPublicationService` (**une** transaction atomique,
+    `@Transactional(REQUIRES_NEW)` ; verrou `FOR UPDATE` du job + du
+    `planning_schedule` ; re-validation périmètre + anomalies bloquantes ;
+    `planning_version` N/N+1 + `planning_entry` ; appel synchrone du port ;
+    lien `planning_entry.session_public_id` ; ancienne version
+    `SUPERSEDED` ; `PlanningPublishedEvent` in-transaction),
+    `PlanningPublicationOrchestrator` (hors transaction : conflit métier
+    → propagé ; échec inattendu → `FAILED` via bean séparé +
+    `PLAN_PUBLICATION_FAILED` 409), `PlanningPublicationFailureRecorder`
+    (`REQUIRES_NEW` ; ne réécrit pas un job déjà publié par une requête
+    concurrente), `PlanningVersionService` + `PlanningVersionController` +
+    `PlanningResponses` étendu, `PlanningPurgeService` (`@Scheduled`,
+    `@EnableScheduling` réactivé).
+- **Endpoints ajoutés** :
+  `POST /api/v1/planning-imports/{id}/publish` (`200`, idempotent),
+  `GET /api/v1/planning/versions?classGroupPublicId=…` (paginé, tri liste
+  blanche), `GET /api/v1/planning/versions/{id}` (détail + entrées).
+- **Migrations** : aucune (V12/V13 suffisent — décision de ne PAS ajouter
+  de colonne `slot_uid` : l'identité stable d'un créneau passée au port
+  est un `UUID.nameUUIDFromBytes(schedule.public_id + "|" + slot_key)`
+  déterministe, `planning_entry.public_id` reste un identifiant de ligne
+  aléatoire ; `course_session.planning_entry_public_id` porte l'identité
+  stable de créneau — d'où l'idempotence inter-versions du writer).
+- **Tests ajoutés** : `PlanningPublicationIntegrationTests` (6,
+  `@SpringBootTest` MySQL) : publication → version 1 + séances planning
+  `PLANNED` sans motif d'exception ; **AC-007** (simulation ⇒ 0 séance) ;
+  idempotence (double publish → `alreadyPublished=true`, pas de nouvelle
+  séance) ; **AC-008** (republication modifiée → version 2, version 1
+  `SUPERSEDED` + `replacedByVersion`, S1 réutilisée / S2 supersédée
+  filtrée / S3 créée) ; ligne bloquante → `409 PLAN_BLOCKING_ISSUES`,
+  job resté `SIMULATED` ; **concurrence** (2 publish parallèles → `200` /
+  `409`, jamais `5xx`, 1 seule séance) ; `403` TEACHER / STUDENT.
+  **+6** tests back (707 → 713).
+- **Commandes** :
+  `./mvnw test -Dtest='PlanningPublicationIntegrationTests,PlanningImportIntegrationTests,PlanningCsvParserTests,CourseSessionIntegrationTests,ModularityTests'`
+  → **31 / 0 — BUILD SUCCESS** ; `./mvnw clean test` → **`Tests run:
+  713, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** (707 → 713).
+- **Décision tranchée** : la « supersession » (DEC-G1-004 règle 4) se
+  matérialise par `course_session.superseded_by_scheduling = true` + une
+  spécification d'exclusion de liste ; l'état `CANCELLED` reste pour
+  G1-C. Optimistic-lock sur publication concurrente → le perdant part en
+  `FAILED` (dette mineure : re-import requis ; le gagnant n'est jamais
+  écrasé).
+- **Non couvert** : écrans Angular `/planning/import`,
+  `/planning/import/:jobId`, `/planning/versions`, `/planning/versions/:id`,
+  `/my-planning` ; avertissements d'alternance (`DEC-G1-006`) ; conflit
+  avec des séances **déjà publiées** hors du fichier courant.
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu après ce commit** : `feat(planning): simuler les imports
-  CSV de planning` (parent `e4793e7`).
+- **HEAD attendu après ce commit** : `feat(planning): publier des
+  plannings versionnés en séances` (parent `24cc9f5`).
 - **Working tree** : propre après commit.
-- **Bloc courant** : G1-B, sous-tâche suivante = **publication atomique**
-  (checkpoint `feat(planning): publier les séances`) :
-  `DefaultPlanningSessionWriter` (impl du port dans
-  `coursesession.internal`, création / réutilisation / supersession de
-  `course_session`), `PlanningPublicationService` (transaction unique,
-  verrou `FOR UPDATE` du job + du schedule, re-validation, version N/N+1,
-  `PlanningPublicationOrchestrator` pour le `FAILED` en `REQUIRES_NEW`),
-  `POST /api/v1/planning-imports/{id}/publish`,
-  `GET /api/v1/planning/versions` + `/{id}`,
-  `PlanningPublishedEvent` (pour G1-D), purge `@Scheduled`. Tests :
-  rollback total (T3), idempotence (double publish), concurrence
-  (2 publications), `FAILED` après port qui lève, `ModularityTests`.
-- **Fichiers non terminés** : aucun (les checkpoints schéma+modèle et
-  simulation sont cohérents et verts). À créer au checkpoint
-  « publication » : `DefaultPlanningSessionWriter`
-  (`coursesession.internal`, impl du port `PlanningSessionWriter`),
-  `PlanningPublicationService` + `PlanningPublicationOrchestrator`,
-  `PlanningVersionService` / `PlanningVersionController`,
-  `PlanningPublishedEvent`, `PlanningPurgeService` (`@Scheduled`),
-  `POST /api/v1/planning-imports/{id}/publish`,
-  `GET /api/v1/planning/versions(/{id})`, specs (rollback T3,
-  idempotence, concurrence, `FAILED` en `REQUIRES_NEW`, `ModularityTests`).
-- **Tests verts** : suite front 523/0 ; suite back **707/0** ; `ModularityTests` vert avec le module
-  `planning` complet (contrôleur + advice + services).
+- **Bloc courant** : G1-B — reste **le parcours Angular planning**
+  (checkpoint `feat(frontend): ajouter le parcours planning`) :
+  `features/planning/` (service API typé, mapper d'erreurs `PLAN_*`,
+  `planning-import` upload + revue des lignes/anomalies + bouton publier,
+  `planning-versions` liste + détail (vue semaine CSS grid, pas de lib
+  calendrier), gardes `MANAGE_ROLES`), routes `/planning/**`, entrée de
+  navigation. Puis **G1-C** (annulation + remplaçant, migration `V14`).
+- **Fichiers non terminés** : aucun (les trois checkpoints back G1-B —
+  schéma+modèle, simulation, publication — sont cohérents et verts). À
+  créer au checkpoint suivant : `frontend/src/app/features/planning/`
+  (service API typé + mapper `PLAN_*`, `planning-import` upload + revue
+  lignes/anomalies + publier, `planning-versions` liste + détail),
+  routes `/planning/**`, entrée de navigation, specs front + a11y.
+- **Tests verts** : suite front 523/0 ; suite back **713/0** ; `ModularityTests` vert avec `planning`
+  back-end complet + `DefaultPlanningSessionWriter` dans
+  `coursesession.internal`.
 - **Tests rouges** : aucun.
-- **Commande suivante** : lire `CourseSessionService` (création d'une
-  séance + `SessionClass` + `AttendanceCheckpoint`) puis écrire
-  `DefaultPlanningSessionWriter` (création / réutilisation / supersession
-  par `entryPublicId`).
-- **Risques** : `ddl-auto=validate` strict (char/varchar, int/bigint,
-  `@JdbcTypeCode`) — comparer chaque colonne à son équivalent
-  `studentimport` ; la publication crée des `course_session` d'origine
-  planning (`exception_reason` nul, `planning_entry_public_id` renseigné)
-  — vérifier le `CHECK chk_course_session_open_state` de V9 (PLANNED ⇒
-  `opened_at`/`closed_at` nuls : OK à la création) ; `esic_test`
-  `DROP`/`CREATE` libre, jamais `esic_connect`.
-- **Décisions encore ouvertes** : `DEC-G1-003` guard extraction `shared`
-  → **tranchée** (duplication) ; `DEC-G1-003` correction ligne à ligne →
-  **tranchée** (annulation + réimport) ; guard CSV `slot_key` format —
-  modèle CSV fictif `docs/demo-data/planning-demo.csv` à fournir en G1-G ;
-  `DEC-G1-006` (alternance) reporté au checkpoint publication ou G1-G.
+- **Commande suivante** : lire `features/students/import/*` (patterns
+  upload multipart + revue Angular) puis écrire
+  `features/planning/planning-api.service.ts` + `planning-errors.ts`.
+- **Risques** : le budget de bundle front (< 500 kB) — la vue semaine du
+  planning doit rester en CSS grid, aucune lib calendrier (DEC-G1-B-UI) ;
+  `esic_test` `DROP`/`CREATE` libre, jamais `esic_connect`.
+- **Décisions tranchées** : guard CSV **dupliqué** ; correction ligne à
+  ligne **non retenue** (annulation + réimport) ; identité stable de
+  créneau = UUID déterministe `(schedule.public_id, slot_key)` porté par
+  `course_session.planning_entry_public_id`, `planning_entry.public_id`
+  reste aléatoire. **Encore ouvert** : modèle CSV fictif
+  `docs/demo-data/planning-demo.csv` (G1-G) ; `DEC-G1-006` (alternance)
+  reporté à G1-G ; conflit planning vs séances déjà publiées (post-G1).
 
 ## Dernier commit produit
 
 ```text
-(G1-B simulation prêt à être commité : feat(planning): simuler les imports CSV de planning)
+(G1-B publication prêt à être commité : feat(planning): publier des plannings versionnés en séances)
 ```
 
 ## Commandes de reprise

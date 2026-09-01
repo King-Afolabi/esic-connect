@@ -82,6 +82,9 @@ class CourseSessionService {
                                              Instant from, Instant to, int page, int size, String sort,
                                              String callerSubject) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
+        // Les séances planning retirées par une republication (DEC-G1-004
+        // règle 4) ne sont jamais listées.
+        specs.add(CourseSessionSpecifications.notSupersededByScheduling());
         parseStatus(statusFilter).ifPresent(status -> specs.add(CourseSessionSpecifications.hasStatus(status)));
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
