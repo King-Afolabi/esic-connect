@@ -137,8 +137,8 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | Bloc | Intitulé | Statut | Commit |
 |---|---|---|---|
 | G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | `f3691bd` — `docs(g1): figer les exigences et décisions d'architecture` |
-| G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | _ce commit : `fix(g1): stabiliser les dates métier et corriger le socle`_ |
-| G1-A | Interfaces Angular des API existantes | `NOT_STARTED` | — |
+| G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | `01a6068` — `fix(g1): stabiliser les dates métier et corriger le socle` |
+| G1-A | Interfaces Angular des API existantes | `IMPLEMENTED_FULL_SUITE_GREEN` (référentiel organisationnel livré ; écritures `academic`/`enrollment`/affectations/invitation = dette assumée, cf. plan §3.1) | _ce commit : `feat(frontend): exposer les parcours administratifs existants`_ |
 | G1-B | Module `planning` complet | `NOT_STARTED` | — |
 | G1-C | Cycle de vie avancé des séances | `NOT_STARTED` | — |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
@@ -220,10 +220,70 @@ Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
 - `DEC-G1-011` — Playwright vs démonstration API automatisée : vérifié au
   bloc G1-G.
 
+## Bloc G1-A — référentiel organisationnel Angular (1er septembre 2026)
+
+- **HEAD de départ** : `01a6068`.
+- **État** : `IMPLEMENTED_FULL_SUITE_GREEN`.
+- **Périmètre livré** : le module back-end `organization` était le seul
+  sans **aucun** écran Angular (CS « API seule »). Livré de bout en bout :
+  `EF-ROOM-001` (sites / bâtiments / salles) + plages réseau CIDR
+  (`SUPER_ADMIN`).
+- **Fichiers front principaux** (`frontend/src/app/features/organization/`) :
+  `organization.models.ts`, `organization-api.service.ts` (+ `.spec`),
+  `organization-errors.ts` (+ `.spec`), `organization-paginator.ts`,
+  `organization.shared.scss`, `site-list/` (+ `.spec`), `site-form/`
+  (+ `.spec` + `.a11y.spec`), `site-detail/` (+ `.spec`).
+- **Câblage** : `app.routes.ts` (arbre `/organization/**`, gardes
+  `ORGANIZATION_READ_ROLES` / `ORGANIZATION_WRITE_ROLES`),
+  `core/navigation/navigation.ts` (entrée « Organisation »),
+  `navigation.spec.ts` + `app-shell.spec.ts` mis à jour.
+- **Migrations** : aucune (bloc front-only).
+- **Endpoints consommés** (tous préexistants, aucun inventé) :
+  `GET/POST /api/v1/sites`, `GET/PATCH /api/v1/sites/{id}`,
+  `POST /api/v1/sites/{id}/archive|restore`,
+  `GET/POST /api/v1/sites/{id}/buildings`,
+  `PATCH /api/v1/buildings/{id}`, `POST /api/v1/buildings/{id}/archive|restore`,
+  `GET/POST /api/v1/sites/{id}/rooms`, `PATCH /api/v1/rooms/{id}`,
+  `POST /api/v1/rooms/{id}/archive|restore`,
+  `GET/POST /api/v1/sites/{id}/network-ranges`,
+  `POST /api/v1/network-ranges/{id}/activate|deactivate`.
+- **Routes UI ajoutées** : `/organization/sites`, `/organization/sites/new`,
+  `/organization/sites/:publicId`, `/organization/sites/:publicId/edit`.
+- **Tests ajoutés** : front **+48** (`475 → 523`), 7 fichiers de specs
+  (`organization-api.service`, `organization-errors`, `site-list`,
+  `site-form`, `site-detail`, `site-form.a11y`, + 2 cas de navigation).
+- **Commandes exécutées** :
+  - `npm run lint` → « All files pass linting » ;
+  - `npm test -- --watch=false` → **61 fichiers / 523 tests / 0 échec** ;
+  - `npm run build` → **484,07 kB** brut (0 alerte de budget < 500 kB) ;
+  - `npm audit --audit-level=high` → **0 vulnérabilité** ;
+  - back-end (non modifié par ce bloc) `./mvnw clean test` → surefire
+    **693 tests / 0 échec / 0 erreur** (l'exit code 1 observé venait du
+    `grep` final sous `mvnw -q` qui masque la ligne de résumé, pas d'un
+    test).
+- **Décisions** :
+  - `DEC-G1-A-SCOPE` (session autonome) : seul le référentiel
+    organisationnel est livré cette session ; `EF-ACA-001..005`,
+    `EF-USER-001`, `EF-AUTH-004` restent une **dette assumée de G1-A**,
+    l'audit complet des rôles réels est figé dans le plan §3.1 (aucune
+    UI ne simule un endpoint absent).
+  - `window.prompt` pour le motif d'archivage d'un bâtiment / d'une
+    salle (confirmation native, clavier-accessible) ; le motif
+    d'archivage d'un **site** utilise un panneau de confirmation en
+    ligne (motif obligatoire, cohérent avec `user-detail`).
+  - Panneau « Plages réseau » rendu uniquement pour un contexte
+    `SUPER_ADMIN` (masquage ergonomique ; `SiteNetworkRangeController`
+    reste l'autorité, lecture comprise).
+- **Limites connues G1-A** : pas d'écran d'édition de bâtiment / salle
+  (seulement création + archivage/restauration) ; pas de pagination des
+  sous-listes (chargées à `size=100`) ; écritures académiques /
+  inscriptions / affectations / émission d'invitation non livrées.
+- **Prochain bloc** : G1-B (module `planning`).
+
 ## Dernier commit produit
 
 ```text
-(G1-0.1 prêt à être commité : fix(g1): stabiliser les dates métier et corriger le socle)
+(G1-A prêt à être commité : feat(frontend): exposer les parcours administratifs existants)
 ```
 
 ## Commandes de reprise

@@ -132,26 +132,46 @@ Chaque bloc : implémenter → tester (back + front) → documenter →
 
 ## 3. G1-A — plan détaillé
 
-### 3.1 Audit endpoint → écran (à compléter au démarrage du bloc)
+### 3.1 Audit endpoint → écran (relevé le 1er septembre 2026, sur le code réel)
 
-| Endpoint réel | Méthode | Rôles `@PreAuthorize` | Périmètre | Écran cible | Écriture UI | Test existant | Test à ajouter |
-|---|---|---|---|---|---|---|---|
-| `/api/v1/sites` | GET/POST | (à relever) | — | `/organization/sites` | oui | `SiteController` IT | service + composant + garde |
-| `/api/v1/sites/{id}` (+ archive/restore) | GET/PATCH/POST | (à relever) | — | `/organization/sites/:siteId` | oui | idem | idem |
-| `/api/v1/buildings/**` | … | … | — | `/organization/buildings/:buildingId` | oui | … | … |
-| `/api/v1/rooms/**` | … | … | — | `/organization/rooms/:roomId` | oui | … | … |
-| `/api/v1/site-network-ranges` (nom à confirmer) | … | `SUPER_ADMIN` ? | — | `/organization/network-ranges` | oui | … | … |
-| `/api/v1/pedagogical-assignments` (nom à confirmer) | GET/POST/DELETE | `ADMIN`/`SUPER_ADMIN`/`PEDAGOGICAL_MANAGER` ? | RP | `/academic/assignments(/new)` | oui | `PedagogicalAssignmentIntegrationTests` | garde + `403` périmètre |
-| `/api/v1/academic-years` (+ POST/PATCH/archive) | … | `AcademicWeb.WRITE_ROLES` | RP | `/academic/academic-years/new` + `/:id/edit` | oui | `AcademicIntegrationTests` | formulaire + garde |
-| `/api/v1/programs` … `/class-groups` | … | idem | RP | routes `new`/`edit` | oui | idem | idem |
-| `/api/v1/student-profiles` (POST) | … | `EnrollmentWeb.MANAGE_ROLES` | — | `/students/new` | oui | `EnrollmentController` IT | formulaire |
-| `/api/v1/enrollments` (POST) | … | idem | — | `/students/:publicId/enrollments/new` | oui | idem | formulaire |
-| `/api/v1/enrollments/{id}/transfer` (nom à confirmer) | POST | idem | — | `/enrollments/:publicId/transfer` | oui | idem | conflit `409` |
-| invitation (émission) | ? | ? | ? | `/administration/invitations/new` **si endpoint réel** | oui/non | `AccountInvitationController` IT | contrat |
+Rôles relevés **textuellement** dans les contrôleurs / classes `*Web` :
 
-> Les cases « à relever / à confirmer » sont renseignées **avant** d'écrire
-> le premier composant, en lisant chaque contrôleur, service, DTO,
-> exception et test. Aucun nom de route ou d'endpoint n'est inventé.
+- `SiteController.READ_ROLES` = `ADMIN, SUPER_ADMIN, SCHOOL_ADMINISTRATION, PEDAGOGICAL_MANAGER`
+  ; `SiteController.WRITE_ROLES` = `ADMIN, SUPER_ADMIN` (réutilisés par
+  `BuildingController` / `RoomController`).
+- `SiteNetworkRangeController` : `@PreAuthorize("hasRole('SUPER_ADMIN')")`
+  **au niveau de la classe** — lecture comprise.
+- `AcademicWeb.READ_ROLES` = `ADMIN, SUPER_ADMIN, SCHOOL_ADMINISTRATION, PEDAGOGICAL_MANAGER`
+  ; `WRITE_ROLES` = `ADMIN, SUPER_ADMIN` ;
+  `SCOPED_WRITE_ROLES` = `ADMIN, SUPER_ADMIN, PEDAGOGICAL_MANAGER` ;
+  `ASSIGNMENT_ROLES` = `ADMIN, SUPER_ADMIN`.
+- `EnrollmentWeb.MANAGE_ROLES` = `ADMIN, SUPER_ADMIN, SCHOOL_ADMINISTRATION`.
+- `AccountInvitationController` `POST /api/v1/account-invitations` =
+  `ADMIN, SUPER_ADMIN, PEDAGOGICAL_MANAGER, SCHOOL_ADMINISTRATION`
+  (endpoint d'émission **réel** — `validate` / `activate` publics).
+
+| Endpoint réel | Méthodes | Rôles `@PreAuthorize` | Périmètre | Écran cible | Écriture UI | État G1-A |
+|---|---|---|---|---|---|---|
+| `/api/v1/sites` (+ `/{id}`, `/{id}/archive`, `/{id}/restore`) | GET/POST/PATCH/POST | READ = `ADMIN,SUPER_ADMIN,SCHOOL_ADMINISTRATION,PEDAGOGICAL_MANAGER` ; WRITE = `ADMIN,SUPER_ADMIN` | — | `/organization/sites`, `/sites/new`, `/sites/:publicId`, `/sites/:publicId/edit` | oui | **livré** (`SiteList` / `SiteForm` / `SiteDetail` + `OrganizationApiService` + `organization-errors` ; specs service/errors/list/form/detail + a11y) |
+| `/api/v1/sites/{id}/buildings` (+ `/buildings/{id}` PATCH, `/archive`, `/restore`) | GET/POST/PATCH/POST | idem `Site` READ/WRITE | — | panneau « Bâtiments » de `/organization/sites/:publicId` | oui | **livré** (création + liste + archivage/restauration dans `SiteDetail`) |
+| `/api/v1/sites/{id}/rooms` (+ `/rooms/{id}` PATCH, `/archive`, `/restore`) | GET/POST/PATCH/POST | idem `Site` READ/WRITE | — | panneau « Salles » de `/organization/sites/:publicId` | oui | **livré** (création + liste + archivage/restauration + sélecteur de bâtiment) ; `PATCH` d'une salle non exposé (dette assumée G1-A) |
+| `/api/v1/sites/{id}/network-ranges` (+ `/network-ranges/{id}/activate`, `/deactivate`) | GET/POST/POST | `SUPER_ADMIN` (classe) | — | panneau « Plages réseau » de `/organization/sites/:publicId`, rendu pour un contexte `SUPER_ADMIN` uniquement | oui | **livré** (création + liste + activation/désactivation) |
+| `/api/v1/academic-years` (+ POST/PATCH/`/archive`/`/restore`) | GET/POST/PATCH/POST | READ ; WRITE = `ADMIN,SUPER_ADMIN` | — | `/academic/academic-years/new` + `/:id/edit` | oui | **non livré** — dette assumée G1-A (front `/academic` reste lecture seule ; API prête) |
+| `/api/v1/programs`, `/program-levels`, `/promotions`, `/class-groups` (POST/PATCH/`/archive`/`/restore`) | idem | READ ; POST `programs`/`academic-years` = `WRITE_ROLES` ; le reste = `SCOPED_WRITE_ROLES` (RP inclus, périmètre serveur) | RP sur `SCOPED_WRITE_ROLES` | routes `new`/`edit` sous `/academic` | oui | **non livré** — dette assumée G1-A |
+| `/api/v1/pedagogical-assignments` (+ `/{id}` GET, `/{id}/close`) | GET/POST | `ASSIGNMENT_ROLES` = `ADMIN,SUPER_ADMIN` | — | `/academic/assignments(/new)` | oui | **non livré** — dette assumée G1-A |
+| `/api/v1/student-profiles` (POST), `/api/v1/enrollments` (POST, `/{id}/transfer`, `/{id}/close`) | GET/POST | `EnrollmentWeb.MANAGE_ROLES` = `ADMIN,SUPER_ADMIN,SCHOOL_ADMINISTRATION` | — | `/students/new`, `/students/:publicId/enrollments/new`, transfert | oui | **non livré** — dette assumée G1-A (front `/students` reste lecture seule ; API prête) |
+| `POST /api/v1/account-invitations` (émission) | POST | `ADMIN,SUPER_ADMIN,PEDAGOGICAL_MANAGER,SCHOOL_ADMINISTRATION` | RP sur son périmètre | `/administration/invitations/new` | oui | **non livré** — endpoint réel confirmé ; écran d'émission reste une dette assumée G1-A |
+
+> **Décision de périmètre G1-A (session autonome du 1er sept. 2026).**
+> Le référentiel **organisationnel** (`EF-ROOM-001`) est le seul domaine
+> livré de bout en bout dans cette session : c'était l'unique domaine
+> back-end **sans aucun écran Angular** (CS « API seule »). Les écritures
+> `academic` / `enrollment` / affectations pédagogiques / émission
+> d'invitation (`EF-ACA-001..005`, `EF-USER-001`, `EF-AUTH-004`) ont déjà
+> une consultation en lecture seule ; leurs formulaires restent une
+> **dette assumée de G1-A**, tracée ici avec l'audit complet des rôles
+> réels pour qu'un suivi soit mécanique. Aucun faux endpoint n'est
+> simulé côté UI.
 
 ### 3.2 Règles UI (rappel)
 
