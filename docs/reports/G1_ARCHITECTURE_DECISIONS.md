@@ -14,7 +14,39 @@
 
 ```text
 31 août 2026
+1er septembre 2026 — révision après l'audit correctif G1-B.1
 ```
+
+## Révision G1-B.1 (1er septembre 2026) — identité d'un créneau
+
+L'implémentation G1-B stockait, dans une colonne nommée
+`course_session.planning_entry_public_id` et un champ de port
+`entryPublicId`, une valeur qui **n'était pas** un `planning_entry.public_id`
+(celui-ci est aléatoire et propre à chaque version) mais un **UUID
+déterministe** dérivé de `planning_schedule.public_id + "|" + slot_key`.
+Nom trompeur, interdit par l'audit. Corrigé **sans migration
+supplémentaire** (V12 et V13 n'ont jamais été poussées ni appliquées hors
+d'une base jetable — décision documentée en tête de `V13`) :
+
+- `planning_entry.public_id` = identifiant **de ligne de version**,
+  aléatoire (inchangé) ;
+- **nouveau** `planning_entry.slot_public_id BINARY(16) NOT NULL` =
+  identité **stable** du créneau à travers les versions, déterministe
+  (`UUIDv3(schedule.public_id || '|' || slot_key)`) ;
+- `course_session.planning_entry_public_id` → **renommée**
+  `course_session.planning_slot_public_id` (porte cette identité stable) ;
+- port `PlanningSessionWriter` : `PlannedSession.entryPublicId` →
+  `slotPublicId` ; `SyncedSession.entryPublicId` → `slotPublicId` ;
+  `SupersededSession.previousEntryPublicId` → `previousSlotPublicId` ;
+  `PlanningSessionSyncException.entryPublicId()` → `slotPublicId()` ;
+- DTO : `PlanningResponses.VersionEntryResponse` expose désormais
+  explicitement `slotPublicId` **en plus** de `publicId`.
+
+Formule centralisée dans `planning.internal.PlanningSlotIds` (utilisée à
+la simulation **et** à la publication). Les mentions
+`planning_entry_public_id` de `DEC-G1-001` / `DEC-G1-004` ci-dessous se
+lisent désormais `planning_slot_public_id` ; « discriminant d'origine »
+(NULL ⇒ séance manuelle) reste valable sur la colonne renommée.
 
 ## Contexte technique vérifié (commun)
 

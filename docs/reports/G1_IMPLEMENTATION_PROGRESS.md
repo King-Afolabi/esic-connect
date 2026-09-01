@@ -139,8 +139,9 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | `f3691bd` — `docs(g1): figer les exigences et décisions d'architecture` |
 | G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | `01a6068` — `fix(g1): stabiliser les dates métier et corriger le socle` |
 | G1-A | Interfaces Angular des API existantes | `IMPLEMENTED_FULL_SUITE_GREEN` (référentiel organisationnel livré ; écritures `academic`/`enrollment`/affectations/invitation = dette assumée, cf. plan §3.1) | `2cf1416` — `feat(frontend): exposer les parcours administratifs existants` |
-| G1-B | Module `planning` complet | `IMPLEMENTED_FULL_SUITE_GREEN` — back-end (schéma `e4793e7`, simulation `24cc9f5`, publication `dafd23a`) **+ parcours Angular** ce commit. Reste post-G1 : avertissements d'alternance (`DEC-G1-006`), conflit vs séances déjà publiées, création manuelle plein calendrier (`EF-PLAN-006`, hors périmètre G1). | `e4793e7` + `24cc9f5` + `dafd23a` + _ce commit : `feat(frontend): ajouter le parcours planning`_ |
-| G1-C | Cycle de vie avancé des séances | `NOT_STARTED` | — |
+| G1-B | Module `planning` complet | `IMPLEMENTED_FULL_SUITE_GREEN` — back-end (schéma `e4793e7`, simulation `24cc9f5`, publication `dafd23a`) **+ parcours Angular** (`429f45b`). Reste post-G1 : avertissements d'alternance (`DEC-G1-006`), création manuelle plein calendrier (`EF-PLAN-006`, hors périmètre G1). | `e4793e7` + `24cc9f5` + `dafd23a` + `429f45b` |
+| G1-B.1 | Audit correctif du bloc `planning` | `IMPLEMENTED_FULL_SUITE_GREEN` — identité de créneau (`planning_slot_public_id`), concurrence idempotente durcie, rollback+`FAILED` déterministe, garde centralisée « séance supersédée = inactive », conflit vs séances déjà publiées (formateur/classe), traçabilité reclassée, script de démo. Suites **719/0** (3 fuseaux) / **550/0**. | `fix(planning): consolider l'identité et la publication atomique` + `docs(g1): corriger la traçabilité après audit du planning` |
+| G1-C | Cycle de vie avancé des séances | `IN_PROGRESS` (démarré après G1-B.1) | — |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
 | G1-E | Pièces jointes des justificatifs | `NOT_STARTED` | — |
@@ -518,11 +519,151 @@ Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
   d'alternance (`DEC-G1-006`) ; conflit avec des séances déjà publiées
   hors du fichier courant.
 
+## Audit G1-B.1 — 1er septembre 2026
+
+Audit correctif du bloc G1-B **avant** G1-C. Commits :
+`fix(planning): consolider l'identité et la publication atomique`
+(+ `docs(g1): corriger la traçabilité après audit du planning`).
+
+### Identité des créneaux — avant / après
+
+| | Avant (G1-B) | Après (G1-B.1) |
+|---|---|---|
+| Colonne séance | `course_session.planning_entry_public_id` — **nom trompeur** : contenait un UUID déterministe `UUIDv3(schedule.public_id\|slot_key)`, jamais un `planning_entry.public_id` | **renommée** `course_session.planning_slot_public_id` — identité **stable** du créneau |
+| `planning_entry` | `public_id` aléatoire par ligne de version, pas d'identité stable explicite | **+ `slot_public_id BINARY(16) NOT NULL`** (déterministe), `public_id` inchangé |
+| Port `PlanningSessionWriter` | `entryPublicId` / `previousEntryPublicId` | `slotPublicId` / `previousSlotPublicId` |
+| DTO version | `VersionEntryResponse.publicId` seul | `+ slotPublicId` explicite |
+| Formule | inline dans `PlanningPublicationService` | `planning.internal.PlanningSlotIds` (simulation **et** publication) |
+
+### Migrations
+
+Aucune nouvelle migration. **V12 et V13 corrigées en place** (jamais
+poussées ni appliquées hors base jetable — cf. en-tête de `V13`). V14
+reste **libre** pour G1-C. Une base de dev `esic_connect` déjà à V13 doit
+être recréée ou `flyway repair`.
+
+### Publication concurrente — durcissement
+
+- `PlanningPublicationService.publish` : `entityManager.refresh(job)` juste
+  après `FOR UPDATE` (défait l'instantané périmé du contexte de
+  persistance).
+- Nouveau `alreadyPublishedResult(jobPublicId)` (`REQUIRES_NEW`, lecture) ;
+  `PlanningPublicationOrchestrator` l'appelle sur toute `RuntimeException`
+  inattendue : **si le job est déjà `PUBLISHED`** ⇒ renvoie le résultat
+  idempotent (`alreadyPublished=true`), **jamais `FAILED`**. `FAILED` est
+  réservé à un échec réel sans job publié.
+- `PlanningQueryService.toJobResponse` peuple enfin
+  `publishedVersionPublicId` (était toujours `null`).
+- Test `concurrentPublishOfSameJobIsStrictlyIdempotent` : assertions
+  **exactes** — 2×`200`, exactement `{false,true}` sur `alreadyPublished`,
+  même `versionPublicId`, job `PUBLISHED`, `publishedVersionPublicId` non
+  nul, `failureReason` nul, 1 version, 1 séance.
+
+### Rollback + FAILED — test déterministe
+
+`PlanningPublicationFailureIntegrationTests` (package `planning.internal`,
+faux `PlanningSessionWriter` `@Primary` qui lève après le début de la
+publication) :
+- transaction métier rollbackée : 0 `planning_version`, 0 `planning_entry`,
+  0 séance planning, `current_version_number` inchangé, **0
+  `PlanningPublishedEvent`** consommé (recorder `@EventListener`) ;
+- transaction séparée : job `FAILED`, `failure_reason` non sensible,
+  **exactement 1** `planning_import_job_issue` `PLAN_PUBLICATION_FAILED`
+  sans cellule CSV / PII ;
+- API : `409` `PLAN_PUBLICATION_FAILED`, **sans** marqueur de faute, sans
+  `IllegalStateException`, sans nom SQL, sans package interne ;
+- `FAILED` non republiable ;
+- test complémentaire : une ligne `ERROR` (conflit métier attendu) laisse
+  le job `SIMULATED`, **jamais `FAILED`**.
+
+### Séances supersédées — garde centralisée
+
+`CourseSession.isOperational()` (`= !supersededByScheduling` ;
+`CANCELLED` de G1-C viendra s'y ajouter). Appliquée :
+- `DefaultCourseSessionDirectory` : `resolve` → `NOT_FOUND` ;
+  `findForAttendance`, `findCheckpointForAttendance`,
+  `findSessionByCheckpointPublicId` → filtrés ; `findSessionsForClasses`,
+  `findSessionsInRange` → `operational()` spec ;
+- `CourseSessionService.require` (get / open / close) → `SESSION_NOT_FOUND` ;
+  `list` → `operational()` spec.
+Une séance supersédée n'est donc : ni listée, ni ouvrable, ni
+tokenisable, ni émargeable, ni comptée en assiduité, ni dans les
+rapports. **Seul** l'historique des versions de planning (module
+`planning`, lit `planning_entry`) continue de la montrer avec son
+`sessionPublicId`. Test :
+`supersededSessionIsInactiveButRemainsInPlanningVersionHistory`.
+
+### Conflits avec les séances déjà publiées (RG-034, partiel)
+
+Nouveau port `CourseSessionDirectory.findOperationalSessionWindows(from,to)`
+(records `ExistingSessionWindow`, **100 % UUID publics**).
+`PlanningSimulationService.detectPublishedConflicts` : conflit
+**formateur** et **classe** contre les séances opérationnelles existantes
+qui chevauchent, **hors** le même créneau republié (`slotPublicId`).
+Salle **non** vérifiée contre l'existant (`coursesession` sans `room_code`
+— limite documentée). Test
+`simulationDetectsConflictWithAlreadyPublishedSessionButNotWithTheSameSlot`.
+
+### Exigences reclassées
+
+Voir `G1_REQUIREMENTS_TRACEABILITY.md` §3bis. En bref :
+`EF-PLAN-007`/`RG-032` → **`PARTIAL`** (pas de test « ≥ 3 versions ») ;
+`RG-033` → **`PARTIAL`** (pas de notification persistante, G1-D) ;
+`RG-034` → **`PARTIAL`** (gap réduit : reste salle vs existant) ;
+`RG-035` → **`PARTIAL`** (`room_code` string sans action d'affectation) ;
+`AC-008` → versionnement `IMPLEMENTED_AND_TESTED`, devenir des séances
+`PARTIAL` (supersédée = inactive, pas encore `CANCELLED`).
+`EF-PLAN-001/002/004/005`, `EF-SES-001`, `RG-016`, `RG-030/031`, `AC-007`
+restent `IMPLEMENTED_AND_TESTED`. G1-A **bloc** = `PARTIAL`.
+
+### Données de démonstration
+
+`scripts/prepare-planning-demo.sh` : substitue `__TEACHER_PUBLIC_ID__`
+(résolu via l'API ou passé en argument, **validé UUID**) dans des copies
+sous `build/demo-data/` — les modèles versionnés ne sont jamais touchés.
+Test `scripts/test/test-prepare-planning-demo.sh` (4 vérifications, sans
+back-end). `docs/demo-data/README.md` mis à jour (résultats **attendus**,
+non « réellement observés »).
+
+### Tests ajoutés
+
+- Back : `PlanningSlotIdentityIntegrationTests` (2),
+  `PlanningPublicationFailureIntegrationTests` (2),
+  `PlanningPublicationIntegrationTests` + concurrence stricte / séance
+  supersédée / conflit publié (net **713 → 719**).
+- Front : `planning-import-review.spec` (course idempotente → succès),
+  `planning-api.service.spec` (`slotPublicId`, pas d'`entryPublicId`)
+  (**548 → 550**).
+- Shell : `test-prepare-planning-demo.sh`.
+
+### Validation G1-B.1
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw clean test` (Europe/Paris, défaut) | **719 / 0 — BUILD SUCCESS** |
+| `TZ=UTC ./mvnw clean test` | **719 / 0 — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **719 / 0 — BUILD SUCCESS** |
+| `npm test -- --watch=false` | **66 fichiers / 550 tests / 0 échec** |
+| `npm run lint` | « All files pass linting » |
+| `npm run build` | initial **484,68 kB** — 0 alerte de budget |
+| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| `bash scripts/test/test-prepare-planning-demo.sh` | **OK — 4 vérifications** |
+
+### Limites restantes après G1-B.1
+
+- `EF-PLAN-007` : pas de test « ≥ 3 versions consultables » (gap mineur, G1-G).
+- `RG-034` : conflit **salle** vs séances déjà publiées non fait (`coursesession` sans `room_code`).
+- `RG-035` : aucune action / écran d'affectation de salle post-import.
+- `RG-033` : notification persistante = G1-D.
+- Séances supersédées : encore `PLANNED` + drapeau (inactives via garde) ;
+  bascule vers `CANCELLED` prévue **dans la migration G1-C**.
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu après ce commit** : `feat(frontend): ajouter le parcours
-  planning` (parent `dafd23a`).
+- **HEAD attendu** : `docs(g1): corriger la traçabilité après audit du
+  planning` (chaîne : `db80beb` → `fix(planning): consolider l'identité et
+  la publication atomique` → ce commit).
 - **Working tree** : propre après commit.
 - **Bloc courant** : **G1-C** — cycle de vie avancé des séances
   (EF-SES-004 annulation, EF-SES-005 remplaçant, CAD §24 RG-12) :

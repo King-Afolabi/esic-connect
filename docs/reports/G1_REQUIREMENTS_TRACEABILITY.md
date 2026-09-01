@@ -114,6 +114,44 @@ Spring Security reste l'autorité.
 
 ---
 
+## 3bis. Réévaluation individuelle après l'audit correctif G1-B.1 (1er septembre 2026)
+
+> **Pourquoi.** La ligne du §1 déclarait en bloc « `EF-PLAN-001..005,
+> EF-PLAN-007, EF-SES-001, RG-016, RG-030..RG-035, AC-007, AC-008 =
+> IMPLEMENTED_AND_TESTED ». L'audit G1-B.1 a réévalué **chaque
+> identifiant** et corrige cette déclaration trop optimiste. La colonne
+> « Déclaré initialement (G1-B) » conserve la mention d'origine ; la
+> colonne « Statut corrigé (audit G1-B.1) » fait foi.
+
+| ID | Déclaré initialement (G1-B) | Statut corrigé (audit G1-B.1) | Justification vérifiée dans le code |
+|---|---|---|---|
+| EF-PLAN-001 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `PlanningImportController` + `PlanningCsvGuard` + `PlanningCsvParser` ; `PlanningImportIntegrationTests` (upload `.csv`, rejet non-CSV → `415`, colonne manquante → `400`, sécurité `401/403`). |
+| EF-PLAN-002 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `PlanningSimulationService` invariant T1 (aucune écriture métier) ; lignes + anomalies + synthèse ; conflits intra-fichier **et** vs séances déjà publiées (audit G1-B.1). |
+| EF-PLAN-003 | `PARTIAL` | **`PARTIAL`** (inchangé) | Pas de correction ligne à ligne : un fichier fautif se corrige et se re-téléverse (`/cancel` + réimport, DEC-G1-003). `PlanningQueryService.cancel` idempotent, testé. |
+| EF-PLAN-004 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** (renforcé) | Transaction atomique + `FOR UPDATE` ; **concurrence idempotente durcie** : le perdant d'une course sur le même job renvoie `alreadyPublished=true` (jamais `FAILED`) — `entityManager.refresh` + repli `alreadyPublishedResult` dans l'orchestrateur ; test `concurrentPublishOfSameJobIsStrictlyIdempotent` (assertions exactes : 1 version, 1 séance, job `PUBLISHED`, `publishedVersionPublicId` non nul, pas de `PLAN_PUBLICATION_FAILED`). Rollback + `FAILED` prouvé de façon déterministe (`PlanningPublicationFailureIntegrationTests`, faux `PlanningSessionWriter` `@Primary`). |
+| EF-PLAN-005 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `PlanningVersion` `DRAFT/PUBLISHED/SUPERSEDED`, N/N+1, `replacedByVersion` ; `PlanningPublicationIntegrationTests#republicationOfAModifiedImportCreatesVersionTwoAndSupersedesVersionOne`. |
+| EF-PLAN-006 | `HORS_PÉRIMÈTRE_ASSUMÉ` | **`HORS_PÉRIMÈTRE_ASSUMÉ`** (inchangé) | Création manuelle plein calendrier non implémentée (US-073). |
+| EF-PLAN-007 / RG-032 | `IMPLEMENTED_AND_TESTED` | **`PARTIAL`** | Aucune purge de `planning_version` (rétention garantie structurellement : aucun chemin `DELETE`), mais **aucun test dédié « ≥ 3 versions consultables »** — les tests d'intégration couvrent 2 versions. Gap mineur, tracé pour G1-G. |
+| EF-SES-001 / RG-016 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** (identité corrigée) | Port `PlanningSessionWriter` (création / réutilisation / supersession). **Identité de créneau corrigée à l'audit** : `course_session.planning_slot_public_id` (renommée depuis `planning_entry_public_id`, nom trompeur) porte l'identité *stable* du créneau (`planning_entry.slot_public_id` déterministe), jamais un `planning_entry.public_id`. Test `PlanningSlotIdentityIntegrationTests` (identité stable inter-versions ; `public_id` de ligne distinct ; deux plannings ⇒ identités distinctes ; aucun `entryPublicId` ambigu dans les DTO). |
+| RG-030 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `AcademicScopeDirectory.isClassInScope` re-vérifié à la publication ; `403 PLAN_SCOPE_FORBIDDEN` testé. |
+| RG-031 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `@PreAuthorize(PlanningWeb.MANAGE_ROLES)` sans `TEACHER` ; `publishIsForbiddenForTeacherAndStudent`. |
+| RG-033 | `IMPLEMENTED_AND_TESTED` | **`PARTIAL`** | `PlanningPublishedEvent` publié en transaction et consommé après commit par `audit` **uniquement** ; **aucune notification persistante** destinée à un utilisateur (module `notification` = G1-D, `NOT_STARTED`). La règle « génère une notification » n'est pas satisfaite côté destinataire. |
+| RG-034 | `IMPLEMENTED_AND_TESTED` | **`PARTIAL`** (gap réduit) | Conflit bloquant intra-fichier (formateur / classe / **salle**) + hors plage horaire : OK. **Ajout audit G1-B.1** : conflit **formateur** et **classe** contre des séances *déjà publiées* (port `CourseSessionDirectory.findOperationalSessionWindows`, exclusion du même créneau republié) — testé. **Gap restant** : conflit **salle** contre des séances déjà publiées — non fait, le module `coursesession` ne porte pas de `room_code` (limite documentée, DEC-G1-005). |
+| RG-035 | `IMPLEMENTED_AND_TESTED` | **`PARTIAL`** | `planning_entry.room_code` = simple `VARCHAR` facultatif, propagé jusqu'à la séance ; **aucune action / aucun écran d'affectation de salle après l'import**, aucun lien vers `organization.room`. Une entrée sans salle est publiable (couvert). |
+| AC-007 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `publishesAVersionAndCreatesPlanningSessionsOnlyAfterConfirmation` + assertion « simulation ⇒ 0 séance » dans plusieurs tests. |
+| AC-008 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** pour le versionnement ; **`PARTIAL`** pour le devenir des séances | Version N+1 + ancienne `SUPERSEDED` : testé. Une séance retirée d'une version reste `PLANNED` + `superseded_by_scheduling = true` ; elle est désormais traitée comme **inactive** par une garde centralisée (`CourseSession.isOperational()` appliquée dans `DefaultCourseSessionDirectory`, `CourseSessionService.require/list`, specs) — GET / ouverture / jeton / rapports la rejettent, seul l'historique planning la montre (tests dans `PlanningPublicationIntegrationTests#supersededSessionIsInactiveButRemainsInPlanningVersionHistory`). L'état `CANCELLED` propre arrive en **G1-C** ; la migration G1-C fera basculer ces séances futures `PLANNED` supersédées vers `CANCELLED`. |
+
+### G1-A — statut de bloc corrigé
+
+`G1-A` reste **globalement `PARTIAL`** : seul `EF-ROOM-001` (écrans
+`organization`) est `IMPLEMENTED_AND_TESTED`. `EF-ACA-001..005`,
+`EF-USER-001`, `EF-AUTH-004` (écrans d'écriture académique, inscriptions,
+affectation d'un responsable pédagogique, émission d'invitation) restent
+**`NOT_IMPLEMENTED`** — API livrées, aucune UI. Aucune UI ne simule un
+endpoint absent.
+
+---
+
 ## 4. G1-C — Cycle de vie avancé des séances
 
 | ID | Source | Résumé fidèle | Statut avant G1 | Critère d'acceptation G1 | Preuve code | Preuve test | Démo |
