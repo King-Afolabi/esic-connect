@@ -1800,11 +1800,101 @@ aucun test supprimé ni assertion affaiblie ; `.env` inchangé.
 - pas de cache Redis (agrégats = requêtes SQL bornées, `DEC-G1-010`) ;
 - pas de test e2e navigateur.
 
+## G1-G — Recette, stabilisation, documentation technique (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN` pour la **recette API** ; **e2e navigateur
+`PARTIAL`** (non livré). Commits `test(e2e): couvrir le parcours produit
+prioritaire` + `docs(g1): finaliser la traçabilité technique du grand lot
+G1`.
+
+### Audit de clôture
+
+- `rg 'TODO|FIXME|HACK|NOT_IMPLEMENTED|501'` sur le code G1
+  (`dashboard`, `planning`, `notification`, `attendance` justificatif /
+  pièce jointe) → **aucun** stub, aucune coquille vide, aucun `501` ;
+- `git grep '@Disabled|@Ignore|it.skip|.only('` sur `backend/src/test` +
+  `frontend/src` → **aucun** ;
+- routes front consommées, endpoints back consommés (vérifié bloc par
+  bloc dans les sections ci-dessus) ;
+- aucun défaut bloquant révélé par la recette : la recette API est
+  passée sans correction de code de production (seuls des ajustements de
+  fixtures de test — noms de table `session_class`, chevauchement de
+  période de remplacement ± 60 min, séance exceptionnelle dédiée pour le
+  justificatif — cf. commit `test(e2e)`).
+
+### Recette API de bout en bout — `DEC-G1-011` repli
+
+**Playwright n'est pas ajouté** (dépendance lourde + téléchargement de
+navigateur non fiable en environnement non interactif ; critère « risque
+/ coût disproportionné » de `DEC-G1-011`). **Repli livré** :
+`backend/src/test/java/com/esic/connect/recette/PriorityPathRecetteIntegrationTests`
+(`@SpringBootTest`, `TestRestTemplate`, appels HTTP réels) —
+`theEndToEndPriorityPathAndG1ExtensionsReplaySuccessfully` :
+
+```text
+référentiel académique
+→ import apprenants CSV : simulation (confirmable) → confirmation → 3 comptes
+→ import planning CSV : simulation ⇒ 0 séance (AC-007) → publication : version 1, 2 séances
+→ le formateur voit ses séances, en ouvre une, émet un jeton + code court
+→ un apprenant ACTIF inscrit émarge (PRESENT / LATE)
+→ rapport classe + export CSV (Content-Type text/csv)
+→ annulation d'une séance → notification SESSION_CANCELLED du formateur
+→ remplacement de formateur (période chevauchant la séance)
+→ justificatif (séance exceptionnelle dédiée) + pièce jointe PDF
+→ acceptation → notification JUSTIFICATION_ACCEPTED du propriétaire
+→ téléchargement de la pièce par l'examinateur (Content-Disposition: attachment)
+→ tableaux de bord ADMINISTRATION / TEACHER / STUDENT
+```
+
+Le e2e **navigateur** reste `PARTIAL` — non livré. **Aucune
+démonstration manuelle** n'a été exécutée ni consignée : le grand lot G1
+est `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`, **jamais `DEMONSTRATED`**.
+
+### Données de démonstration
+
+`scripts/prepare-attachment-demo.sh` (nouveau, idempotent, aucun secret) :
+génère des fichiers de pièce jointe **fictifs et valides** (PDF 1.4 /
+PNG 1×1 / JPEG minimal — magic bytes corrects) sous `build/demo-data/`
+(répertoire **non versionné**, `git check-ignore` confirmé). Les jeux
+`docs/demo-data/planning-demo.csv` / `apprenants-demo.csv` /
+`planning-conflicts-demo.csv` restent la source versionnée (marqueurs,
+aucun identifiant réel).
+
+### Validation finale G1-G
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw clean test` (base `esic_test` **recréée vierge** → Flyway `V1→V16`, `ddl-auto=validate`) | **`Tests run: 800, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** (799 → 800 : +1 `PriorityPathRecetteIntegrationTests`) ; `Successfully validated 16 migrations` |
+| `TZ=UTC ./mvnw clean test` | **800 / 0 — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **800 / 0 — BUILD SUCCESS** |
+| `npm test -- --watch=false` | **71 fichiers / 596 tests / 0 échec** (inchangé — aucun fichier front touché en G1-G) |
+| `npm run lint` / `npm run build` (**484,52 kB**) / `npm audit --audit-level=high` | verts, 0 alerte de budget, 0 vulnérabilité |
+| `git diff --check` | propre |
+| `git grep -nE '@Disabled\|@Ignore\|it\.skip\|\.only\('` sur `backend/src/test` `frontend/src` | **vide** |
+
+Aucune migration G1-G (schéma en **V16**). `.env` inchangé. Aucun
+`push`, aucune PR, aucune fusion.
+
+### Totaux consolidés de la session (G1-D.1 résiduel → G1-G)
+
+| Suite | Début de session | Fin G1-G |
+|---|---|---|
+| Back (`./mvnw clean test`, 3 fuseaux) | 772 (+17 `Notification*` après G1-D.1 résiduel) | **800 / 0** |
+| Front (`npm test`) | 574 | **596 / 0** |
+| `npm run build` | 484,81 kB | **484,52 kB** (0 alerte de budget) |
+| `npm audit --audit-level=high` | 0 vuln. | **0 vuln.** |
+| `ModularityTests` | vert | **vert** (13 modules — ajout de `dashboard`) |
+
 ## Documentation secondaire à reporter après G1
 
 > Section maintenue pour le report final (prompt §2). Aucun de ces
-> fichiers n'est modifié pendant la session ; les faits ci-dessous sont
-> à reporter au bloc G1-G / après G1.
+> fichiers n'a été modifié pendant la session (documents secondaires
+> gelés — prompt §2) ; les faits ci-dessous sont à reporter **après G1**.
+> **Chiffres de référence de fin de session : back `./mvnw clean test`
+> 800 / 0 (3 fuseaux, Flyway `V1→V16`), front `npm test` 596 / 0,
+> `npm run build` 484,52 kB (0 alerte de budget), `npm audit
+> --audit-level=high` 0 vulnérabilité, `ModularityTests` vert (13
+> modules).**
 
 | Fichier cible | Section | Statut / faits à reporter | À retirer (obsolète) | Chiffres | Démo |
 |---|---|---|---|---|---|
@@ -1817,34 +1907,35 @@ aucun test supprimé ni assertion affaiblie ; `.env` inchangé.
 | `README.md` / `docs/CURRENT-STATE.md` (G1-F) | modules ; capacités ; « Fonctionnalités partielles » | **13ᵉ module `dashboard`** ; `GET /api/v1/me/dashboard` typé par rôle (priorité serveur `DEC-G1-F`) ; cartes par rôle sous « Mon activité » du dashboard Angular ; cartes `PARTIAL` (justificatifs périmétrés RP, audit, planning actif, conflits) ; aucune migration | mention « dashboard générique unique » | back **799** / front **596** | `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` |
 | `docs/05-product-backlog.md` (G1-F) | §9bis | G1-F **terminé** ; dettes : justificatifs périmétrés RP, alternance `UNKNOWN`, audit récent, planning actif, conflits, remplaçant dans la carte formateur | « G1-F `NOT_STARTED` » | — | — |
 | `docs/10-journal-ia.md` (G1-F) | ligne de session | module `dashboard` + 4 ports + `findByInternalIds` ; rôle effectif serveur ; anti-N+1 testé ; cartes `PARTIAL` documentées | — | back 799 / front 596 | — |
+| `README.md` / `docs/CURRENT-STATE.md` (G1-G) | « Tests » / « Recette » / « Démonstration » | recette **API** de bout en bout livrée (`PriorityPathRecetteIntegrationTests`, parcours prioritaire + extensions G1) ; **e2e navigateur `PARTIAL`** (Playwright non ajouté, repli API) ; totaux **800 / 596** ; `scripts/prepare-attachment-demo.sh` (fictifs sous `build/`) | mentions « recette e2e à faire » | back **800 / 0** (3 fuseaux) / front **596 / 0** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`** — aucune manipulation manuelle consignée |
+| `docs/05-product-backlog.md` (G1-G) | §9bis | G1-G : recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `PARTIAL` (dette : Playwright ou script API en CI) ; démonstration manuelle à exécuter | « G1-G `NOT_STARTED` » | — | — |
+| `docs/10-journal-ia.md` (G1-G) | ligne de session | `PriorityPathRecetteIntegrationTests` ; `DEC-G1-011` repli (Playwright écarté, coût disproportionné) ; script `prepare-attachment-demo.sh` ; totaux 800 / 596 | — | back 800 / front 596 | non démontré manuellement |
+| `docs/11-guide-demonstration.md` (G1-G) | scénario | le parcours rejouable est celui de `PriorityPathRecetteIntegrationTests` (API) ; pour la démo **manuelle**, générer les pièces jointes via `scripts/prepare-attachment-demo.sh` ; qualifier chaque étape « automatisée (IT) » vs « à démontrer manuellement » | — | — | statut manuel à consigner le jour J |
+| `docs/12-guide-utilisateur.md` (G1-G) | rôle par rôle | ajouter la section « Tableau de bord » (cartes par rôle sous « Mon activité », cartes `PARTIAL`) ; renvoyer la pièce jointe de justificatif au §`STUDENT` / examinateur (déjà noté en G1-E) | — | — | — |
 
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : `feat(frontend): ajouter les pièces jointes aux
-  justificatifs` (`5d5f451`), puis le commit doc G1-E, puis **G1-F**.
+- **Session terminée à la fin de G1-G.** Blocs G1-D.1 résiduel → G1-E →
+  G1-F → G1-G livrés et commités. **Ne pas dépasser G1-G.** Rien n'est
+  poussé ; aucune PR ; aucune fusion.
 - **Chaîne de commits de la session** (parent `d7a7d14`) :
-  `31ffc70` fix(notification) classification erreurs d'idempotence →
-  `de972f8` docs(g1) →
-  `1835532` feat(justification) orchestrer et exposer les pièces jointes →
-  `5d5f451` feat(frontend) pièces jointes aux justificatifs →
-  (doc G1-E) → **G1-F à démarrer**.
-- **Working tree** : propre après chaque commit de checkpoint.
-- **Bloc courant** : **G1-F `IMPLEMENTED_FULL_SUITE_GREEN`** (module
-  `dashboard` livré back + front). **Prochaine sous-tâche exacte** :
-  **G1-G** — recette du parcours produit prioritaire (import apprenants →
-  import planning → simulation → publication → séances → ouverture →
-  émargement → rapport) + extensions G1 (annulation/remplacement →
-  notification → justificatif+pièce → décision → dashboard). Étapes :
-  audit de clôture (`G1_IMPLEMENTATION_PROGRESS.md`, traçabilité, tests
-  A-F, scripts/données de démo, routes prioritaires) ; corrections
-  transverses par commit ciblé ; recette automatisée — évaluer Playwright
-  (`DEC-G1-011`, vérifier compat Node/Angular 21 + `npm audit`), sinon
-  repli script API / `@SpringBootTest` bout en bout (statut `PARTIAL`
-  pour l'e2e navigateur) ; données de démo fictives sous `build/` ; tests
-  de recette prioritaires back + front ; traçabilité finale ;
-  section « Documentation secondaire à reporter après G1 » complétée.
-  **Ne pas dépasser G1-G. Aucun push, aucune PR, aucune fusion.**
+  `31ffc70` fix(notification) classification des erreurs d'idempotence ·
+  `de972f8` docs(g1) ·
+  `1835532` feat(justification) orchestrer et exposer les pièces jointes ·
+  `5d5f451` feat(frontend) pièces jointes aux justificatifs ·
+  `86d946d` docs(g1) livraison G1-E ·
+  `1eb5e9f` feat(dashboard) agrégats périmétrés par rôle ·
+  `e80674a` feat(frontend) tableaux de bord par rôle ·
+  `206f292` docs(g1) livraison G1-F ·
+  `test(e2e)` + `docs(g1)` finalisation G1-G.
+- **Working tree** : propre après chaque commit.
+- **Prochaine priorité produit hors périmètre de cette session** :
+  démonstration **manuelle** enregistrée (statut `DEMONSTRATED`) ; e2e
+  navigateur Playwright si l'environnement le permet en CI ; report des
+  documents secondaires (README, `docs/CURRENT-STATE.md`, `docs/05`,
+  `docs/10`, `docs/11`, `docs/12`) — cf. section « Documentation
+  secondaire à reporter après G1 » ci-dessus.
 - **Décisions tranchées (G1-E, checkpoints 2-4)** : voir la section
   « Checkpoints 2-4 » ci-dessus. En bref — port `store(String storageKey,
   PendingUpload)` + `newStorageKey()` (clé persistée `PENDING_STORAGE`
@@ -1860,14 +1951,14 @@ aucun test supprimé ni assertion affaiblie ; `.env` inchangé.
   `PENDING` uniquement) ; rétention pièces `À_DÉFINIR` (`R-G1-30`).
 - **Fichiers non terminés** : aucun (chaque commit cohérent — pas de
   coquille vide, pas de `501`).
-- **Tests verts** : back **792/0** (défaut `Europe/Paris`) ; `TZ=UTC`
-  ciblé `Justification*,Attendance*,Notification*,ModularityTests` →
-  **127/0 — BUILD SUCCESS** ; front **591/0** ; `lint` / `build`
-  (484,81 kB) / `audit` verts.
+- **Tests verts (fin G1-G)** : back **800/0** (`./mvnw clean test`, 3
+  fuseaux, base `esic_test` recréée vierge → Flyway `V1→V16`) ; front
+  **596/0** ; `lint` / `build` (484,52 kB, 0 alerte de budget) / `audit`
+  (0 vuln.) verts ; `ModularityTests` vert (13 modules).
 - **Tests rouges** : aucun.
-- **Migrations** : schéma en **V16** (consommée). **V17 libre** — index de
-  couverture des tableaux de bord G1-F *uniquement si* un test de perf le
-  justifie (`DEC-G1-010`), sinon non créée.
+- **Migrations** : schéma en **V16** (consommée). **V17 non créée** —
+  aucun index de perf ne s'est avéré nécessaire pour G1-F (`DEC-G1-010`,
+  test anti-N+1 passant sans).
 - **Décisions tranchées (G1-E checkpoint 1)** : port public
   `attendance.JustificationFileStorage` (le métier ne dépend jamais de
   `java.nio.file`) ; adaptateur local (clé opaque dispersée, déplacement

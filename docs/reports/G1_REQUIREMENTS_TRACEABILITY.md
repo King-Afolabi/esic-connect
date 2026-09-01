@@ -54,7 +54,7 @@
 | G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) | **EF-NOTIF-001 `IMPLEMENTED_AND_TESTED`** ; **EF-NOTIF-002 / RG-033 `PARTIAL`** (audit G1-D.1) — module `notification` étendu (`V15`), listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant (**+ fin de remplacement**, G1-D.1), idempotence `dedup_key`, isolation par destinataire, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular (liens en liste blanche par rôle). Audience **formateur uniquement** ; apprenants / RP = dette G1-D-AUDIENCE ; livraison **best effort** sans reprise = dette G1-D-OUTBOX. Voir §5bis + §5ter. |
 | G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010, DEC-G1-F | `PARTIAL` (dashboard générique unique) | **`IMPLEMENTED_AND_TESTED`** — module `dashboard`, `GET /api/v1/me/dashboard` typé par rôle (rôle effectif décidé serveur, priorité fixe), agrégats bornés via ports publics, périmètre serveur (`STUDENT` = ses données AC-017, `TEACHER` = ses séances, RP = `AcademicScopeDirectory`), anti-N+1 testé (manager). Cartes `PARTIAL` : justificatifs périmétrés RP / alternance `UNKNOWN`, dernières opérations d'audit, planning actif, conflits (non exposées). Front : cartes par rôle sous « Mon activité ». Voir §6bis. |
 | G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | **`IMPLEMENTED_AND_TESTED`** — dépôt owner + endpoints + séquence base/fichier avec compensation + réconciliation `@Scheduled` + téléchargement sécurisé (owner + examinateur) + notification au propriétaire + écrans. `V16` consommée. **Antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; rétention pièces `À_DÉFINIR` (`R-G1-30`) ; pas de remplacement direct (retrait puis redépôt). Voir §7ter. |
-| G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | `PARTIAL` — jeux de données `planning-demo.csv` / `planning-conflicts-demo.csv` ajoutés ; docs `CURRENT-STATE` / README / ce fichier mis à jour ; recette e2e complète + `docs/11` restent à faire |
+| G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | **`IMPLEMENTED_AND_TESTED`** pour la recette **API** de bout en bout (`PriorityPathRecetteIntegrationTests`, parcours prioritaire + extensions G1) ; **e2e navigateur `PARTIAL`** (Playwright non ajouté, repli API livré) ; **aucune démonstration manuelle** ⇒ G1 global `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`. Voir §8bis. |
 
 ---
 
@@ -342,6 +342,17 @@ le **technique** (`PENDING_STORAGE` orphelins), pas le métier.
 | AC-007, AC-008 | CDC §45 | Rejoués de bout en bout (API + e2e si Playwright) |
 | AC-017 | CDC §45 | Rejoué : accès croisé apprenant refusé |
 | DEC-G1-011 | `G1_ARCHITECTURE_DECISIONS.md` | Décision e2e (Playwright vs démonstration API automatisée) |
+
+### 8bis. Statut après livraison G1-G (1er septembre 2026)
+
+| Élément | Statut | Justification vérifiée dans le code / les tests |
+|---|---|---|
+| CDC §47.2 (recette bout en bout **avec planning**) | **`IMPLEMENTED_AND_TESTED`** (API) | `PriorityPathRecetteIntegrationTests#theEndToEndPriorityPathAndG1ExtensionsReplaySuccessfully` : référentiel → import apprenants CSV (simulation → confirmation → 3 comptes) → import planning CSV (**AC-007** : simulation ⇒ 0 séance) → publication (version 1, 2 séances) → le formateur consulte / ouvre / émet un jeton → un apprenant actif inscrit émarge → rapport classe + **export CSV** (`text/csv`) → annulation d'une séance → **notification** `SESSION_CANCELLED` du formateur → **remplacement** de formateur → justificatif + **pièce jointe** → acceptation → **notification** `JUSTIFICATION_ACCEPTED` du propriétaire + téléchargement de la pièce par l'examinateur → **tableaux de bord** `ADMINISTRATION` / `TEACHER` / `STUDENT`. |
+| AC-007 | **`IMPLEMENTED_AND_TESTED`** (rejoué) | assertion « après simulation, `planning_slot_public_id` séances = 0 » puis « après publication = 2 ». |
+| AC-008 | `IMPLEMENTED_AND_TESTED` (couvert par `PlanningPublicationIntegrationTests`) | non re-rejoué dans la recette (une seule publication) — versionnement N/N+1 testé au bloc G1-B. |
+| AC-017 | `IMPLEMENTED_AND_TESTED` | couvert par `DashboardIntegrationTests` (dashboard `STUDENT` = ses données) + `Attendance*` / `Justification*` (accès croisé → `404`). |
+| DEC-G1-011 (e2e) | **`PARTIAL`** — e2e **navigateur non livré** | **Playwright n'est pas ajouté** : dépendance lourde + téléchargement de navigateur non fiable dans l'environnement (critère « risque / coût disproportionné » de `DEC-G1-011`). **Repli livré** : `PriorityPathRecetteIntegrationTests` (`@SpringBootTest`, appels HTTP réels de bout en bout). Le e2e **navigateur** reste `PARTIAL`. Aucune démonstration **manuelle** n'a été exécutée ⇒ le grand lot G1 est `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`, jamais `DEMONSTRATED`. |
+| CDC §46 (agrégation) | **`IMPLEMENTED_AND_TESTED`** | totaux finaux consignés dans `G1_IMPLEMENTATION_PROGRESS.md` § « G1-G ». |
 
 ---
 

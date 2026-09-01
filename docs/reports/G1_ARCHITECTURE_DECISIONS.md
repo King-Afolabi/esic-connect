@@ -1000,6 +1000,34 @@ dans `G1_FINAL_REPORT.md`.
 
 **Impact déploiement.** Aucun (outil de test).
 
+### Révision à la livraison G1-G (1er septembre 2026) — **repli retenu**
+
+**Évaluation Playwright.** Environnement : Node 24.13, Angular 21.2,
+Vitest 4, aucune dépendance e2e. Ajouter `@playwright/test` implique une
+**dépendance lourde** et le **téléchargement d'un navigateur Chromium**,
+non fiable dans l'environnement d'exécution non interactif de cette
+session. Le critère « risque / coût disproportionné » de `DEC-G1-011`
+est rempli : **Playwright n'est pas ajouté**.
+
+**Repli livré (option « démonstration API automatisée » de
+`DEC-G1-011`).** `backend/.../recette/PriorityPathRecetteIntegrationTests`
+(`@SpringBootTest`, `TestRestTemplate`) rejoue **par appels HTTP réels**
+le parcours produit prioritaire (import apprenants → import planning →
+simulation `AC-007` → publication → séances → ouverture → émargement →
+rapport + export CSV) **puis** les extensions G1 (annulation →
+notification · remplacement · justificatif + pièce jointe → acceptation →
+notification propriétaire · tableaux de bord par rôle). Un seul
+navigateur, aucune donnée réelle : comptes `esic-connect.test` /
+`example.test`, PDF fictif inline.
+
+**Conséquence de traçabilité.** Le e2e **navigateur** reste `PARTIAL` —
+**non livré**. Aucune démonstration **manuelle** n'a été exécutée ni
+consignée ⇒ le grand lot G1 est
+`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`, **jamais `DEMONSTRATED`**.
+`scripts/prepare-attachment-demo.sh` (nouveau) génère des fichiers de
+pièce jointe fictifs (PDF / PNG / JPEG valides) sous `build/demo-data/`
+(non versionné, idempotent) pour une future démonstration manuelle.
+
 ---
 
 ## DEC-G1-012 — Stratégie de migrations
