@@ -146,7 +146,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-C.3 | Audit correctif du bloc G1-C | `IMPLEMENTED_FULL_SUITE_GREEN` — lecture historique `CANCELLED` (`isHistoricallyReadable`), remplaçant actif visible en liste, période vs séance (`422 …OUTSIDE_SESSION`), audit + purge Redis `AFTER_COMMIT`, correction doc Flyway. Back **735/0** (3 fuseaux), front **559/0**. | `fix(coursesession): consolider l'historique et les droits du remplaçant` + `docs(g1): corriger les garanties transactionnelles et Flyway` |
 | G1-D | Notifications métier persistantes | `IMPLEMENTED_FULL_SUITE_GREEN` — module `notification` étendu (V15, table `notification`), listeners `@TransactionalEventListener(AFTER_COMMIT)` sur `PlanningPublishedEvent` + `CourseSessionChangeEvent` (`CANCELLED` / `SUBSTITUTION_*`), idempotence `dedup_key`, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular. Destinataires = **formateurs** (principal + remplaçants actifs) ; apprenants / RP = prolongement documenté. Back **743/0** (3 fuseaux), front **570/0**. | `feat(notification): créer le modèle de notifications` + `feat(notification): ajouter la boîte de notifications persistantes` + `feat(frontend): ajouter le centre de notifications` |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
-| G1-E | Pièces jointes des justificatifs | `NOT_STARTED` | — |
+| G1-E | Pièces jointes des justificatifs | `IN_PROGRESS` — **checkpoint 1 « schéma + modèle + stockage »** livré et testé (V16 `justification_attachment`, port `JustificationFileStorage` + adaptateur local, validateur magic-bytes) ; endpoints REST + séquence base/fichier avec compensation + écran d'upload = checkpoints suivants | `feat(justification): créer le stockage sécurisé des pièces jointes` |
 | G1-G | Recette globale, e2e, documentation finale | `NOT_STARTED` | — |
 
 ## Livrables G1-0
@@ -1420,26 +1420,169 @@ des notifications`.
 - Pas de **préférences**, pas de **push PWA** ni d'**email métier**.
 - Pas de test e2e navigateur (specs de composant + IT `@SpringBootTest`).
 
+## G1-E — 1er septembre 2026
+
+Pièces jointes des justificatifs d'absence (EF-JUS-001, EF-JUS-002,
+CDC §21.5, RG-071/072/073/075/076 ; DEC-G1-008 / DEC-G1-009). **Découpé
+en checkpoints** (motif G1-B). Commit du checkpoint 1 :
+`feat(justification): créer le stockage sécurisé des pièces jointes`.
+
+### Audit documentaire (avant code)
+
+| Réf | Source | Portée G1-E |
+|---|---|---|
+| EF-JUS-001 | CDC §44 (`SHOULD`) | Déposer un justificatif **avec** pièce jointe |
+| EF-JUS-002 | CDC §44 (`SHOULD`) | Valider / refuser (déjà livré sans fichier ; ajoute le téléchargement sécurisé de la pièce par l'examinateur) |
+| RG-071 | CDC §43 | Taille max **5 Mo** → `app.attendance.justification-max-file-bytes` (défaut `5242880`), rejet pendant le flux |
+| RG-072 | CDC §43 | Formats **JPEG / PNG / PDF** uniquement → liste blanche + magic bytes |
+| RG-073 | CDC §43 | Refus motivé (déjà en place, `AttendanceJustificationService.review`) |
+| RG-075 / RG-076 | CDC §43 | `ACCEPTED ⇒ ABSENT → EXCUSED_ABSENCE`, historique conservé (déjà en place, non régressé) |
+| CDC §21.5 | — | vérif extension **et** type **et** magic bytes ; nom interne ; hors répertoire public ; pas d'exécution ; anti-traversal ; antivirus « prévu » |
+| MDD §21 | — | métadonnées en base, **contenu jamais en base** |
+
+**Décisions du checkpoint (DEC-G1-E-\*)** :
+- **`DEC-G1-E-STORAGE`** : port public
+  `com.esic.connect.attendance.JustificationFileStorage`
+  (`store` / `open` / `delete`, records `PendingUpload` / `StoredRef`,
+  `JustificationFileStorageException`) — le métier ne dépend jamais de
+  `java.nio.file`. Adaptateur G1 :
+  `LocalFilesystemJustificationFileStorage` (clé opaque dispersée
+  `aa/bb/<uuid>`, **jamais** dérivée du nom client ; écriture dans
+  `<base>/tmp` puis **déplacement atomique** — repli non-atomique
+  documenté si le FS ne le supporte pas ; **taille appliquée pendant le
+  flux** ; **SHA-256 calculé pendant l'écriture** ; nettoyage du
+  temporaire sur toute erreur — aucun fichier partiel ; garde
+  anti-traversal sur `open` / `delete`). Répertoire configurable
+  (`app.attendance.justification-storage-path`, défaut
+  `${UPLOAD_DIRECTORY}/justifications` — **hors webroot**).
+- **`DEC-G1-E-VALIDATE`** : `JustificationFileSafetyValidator` (pur) —
+  extension ∈ {`.pdf`, `.jpg`, `.jpeg`, `.png`} ; `Content-Type` déclaré
+  dans une liste tolérée (ou absent) ; magic bytes `%PDF-` / `FF D8 FF` /
+  `89 50 4E 47 0D 0A 1A 0A` → **type re-dérivé du contenu**, jamais celui
+  déclaré ; rejet ZIP / OLE2 (polyglotte) ; **cohérence extension ↔
+  contenu** ; nom d'origine assaini (basename, sans caractère de
+  contrôle, borné 255).
+- **`DEC-G1-E-ANTIVIRUS`** : aucun moteur antivirus n'existe dans
+  l'architecture ⇒ **non implémenté** ; le contrôle structurel
+  (magic bytes + rejet conteneur) est livré, l'antivirus reste une
+  abstraction à ajouter (`FileSafetyScanner`) — **on n'écrit jamais
+  « fichier garanti sans malware »**.
+- **`DEC-G1-E-STATUS`** : `justification_attachment.status ∈
+  {PENDING_STORAGE, STORED, DELETED}` (DEC-G1-009). L'API ne renverra
+  jamais une pièce `PENDING_STORAGE` ; une tâche de réconciliation
+  nettoiera les `PENDING_STORAGE` anciennes et les fichiers orphelins
+  (checkpoint suivant).
+
+### Checkpoint 1 — schéma + modèle + stockage (`IMPLEMENTED_TARGETED_TESTS_GREEN`)
+
+- Migration **`V16__create_justification_attachment_table.sql`** — table
+  `justification_attachment` (`public_id` UNIQUE, `justification_id` FK
+  `RESTRICT` → `attendance_justification`, `original_file_name`,
+  `storage_key` UNIQUE, `content_type` `CHECK IN`
+  {`application/pdf`,`image/jpeg`,`image/png`}, `size_bytes CHECK > 0`,
+  `sha256 CHAR(64)`, `status CHECK IN {PENDING_STORAGE,STORED,DELETED}`,
+  `created_by_id` FK `RESTRICT` → `user_account`, `stored_at`,
+  `deleted_at`, `version`, colonne générée `active_attachment_key` +
+  `UNIQUE` = **une seule pièce active par justificatif**, index
+  `(status, created_at)` et `(justification_id)`). Additive. Aucune
+  donnée métier. Schéma **en V16**.
+- Back : `JustificationAttachment` (entité `attendance.internal`),
+  `JustificationAttachmentStatus`, `JustificationAttachmentRepository`
+  (dont `findByStatusAndCreatedAtBefore` pour la réconciliation à
+  venir), `JustificationAttachmentValidationException` (+ `Kind`),
+  `JustificationFileSafetyValidator` (pur), port public
+  `attendance.JustificationFileStorage` (+ `…Exception`), adaptateur
+  `LocalFilesystemJustificationFileStorage` (`@Component`).
+- Config : `application.yml` `app.attendance.justification-storage-path`
+  / `justification-max-file-bytes` ; `application-test.yml` pointe sous
+  `${java.io.tmpdir}` (jetable) ; `.env.example` documente
+  `JUSTIFICATION_STORAGE_PATH` / `JUSTIFICATION_MAX_FILE_BYTES`
+  (commentés, sans valeur — `.env` **non modifié**).
+- **Aucun endpoint, aucun écran** à ce checkpoint (pas de coquille vide,
+  pas de `501`).
+- Tests ajoutés :
+  - `JustificationFileSafetyValidatorTests` (13, purs) : PDF / JPEG /
+    PNG acceptés + type re-dérivé, fichier vide, taille dépassée,
+    extension interdite, **double extension dangereuse**, type déclaré
+    hors liste, **ZIP déguisé en PDF**, contenu non reconnu, `.png`
+    portant un PDF, **assainissement `../../etc/passwd.pdf → passwd.pdf`** ;
+  - `LocalFilesystemJustificationFileStorageTests` (8, `@TempDir`) :
+    `store→open` round-trip (hash + taille), stockage **hors du
+    répertoire de staging** sans résidu, flux vide rejeté sans fichier,
+    **limite de taille pendant le flux sans fichier partiel**, `open`
+    inconnu → `NOT_FOUND`, **traversal `../` / chemin absolu rejetés**,
+    `delete` idempotent, construction sans chemin refusée ;
+  - `JustificationAttachmentSchemaIntegrationTests` (2, `@SpringBootTest`) :
+    contexte démarre avec **Flyway `V1→V16` + `ddl-auto=validate`**,
+    table + colonne générée présentes, port câblé sur l'adaptateur local
+    (round-trip réel via le bean).
+- Validation : `./mvnw clean test` → **749 → 772, 0 échec — BUILD
+  SUCCESS** dans les **3 fuseaux** (défaut `Europe/Paris`, `TZ=UTC`,
+  `TZ=Europe/Paris`) ; base `esic_test` recréée vierge → `Successfully
+  validated 16 migrations` ; `ModularityTests` vert (le port est dans le
+  package public `attendance`, l'adaptateur et le validateur dans
+  `attendance.internal` — aucune frontière franchie). Front **inchangé**
+  (aucun fichier front touché ; dernier vert **574/0**).
+
+### Non couvert (checkpoints G1-E suivants)
+
+- `AttendanceJustificationService` : dépôt d'une pièce (validation →
+  temporaire → `PENDING_STORAGE` en transaction → `store` after-commit →
+  `STORED`), remplacement, suppression logique ; **compensation**
+  (rollback SQL après `store` ⇒ suppression du fichier ; échec `store`
+  ⇒ pas de métadonnée ; tâche `@Scheduled` de réconciliation des
+  `PENDING_STORAGE` / `DELETED`).
+- Endpoints `POST /api/v1/attendance/justifications` (multipart, avec
+  pièce), `.../{id}/attachment` (GET métadonnées),
+  `.../{id}/attachment/download` (stream + `Content-Disposition: attachment`
+  + `X-Content-Type-Options: nosniff`, type re-dérivé) ; contrôle de
+  propriété (`STUDENT` = son justificatif) / de périmètre
+  (examinateur), `404` plutôt que fuite transverse.
+- Audit `AFTER_COMMIT` (pièce déposée / remplacée / supprimée) sans nom
+  ni chemin ; notification à l'apprenant sur accepté / refusé (si
+  l'audience G1-D.1 le permet).
+- Front : upload étudiant (contraintes taille / type, progression,
+  erreurs `413` / `415` / `409`), téléchargement, actions gestionnaire.
+- `DEC-G1-E-ANTIVIRUS` : abstraction `FileSafetyScanner` + politique
+  documentée ; antivirus réel `NOT_IMPLEMENTED`.
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : chaîne G1-D.1 :
-  `fix(notification): fiabiliser les destinataires et l'idempotence`
-  (`e43b0c8`) → `docs(g1): préciser les garanties et limites des
-  notifications`. Au-dessus de G1-D
-  (`feat(frontend): ajouter le centre de notifications`).
+- **HEAD attendu** : chaîne G1-D.1
+  (`fix(notification): fiabiliser les destinataires et l'idempotence`
+  `e43b0c8` → `docs(g1): préciser les garanties et limites des
+  notifications`) **puis G1-E checkpoint 1**
+  (`feat(justification): créer le stockage sécurisé des pièces jointes`).
 - **Working tree** : propre après commit.
-- **Bloc courant** : **G1-D.1 terminé et consolidé** (destinataire
-  `SUBSTITUTION_ENDED` corrigé, idempotence par destinataire durcie,
-  liens front en liste blanche, compteur sûr, traçabilité honnête :
-  `EF-NOTIF-002` / `RG-033` → `PARTIAL`). Bloc suivant : **G1-E** —
-  pièces jointes des justificatifs (migration `V16`, port
-  `attendance.JustificationFileStorage`, DEC-G1-008 / DEC-G1-009).
-- **Fichiers non terminés** : aucun.
-- **Tests verts** : back **749/0** (3 fuseaux) ; front **574/0** ;
-  `ModularityTests` vert.
+- **Bloc courant** : **G1-E `IN_PROGRESS`** — checkpoint 1
+  (« schéma + modèle + stockage ») livré et testé. **Sous-tâche
+  suivante exacte** : `AttendanceJustificationService` — dépôt d'une
+  pièce (validation → temporaire → `PENDING_STORAGE` en transaction →
+  `store` after-commit → `STORED`), compensation (rollback SQL ⇒
+  suppression fichier ; échec `store` ⇒ pas de métadonnée), tâche
+  `@Scheduled` de réconciliation ; puis endpoints multipart +
+  téléchargement (`Content-Disposition: attachment` + `nosniff`), puis
+  audit + notifications, puis écran d'upload Angular. Voir « G1-E —
+  1er septembre 2026 » § « Non couvert ».
+- **Fichiers non terminés** : aucun (checkpoint cohérent — pas de
+  coquille vide, pas de `501`).
+- **Tests verts** : back **772/0** (3 fuseaux : défaut, `TZ=UTC`,
+  `TZ=Europe/Paris`) ; front **574/0** (inchangé, aucun fichier
+  front touché depuis G1-D.1) ; `ModularityTests` vert.
 - **Tests rouges** : aucun.
-- **Migrations** : schéma en **V15**. V16 libre pour G1-E.
+- **Migrations** : schéma en **V16**. V17 libre (index de couverture des
+  tableaux de bord G1-F si un test de perf le justifie — DEC-G1-010).
+- **Décisions tranchées (G1-E checkpoint 1)** : port public
+  `attendance.JustificationFileStorage` (le métier ne dépend jamais de
+  `java.nio.file`) ; adaptateur local (clé opaque dispersée, déplacement
+  atomique, taille pendant le flux, SHA-256 pendant l'écriture,
+  anti-traversal) ; validateur pur magic-bytes + type re-dérivé + rejet
+  conteneur + cohérence extension↔contenu ; `status ∈
+  {PENDING_STORAGE,STORED,DELETED}` (compensation DEC-G1-009,
+  implémentée au checkpoint suivant) ; **antivirus `NOT_IMPLEMENTED`**
+  (abstraction seule, jamais « garanti sans malware ») ; répertoire
+  configurable **hors webroot** ; `.env` **non modifié**.
 - **Décisions tranchées (G1-D.1)** : audience notifications **formateur
   uniquement** assumée `PARTIAL` (pas d'audience inventée ; dette
   G1-D-AUDIENCE) ; livraison **« au mieux » après commit** sans reprise

@@ -459,7 +459,7 @@ iot            → attendance, coursesession, shared
 > | `enrollment` | §7.3 | V7 |
 > | `alternation` | §7.4 | V8 |
 > | `coursesession` | §7.7 — séances manuelles **et** issues d'un planning publié (G1-B) ; cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C) ; remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
-> | `attendance` | §7.8 (+ le justificatif métier **sans fichier** de §7.9 et une partie du reporting de §7.12) | V9, V10 |
+> | `attendance` | §7.8 (+ le justificatif métier de §7.9 — **socle des pièces jointes** livré en G1-E cp1 : port `JustificationFileStorage`, contenu hors base / hors webroot ; et une partie du reporting de §7.12) | V9, V10, V16 |
 > | `studentimport` | **nouveau** — import CSV contrôlé des apprenants (non prévu explicitement en §7 ; parcours d'import de §7.3) | V11 |
 > | `notification` | §7.11 — email d'activation **+ centre de notifications internes persistantes** (G1-D : table `notification`, listeners `AFTER_COMMIT`, API `/api/v1/me/notifications`) ; **pas de file persistante / DLQ, pas de push, audience formateur uniquement** | V15 |
 > | `audit` | §7.13 | V1 |

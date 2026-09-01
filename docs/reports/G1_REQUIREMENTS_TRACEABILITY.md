@@ -282,6 +282,19 @@ une donnée réelle et arrêtée dans **DEC-G1-010**.
 | — | CDC §21.5 « Sécurité des fichiers » (vérifier extension / MIME / taille, nom interne, hors répertoire public, pas d'exécution, anti-traversal) | Durcissement fichier | tests dédiés (voir ci-dessus) |
 | AC-014 | CDC §45 (`AC-014 — Justificatif` : « Un justificatif accepté doit transformer `ABSENT` en `EXCUSED`. ») | Transition d'assiduité | non régressé par l'ajout de fichier |
 
+### 7bis. Statut après checkpoint 1 de G1-E (1er septembre 2026)
+
+Bloc `IN_PROGRESS` — checkpoint « schéma + modèle + stockage » livré.
+
+| ID | Statut | Justification vérifiée dans le code |
+|---|---|---|
+| EF-JUS-001 | **`PARTIAL`** (socle livré) | `V16` `justification_attachment` (métadonnées seules) ; port public `attendance.JustificationFileStorage` + `LocalFilesystemJustificationFileStorage` (clé opaque dispersée, déplacement atomique, **taille appliquée pendant le flux**, SHA-256 pendant l'écriture, anti-traversal, hors webroot) ; `JustificationFileSafetyValidator` (extension + type déclaré + **magic bytes** → type re-dérivé ; rejet ZIP/OLE2 ; cohérence extension↔contenu ; nom assaini). Tests : `JustificationFileSafetyValidatorTests` (13), `LocalFilesystemJustificationFileStorageTests` (8), `JustificationAttachmentSchemaIntegrationTests` (2). **Manque** : endpoint de dépôt multipart + séquence base/fichier avec compensation (DEC-G1-009), tâche de réconciliation. |
+| EF-JUS-002 | `IMPLEMENTED_AND_TESTED` (cycle d'examen, sans fichier) | inchangé ; le **téléchargement sécurisé** de la pièce par l'examinateur arrive au checkpoint endpoints. |
+| RG-071 | `PARTIAL` | `app.attendance.justification-max-file-bytes` (défaut `5242880`), rejet `TOO_LARGE` **pendant le flux** (testé au niveau du stockage) ; `413` HTTP au checkpoint endpoints. |
+| RG-072 | **`IMPLEMENTED_AND_TESTED`** (validateur) | liste blanche `.pdf`/`.jpg`/`.jpeg`/`.png` + magic bytes `%PDF-` / `FF D8 FF` / PNG ; tout autre contenu → `CONTENT_NOT_RECOGNISED` ; ZIP/OLE2 → `ARCHIVE_REJECTED` ; `.png` portant un PDF → `EXTENSION_CONTENT_MISMATCH`. |
+| RG-073 / RG-075 / RG-076 / AC-014 | `IMPLEMENTED_AND_TESTED` | inchangés, non régressés. |
+| CDC §21.5 (durcissement fichier) | `PARTIAL` | extension + type + magic bytes + taille + nom interne + hors répertoire public + anti-traversal **livrés et testés** ; `Content-Disposition: attachment` + `nosniff` = checkpoint endpoints ; **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS` — abstraction seule, jamais « garanti sans malware »). |
+
 ---
 
 ## 8. G1-G — Recette globale, e2e, documentation

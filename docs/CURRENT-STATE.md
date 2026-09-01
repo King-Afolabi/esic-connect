@@ -44,7 +44,7 @@ finalisation se fait sur `chore/project-finalization-f2-f6`.
 | `enrollment` | profil apprenant, inscription, changement de classe historisé | V7 |
 | `alternation` | modèles de rythme, affectation historisée à une classe, exceptions individuelles, résolution `SCHOOL`/`COMPANY`/`UNKNOWN` | V8 |
 | `coursesession` | séance (création manuelle **ou** issue d'un planning publié — G1-B), cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C), points de contrôle multiples, remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
-| `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction / annulation, justificatif métier sans fichier, rapports + export CSV | V9, V10 |
+| `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction / annulation, justificatif métier (sans fichier) **+ stockage sécurisé des pièces jointes** (G1-E cp1 : port `JustificationFileStorage`, adaptateur local, validateur magic-bytes ; contenu hors base / hors webroot), rapports + export CSV | V9, V10, V16 |
 | `studentimport` | import CSV contrôlé des apprenants (lecture sécurisée, simulation, confirmation transactionnelle, purge) | V11 |
 | `notification` | email d'activation via SMTP local (Mailpit) **+ centre de notifications métier persistantes** (G1-D) : table `notification`, listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant, idempotence `dedup_key`, API `/api/v1/me/notifications` | V15 |
 | `audit` | piste d'audit `audit_event` alimentée par les événements métier | V1 |
@@ -71,9 +71,10 @@ V6  affectations pédagogiques V13 lien course_session ↔ créneau     [G1-B]
 V7  profils apprenant         V14 cycle de vie séances (CANCELLED,  [G1-C]
     + inscriptions                teacher_substitution)
                               V15 table notification                [G1-D]
+                              V16 justification_attachment          [G1-E]
 ```
 
-Schéma **en version 15**. `spring.jpa.hibernate.ddl-auto = validate`.
+Schéma **en version 16**. `spring.jpa.hibernate.ddl-auto = validate`.
 Aucune donnée métier insérée par une migration. V12/V13 corrigées en
 place à l'audit G1-B.1, en-tête de `V13` re-précisé au checkpoint G1-C.3
 (jamais poussées ; une base ayant appliqué l'ancienne forme ne se répare
@@ -185,7 +186,7 @@ enregistrée dans le dépôt.
 | Points de contrôle (EF-ATT-003) | N points de contrôle par séance | les 4 types nommés (`MORNING_ARRIVAL`…) et le calcul journée/demi-journée strict du cahier ne sont pas modélisés tels quels |
 | Retards (EF-ATT-005) | seuil unique `PT10M` → `LATE` | paliers 15 / 30 min, validation manuelle automatique après 30 min |
 | Alternance ↔ assiduité | contexte résolu, consommé par le reporting | pas de module `planning` : les « demi-journées attendues » reposent sur des séances exceptionnelles saisies à la main |
-| Justificatif (EF-JUS-001/002) | métadonnée métier + cycle d'examen | aucune pièce jointe (docs/02 §21) |
+| Justificatif (EF-JUS-001/002) | métadonnée métier + cycle d'examen ; **stockage sécurisé des pièces jointes** livré et testé (G1-E cp1 : `V16`, port + adaptateur local + validateur magic-bytes) | dépôt d'une pièce via l'API (service + compensation base/fichier), tâche de réconciliation, endpoints multipart + téléchargement (`nosniff`), audit / notification, écran d'upload — checkpoints G1-E suivants ; antivirus `NOT_IMPLEMENTED` |
 | Notifications (EF-NOTIF-001 `IMPLEMENTED_AND_TESTED` ; EF-NOTIF-002 / RG-033 `PARTIAL`) | email d'activation **+ centre in-app persistant** (G1-D + G1-D.1) : planning publié / séance annulée / remplaçant affecté / **remplacement terminé** → notifications after-commit pour les **formateurs** (principal + remplaçants `ACTIVE` + remplaçant tout juste terminé) ; idempotence `dedup_key` ; isolation par destinataire ; API `/api/v1/me/notifications` + cloche + centre Angular (liens en liste blanche par rôle) | notifications aux **apprenants / responsables pédagogiques** (dette G1-D-AUDIENCE), garantie de livraison / reprise (best effort après commit — dette G1-D-OUTBOX), email métier, push PWA, préférences par type, file persistante / DLQ, purge / rétention (`À_DÉFINIR`) |
 | Rapports « officiels » (docs/02 §24.5) | calcul demi-journées + export CSV | mise en page (logo ESIC, PDF, identifiant de document), export Excel |
 | OpenAPI | `/v3/api-docs` + `/swagger-ui` au runtime | pas d'`openapi.json` versionné (voir F3) |
@@ -453,9 +454,48 @@ Suites : back **743 → 749/0** (`Notification*` +6, 3 fuseaux ; Flyway
 `V1→V15` rejoué sur `esic_test` vierge), front **570 → 574/0**, `lint` /
 `build` (484,81 kB) / `audit` verts.
 
+### Bloc G1-E — pièces jointes des justificatifs : checkpoint 1 (1er septembre 2026)
+
+`IN_PROGRESS` — checkpoint « schéma + modèle + stockage »
+(`IMPLEMENTED_TARGETED_TESTS_GREEN`). Détail :
+[`G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md)
+§ « G1-E ».
+
+- Migration **`V16`** : table `justification_attachment` — **métadonnées
+  uniquement** (`storage_key` opaque unique jamais dérivée du nom
+  client, `content_type` re-dérivé des magic bytes ∈
+  {`application/pdf`,`image/jpeg`,`image/png`}, `size_bytes`, `sha256`,
+  `status ∈ {PENDING_STORAGE,STORED,DELETED}`, une seule pièce active
+  par justificatif via colonne générée). Le **contenu n'est jamais en
+  base**.
+- Port public `com.esic.connect.attendance.JustificationFileStorage`
+  (le métier ne dépend jamais de `java.nio.file`) + adaptateur
+  `LocalFilesystemJustificationFileStorage` : clé dispersée `aa/bb/<uuid>`,
+  écriture temporaire + **déplacement atomique**, taille appliquée
+  **pendant le flux**, SHA-256 calculé pendant l'écriture, **garde
+  anti-traversal**, répertoire configurable **hors webroot**
+  (`app.attendance.justification-storage-path`).
+- `JustificationFileSafetyValidator` (pur) : extension + type déclaré +
+  **magic bytes** (`%PDF-` / JPEG / PNG) → **type re-dérivé du contenu**,
+  rejet ZIP / OLE2, cohérence extension ↔ contenu, nom assaini.
+- **Antivirus : `NOT_IMPLEMENTED`** — aucun moteur dans l'architecture ;
+  contrôle structurel seul, jamais « garanti sans malware »
+  (`DEC-G1-E-ANTIVIRUS`).
+- **Aucun endpoint, aucun écran** à ce checkpoint. Restent : service de
+  dépôt + compensation base/fichier (DEC-G1-009), tâche de
+  réconciliation, endpoints multipart + téléchargement (`nosniff` +
+  `Content-Disposition: attachment`), audit / notifications, upload
+  Angular.
+- Tests ajoutés : back **+23** (`JustificationFileSafetyValidatorTests`
+  13, `LocalFilesystemJustificationFileStorageTests` 8,
+  `JustificationAttachmentSchemaIntegrationTests` 2). Suites : back
+  **749 → 772/0** (Flyway `V1→V16` rejoué sur `esic_test` vierge,
+  `ModularityTests` vert) ; front **inchangé** (574/0). `.env` non
+  modifié.
+
 Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
 finalisation F2) **reste d'actualité** tant que les blocs G1-E à G1-G
-ne sont pas livrés.
+ne sont pas complètement livrés.
 
 ## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)
 

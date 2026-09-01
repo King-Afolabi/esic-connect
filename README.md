@@ -33,7 +33,8 @@ Audit vérifiable et matrices d'exigences :
 Autres briques livrées : authentification JWT, administration des comptes
 et des rôles, invitation / activation par email (Mailpit), référentiels
 organisationnel et académique, périmètre pédagogique, inscriptions
-historisées, rythmes d'alternance, justificatif métier (sans fichier),
+historisées, rythmes d'alternance, justificatif métier (métadonnées ;
+**socle de stockage sécurisé des pièces jointes** livré — G1-E cp1),
 piste d'audit, **centre de notifications métier persistantes** (G1-D /
 G1-D.1 — planning publié / séance annulée / remplaçant affecté / remplacement
 terminé → notifications after-commit pour les formateurs, idempotentes,
@@ -71,8 +72,13 @@ implémentés** et ne doivent jamais être présentés comme livrés :
 - QR fixe de salle + contrôle réseau CIDR (référentiel présent, non
   consommé) ; scan caméra mobile (code court uniquement).
 - WebAuthn / passkeys, MFA TOTP, anti-bot (Turnstile).
-- Réclamations / messagerie, départ anticipé, justificatif avec pièce
-  jointe, import Excel `.xlsx` / multifeuille.
+- Réclamations / messagerie, départ anticipé, import Excel `.xlsx` /
+  multifeuille.
+- Justificatif **avec pièce jointe** : le socle est livré (G1-E cp1 —
+  `V16`, port `JustificationFileStorage`, validateur magic-bytes,
+  stockage hors base / hors webroot) ; le dépôt via l'API (compensation
+  base/fichier), le téléchargement sécurisé et l'écran d'upload sont les
+  checkpoints G1-E suivants ; **antivirus non implémenté**.
 - Service IA (FastAPI, mapping de colonnes, score d'anomalie).
 - IoT / MQTT / Raspberry Pi (broker Mosquitto démarré, **aucun code**).
 - Notifications : le centre in-app persistant est livré (G1-D / G1-D.1)
@@ -100,8 +106,8 @@ Liste complète et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md`
   `coursesession`, `attendance`, `studentimport`, `notification`,
   `audit`, `bootstrap`, `shared`. Frontières vérifiées par
   `ModularityTests`.
-- **Base** : MySQL 8, schéma géré **uniquement** par Flyway (`V1` → `V11`,
-  schéma en version 11), `ddl-auto: validate`.
+- **Base** : MySQL 8, schéma géré **uniquement** par Flyway (`V1` → `V16`,
+  schéma en version 16), `ddl-auto: validate`.
 - **Cache / données temporaires** : Redis 7 — consommé **uniquement**
   pour les jetons d'émargement.
 - **Front-end** : Angular 21.2 (standalone, zoneless, signaux, lazy
