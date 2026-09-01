@@ -60,6 +60,11 @@ app:
       # Origines de test pour HttpSecurityHeadersIntegrationTests /
       # la vérification CORS. `http://evil.example` n'est PAS listé.
       allowed-origins: http://localhost:4200,https://app.esic.test
+  attendance:
+    # Pièces jointes de justificatifs (bloc G1-E) : répertoire jetable
+    # sous le tmp de la JVM — jamais /data/uploads (non inscriptible en
+    # test). Les tests dédiés utilisent en plus @TempDir.
+    justification-storage-path: ${java.io.tmpdir}/esic-connect-justification-attachments-test
   activation:
     base-url: http://localhost:4200/activation
   mail:

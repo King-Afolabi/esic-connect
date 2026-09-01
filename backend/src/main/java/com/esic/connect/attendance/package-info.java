@@ -28,6 +28,16 @@
  * les rapports / exports CSV (déduction des absents, exclusion du
  * contexte d'alternance {@code COMPANY}).
  *
+ * <p>V16 (bloc G1-E) ajoute la <strong>pièce jointe</strong> d'un
+ * justificatif ({@code justification_attachment} : métadonnées en base,
+ * contenu <strong>hors base et hors webroot</strong> via le port public
+ * {@link com.esic.connect.attendance.JustificationFileStorage},
+ * adaptateur local {@code LocalFilesystemJustificationFileStorage}).
+ * Validation stricte avant écriture (extension, type déclaré, magic
+ * bytes, taille — {@code JustificationFileSafetyValidator}) et séquence
+ * base/fichier avec compensation (DEC-G1-009 : statut
+ * {@code PENDING_STORAGE → STORED → DELETED}).
+ *
  * <p>Dépendances inter-modules limitées aux ports publics :
  * {@link com.esic.connect.coursesession.CourseSessionDirectory} (séance,
  * points de contrôle, contrôle d'accès de lecture / gestion),

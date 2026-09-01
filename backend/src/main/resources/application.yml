@@ -86,6 +86,15 @@ app:
     # tranche). Doit rester >= 0 (le démarrage échoue sinon, voir
     # AttendanceService).
     late-threshold: ${ATTENDANCE_LATE_THRESHOLD:PT10M}
+    # Pièces jointes des justificatifs (bloc G1-E ; DEC-G1-008). Le
+    # CONTENU des fichiers est stocké HORS webroot, jamais en base. Le
+    # répertoire doit être accessible en écriture ; par défaut un
+    # sous-dossier de UPLOAD_DIRECTORY. Un déploiement avec système de
+    # fichiers éphémère doit monter un volume persistant (ou substituer
+    # un adaptateur objet — le métier ne dépend que du port).
+    justification-storage-path: ${JUSTIFICATION_STORAGE_PATH:${UPLOAD_DIRECTORY:/data/uploads}/justifications}
+    # Taille maximale d'une pièce jointe (octets ; CDC §43 RG-071 : 5 Mo).
+    justification-max-file-bytes: ${JUSTIFICATION_MAX_FILE_BYTES:5242880}
   activation:
     # Base du lien d'activation inséré dans l'email (front Angular à venir).
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}
