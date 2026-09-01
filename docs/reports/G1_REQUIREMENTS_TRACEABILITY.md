@@ -52,7 +52,7 @@
 | G1-B | Module `planning` complet | EF-PLAN-001, EF-PLAN-002, EF-PLAN-003, EF-PLAN-004, EF-PLAN-005, EF-PLAN-007, EF-SES-001, RG-016, RG-030..RG-035, AC-007, AC-008 | DEC-G1-001..006, DEC-G1-012 | `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) | **`IMPLEMENTED_AND_TESTED`** — module `planning`, V12/V13, simulation (T1), publication atomique + versionnement, port `PlanningSessionWriter`, écrans `/planning/**`. `EF-PLAN-003` (correction ligne à ligne) = **`PARTIAL`** (annulation + réimport, DEC-G1-003) ; `EF-PLAN-006` = `HORS_PÉRIMÈTRE_ASSUMÉ` ; `DEC-G1-006` (alternance) post-G1 |
 | G1-C | Cycle de vie avancé des séances | EF-SES-004, EF-SES-005, CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 | DEC-G1-004, DEC-G1-005 | `NOT_IMPLEMENTED` (séances exceptionnelles `PLANNED→OPEN→CLOSED` seulement) | `NOT_STARTED` |
 | G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) | **EF-NOTIF-001 `IMPLEMENTED_AND_TESTED`** ; **EF-NOTIF-002 / RG-033 `PARTIAL`** (audit G1-D.1) — module `notification` étendu (`V15`), listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant (**+ fin de remplacement**, G1-D.1), idempotence `dedup_key`, isolation par destinataire, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular (liens en liste blanche par rôle). Audience **formateur uniquement** ; apprenants / RP = dette G1-D-AUDIENCE ; livraison **best effort** sans reprise = dette G1-D-OUTBOX. Voir §5bis + §5ter. |
-| G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010 | `PARTIAL` (dashboard générique unique) | `NOT_STARTED` |
+| G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010, DEC-G1-F | `PARTIAL` (dashboard générique unique) | **`IMPLEMENTED_AND_TESTED`** — module `dashboard`, `GET /api/v1/me/dashboard` typé par rôle (rôle effectif décidé serveur, priorité fixe), agrégats bornés via ports publics, périmètre serveur (`STUDENT` = ses données AC-017, `TEACHER` = ses séances, RP = `AcademicScopeDirectory`), anti-N+1 testé (manager). Cartes `PARTIAL` : justificatifs périmétrés RP / alternance `UNKNOWN`, dernières opérations d'audit, planning actif, conflits (non exposées). Front : cartes par rôle sous « Mon activité ». Voir §6bis. |
 | G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | **`IMPLEMENTED_AND_TESTED`** — dépôt owner + endpoints + séquence base/fichier avec compensation + réconciliation `@Scheduled` + téléchargement sécurisé (owner + examinateur) + notification au propriétaire + écrans. `V16` consommée. **Antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; rétention pièces `À_DÉFINIR` (`R-G1-30`) ; pas de remplacement direct (retrait puis redépôt). Voir §7ter. |
 | G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | `PARTIAL` — jeux de données `planning-demo.csv` / `planning-conflicts-demo.csv` ajoutés ; docs `CURRENT-STATE` / README / ce fichier mis à jour ; recette e2e complète + `docs/11` restent à faire |
 
@@ -265,6 +265,22 @@ une donnée réelle et arrêtée dans **DEC-G1-010**.
 | ID | Source | Texte | Rôle dans G1-F |
 |---|---|---|---|
 | AC-017 | CDC §45 (`AC-017 — Sécurité` : « Un étudiant ne doit jamais consulter le rapport d'un autre étudiant. ») | Cloisonnement apprenant | Le dashboard `STUDENT` n'expose que les données de l'appelant ; test d'accès croisé |
+
+### 6bis. Statut après livraison G1-F (1er septembre 2026)
+
+Module `dashboard` livré. Commits `feat(dashboard): exposer les agrégats
+périmétrés par rôle` + `feat(frontend): ajouter les tableaux de bord par
+rôle`. Détail + matrice rôle × carte :
+`G1_IMPLEMENTATION_PROGRESS.md` § « G1-F ».
+
+| Élément | Statut | Justification vérifiée dans le code / les tests |
+|---|---|---|
+| CDC §25.1 (RP) | **`IMPLEMENTED_AND_TESTED`** (partiel) | classes du périmètre + séances à venir périmétrées (`AcademicScopeDirectory` → `findByInternalIds` en 1 requête, anti-N+1 testé). **`PARTIAL`** : justificatifs périmétrés / alternance `UNKNOWN` (renvoi vers « Suivi d'assiduité »). |
+| CDC §25.2 (administration) | **`IMPLEMENTED_AND_TESTED`** (partiel) | comptes par statut, justificatifs en attente global, imports récents, séances du jour. **`PARTIAL`** : dernières opérations d'audit (non exposées — éviter la divulgation d'`audit_event`). |
+| CDC §25.3 (formateur) | **`IMPLEMENTED_AND_TESTED`** | prochaine séance / séances à venir / à ouvrir (`findUpcomingForTeacher`, UUID public). Limite : séances où il n'est que **remplaçant** non incluses. |
+| CDC §25.4 (apprenant) | **`IMPLEMENTED_AND_TESTED`** | prochain cours / semaine + présences / retards / absences / justificatifs — **ses seules données** (AC-017, `aStudentGetsOnlyTheStudentSectionWithTheirOwnData`). |
+| AC-017 (cloisonnement) | **`IMPLEMENTED_AND_TESTED`** | `studentDigest(userPublicId)` + inscriptions actives de l'appelant uniquement ; DTO sans identifiant SQL ni e-mail. |
+| DEC-G1-010 (endpoint typé, agrégats bornés, sans N+1) | **`IMPLEMENTED_AND_TESTED`** | `GET /api/v1/me/dashboard`, `readOnly`, `COUNT` / `GROUP BY` / `Pageable`, compteur Hibernate `< 20` requêtes pour le dashboard manager. `V17` non créée (aucun index de perf justifié). |
 
 ---
 

@@ -147,7 +147,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-D | Notifications métier persistantes | `IMPLEMENTED_FULL_SUITE_GREEN` — module `notification` étendu (V15, table `notification`), listeners `@TransactionalEventListener(AFTER_COMMIT)` sur `PlanningPublishedEvent` + `CourseSessionChangeEvent` (`CANCELLED` / `SUBSTITUTION_*`), idempotence `dedup_key`, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular. Destinataires = **formateurs** (principal + remplaçants actifs) ; apprenants / RP = prolongement documenté. Back **743/0** (3 fuseaux), front **570/0**. | `feat(notification): créer le modèle de notifications` + `feat(notification): ajouter la boîte de notifications persistantes` + `feat(frontend): ajouter le centre de notifications` |
 | G1-D.1 | Correctif résiduel — classification des erreurs d'idempotence | `IMPLEMENTED_FULL_SUITE_GREEN` — `NotificationErrorClassifier` : seule une collision réellement attribuée à `uq_notification_dedup` = succès idempotent ; toute autre erreur (autre contrainte, `UnexpectedRollbackException` nue) = vraie erreur journalisée, destinataire suivant traité. `Notification*` **17/0**. | `fix(notification): préciser la classification des erreurs d'idempotence` (`31ffc70`) + `docs(g1): consigner le correctif …` (`de972f8`) |
 | G1-E | Pièces jointes des justificatifs | `IMPLEMENTED_FULL_SUITE_GREEN` — cp1 (schéma/modèle/stockage, `d7a7d14`) + cp2-4 : port `store(key,upload)` + `newStorageKey()`, séquence base/fichier avec compensation (`JustificationAttachmentStore` / `…Preparer` / `…Finalizer`), réconciliation `@Scheduled` bornée, endpoints owner + examinateur (`404` hors périmètre), téléchargement forcé + type re-dérivé + `nosniff` + `no-store`, multipart servlet 6 Mo, notification au **propriétaire** (`JustificationReviewedEvent`), écrans (`my-attendance-detail`, `justification-queue`). **Antivirus `NOT_IMPLEMENTED`** ; rétention pièces `À_DÉFINIR` (`R-G1-30`). Back **792/0** (`TZ=UTC` ciblé 127/0), front **591/0**. | `feat(justification): orchestrer et exposer les pièces jointes sécurisées` (`1835532`) + `feat(frontend): ajouter les pièces jointes aux justificatifs` (`5d5f451`) + `docs(g1): consigner la livraison technique du bloc G1-E` |
-| G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
+| G1-F | Tableaux de bord par rôle | `IMPLEMENTED_FULL_SUITE_GREEN` — module `dashboard` (Spring Modulith, lecture seule), `GET /api/v1/me/dashboard` typé par rôle effectif décidé serveur (priorité fixe, `DEC-G1-F`), agrégats bornés via 4 nouveaux ports publics + `findByInternalIds` (anti-N+1 testé), périmètre serveur (AC-017), cartes Angular par rôle. Cartes `PARTIAL` : justificatifs périmétrés RP / audit / planning actif / conflits. Back **799/0**, front **596/0**. | `feat(dashboard): exposer les agrégats périmétrés par rôle` + `feat(frontend): ajouter les tableaux de bord par rôle` + doc |
 | G1-G | Recette globale, e2e, documentation finale | `NOT_STARTED` | — |
 
 ## Livrables G1-0
@@ -1701,6 +1701,105 @@ supprimé ; aucune assertion affaiblie ; `.env` inchangé.
 | AC-014 (`ABSENT → EXCUSED`) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | non régressé |
 | EF-NOTIF-002 (audience) | `PARTIAL` | **`PARTIAL`** (inchangé) | G1-E **ajoute** l'audience « propriétaire » pour l'examen d'un justificatif (destinataire unique, pas de dette d'audience) ; l'audience apprenants/RP des événements planning/séance reste la dette **G1-D-AUDIENCE** |
 
+## G1-F — Tableaux de bord par rôle (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN`. Commits `feat(dashboard): exposer les
+agrégats périmétrés par rôle` + `feat(frontend): ajouter les tableaux de
+bord par rôle` + doc.
+
+**Nouveau module Spring Modulith `dashboard`** (`ModularityTests` vert ;
+lecture seule ; dépendances aux **API publiques** des autres modules
+uniquement, aucune entité / repository importé). Un endpoint :
+`GET /api/v1/me/dashboard` (`@PreAuthorize("isAuthenticated()")`).
+
+**Rôle effectif décidé côté serveur** (`DEC-G1-F`, priorité fixe
+documentée) : `SUPER_ADMIN` / `ADMIN` / `SCHOOL_ADMINISTRATION` →
+`ADMINISTRATION` ; sinon `PEDAGOGICAL_MANAGER` ; sinon `TEACHER` ; sinon
+`STUDENT` ; sinon `403 DASHBOARD_NO_ROLE`. Le contexte de rôle du front
+est **ergonomique** et **n'est pas transmis** ; un compte multi-rôles
+obtient le tableau de bord de son rôle le plus élevé (documenté ;
+`aMultiRoleUserGetsTheHighestPriorityDashboard`).
+
+**Nouveaux ports publics** (tous 100 % UUID publics / agrégats bornés) :
+`identity.AccountStatsDirectory` (1 requête `GROUP BY status`),
+`attendance.AttendanceDashboardDirectory`
+(`countPendingJustifications()` + `studentDigest(userPublicId)` —
+`GROUP BY` + `COUNT`), `studentimport.StudentImportDashboardDirectory`
+(`recentJobs(limit≤10)`), `coursesession.CourseSessionDirectory` +=
+`findUpcomingForTeacher(teacherPublicId, from, to, limit)` (`Pageable`
+borné), `academic.ClassGroupDirectory` += `findByInternalIds(collection)`
+(résolution du périmètre RP en **une** requête, anti-N+1).
+
+### Matrice rôle × carte
+
+| Rôle | Carte | Source | Périmètre | Borne | Statut |
+|---|---|---|---|---|---|
+| `STUDENT` | présences (present/late/absent/excused), justificatifs en attente / refusés | `AttendanceDashboardDirectory.studentDigest` (`GROUP BY status` + 2 `COUNT`) | ses seules données (AC-017) | — | `IMPLEMENTED_AND_TESTED` |
+| `STUDENT` | mes cours des 7 j (≤ 10) | `EnrollmentDirectory.findActiveEnrollmentsForUserOn` → `CourseSessionDirectory.findSessionsForClasses` | ses inscriptions actives | 10 | `IMPLEMENTED_AND_TESTED` |
+| `TEACHER` | séances à venir (7 j) / à ouvrir | `CourseSessionDirectory.findUpcomingForTeacher` (`Pageable`) | ses séances (formateur **principal**) | 10 | `IMPLEMENTED_AND_TESTED` ; séances où il n'est que **remplaçant** = limite documentée |
+| `PEDAGOGICAL_MANAGER` | nombre de classes + codes | `AcademicScopeDirectory.visibleClassGroupIds` → `ClassGroupDirectory.findByInternalIds` (1 requête) | périmètre pédagogique serveur | 10 codes | `IMPLEMENTED_AND_TESTED` (anti-N+1 testé) |
+| `PEDAGOGICAL_MANAGER` | séances à venir (7 j) du périmètre | `findSessionsForClasses` | idem | 10 | `IMPLEMENTED_AND_TESTED` |
+| `PEDAGOGICAL_MANAGER` | justificatifs en attente périmétrés / alternance `UNKNOWN` | — | — | — | **`PARTIAL`** : `note` renvoyée, agrégat périmétré non exposé (dette G1-F) — renvoi vers « Suivi d'assiduité » (déjà périmétré côté serveur) |
+| `ADMINISTRATION` | comptes actifs / suspendus / en attente / archivés | `AccountStatsDirectory.counts()` (1 `GROUP BY`) | global autorisé | — | `IMPLEMENTED_AND_TESTED` |
+| `ADMINISTRATION` | justificatifs en attente (global) | `AttendanceDashboardDirectory.countPendingJustifications()` | global | — | `IMPLEMENTED_AND_TESTED` |
+| `ADMINISTRATION` | imports récents | `StudentImportDashboardDirectory.recentJobs(10)` (`Pageable`) | global | 10 | `IMPLEMENTED_AND_TESTED` |
+| `ADMINISTRATION` | séances du jour | `CourseSessionDirectory.findSessionsInRange(jourStart, jourEnd)` | global | 10 | `IMPLEMENTED_AND_TESTED` |
+| `ADMINISTRATION` | dernières opérations d'audit | — | — | — | **`PARTIAL`** : non exposé (éviterait de divulguer `audit_event` sans filtrage) — dette G1-F |
+| tous | planning actif / conflits récents | — | — | — | **`PARTIAL`** : non exposé (dette G1-F) |
+
+### Sécurité / périmètre
+
+- `STUDENT` = ses seules données (`studentDigest(userPublicId)` +
+  inscriptions actives) — AC-017 respecté pour les données apprenant du
+  dashboard (`aStudentGetsOnlyTheStudentSectionWithTheirOwnData`) ;
+- `TEACHER` = ses séances (`findUpcomingForTeacher` par UUID public) —
+  `aTeacherSeesOnlyTheirOwnUpcomingSessions` ;
+- `PEDAGOGICAL_MANAGER` = `AcademicScopeDirectory.visibleClassGroupIds`
+  (décision serveur) — classe hors périmètre exclue ; **anti-N+1**
+  vérifié par le compteur Hibernate (`generate_statistics`) :
+  `< 20` requêtes SQL pour le dashboard manager (2 classes + séances) ;
+- `401` sans jeton, `403 DASHBOARD_NO_ROLE` sans rôle exploitable ;
+- DTO **sans identifiant SQL**, sans e-mail, sans contenu d'audit
+  (asserté : la charge utile ne contient ni `internalId` ni
+  `@esic-connect.test`).
+
+### Front
+
+`features/dashboard/` : `dashboard.models.ts` (miroir DTO),
+`dashboard-api.service.ts` (`GET /me/dashboard`, aucun paramètre),
+`dashboard.ts` étendu (état `loading` / `forbidden` / `error` + reprise,
+cartes par rôle sous la section « Mon activité », **sans remplacer** les
+cartes Session / Rôles / Accès rapides existantes). Liens vers
+`/sessions/:id` **uniquement** si le rôle effectif du front couvre la
+lecture des séances (`canLinkSessions` — repris des rôles de route) ;
+sinon texte simple (carte `STUDENT` : jamais de lien séance).
+`notes` du serveur rendues telles quelles.
+
+### Validation G1-F
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw test -Dtest='Dashboard*,CourseSession*,Notification*,Academic*,Enrollment*,ModularityTests'` (base `esic_test` vierge) | **171/0 — BUILD SUCCESS**, `ModularityTests` vert |
+| `./mvnw clean test` | **`Tests run: 799, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** (792 → 799 : +7 `DashboardIntegrationTests` ; les 4 nouveaux ports n'ont pas de test dédié, couverts par l'IT du dashboard) |
+| `npm test -- --watch=false` | **71 fichiers / 596 tests / 0 échec** (591 → 596) |
+| `npm run lint` / `npm run build` (**484,52 kB**) / `npm audit --audit-level=high` | verts, 0 alerte de budget, 0 vulnérabilité |
+| `git diff --check` | propre |
+
+Aucune migration (schéma en **V16** — DEC-G1-010 : `V17` non créée, aucun
+index de perf justifié). Aucun `@Disabled` / `it.skip` / `.only(` ;
+aucun test supprimé ni assertion affaiblie ; `.env` inchangé.
+
+### Limites restantes après G1-F
+
+- justificatifs en attente **périmétrés** (RP) et alternance `UNKNOWN` :
+  `PARTIAL` (renvoi vers « Suivi d'assiduité ») ;
+- dernières opérations d'**audit**, **planning actif**, **conflits** :
+  `PARTIAL` (non exposés) ;
+- carte `TEACHER` : séances où l'utilisateur n'intervient que comme
+  **remplaçant** non incluses ;
+- pas de cache Redis (agrégats = requêtes SQL bornées, `DEC-G1-010`) ;
+- pas de test e2e navigateur.
+
 ## Documentation secondaire à reporter après G1
 
 > Section maintenue pour le report final (prompt §2). Aucun de ces
@@ -1715,6 +1814,9 @@ supprimé ; aucune assertion affaiblie ; `.env` inchangé.
 | `docs/10-journal-ia.md` | ligne de session | session G1-D.1 résiduel → G1-E : commits `31ffc70`, `de972f8`, `1835532`, `5d5f451` (+ doc) ; `V16` consommée ; décisions port `store(key,…)`, compensation, réconciliation, notification propriétaire ; antivirus `NOT_IMPLEMENTED` | — | back 792 / front 591 | — |
 | `docs/11-guide-demonstration.md` | scénario | ajouter « déposer un PDF fictif sur un justificatif → examiner → télécharger la pièce » ; données `docs/demo-data/` (PDF/JPEG fictifs à générer sous `build/`) | — | — | à qualifier manuel/automatisé |
 | `docs/12-guide-utilisateur.md` | rôle `STUDENT` / examinateur | écran « Mes présences » → détail → section Pièce jointe (formats, 5 Mo, retrait tant que PENDING) ; examinateur : téléchargement dans le panneau d'examen ; erreurs `413`/`415`/`409` | — | — | — |
+| `README.md` / `docs/CURRENT-STATE.md` (G1-F) | modules ; capacités ; « Fonctionnalités partielles » | **13ᵉ module `dashboard`** ; `GET /api/v1/me/dashboard` typé par rôle (priorité serveur `DEC-G1-F`) ; cartes par rôle sous « Mon activité » du dashboard Angular ; cartes `PARTIAL` (justificatifs périmétrés RP, audit, planning actif, conflits) ; aucune migration | mention « dashboard générique unique » | back **799** / front **596** | `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` |
+| `docs/05-product-backlog.md` (G1-F) | §9bis | G1-F **terminé** ; dettes : justificatifs périmétrés RP, alternance `UNKNOWN`, audit récent, planning actif, conflits, remplaçant dans la carte formateur | « G1-F `NOT_STARTED` » | — | — |
+| `docs/10-journal-ia.md` (G1-F) | ligne de session | module `dashboard` + 4 ports + `findByInternalIds` ; rôle effectif serveur ; anti-N+1 testé ; cartes `PARTIAL` documentées | — | back 799 / front 596 | — |
 
 ## État de reprise autonome
 
@@ -1728,18 +1830,21 @@ supprimé ; aucune assertion affaiblie ; `.env` inchangé.
   `5d5f451` feat(frontend) pièces jointes aux justificatifs →
   (doc G1-E) → **G1-F à démarrer**.
 - **Working tree** : propre après chaque commit de checkpoint.
-- **Bloc courant** : **G1-E `IMPLEMENTED_FULL_SUITE_GREEN`** (checkpoints
-  1-4 livrés). **Prochaine sous-tâche exacte** : **G1-F** — audit ciblé
-  (plan §7, `DEC-G1-010`, CDC §25, dashboard existant), matrice
-  `rôle | carte | source SQL/service | périmètre | borne | statut` dans
-  ce fichier, puis `GET /api/v1/me/dashboard` typé par rôle serveur
-  (agrégats bornés, `readOnly`, périmètre serveur, test anti-N+1 sur
-  `PEDAGOGICAL_MANAGER`), puis dashboards Angular par rôle, puis barrière
-  G1-F. Commande suivante :
-  ```bash
-  cd /Users/kingafolabi/Desktop/projet_final
-  rg -n 'dashboard' frontend/src/app/features/dashboard backend/src/main/java --files-with-matches
-  ```
+- **Bloc courant** : **G1-F `IMPLEMENTED_FULL_SUITE_GREEN`** (module
+  `dashboard` livré back + front). **Prochaine sous-tâche exacte** :
+  **G1-G** — recette du parcours produit prioritaire (import apprenants →
+  import planning → simulation → publication → séances → ouverture →
+  émargement → rapport) + extensions G1 (annulation/remplacement →
+  notification → justificatif+pièce → décision → dashboard). Étapes :
+  audit de clôture (`G1_IMPLEMENTATION_PROGRESS.md`, traçabilité, tests
+  A-F, scripts/données de démo, routes prioritaires) ; corrections
+  transverses par commit ciblé ; recette automatisée — évaluer Playwright
+  (`DEC-G1-011`, vérifier compat Node/Angular 21 + `npm audit`), sinon
+  repli script API / `@SpringBootTest` bout en bout (statut `PARTIAL`
+  pour l'e2e navigateur) ; données de démo fictives sous `build/` ; tests
+  de recette prioritaires back + front ; traçabilité finale ;
+  section « Documentation secondaire à reporter après G1 » complétée.
+  **Ne pas dépasser G1-G. Aucun push, aucune PR, aucune fusion.**
 - **Décisions tranchées (G1-E, checkpoints 2-4)** : voir la section
   « Checkpoints 2-4 » ci-dessus. En bref — port `store(String storageKey,
   PendingUpload)` + `newStorageKey()` (clé persistée `PENDING_STORAGE`

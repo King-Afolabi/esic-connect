@@ -921,6 +921,38 @@ absence de N+1 (au moins un endpoint), `401/403`.
 
 **Impact déploiement.** Aucun.
 
+### Révision à la livraison G1-F (1er septembre 2026)
+
+- **Module dédié `dashboard`** (Spring Modulith) plutôt qu'un endpoint
+  greffé sur un module existant : lecture seule, dépend des **API
+  publiques** des autres modules, `ModularityTests` vert.
+- **`DEC-G1-F` — rôle effectif décidé serveur, priorité fixe.** Le
+  contexte de rôle du front est ergonomique et **n'est pas transmis** au
+  serveur. `GET /api/v1/me/dashboard` retient, dans l'ordre :
+  `SUPER_ADMIN` / `ADMIN` / `SCHOOL_ADMINISTRATION` → dashboard
+  `ADMINISTRATION` ; sinon `PEDAGOGICAL_MANAGER` ; sinon `TEACHER` ;
+  sinon `STUDENT` ; sinon `403 DASHBOARD_NO_ROLE`. Un compte multi-rôles
+  obtient le tableau de bord de son rôle le plus élevé (documenté, testé).
+  Aucun paramètre client n'élargit l'autorisation.
+- **Nouveaux ports publics** (agrégats bornés, 100 % UUID publics) :
+  `identity.AccountStatsDirectory`,
+  `attendance.AttendanceDashboardDirectory`,
+  `studentimport.StudentImportDashboardDirectory`,
+  `coursesession.CourseSessionDirectory#findUpcomingForTeacher`,
+  `academic.ClassGroupDirectory#findByInternalIds` (résolution du
+  périmètre RP en **une** requête — anti-N+1, vérifié par le compteur
+  Hibernate `< 20`).
+- **Cartes non livrées, classées `PARTIAL`** (jamais inventées) :
+  justificatifs en attente **périmétrés** RP + alternance `UNKNOWN`
+  (renvoi vers « Suivi d'assiduité », déjà périmétré serveur) ;
+  dernières opérations d'**audit** (éviter la divulgation d'`audit_event`
+  sans filtrage) ; **planning actif** ; **conflits**. Carte `TEACHER` :
+  séances où l'utilisateur n'intervient que comme **remplaçant** non
+  incluses.
+- **Pas de `V17`** : aucun index de performance ne s'est avéré nécessaire
+  (les agrégats sont des requêtes bornées ; le test anti-N+1 passe sans).
+- **Pas de cache Redis** (inchangé — décision d'origine confirmée).
+
 ---
 
 ## DEC-G1-011 — Stratégie de tests e2e
