@@ -1,6 +1,9 @@
 package com.esic.connect.attendance.internal;
 
+import com.esic.connect.attendance.internal.JustificationAttachmentResponses.Meta;
 import jakarta.validation.Valid;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -52,5 +55,21 @@ class AttendanceJustificationController {
                                  @Valid @RequestBody JustificationRequests.Review request,
                                  @AuthenticationPrincipal Jwt caller) {
         return service.review(justificationId, request, AttendanceManagementWeb.subject(caller));
+    }
+
+    // --- Pièce jointe : consultation / téléchargement par l'examinateur ---
+
+    @GetMapping("/{justificationId}/attachment")
+    @PreAuthorize(AttendanceManagementWeb.REVIEW_LIST_ROLES)
+    Meta attachment(@PathVariable String justificationId, @AuthenticationPrincipal Jwt caller) {
+        return service.getReviewAttachment(justificationId, AttendanceManagementWeb.subject(caller));
+    }
+
+    @GetMapping("/{justificationId}/attachment/download")
+    @PreAuthorize(AttendanceManagementWeb.REVIEW_LIST_ROLES)
+    ResponseEntity<InputStreamResource> downloadAttachment(@PathVariable String justificationId,
+                                                           @AuthenticationPrincipal Jwt caller) {
+        return JustificationAttachmentResponses.download(
+                service.openReviewAttachment(justificationId, AttendanceManagementWeb.subject(caller)));
     }
 }

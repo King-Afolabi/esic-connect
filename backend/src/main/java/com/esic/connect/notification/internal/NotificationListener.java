@@ -1,5 +1,6 @@
 package com.esic.connect.notification.internal;
 
+import com.esic.connect.attendance.JustificationReviewedEvent;
 import com.esic.connect.coursesession.CourseSessionChangeEvent;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionResourceType;
@@ -109,6 +110,26 @@ class NotificationListener {
         // Clé d'occurrence : versionPublicId (unique par publication).
         writer.write(NotificationType.PLANNING_PUBLISHED, "PLANNING_VERSION", event.versionPublicId(),
                 event.versionPublicId(), teachers, title, body);
+    }
+
+    /**
+     * Examen d'un justificatif d'absence (G1-E) → notification au
+     * <strong>propriétaire</strong> (destinataire unique porté par
+     * l'événement). Un justificatif est examiné une seule fois (machine à
+     * états) : la clé d'occurrence de {@code dedup_key} est donc
+     * l'identifiant du justificatif lui-même.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onJustificationReviewed(JustificationReviewedEvent event) {
+        NotificationType type = event.accepted()
+                ? NotificationType.JUSTIFICATION_ACCEPTED
+                : NotificationType.JUSTIFICATION_REJECTED;
+        String title = event.accepted() ? "Justificatif accepté" : "Justificatif refusé";
+        String body = event.accepted()
+                ? "Votre justificatif d'absence a été accepté."
+                : "Votre justificatif d'absence a été refusé. Consultez le motif dans votre espace.";
+        writer.write(type, "JUSTIFICATION", event.justificationPublicId(), event.justificationPublicId(),
+                Set.of(event.ownerUserPublicId()), title, body);
     }
 
     private static String sessionLabel(CourseSessionDirectory.SessionNotificationInfo session) {

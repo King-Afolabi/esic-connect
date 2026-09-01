@@ -6,8 +6,13 @@ import com.esic.connect.attendance.AttendanceStatus;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory.CheckpointRef;
 import com.esic.connect.coursesession.CourseSessionDirectory.SessionRef;
+import com.esic.connect.attendance.JustificationReviewedEvent;
+import com.esic.connect.attendance.internal.JustificationAttachmentResponses.Download;
+import com.esic.connect.attendance.internal.JustificationAttachmentResponses.Meta;
 import com.esic.connect.enrollment.EnrollmentDirectory;
 import com.esic.connect.identity.CurrentUserResolver;
+import com.esic.connect.identity.UserDirectory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -42,6 +47,9 @@ class AttendanceJustificationService {
     private final AttendanceJustificationRepository justificationRepository;
     private final AttendanceCorrectionRepository correctionRepository;
     private final AttendanceChangePublisher changePublisher;
+    private final JustificationAttachmentStore attachmentStore;
+    private final UserDirectory userDirectory;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     AttendanceJustificationService(CourseSessionDirectory courseSessionDirectory,
@@ -52,6 +60,9 @@ class AttendanceJustificationService {
                                    AttendanceJustificationRepository justificationRepository,
                                    AttendanceCorrectionRepository correctionRepository,
                                    AttendanceChangePublisher changePublisher,
+                                   JustificationAttachmentStore attachmentStore,
+                                   UserDirectory userDirectory,
+                                   ApplicationEventPublisher eventPublisher,
                                    Clock clock) {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
@@ -61,6 +72,9 @@ class AttendanceJustificationService {
         this.justificationRepository = justificationRepository;
         this.correctionRepository = correctionRepository;
         this.changePublisher = changePublisher;
+        this.attachmentStore = attachmentStore;
+        this.userDirectory = userDirectory;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -225,7 +239,100 @@ class AttendanceJustificationService {
         changePublisher.publishJustification(j.getPublicId(), reviewerId,
                 AttendanceChangeAction.JUSTIFICATION_REVIEWED,
                 "decision=" + (accept ? "ACCEPTED" : "REJECTED"));
+        // Notification au propriétaire (bloc G1-E) — publiée DANS la
+        // transaction ; consommée après commit par `notification`. Le
+        // destinataire est porté explicitement (résolu ici, pas de port
+        // enrollment / academic requis).
+        userDirectory.findByInternalId(j.getSubmittedById())
+                .map(UserDirectory.UserRef::publicId)
+                .ifPresent(ownerPublicId -> eventPublisher.publishEvent(
+                        new JustificationReviewedEvent(j.getPublicId(), ownerPublicId, accept)));
         return describeForStaff(j);
+    }
+
+    // ------------------------------------------------------------------
+    // Pièces jointes (bloc G1-E ; DEC-G1-008 / DEC-G1-009)
+    // ------------------------------------------------------------------
+
+    /**
+     * Dépôt d'une pièce jointe par le <strong>propriétaire</strong> du
+     * justificatif, tant qu'il est {@code PENDING}. Non transactionnel :
+     * la séquence base/fichier avec compensation est portée par
+     * {@link JustificationAttachmentStore}. L'audit
+     * {@code JUSTIFICATION_ATTACHMENT_STORED} est publié <em>après</em> le
+     * succès (donc après le commit {@code STORED}).
+     */
+    Meta uploadOwnAttachment(String justificationPublicId, String fileName, String declaredType,
+                             byte[] content, String studentSubject) {
+        Long studentId = requireCaller(studentSubject);
+        AttendanceJustification j = requireOwnedPending(justificationPublicId, studentId);
+        Meta meta = attachmentStore.store(j.getId(), studentId, fileName, declaredType, content);
+        changePublisher.publishJustification(j.getPublicId(), studentId,
+                AttendanceChangeAction.JUSTIFICATION_ATTACHMENT_STORED, null);
+        return meta;
+    }
+
+    @Transactional(readOnly = true)
+    Meta getOwnAttachment(String justificationPublicId, String studentSubject) {
+        Long studentId = requireCaller(studentSubject);
+        AttendanceJustification j = requireJustification(justificationPublicId);
+        if (!studentId.equals(j.getSubmittedById())) {
+            throw new AttendanceException(AttendanceException.Kind.JUSTIFICATION_NOT_FOUND);
+        }
+        return attachmentStore.describeStored(j.getId());
+    }
+
+    /** Flux d'une pièce du propriétaire (le contrôleur pose les en-têtes de téléchargement). */
+    Download openOwnAttachment(String justificationPublicId, String studentSubject) {
+        Long studentId = requireCaller(studentSubject);
+        AttendanceJustification j = requireJustification(justificationPublicId);
+        if (!studentId.equals(j.getSubmittedById())) {
+            throw new AttendanceException(AttendanceException.Kind.JUSTIFICATION_NOT_FOUND);
+        }
+        return attachmentStore.open(j.getId());
+    }
+
+    /**
+     * Retrait de sa propre pièce par l'apprenant, tant que le justificatif
+     * est {@code PENDING} (permet de redéposer un fichier correct). Aucun
+     * <em>remplacement</em> direct n'est exposé : c'est retrait puis
+     * nouveau dépôt.
+     */
+    void deleteOwnAttachment(String justificationPublicId, String studentSubject) {
+        Long studentId = requireCaller(studentSubject);
+        AttendanceJustification j = requireOwnedPending(justificationPublicId, studentId);
+        attachmentStore.deleteActive(j.getId());
+    }
+
+    @Transactional(readOnly = true)
+    Meta getReviewAttachment(String justificationPublicId, String callerSubject) {
+        AttendanceJustification j = requireJustification(justificationPublicId);
+        JustificationResponse described = describeForStaff(j);
+        if (described == null || !inReadScope(described, callerSubject)) {
+            throw new AttendanceException(AttendanceException.Kind.JUSTIFICATION_NOT_FOUND);
+        }
+        return attachmentStore.describeStored(j.getId());
+    }
+
+    /** Flux d'une pièce pour un examinateur dans son périmètre. */
+    Download openReviewAttachment(String justificationPublicId, String callerSubject) {
+        AttendanceJustification j = requireJustification(justificationPublicId);
+        JustificationResponse described = describeForStaff(j);
+        if (described == null || !inReadScope(described, callerSubject)) {
+            throw new AttendanceException(AttendanceException.Kind.JUSTIFICATION_NOT_FOUND);
+        }
+        return attachmentStore.open(j.getId());
+    }
+
+    private AttendanceJustification requireOwnedPending(String justificationPublicId, Long studentId) {
+        AttendanceJustification j = requireJustification(justificationPublicId);
+        if (!studentId.equals(j.getSubmittedById())) {
+            throw new AttendanceException(AttendanceException.Kind.JUSTIFICATION_NOT_FOUND);
+        }
+        if (!j.isPending()) {
+            throw new AttendanceException(AttendanceException.Kind.JUSTIFICATION_INVALID_STATE);
+        }
+        return j;
     }
 
     // ------------------------------------------------------------------

@@ -51,6 +51,13 @@ class AttendanceException extends RuntimeException {
         JUSTIFICATION_INVALID_STATE,
         /** Motif de décision obligatoire pour un refus. */
         JUSTIFICATION_DECISION_REASON_REQUIRED,
+        // --- Pièces jointes de justificatif (V16 ; bloc G1-E) ---
+        /** Aucune pièce jointe disponible (aucune, ou pas encore {@code STORED}). */
+        ATTACHMENT_NOT_FOUND,
+        /** Une pièce active existe déjà pour ce justificatif. */
+        ATTACHMENT_ALREADY_EXISTS,
+        /** Le stockage de la pièce a échoué (le justificatif est intact). */
+        ATTACHMENT_STORAGE_FAILED,
         // --- Rapports (V10) ---
         /** Filtre de rapport invalide. */
         REPORT_INVALID_FILTER,

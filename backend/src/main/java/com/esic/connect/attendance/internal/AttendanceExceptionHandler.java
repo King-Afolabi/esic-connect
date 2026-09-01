@@ -117,6 +117,21 @@ class AttendanceExceptionHandler {
                 code = "ATT_JUSTIFICATION_DECISION_REASON_REQUIRED";
                 message = "Un motif est obligatoire pour refuser un justificatif.";
             }
+            case ATTACHMENT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ATTACHMENT_NOT_FOUND";
+                message = "Aucune pièce jointe disponible pour ce justificatif.";
+            }
+            case ATTACHMENT_ALREADY_EXISTS -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ATTACHMENT_ALREADY_EXISTS";
+                message = "Une pièce jointe est déjà associée à ce justificatif.";
+            }
+            case ATTACHMENT_STORAGE_FAILED -> {
+                status = HttpStatus.SERVICE_UNAVAILABLE;
+                code = "ATT_ATTACHMENT_STORAGE_FAILED";
+                message = "Le dépôt de la pièce jointe a échoué. Réessayez dans un instant.";
+            }
             case REPORT_INVALID_FILTER -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ATT_REPORT_INVALID_FILTER";
@@ -131,6 +146,78 @@ class AttendanceExceptionHandler {
                 status = HttpStatus.FORBIDDEN;
                 code = "ATT_OPERATION_FORBIDDEN";
                 message = "Vous n'êtes pas autorisé à effectuer cette opération.";
+            }
+        }
+        ApiError body = new ApiError(Instant.now(), status.value(), code, message,
+                request.getRequestURI(), UUID.randomUUID().toString(), List.of());
+        return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * Rejet d'un fichier de pièce jointe <em>avant</em> toute écriture
+     * (bloc G1-E). {@code 413} si la taille dépasse la limite ou le
+     * fichier est vide ; {@code 415} pour un type / une structure
+     * incohérents. Aucun nom de fichier client ni chemin dans la réponse.
+     */
+    @ExceptionHandler(JustificationAttachmentValidationException.class)
+    ResponseEntity<ApiError> handleAttachmentValidation(JustificationAttachmentValidationException ex,
+                                                       HttpServletRequest request) {
+        HttpStatus status;
+        String code;
+        String message;
+        switch (ex.kind()) {
+            case EMPTY -> {
+                status = HttpStatus.PAYLOAD_TOO_LARGE;
+                code = "ATT_ATTACHMENT_EMPTY";
+                message = "Le fichier est vide.";
+            }
+            case TOO_LARGE -> {
+                status = HttpStatus.PAYLOAD_TOO_LARGE;
+                code = "ATT_ATTACHMENT_TOO_LARGE";
+                message = "La pièce jointe dépasse la taille maximale autorisée (5 Mo).";
+            }
+            default -> {
+                status = HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+                code = "ATT_ATTACHMENT_UNSUPPORTED";
+                message = "Format de pièce jointe non autorisé : PDF, JPEG ou PNG uniquement.";
+            }
+        }
+        ApiError body = new ApiError(Instant.now(), status.value(), code, message,
+                request.getRequestURI(), UUID.randomUUID().toString(), List.of());
+        return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * Échec technique du port de stockage (bloc G1-E). {@code 413} si la
+     * taille a dépassé la limite pendant le flux, {@code 404} clé
+     * inconnue, {@code 503} pour une E/S — jamais de chemin ni de trace.
+     */
+    @ExceptionHandler(com.esic.connect.attendance.JustificationFileStorageException.class)
+    ResponseEntity<ApiError> handleStorage(com.esic.connect.attendance.JustificationFileStorageException ex,
+                                           HttpServletRequest request) {
+        HttpStatus status;
+        String code;
+        String message;
+        switch (ex.kind()) {
+            case TOO_LARGE -> {
+                status = HttpStatus.PAYLOAD_TOO_LARGE;
+                code = "ATT_ATTACHMENT_TOO_LARGE";
+                message = "La pièce jointe dépasse la taille maximale autorisée (5 Mo).";
+            }
+            case EMPTY -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_ATTACHMENT_EMPTY";
+                message = "Le fichier est vide.";
+            }
+            case NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ATTACHMENT_NOT_FOUND";
+                message = "Pièce jointe introuvable.";
+            }
+            default -> {
+                status = HttpStatus.SERVICE_UNAVAILABLE;
+                code = "ATT_ATTACHMENT_STORAGE_FAILED";
+                message = "Le service de pièces jointes est momentanément indisponible.";
             }
         }
         ApiError body = new ApiError(Instant.now(), status.value(), code, message,

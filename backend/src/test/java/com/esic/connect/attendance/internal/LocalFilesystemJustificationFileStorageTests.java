@@ -23,9 +23,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Bloc G1-E — adaptateur local du port {@link JustificationFileStorage}
- * (DEC-G1-008). Clé opaque, écriture atomique via temporaire, taille
- * appliquée pendant le flux, SHA-256 calculé, anti-traversal, aucun
- * fichier partiel sur erreur.
+ * (DEC-G1-008 / DEC-G1-009). Clé opaque générée puis fournie à
+ * {@code store}, écriture atomique via temporaire, taille appliquée
+ * pendant le flux, SHA-256 calculé, anti-traversal, refus d'écrasement,
+ * aucun fichier partiel sur erreur.
  */
 class LocalFilesystemJustificationFileStorageTests {
 
@@ -48,14 +49,23 @@ class LocalFilesystemJustificationFileStorageTests {
     }
 
     @Test
+    void newStorageKeyIsOpaqueDispersedAndRandom() {
+        String a = storage.newStorageKey();
+        String b = storage.newStorageKey();
+        assertThat(a).matches("[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]+");
+        assertThat(a).isNotEqualTo(b);
+    }
+
+    @Test
     void storesThenReadsBackTheExactContentWithHashAndSize() throws Exception {
         byte[] data = "%PDF-1.4 contenu fictif de justificatif".getBytes(StandardCharsets.UTF_8);
+        String key = storage.newStorageKey();
 
-        StoredRef ref = storage.store(upload(data, 1_000_000));
+        StoredRef ref = storage.store(key, upload(data, 1_000_000));
 
+        assertThat(ref.storageKey()).isEqualTo(key);
         assertThat(ref.sizeBytes()).isEqualTo(data.length);
         assertThat(ref.sha256()).isEqualTo(sha256Hex(data));
-        assertThat(ref.storageKey()).matches("[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]+");
         try (InputStream in = storage.open(ref.storageKey())) {
             assertThat(in.readAllBytes()).isEqualTo(data);
         }
@@ -63,7 +73,8 @@ class LocalFilesystemJustificationFileStorageTests {
 
     @Test
     void storesTheContentOutsideTheTmpStagingDirectory() {
-        StoredRef ref = storage.store(upload("%PDF-1.4".getBytes(StandardCharsets.UTF_8), 1000));
+        String key = storage.newStorageKey();
+        StoredRef ref = storage.store(key, upload("%PDF-1.4".getBytes(StandardCharsets.UTF_8), 1000));
         Path stored = root.resolve(ref.storageKey());
         assertThat(Files.exists(stored)).isTrue();
         assertThat(stored.startsWith(root.resolve("tmp"))).isFalse();
@@ -72,8 +83,17 @@ class LocalFilesystemJustificationFileStorageTests {
     }
 
     @Test
+    void neverOverwritesAnExistingKey() {
+        String key = storage.newStorageKey();
+        storage.store(key, upload("%PDF-1.4 v1".getBytes(StandardCharsets.UTF_8), 1000));
+        assertThatThrownBy(() -> storage.store(key, upload("%PDF-1.4 v2".getBytes(StandardCharsets.UTF_8), 1000)))
+                .isInstanceOfSatisfying(JustificationFileStorageException.class,
+                        e -> assertThat(e.kind()).isEqualTo(Kind.IO_ERROR));
+    }
+
+    @Test
     void rejectsAnEmptyStreamWithoutLeavingAFile() {
-        assertThatThrownBy(() -> storage.store(upload(new byte[0], 1000)))
+        assertThatThrownBy(() -> storage.store(storage.newStorageKey(), upload(new byte[0], 1000)))
                 .isInstanceOfSatisfying(JustificationFileStorageException.class,
                         e -> assertThat(e.kind()).isEqualTo(Kind.EMPTY));
         assertThat(Stream.of(root.resolve("tmp").toFile().listFiles()).count()).isZero();
@@ -82,7 +102,7 @@ class LocalFilesystemJustificationFileStorageTests {
     @Test
     void enforcesTheSizeLimitDuringStreamingAndLeavesNoPartialFile() {
         byte[] data = new byte[4096];
-        assertThatThrownBy(() -> storage.store(upload(data, 1024)))
+        assertThatThrownBy(() -> storage.store(storage.newStorageKey(), upload(data, 1024)))
                 .isInstanceOfSatisfying(JustificationFileStorageException.class,
                         e -> assertThat(e.kind()).isEqualTo(Kind.TOO_LARGE));
         assertThat(Stream.of(root.resolve("tmp").toFile().listFiles()).count()).isZero();
@@ -102,12 +122,16 @@ class LocalFilesystemJustificationFileStorageTests {
                     .as("open(%s)", evil)
                     .isInstanceOfSatisfying(JustificationFileStorageException.class,
                             e -> assertThat(e.kind()).isEqualTo(Kind.NOT_FOUND));
+            assertThatThrownBy(() -> storage.store(evil, upload("%PDF-".getBytes(StandardCharsets.UTF_8), 100)))
+                    .as("store(%s)", evil)
+                    .isInstanceOf(JustificationFileStorageException.class);
         }
     }
 
     @Test
     void deleteIsIdempotent() {
-        StoredRef ref = storage.store(upload("%PDF-1.4".getBytes(StandardCharsets.UTF_8), 1000));
+        String key = storage.newStorageKey();
+        StoredRef ref = storage.store(key, upload("%PDF-1.4".getBytes(StandardCharsets.UTF_8), 1000));
         storage.delete(ref.storageKey());
         storage.delete(ref.storageKey()); // pas d'erreur sur une clé déjà absente
         assertThat(Files.exists(root.resolve(ref.storageKey()))).isFalse();

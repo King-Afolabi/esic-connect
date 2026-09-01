@@ -12,5 +12,9 @@ enum NotificationType {
     /** Un remplaçant a été affecté à une séance (G1-C). */
     SESSION_SUBSTITUTION_ADDED,
     /** Un remplacement de formateur a pris fin (G1-C). */
-    SESSION_SUBSTITUTION_ENDED
+    SESSION_SUBSTITUTION_ENDED,
+    /** Le justificatif d'absence de l'apprenant a été accepté (G1-E). */
+    JUSTIFICATION_ACCEPTED,
+    /** Le justificatif d'absence de l'apprenant a été refusé (G1-E). */
+    JUSTIFICATION_REJECTED
 }

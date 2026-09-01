@@ -1592,27 +1592,57 @@ en checkpoints** (motif G1-B). Commit du checkpoint 1 :
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : chaîne G1-D.1
-  (`fix(notification): fiabiliser les destinataires et l'idempotence`
-  `e43b0c8` → `docs(g1): préciser les garanties et limites des
-  notifications`) **puis G1-E checkpoint 1**
-  (`feat(justification): créer le stockage sécurisé des pièces jointes`).
-- **Working tree** : propre après commit.
-- **Bloc courant** : **G1-E `IN_PROGRESS`** — checkpoint 1
-  (« schéma + modèle + stockage ») livré et testé. **Sous-tâche
-  suivante exacte** : `AttendanceJustificationService` — dépôt d'une
-  pièce (validation → temporaire → `PENDING_STORAGE` en transaction →
-  `store` after-commit → `STORED`), compensation (rollback SQL ⇒
-  suppression fichier ; échec `store` ⇒ pas de métadonnée), tâche
-  `@Scheduled` de réconciliation ; puis endpoints multipart +
-  téléchargement (`Content-Disposition: attachment` + `nosniff`), puis
-  audit + notifications, puis écran d'upload Angular. Voir « G1-E —
-  1er septembre 2026 » § « Non couvert ».
+- **HEAD attendu** : correctif résiduel G1-D.1
+  (`fix(notification): préciser la classification des erreurs
+  d'idempotence` `31ffc70` → `docs(g1): consigner le correctif de
+  classification des notifications` `de972f8`) **puis** la chaîne G1-E
+  (checkpoints 2+).
+- **Working tree** : propre après chaque commit de checkpoint.
+- **Bloc courant** : **G1-E `IN_PROGRESS`** — checkpoint 1 (« schéma +
+  modèle + stockage ») livré et testé. **Sous-tâches restantes**
+  (session autonome G1-D.1→G1-G) :
+  1. checkpoint 2 — orchestration du dépôt (validation → `newStorageKey`
+     → `PENDING_STORAGE` en transaction courte → `store(key, upload)`
+     hors transaction → vérif SHA-256/taille → `STORED` en transaction
+     courte) + compensation (échec `store` ⇒ `markDeleted` + fichier
+     nettoyé ; échec `markStored` ⇒ ligne `PENDING_STORAGE` + fichier
+     récupérables) + `@Scheduled` de réconciliation bornée
+     (`PENDING_STORAGE` anciens : fichier valide → `STORED` ; fichier
+     absent → `DELETED` ; hash incohérent → suppression + `DELETED`) ;
+     commit `feat(justification): orchestrer le stockage et la
+     réconciliation des pièces` ;
+  2. checkpoint 3 — endpoints multipart (owner) + métadonnées + download
+     (`Content-Disposition: attachment` + `nosniff` + type re-dérivé +
+     `no-store`), autorisations owner/examinateur, `413/415/409/404` ;
+     bump `spring.servlet.multipart.max-file-size` défaut `2MB → 6MB`
+     (`.env` **non modifié**) ; commit `feat(justification): exposer les
+     pièces jointes sécurisées` ;
+  3. checkpoint 4 — front (upload étudiant, téléchargement, actions
+     gestionnaire) ; commit `feat(frontend): ajouter les pièces jointes
+     aux justificatifs` ;
+  4. checkpoint 5 — doc technique ; commit `docs(g1): consigner la
+     livraison technique du bloc G1-E`.
+- **Décision port (checkpoint 2)** : `JustificationFileStorage` gagne
+  `String newStorageKey()` et `store(String storageKey, PendingUpload)`
+  (la clé est générée puis **persistée** au statut `PENDING_STORAGE`
+  AVANT le déplacement — DEC-G1-009 étape 5 « stocker avec la storage_key
+  persistée ») ; l'adaptateur **n'écrase jamais** une cible existante.
+- **Audit pièce stockée** : `AttendanceChangeAction.JUSTIFICATION_ATTACHMENT_STORED`
+  publié par l'orchestrateur **après** le commit `STORED` (jamais dans
+  une transaction) ⇒ pas d'audit si `markStored` échoue.
+- **Notification examen** : événement public
+  `attendance.JustificationReviewedEvent(justificationPublicId,
+  ownerUserPublicId, accepted)` publié dans la transaction de `review` ;
+  `NotificationListener.onJustificationReviewed` (`AFTER_COMMIT`) →
+  notification au **propriétaire** (destinataire unique, résolu par
+  `submittedById`, pas de nouveau port `enrollment`/`academic`) ;
+  `dedup_key` = `justificationPublicId` (un justificatif est examiné une
+  seule fois — machine à états). Types `JUSTIFICATION_ACCEPTED` /
+  `JUSTIFICATION_REJECTED`.
 - **Fichiers non terminés** : aucun (checkpoint cohérent — pas de
   coquille vide, pas de `501`).
-- **Tests verts** : back **772/0** (3 fuseaux : défaut, `TZ=UTC`,
-  `TZ=Europe/Paris`) ; front **574/0** (inchangé, aucun fichier
-  front touché depuis G1-D.1) ; `ModularityTests` vert.
+- **Tests verts au démarrage de la session** : back **772/0** + **17/0**
+  `Notification*` (après G1-D.1 résiduel) ; front **574/0**.
 - **Tests rouges** : aucun.
 - **Migrations** : schéma en **V16**. V17 libre (index de couverture des
   tableaux de bord G1-F si un test de perf le justifie — DEC-G1-010).

@@ -1,5 +1,6 @@
 package com.esic.connect.attendance.internal;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.Instant;
@@ -24,4 +25,8 @@ interface JustificationAttachmentRepository extends JpaRepository<JustificationA
      */
     List<JustificationAttachment> findByStatusAndCreatedAtBefore(JustificationAttachmentStatus status,
             Instant cutoff);
+
+    /** Même chose, <strong>borné</strong> (lot de réconciliation), du plus ancien au plus récent. */
+    List<JustificationAttachment> findByStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
+            JustificationAttachmentStatus status, Instant cutoff, Pageable pageable);
 }

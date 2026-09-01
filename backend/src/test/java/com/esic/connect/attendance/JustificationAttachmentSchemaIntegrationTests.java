@@ -53,7 +53,9 @@ class JustificationAttachmentSchemaIntegrationTests {
                 .isEqualTo("LocalFilesystemJustificationFileStorage");
 
         byte[] data = "%PDF-1.4 checkpoint G1-E".getBytes(StandardCharsets.UTF_8);
-        StoredRef ref = storage.store(new PendingUpload(new ByteArrayInputStream(data), 1_000_000));
+        String key = storage.newStorageKey();
+        StoredRef ref = storage.store(key, new PendingUpload(new ByteArrayInputStream(data), 1_000_000));
+        assertThat(ref.storageKey()).isEqualTo(key);
         try (InputStream in = storage.open(ref.storageKey())) {
             assertThat(in.readAllBytes()).isEqualTo(data);
         }

@@ -18,19 +18,34 @@ import java.io.InputStream;
 public interface JustificationFileStorage {
 
     /**
-     * Persiste un fichier <strong>déjà validé</strong> (extension, type,
-     * magic bytes, taille) et renvoie sa référence de stockage. L'écriture
-     * passe par un fichier temporaire puis un déplacement atomique ;
-     * l'empreinte SHA-256 et la taille sont calculées pendant l'écriture
-     * et vérifiées. En cas d'échec, aucun fichier partiel ne subsiste.
-     *
-     * @param upload contenu à stocker (le flux est entièrement consommé)
-     * @return la clé opaque, la taille et l'empreinte réellement écrites
-     * @throws JustificationFileStorageException si l'écriture échoue, si la
-     *         taille dépasse la limite pendant le flux, ou si le contenu
-     *         est vide
+     * Génère une nouvelle clé opaque de stockage — aléatoire, dispersée,
+     * <strong>jamais</strong> dérivée d'un nom fourni par le client. La
+     * clé est destinée à être <em>persistée en base au statut
+     * {@code PENDING_STORAGE}</em> (DEC-G1-009 étape 3) <strong>avant</strong>
+     * l'appel à {@link #store(String, PendingUpload)} (étape 5 :
+     * « stocker avec la storage_key persistée »).
      */
-    StoredRef store(PendingUpload upload);
+    String newStorageKey();
+
+    /**
+     * Persiste un fichier <strong>déjà validé</strong> (extension, type,
+     * magic bytes, taille) <strong>sous la clé fournie</strong> et renvoie
+     * la taille et l'empreinte réellement écrites. L'écriture passe par un
+     * fichier temporaire puis un déplacement atomique ; l'empreinte
+     * SHA-256 et la taille sont calculées pendant l'écriture. Une cible
+     * déjà présente n'est <strong>jamais écrasée</strong> (échec
+     * {@code IO_ERROR}). En cas d'échec, aucun fichier partiel ne
+     * subsiste.
+     *
+     * @param storageKey clé opaque obtenue via {@link #newStorageKey()} et
+     *                   déjà persistée (statut {@code PENDING_STORAGE})
+     * @param upload     contenu à stocker (le flux est entièrement consommé)
+     * @return la clé (écho), la taille et l'empreinte réellement écrites
+     * @throws JustificationFileStorageException si l'écriture échoue, si la
+     *         taille dépasse la limite pendant le flux, si le contenu est
+     *         vide, ou si la clé est déjà utilisée
+     */
+    StoredRef store(String storageKey, PendingUpload upload);
 
     /**
      * Ouvre le contenu d'une pièce pour téléchargement.
