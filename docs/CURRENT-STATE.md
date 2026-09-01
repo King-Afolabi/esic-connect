@@ -18,18 +18,30 @@
 ## Dernière mise à jour
 
 ```text
-1er septembre 2026 — passe corrective probatoire G1-E / G1-F / G1-G
+1er septembre 2026 — 2e passe corrective probatoire (documentaire)
+sur G1-E / G1-F / G1-G
 (branche feature/master-level-product-expansion)
 ```
 
-> Cette passe corrige des réserves des blocs G1-E/F/G : isolation de
-> l'échec d'audit après stockage d'une pièce jointe (CHANTIER A),
-> portée réelle de la réconciliation des orphelins (B), remplaçants
-> actifs dans le tableau de bord formateur (C), contexte de rôle
-> multi-rôle vérifié côté serveur (D), anti-N+1 réellement prouvé (F),
-> recette API rendue continue (G) et statuts documentaires réalignés.
-> Détail : `docs/reports/G1_FINAL_REPORT.md` et
-> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` § « Passe corrective G1-E/F/G ».
+> **1re passe** : isolation de l'échec d'audit après stockage d'une
+> pièce jointe (A), portée de la réconciliation des orphelins (B),
+> remplaçants actifs dans le tableau de bord formateur (C), contexte de
+> rôle multi-rôle vérifié côté serveur (D), N+1 réel selon le nombre de
+> classes corrigé (F), recette API rendue continue (G).
+>
+> **2e passe (courte, documentaire)** : preuve **directe** de l'isolation
+> de l'échec d'audit (test unité Mockito, en plus du test d'intégration
+> qui teste un scénario *adjacent*) ; **coût SQL du dashboard selon le
+> nombre de séances** mesuré (linéaire ≈ 2 req/séance, non regroupé —
+> documenté, non corrigé) ; **incident UTC de `EnrollmentDirectoryTests`
+> non reproduit** en 5 répétitions isolées (« cause non déterminée »,
+> pas « infra confirmée ») ; **G1-F global reclassé `PARTIAL`** ; G1-E
+> périmètre fonctionnel `IMPLEMENTED_AND_TESTED` + durcissement
+> opérationnel `PARTIAL` ; **Groupe 1 global
+> `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`**. Aucun code de
+> production modifié. Détail : `docs/reports/G1_FINAL_REPORT.md` §1bis /
+> §3.4 / §7 et `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`
+> § « Deuxième passe corrective probatoire ».
 
 ## Commit stable de référence
 
@@ -208,7 +220,7 @@ enregistrée dans le dépôt.
 | Alternance ↔ assiduité | contexte résolu, consommé par le reporting ; module `planning` livré (G1-B) : les séances peuvent venir d'un planning publié | pas d'avertissement d'alternance sur un créneau jour-entreprise à la publication (DEC-G1-006) ; le calcul « demi-journées attendues » ne croise pas encore le rythme d'alternance de façon systématique |
 | Justificatif avec pièce jointe (EF-JUS-001/002) → **`IMPLEMENTED_AND_TESTED`** | dépôt multipart propriétaire, validation extension+MIME+magic-bytes, `V16` métadonnées, contenu hors base / hors webroot, séquence base↔fichier avec compensation, réconciliation `@Scheduled` des `PENDING_STORAGE`, téléchargement `Content-Disposition: attachment`+`nosniff` (propriétaire + examinateur périmétré), notification propriétaire à l'examen. **Échec d'audit après un stockage réussi : isolé** (201 rendu, pièce durable, trace non rejouée — passe corrective A) | **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; **balayage des fichiers orphelins `NOT_IMPLEMENTED`** — la réconciliation ne traite QUE les lignes `PENDING_STORAGE`, un fichier laissé par un retrait dont la suppression best-effort a échoué (ligne `DELETED`) n'est pas balayé (passe corrective B) ; remplacement direct d'une pièce (retrait puis redépôt) ; rétention `DELETED` `À_DÉFINIR` (`R-G1-30`) |
 | Notifications (EF-NOTIF-001 `IMPLEMENTED_AND_TESTED` ; EF-NOTIF-002 / RG-033 `PARTIAL`) | email d'activation **+ centre in-app persistant** (G1-D + G1-D.1) : planning publié / séance annulée / remplaçant affecté / **remplacement terminé** → notifications after-commit pour les **formateurs** (principal + remplaçants `ACTIVE` + remplaçant tout juste terminé) ; idempotence `dedup_key` ; isolation par destinataire ; API `/api/v1/me/notifications` + cloche + centre Angular (liens en liste blanche par rôle) | notifications aux **apprenants / responsables pédagogiques** (dette G1-D-AUDIENCE), garantie de livraison / reprise (best effort après commit — dette G1-D-OUTBOX), email métier, push PWA, préférences par type, file persistante / DLQ, purge / rétention (`À_DÉFINIR`) |
-| Tableau de bord par rôle (G1-F, CDC §25) | `GET /api/v1/me/dashboard` typé par rôle, périmètre serveur ; carte formateur **avec remplaçants actifs** (C) ; anti-N+1 **prouvé** (1 vs 15 classes — F) ; contexte de rôle multi-rôle **vérifié côté serveur** (403 si non détenu — D) | cartes manager **`PARTIAL`** : justificatifs en attente périmétrés, alternance `UNKNOWN`, planning actif, conflits récents (pas de port agrégé borné — dette G1-F) ; carte administration : dernières opérations d'audit non exposées ; pas de cache Redis |
+| Tableau de bord par rôle (G1-F, CDC §25) — **bloc global `PARTIAL`** | `GET /api/v1/me/dashboard` typé par rôle, périmètre serveur ; cartes `STUDENT` / `TEACHER` `IMPLEMENTED_AND_TESTED` (carte formateur **avec remplaçants actifs** — C) ; contexte de rôle multi-rôle **vérifié côté serveur** (403 si non détenu — D) ; anti-N+1 **selon le nombre de classes** prouvé (1 vs 15 — F, croissance nulle) | coût SQL **selon le nombre de séances** linéaire ≈ 2 req/séance, non regroupé (2e passe, `G1_FINAL_REPORT.md` §7) ; cartes manager **`PARTIAL`** : justificatifs en attente périmétrés, alternance `UNKNOWN`, planning actif, conflits récents (pas de port agrégé borné) ; carte administration : dernières opérations d'audit non exposées ; pas de cache Redis |
 | Rapports « officiels » (docs/02 §24.5) | calcul demi-journées + export CSV | mise en page (logo ESIC, PDF, identifiant de document), export Excel |
 | OpenAPI | `/v3/api-docs` + `/swagger-ui` au runtime | pas d'`openapi.json` versionné (voir F3) |
 | Redis | jetons d'émargement uniquement | cache de planning, rate-limiting, droits calculés |
@@ -524,14 +536,32 @@ réconciliation `@Scheduled` bornée des `PENDING_STORAGE`, notification
 
 ### Bloc G1-F — tableaux de bord par rôle (1er septembre 2026)
 
-`IMPLEMENTED_AND_TESTED` par carte (jamais un `IMPLEMENTED_FULL_SUITE_GREEN`
-global). Nouveau module `dashboard` ; `GET /api/v1/me/dashboard` typé par
-rôle, lecture seule, agrégats `COUNT`/`GROUP BY`/`Pageable`, DTO sans
-identifiant SQL ni e-mail, périmètre RP décidé serveur
-(`AcademicScopeDirectory`), `STUDENT` = ses seules données (AC-017).
-Cartes `PARTIAL` documentées (manager : justificatifs périmétrés,
-alternance `UNKNOWN`, planning actif, conflits ; administration : audit
-récent). Front `/dashboard` section « Mon activité ».
+**Bloc global `PARTIAL`.** Infrastructure `dashboard` sécurisée et cartes
+principales `IMPLEMENTED_AND_TESTED` ; le bloc produit **n'est pas
+complet**. `IMPLEMENTED_FULL_SUITE_GREEN` ne qualifie que la couleur de la
+suite de tests.
+
+- `IMPLEMENTED_AND_TESTED` : module `dashboard` ;
+  `GET /api/v1/me/dashboard` typé par rôle, lecture seule, agrégats
+  `COUNT`/`GROUP BY`/`Pageable`, DTO sans identifiant SQL ni e-mail,
+  périmètre RP décidé serveur (`AcademicScopeDirectory`), contexte de
+  rôle multi-rôle vérifié côté serveur (D) ; **carte `STUDENT`** (ses
+  seules données, AC-017) ; **carte `TEACHER`** (séances à venir / à
+  ouvrir, y compris comme remplaçant actif).
+- **carte `PEDAGOGICAL_MANAGER` : `PARTIAL`** — classes du périmètre +
+  séances à venir livrées ; **manquent** : justificatifs en attente
+  périmétrés, alternances `UNKNOWN`, planning actif, conflits récents
+  (pas de port agrégé borné — dette G1-F).
+- **carte `ADMINISTRATION` : `PARTIAL`** — comptes / justificatifs
+  globaux / imports / séances du jour livrés ; les **dernières
+  opérations d'audit** ne sont pas exposées.
+- **Coût SQL** : anti-N+1 **selon le nombre de classes** prouvé
+  (croissance nulle : 1 vs 15 classes → 14 → 14 requêtes) ; coût **selon
+  le nombre de séances affichées** linéaire (≈ 2 requêtes/séance,
+  hydratation points de contrôle + `session_class` par séance avant le
+  `trim` à 10) — borné en pratique par la fenêtre 7 j + l'affichage à
+  10, **non regroupé** (2e passe corrective, `G1_FINAL_REPORT.md` §7).
+- Front `/dashboard` section « Mon activité ».
 
 ### Bloc G1-G — recette API du parcours prioritaire (1er septembre 2026)
 
@@ -707,6 +737,25 @@ Aucun `@Disabled` / `@Ignore` / `it.skip` / `.only(` ajouté ; aucun test
 supprimé ; aucune assertion affaiblie ; `.env` inchangé ; aucune
 migration Flyway ajoutée (schéma en **V16**). Détail :
 [`docs/reports/G1_FINAL_REPORT.md`](reports/G1_FINAL_REPORT.md).
+
+**Deuxième passe corrective probatoire (1er septembre 2026)** — passe
+**courte**, documentaire et probatoire. **Aucune anomalie de code de
+production reproduite ⇒ aucun code de production modifié.** Deux tests
+ajoutés (preuves directes) :
+
+| Élément | Résultat |
+|---|---|
+| `AttendanceJustificationServiceAttachmentAuditIsolationTests` (nouveau — preuve directe de l'isolation de l'échec d'audit, unité Mockito hors Spring ; le test d'intégration existant reste, il arme un listener de test en priorité max ⇒ scénario *adjacent*) | **1/1 vert** |
+| `DashboardIntegrationTests#aPedagogicalManagerDashboardQueryCountGrowsLinearlyWithTheNumberOfSessionsWithinTheDisplayLimit` (nouveau) | **vert** — mesure : 1 séance → **10** requêtes ; 10 séances → **28** (≈ 2 req/séance, **linéaire**, pas de produit cartésien) |
+| Conclusion N+1 dashboard | **par classes** : croissance nulle (corrigé) ; **par séances** : linéaire ≈ 2/séance, borné en pratique par la fenêtre 7 j + l'affichage à 10, **non regroupé** — documenté, non corrigé (`DEC-G1-010`, hors périmètre) |
+| `EnrollmentDirectoryTests` sous `TZ=UTC`, 5 répétitions isolées | **5/5 vertes** (`Tests run: 3, 0 échec`) — incident UTC de la 1re passe **non reproduit** ; « incident intermittent observé une fois, non reproduit lors des répétitions et du run final ; cause non déterminée » (pas « problème d'infrastructure confirmé ») |
+| Statuts corrigés | **G1-F global `PARTIAL`** ; **G1-E** périmètre fonctionnel `IMPLEMENTED_AND_TESTED` + durcissement opérationnel `PARTIAL` ; **Groupe 1 global `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** ; Playwright « non retenu, coût disproportionné » (aucune tentative ⇒ ni « non fiable » ni « impossible ») |
+| Suites (défaut, `TZ=UTC`, `TZ=Europe/Paris`) | back **811 / 0** (809 + 2 nouveaux) ; front **600 / 0** (inchangé) ; `ModularityTests` vert (14 modules) ; `lint` / `build` (484,52 kB) / `audit` verts ; `git diff --check` propre |
+
+Aucune migration Flyway modifiée ni ajoutée (schéma en **V16**, `V1 → V16`
+validé à la 1re passe, persistance inchangée) ; aucun `push` / PR / fusion
+/ `--amend`. Détail : [`docs/reports/G1_FINAL_REPORT.md`](reports/G1_FINAL_REPORT.md)
+§1bis / §3.4 / §7.
 
 ## Infrastructure
 

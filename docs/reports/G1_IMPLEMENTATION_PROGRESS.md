@@ -147,8 +147,8 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-D | Notifications métier persistantes | `IMPLEMENTED_FULL_SUITE_GREEN` — module `notification` étendu (V15, table `notification`), listeners `@TransactionalEventListener(AFTER_COMMIT)` sur `PlanningPublishedEvent` + `CourseSessionChangeEvent` (`CANCELLED` / `SUBSTITUTION_*`), idempotence `dedup_key`, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular. Destinataires = **formateurs** (principal + remplaçants actifs) ; apprenants / RP = prolongement documenté. Back **743/0** (3 fuseaux), front **570/0**. | `feat(notification): créer le modèle de notifications` + `feat(notification): ajouter la boîte de notifications persistantes` + `feat(frontend): ajouter le centre de notifications` |
 | G1-D.1 | Correctif résiduel — classification des erreurs d'idempotence | `IMPLEMENTED_FULL_SUITE_GREEN` — `NotificationErrorClassifier` : seule une collision réellement attribuée à `uq_notification_dedup` = succès idempotent ; toute autre erreur (autre contrainte, `UnexpectedRollbackException` nue) = vraie erreur journalisée, destinataire suivant traité. `Notification*` **17/0**. | `fix(notification): préciser la classification des erreurs d'idempotence` (`31ffc70`) + `docs(g1): consigner le correctif …` (`de972f8`) |
 | G1-E | Pièces jointes des justificatifs | `IMPLEMENTED_FULL_SUITE_GREEN` — cp1 (schéma/modèle/stockage, `d7a7d14`) + cp2-4 : port `store(key,upload)` + `newStorageKey()`, séquence base/fichier avec compensation (`JustificationAttachmentStore` / `…Preparer` / `…Finalizer`), réconciliation `@Scheduled` bornée, endpoints owner + examinateur (`404` hors périmètre), téléchargement forcé + type re-dérivé + `nosniff` + `no-store`, multipart servlet 6 Mo, notification au **propriétaire** (`JustificationReviewedEvent`), écrans (`my-attendance-detail`, `justification-queue`). **Antivirus `NOT_IMPLEMENTED`** ; rétention pièces `À_DÉFINIR` (`R-G1-30`). Back **792/0** (`TZ=UTC` ciblé 127/0), front **591/0**. | `feat(justification): orchestrer et exposer les pièces jointes sécurisées` (`1835532`) + `feat(frontend): ajouter les pièces jointes aux justificatifs` (`5d5f451`) + `docs(g1): consigner la livraison technique du bloc G1-E` |
-| G1-F | Tableaux de bord par rôle | `IMPLEMENTED_FULL_SUITE_GREEN` — module `dashboard` (Spring Modulith, lecture seule), `GET /api/v1/me/dashboard` typé par rôle effectif décidé serveur (priorité fixe, `DEC-G1-F`), agrégats bornés via 4 nouveaux ports publics + `findByInternalIds` (anti-N+1 testé), périmètre serveur (AC-017), cartes Angular par rôle. Cartes `PARTIAL` : justificatifs périmétrés RP / audit / planning actif / conflits. Back **799/0**, front **596/0**. | `feat(dashboard): exposer les agrégats périmétrés par rôle` + `feat(frontend): ajouter les tableaux de bord par rôle` + doc |
-| G1-G | Recette globale, e2e, documentation finale | `NOT_STARTED` | — |
+| G1-F | Tableaux de bord par rôle | **Bloc global `PARTIAL`.** Infrastructure `dashboard` (Spring Modulith lecture seule, `GET /api/v1/me/dashboard` typé par rôle, périmètre serveur AC-017, contexte multi-rôle vérifié — passe corrective D) et cartes `STUDENT` / `TEACHER` `IMPLEMENTED_AND_TESTED`. Cartes `PEDAGOGICAL_MANAGER` (justificatifs périmétrés, alternance `UNKNOWN`, planning actif, conflits récents) et `ADMINISTRATION` (audit récent) **`PARTIAL`** — pas de port agrégé borné. Anti-N+1 **selon le nombre de classes** prouvé (croissance nulle) ; coût **selon le nombre de séances** linéaire ≈ 2 req/séance, documenté (`G1_FINAL_REPORT.md` §7). Back **799/0**, front **596/0**. | `feat(dashboard): exposer les agrégats périmétrés par rôle` + `feat(frontend): ajouter les tableaux de bord par rôle` + doc |
+| G1-G | Recette globale, e2e, documentation finale | Recette **API** `IMPLEMENTED_AND_TESTED` (`PriorityPathRecetteIntegrationTests`) ; e2e **navigateur** `NOT_IMPLEMENTED` ; démonstration manuelle `NOT_PERFORMED`. **Groupe 1 global : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** | `test(e2e): couvrir le parcours produit prioritaire` + `docs(g1): finaliser la traçabilité technique du grand lot G1` |
 
 ## Livrables G1-0
 
@@ -1703,7 +1703,15 @@ supprimé ; aucune assertion affaiblie ; `.env` inchangé.
 
 ## G1-F — Tableaux de bord par rôle (1er septembre 2026)
 
-`IMPLEMENTED_FULL_SUITE_GREEN`. Commits `feat(dashboard): exposer les
+> **Statut de bloc corrigé (2e passe corrective, voir plus bas et
+> `G1_FINAL_REPORT.md` §2/§7) : G1-F global = `PARTIAL`.** La suite de
+> tests est verte (`FULL_SUITE_GREEN` ne décrit que cela, pas la
+> complétude produit) : infrastructure `dashboard` + cartes `STUDENT` /
+> `TEACHER` `IMPLEMENTED_AND_TESTED` ; cartes `PEDAGOGICAL_MANAGER`
+> (justificatifs périmétrés, alternance `UNKNOWN`, planning actif,
+> conflits) et `ADMINISTRATION` (audit récent) `PARTIAL`.
+
+Suite de tests verte à la livraison. Commits `feat(dashboard): exposer les
 agrégats périmétrés par rôle` + `feat(frontend): ajouter les tableaux de
 bord par rôle` + doc.
 
@@ -1806,10 +1814,12 @@ aucun test supprimé ni assertion affaiblie ; `.env` inchangé.
 
 ## G1-G — Recette, stabilisation, documentation technique (1er septembre 2026)
 
-`IMPLEMENTED_FULL_SUITE_GREEN` pour la **recette API** ; **e2e navigateur
-`PARTIAL`** (non livré). Commits `test(e2e): couvrir le parcours produit
-prioritaire` + `docs(g1): finaliser la traçabilité technique du grand lot
-G1`.
+Recette **API** `IMPLEMENTED_AND_TESTED` (suite verte) ; **e2e
+navigateur `NOT_IMPLEMENTED`** (non retenu — coût disproportionné,
+`DEC-G1-011`) ; démonstration manuelle `NOT_PERFORMED`. **Groupe 1
+global : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** Commits
+`test(e2e): couvrir le parcours produit prioritaire` + `docs(g1):
+finaliser la traçabilité technique du grand lot G1`.
 
 ### Audit de clôture
 
@@ -2032,18 +2042,96 @@ supprimé ; aucune assertion affaiblie ; `.env` inchangé ; `git diff
 |---|---|---|---|---|---|
 | `README.md` | « Capacités » / « Périmètre non livré » | pièces jointes des justificatifs **livrées** (dépôt owner, téléchargement owner + examinateur, réconciliation technique) ; schéma **V16** ; multipart servlet 6 Mo ; antivirus `NOT_IMPLEMENTED` ; rétention pièces `À_DÉFINIR` | mention « justificatif métier **sans fichier** » comme limite | back 792 / front 591 | non démontré manuellement |
 | `docs/CURRENT-STATE.md` | module `attendance` ; migrations ; « Fonctionnalités partielles » ligne Justificatif ; « Résultats du dernier audit » | Justificatif (EF-JUS-001/002) → `IMPLEMENTED_AND_TESTED` (pièce jointe complète) ; `V16` consommée (endpoints + réconciliation) ; retirer la ligne `PARTIAL` « dépôt d'une pièce via l'API … checkpoints G1-E suivants » | ligne `PARTIAL` justificatif ; totaux 749/574 | back **792/0**, front **591/0**, build **484,81 kB** | `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` |
-| `docs/05-product-backlog.md` | §9bis blocs G1 | G1-E **terminé** ; dettes : antivirus, rétention pièces (`R-G1-30`), pas de remplacement direct, pas de scan d'orphelins | « G1-E `IN_PROGRESS` » | — | — |
+| `docs/05-product-backlog.md` | §9bis blocs G1 | G1-E : **périmètre fonctionnel `IMPLEMENTED_AND_TESTED`** (EF-JUS-001/002, RG-071/072, CDC §21.5), **durcissement opérationnel `PARTIAL`** ; dettes : antivirus `NOT_IMPLEMENTED`, balayage d'orphelins `NOT_IMPLEMENTED`, rétention pièces `À_DÉFINIR` (`R-G1-30`), pas de remplacement direct | « G1-E `IN_PROGRESS` » | — | — |
 | `docs/10-journal-ia.md` | ligne de session | session G1-D.1 résiduel → G1-E : commits `31ffc70`, `de972f8`, `1835532`, `5d5f451` (+ doc) ; `V16` consommée ; décisions port `store(key,…)`, compensation, réconciliation, notification propriétaire ; antivirus `NOT_IMPLEMENTED` | — | back 792 / front 591 | — |
 | `docs/11-guide-demonstration.md` | scénario | ajouter « déposer un PDF fictif sur un justificatif → examiner → télécharger la pièce » ; données `docs/demo-data/` (PDF/JPEG fictifs à générer sous `build/`) | — | — | à qualifier manuel/automatisé |
 | `docs/12-guide-utilisateur.md` | rôle `STUDENT` / examinateur | écran « Mes présences » → détail → section Pièce jointe (formats, 5 Mo, retrait tant que PENDING) ; examinateur : téléchargement dans le panneau d'examen ; erreurs `413`/`415`/`409` | — | — | — |
 | `README.md` / `docs/CURRENT-STATE.md` (G1-F) | modules ; capacités ; « Fonctionnalités partielles » | **13ᵉ module `dashboard`** ; `GET /api/v1/me/dashboard` typé par rôle (priorité serveur `DEC-G1-F`) ; cartes par rôle sous « Mon activité » du dashboard Angular ; cartes `PARTIAL` (justificatifs périmétrés RP, audit, planning actif, conflits) ; aucune migration | mention « dashboard générique unique » | back **799** / front **596** | `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` |
-| `docs/05-product-backlog.md` (G1-F) | §9bis | G1-F **terminé** ; dettes : justificatifs périmétrés RP, alternance `UNKNOWN`, audit récent, planning actif, conflits, remplaçant dans la carte formateur | « G1-F `NOT_STARTED` » | — | — |
+| `docs/05-product-backlog.md` (G1-F) | §9bis | G1-F **bloc global `PARTIAL`** (infra + cartes `STUDENT` / `TEACHER` `IMPLEMENTED_AND_TESTED` ; cartes `PEDAGOGICAL_MANAGER` + `ADMINISTRATION` `PARTIAL`) ; dettes : justificatifs périmétrés RP, alternance `UNKNOWN`, audit récent, planning actif, conflits ; coût SQL par séance linéaire non regroupé | « G1-F `NOT_STARTED` » | — | — |
 | `docs/10-journal-ia.md` (G1-F) | ligne de session | module `dashboard` + 4 ports + `findByInternalIds` ; rôle effectif serveur ; anti-N+1 testé ; cartes `PARTIAL` documentées | — | back 799 / front 596 | — |
 | `README.md` / `docs/CURRENT-STATE.md` (G1-G) | « Tests » / « Recette » / « Démonstration » | recette **API** de bout en bout livrée (`PriorityPathRecetteIntegrationTests`, parcours prioritaire + extensions G1) ; **e2e navigateur `PARTIAL`** (Playwright non ajouté, repli API) ; totaux **800 / 596** ; `scripts/prepare-attachment-demo.sh` (fictifs sous `build/`) | mentions « recette e2e à faire » | back **800 / 0** (3 fuseaux) / front **596 / 0** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`** — aucune manipulation manuelle consignée |
 | `docs/05-product-backlog.md` (G1-G) | §9bis | G1-G : recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `PARTIAL` (dette : Playwright ou script API en CI) ; démonstration manuelle à exécuter | « G1-G `NOT_STARTED` » | — | — |
 | `docs/10-journal-ia.md` (G1-G) | ligne de session | `PriorityPathRecetteIntegrationTests` ; `DEC-G1-011` repli (Playwright écarté, coût disproportionné) ; script `prepare-attachment-demo.sh` ; totaux 800 / 596 | — | back 800 / front 596 | non démontré manuellement |
 | `docs/11-guide-demonstration.md` (G1-G) | scénario | le parcours rejouable est celui de `PriorityPathRecetteIntegrationTests` (API) ; pour la démo **manuelle**, générer les pièces jointes via `scripts/prepare-attachment-demo.sh` ; qualifier chaque étape « automatisée (IT) » vs « à démontrer manuellement » | — | — | statut manuel à consigner le jour J |
 | `docs/12-guide-utilisateur.md` (G1-G) | rôle par rôle | ajouter la section « Tableau de bord » (cartes par rôle sous « Mon activité », cartes `PARTIAL`) ; renvoyer la pièce jointe de justificatif au §`STUDENT` / examinateur (déjà noté en G1-E) | — | — | — |
+
+## Deuxième passe corrective probatoire (1er septembre 2026)
+
+> Branche `feature/master-level-product-expansion`, parent `d606f3d`.
+> Passe **courte**, principalement documentaire et probatoire. **Aucune
+> anomalie de code de production reproduite ⇒ aucun code de production
+> modifié.** Aucune migration (schéma en **V16**), aucun `push` / PR /
+> fusion / `--amend`. Détail : `G1_FINAL_REPORT.md` §1bis / §3.4 / §7.
+
+### Preuves techniques éprouvées
+
+- **Échec d'audit après stockage d'une pièce (réserve A).** Le test
+  d'intégration `anAuditFailureAfterTheAttachmentIsStoredStillReturns201AndKeepsThePiece`
+  arme un `@EventListener` de test en `Ordered.HIGHEST_PRECEDENCE` :
+  l'exception **interrompt la chaîne** du multicasteur Spring, donc le
+  listener d'audit de production (`AttendanceAuditListener`, non ordonné
+  ⇒ dernier) **ne s'exécute pas** dans ce scénario. Ordre **explicite**
+  (déterministe, pas « fragile ») mais scénario **adjacent** au défaut
+  visé (échec de l'**écriture JPA** du writer de production), pas
+  identique. **Preuve directe ajoutée** :
+  `AttendanceJustificationServiceAttachmentAuditIsolationTests` (unité
+  Mockito, hors Spring) — mocke `AttendanceChangePublisher.publishJustification`
+  pour lever, seul point d'appel observé par le `try/catch` du service ;
+  prouve l'isolation **quel que soit** le listener réellement fautif.
+  Le test d'intégration est **conservé**. **Comportement garanti** :
+  `201`, ligne `STORED`, fichier téléchargeable, échec **journalisé
+  (WARN, sans PII)** ; **aucune** trace garantie ni rejouée (dette
+  d'audit assumée).
+- **Anti-N+1 selon le nombre de séances.** La preuve F ne fait varier
+  que le nombre de **classes**. Mesure ajoutée (classes fixes = 2) :
+  **1 séance → 10 requêtes ; 10 séances → 28** (≈ 2 req/séance,
+  linéaire, **pas de produit cartésien**). `toRef` hydrate points de
+  contrôle + `session_class` **par séance renvoyée**, **avant** le
+  `trim` d'affichage à 10. Conclusion : N+1 **par classes** corrigé
+  (croissance 0) ; coût **par séances** linéaire, borné **en pratique**
+  par la fenêtre 7 j + l'affichage à 10, **pas** en requêtes au-delà.
+  **Documenté, non corrigé** (`DEC-G1-010`, hors périmètre). Test :
+  `aPedagogicalManagerDashboardQueryCountGrowsLinearlyWithTheNumberOfSessionsWithinTheDisplayLimit`.
+
+### Incident UTC intermittent (`EnrollmentDirectoryTests`)
+
+Observé **une fois** pendant la 1re passe (`login` HTTP nul →
+`NullPointerException` dans `adminToken()`). Campagne bornée de la 2e
+passe : **5 répétitions isolées** sous `TZ=UTC` → **5/5 vertes**
+(`Tests run: 3, Failures: 0, Errors: 0`). Qualification retenue :
+**« incident intermittent observé une fois, non reproduit lors des
+répétitions et du run final ; cause non déterminée »**. **Pas**
+« problème d'infrastructure confirmé ». Mécanisme plausible (non prouvé)
+= contention du pool HikariCP plafonné à 4 partagé entre les contextes
+`@SpringBootTest` cachés d'un `clean test` complet
+(`TEST_ISOLATION_DECISION.md`). Aucun code ni test modifié.
+
+### Statuts corrigés
+
+- **G1-F global = `PARTIAL`** (infra + cartes `STUDENT` / `TEACHER`
+  `IMPLEMENTED_AND_TESTED` ; cartes `PEDAGOGICAL_MANAGER` et
+  `ADMINISTRATION` `PARTIAL`). `IMPLEMENTED_FULL_SUITE_GREEN` ≠
+  complétude produit.
+- **G1-E** : périmètre **fonctionnel** `IMPLEMENTED_AND_TESTED`
+  (EF-JUS-001/002, RG-071/072, CDC §21.5) ; **durcissement
+  opérationnel `PARTIAL`** — antivirus `NOT_IMPLEMENTED`, balayage des
+  fichiers orphelins `NOT_IMPLEMENTED`, rétention `DELETED` `À_DÉFINIR`
+  (`R-G1-30`). Ne pas présenter le stockage comme « totalement durci ».
+- **Recette** : API `IMPLEMENTED_AND_TESTED` ; e2e navigateur
+  `NOT_IMPLEMENTED` ; démonstration manuelle `NOT_PERFORMED` ;
+  **Groupe 1 global `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`**.
+- **Playwright** : « non retenu pendant cette passe, coût
+  d'introduction et d'exploitation estimé disproportionné » ; aucune
+  tentative d'installation ⇒ le téléchargement de navigateurs n'est
+  **ni** qualifié « non fiable » **ni** « impossible ».
+
+### Tests ajoutés (2e passe)
+
+- back : `AttendanceJustificationServiceAttachmentAuditIsolationTests`
+  (+1) ; `DashboardIntegrationTests` (+1 :
+  `…QueryCountGrowsLinearlyWithTheNumberOfSessions…`).
+- Aucun `@Disabled` / `@Ignore` / `it.skip` / `.only(` ; aucun test
+  supprimé ; aucune assertion affaiblie ; `.env` inchangé.
 
 ## État de reprise autonome
 

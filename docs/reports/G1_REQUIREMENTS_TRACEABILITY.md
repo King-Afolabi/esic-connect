@@ -268,10 +268,16 @@ une donnée réelle et arrêtée dans **DEC-G1-010**.
 
 ### 6bis. Statut après livraison G1-F (1er septembre 2026)
 
-> **Mis à jour par la passe corrective G1-E/F/G — voir §8ter.** La limite
-> « remplaçant non inclus » (CDC §25.3) est **levée** ; DEC-G1-010 gagne
-> une preuve anti-N+1 renforcée (1 vs 15 classes) + un N+1 réel corrigé ;
-> le bloc n'est plus qualifié `IMPLEMENTED_FULL_SUITE_GREEN` (par carte).
+> **Mis à jour par les passes correctives G1-E/F/G — voir §8ter et §8quater.**
+> La limite « remplaçant non inclus » (CDC §25.3) est **levée** ;
+> DEC-G1-010 gagne une preuve anti-N+1 renforcée **selon le nombre de
+> classes** (1 vs 15, croissance nulle) + un N+1 réel corrigé ; le coût
+> **selon le nombre de séances** reste linéaire (≈ 2 requêtes/séance),
+> mesuré et documenté (2e passe). **Statut de bloc G1-F : `PARTIAL`
+> global** — infrastructure `dashboard` + cartes `STUDENT` / `TEACHER`
+> `IMPLEMENTED_AND_TESTED` ; cartes `PEDAGOGICAL_MANAGER` et
+> `ADMINISTRATION` `PARTIAL`. `IMPLEMENTED_FULL_SUITE_GREEN` ne qualifie
+> que la couleur de la suite, pas la complétude produit.
 
 Module `dashboard` livré. Commits `feat(dashboard): exposer les agrégats
 périmétrés par rôle` + `feat(frontend): ajouter les tableaux de bord par
@@ -285,7 +291,7 @@ rôle`. Détail + matrice rôle × carte :
 | CDC §25.3 (formateur) | **`IMPLEMENTED_AND_TESTED`** | prochaine séance / séances à venir / à ouvrir (`findUpcomingForTeacher`, UUID public). Limite : séances où il n'est que **remplaçant** non incluses. |
 | CDC §25.4 (apprenant) | **`IMPLEMENTED_AND_TESTED`** | prochain cours / semaine + présences / retards / absences / justificatifs — **ses seules données** (AC-017, `aStudentGetsOnlyTheStudentSectionWithTheirOwnData`). |
 | AC-017 (cloisonnement) | **`IMPLEMENTED_AND_TESTED`** | `studentDigest(userPublicId)` + inscriptions actives de l'appelant uniquement ; DTO sans identifiant SQL ni e-mail. |
-| DEC-G1-010 (endpoint typé, agrégats bornés, sans N+1) | **`IMPLEMENTED_AND_TESTED`** | `GET /api/v1/me/dashboard`, `readOnly`, `COUNT` / `GROUP BY` / `Pageable`, compteur Hibernate `< 20` requêtes pour le dashboard manager. `V17` non créée (aucun index de perf justifié). |
+| DEC-G1-010 (endpoint typé, agrégats bornés) | **`IMPLEMENTED_AND_TESTED`** (avec réserve mesurée) | `GET /api/v1/me/dashboard`, `readOnly`, `COUNT` / `GROUP BY` / `Pageable`. **Anti-N+1 selon le nombre de classes prouvé** (croissance nulle : 1 vs 15 classes → 14 → 14 requêtes). **Réserve** : le coût **selon le nombre de séances affichées** est linéaire (≈ 2 requêtes/séance : `toRef` hydrate points de contrôle + `session_class` par séance, avant le `trim` à 10) — borné en pratique par la fenêtre 7 j + l'affichage à 10, non regroupé (2e passe, `G1_FINAL_REPORT.md` §7.2). `V17` non créée (aucun index de perf justifié). |
 
 ---
 
@@ -318,8 +324,14 @@ Bloc `IN_PROGRESS` — checkpoint « schéma + modèle + stockage » livré.
 
 ### 7ter. Statut après les checkpoints 2-4 de G1-E (1er septembre 2026)
 
-Bloc **`IMPLEMENTED_FULL_SUITE_GREEN`** — dépôt, endpoints, réconciliation,
-notification et écrans livrés. Commits `1835532` + `5d5f451`. Détail :
+**Périmètre fonctionnel `IMPLEMENTED_AND_TESTED`** (suite verte) — dépôt,
+endpoints, réconciliation technique, notification et écrans livrés.
+Commits `1835532` + `5d5f451`. **Durcissement opérationnel `PARTIAL`** :
+antivirus `NOT_IMPLEMENTED` (`DEC-G1-E-ANTIVIRUS`), balayage des fichiers
+orphelins `NOT_IMPLEMENTED` (la réconciliation ne traite que les
+`PENDING_STORAGE`), rétention des lignes / fichiers `DELETED` `À_DÉFINIR`
+(`R-G1-30`). Ne pas présenter le stockage comme « totalement durci » ni
+garantir l'absence de malware. Détail :
 `G1_IMPLEMENTATION_PROGRESS.md` § « Checkpoints 2-4 ».
 
 | ID | Statut après 2-4 | Justification vérifiée dans le code / les tests |
@@ -375,6 +387,22 @@ Voir `G1_IMPLEMENTATION_PROGRESS.md` § « Passe corrective G1-E/F/G » et
 | CDC §47.2 (recette) — continuité | « un apprenant actif inscrit émarge » (compte parallèle) | **`IMPLEMENTED_AND_TESTED`** — chaîne **continue** | L'apprenant qui émarge et dépose le justificatif est celui **importé** puis **activé** via l'API publique (`/account-invitations/activate`). Dates relatives à l'horloge. |
 | DEC-G1-011 (e2e) | **`PARTIAL`** | **`NOT_IMPLEMENTED`** (navigateur) ; recette **API** `IMPLEMENTED_AND_TESTED` | Étude de faisabilité : pas de Playwright/puppeteer/cypress, pas de navigateur, pas de script `e2e`. Repli API renforcé. Démonstration manuelle : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`. |
 | Décompte de modules | « 13 modules » (fin G1-G) | **14 modules** | 14 `package-info.java` ; `planning` (G1-B) + `dashboard` (G1-F) tous deux réels. |
+
+### 8quater. Deuxième passe corrective probatoire (1er septembre 2026)
+
+Parent `d606f3d`. Passe **courte**, principalement documentaire.
+**Aucune anomalie de code de production reproduite ⇒ aucun code de
+production modifié.** Détail : `G1_FINAL_REPORT.md` §1bis / §3.4 / §7 ;
+`G1_IMPLEMENTATION_PROGRESS.md` § « Deuxième passe corrective probatoire ».
+
+| Élément | Avant (1re passe) | Après (2e passe) | Justification vérifiée |
+|---|---|---|---|
+| G1-E — isolation de l'échec d'audit post-stockage | Preuve = test d'intégration armant un `@EventListener` de test en priorité maximale (le listener de production **ne s'exécute pas** dans ce scénario) — preuve **adjacente** | **Preuve directe ajoutée** : `AttendanceJustificationServiceAttachmentAuditIsolationTests` (unité Mockito hors Spring, mocke `AttendanceChangePublisher.publishJustification` pour lever). Test d'intégration **conservé**. | Isolation prouvée **quel que soit** le listener fautif. Comportement garanti : `201`, `STORED`, fichier téléchargeable, échec journalisé ; **aucune** trace garantie ni rejouée. |
+| DEC-G1-010 — anti-N+1 dashboard selon le **nombre de séances** | Non mesuré (la preuve F ne fait varier que le nombre de **classes**) | **Mesuré** (classes fixes = 2) : 1 séance → 10 requêtes ; 10 séances → 28 (≈ 2/séance, **linéaire**, pas de produit cartésien). Test `aPedagogicalManagerDashboardQueryCountGrowsLinearlyWithTheNumberOfSessionsWithinTheDisplayLimit`. | N+1 **par classes** corrigé ; coût **par séances** linéaire, borné en pratique par la fenêtre 7 j + l'affichage à 10, **non regroupé** (`DEC-G1-010`, hors périmètre). Ne pas écrire « absence totale de N+1 ». |
+| G1-F — statut de bloc | (traité au §8ter, mais sans stampe globale) | **Bloc global `PARTIAL`** stampé explicitement (infra + cartes `STUDENT` / `TEACHER` `IMPLEMENTED_AND_TESTED` ; cartes `PEDAGOGICAL_MANAGER` + `ADMINISTRATION` `PARTIAL`). | `IMPLEMENTED_FULL_SUITE_GREEN` ≠ complétude produit. Cohérence dans `README.md`, `docs/CURRENT-STATE.md`, `G1_FINAL_REPORT.md`, `G1_IMPLEMENTATION_PROGRESS.md`. |
+| G1-E — durcissement opérationnel | Bloc « `IMPLEMENTED_FULL_SUITE_GREEN` » | **Périmètre fonctionnel `IMPLEMENTED_AND_TESTED`** ; **durcissement opérationnel `PARTIAL`** (antivirus + balayage d'orphelins `NOT_IMPLEMENTED`, rétention `DELETED` `À_DÉFINIR`). | Ne pas présenter le stockage comme « totalement durci » ni garantir l'absence de malware. |
+| `EnrollmentDirectoryTests` — échec UTC intermittent | Observé **une fois** (1re passe) | **Non reproduit** : 5 répétitions isolées sous `TZ=UTC` → 5/5 vertes. « incident intermittent observé une fois, non reproduit lors des répétitions et du run final ; cause non déterminée ». **Pas** « problème d'infrastructure confirmé ». | Note ajoutée à `TEST_ISOLATION_DECISION.md`. Mécanisme plausible non prouvé (contention pool HikariCP). |
+| Playwright / e2e navigateur | « téléchargement non fiable en environnement non interactif » | « **non retenu pendant cette passe, coût d'introduction et d'exploitation estimé disproportionné** » ; aucune tentative ⇒ **ni** « non fiable » **ni** « impossible ». | Aucun framework navigateur ajouté. Recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `NOT_IMPLEMENTED` ; démonstration manuelle `NOT_PERFORMED`. **Groupe 1 global : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** |
 
 ---
 

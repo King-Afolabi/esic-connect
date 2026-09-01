@@ -38,7 +38,10 @@ planning** (module `planning`, G1-B), **justificatif avec pièce jointe**
 (G1-E — dépôt / téléchargement sécurisés, réconciliation ; antivirus et
 balayage des orphelins non implémentés), **tableaux de bord par rôle**
 (module `dashboard`, G1-F ; contexte de rôle multi-rôle vérifié côté
-serveur), piste d'audit, **centre de notifications métier persistantes**
+serveur ; infrastructure et cartes `STUDENT` / `TEACHER`
+`IMPLEMENTED_AND_TESTED`, mais bloc **global `PARTIAL`** — cartes
+`PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes, voir
+`docs/CURRENT-STATE.md`), piste d'audit, **centre de notifications métier persistantes**
 (G1-D /
 G1-D.1 — planning publié / séance annulée / remplaçant affecté / remplacement
 terminé → notifications after-commit pour les formateurs, idempotentes,
