@@ -96,16 +96,18 @@ numéro = **11**. Prochain disponible = **12**.
 `/my-attendance/**` (`STUDENT`), `/attendance-management/**`.
 Gardes : `authGuard`, `guestGuard`, `roleGuard([...])`.
 
-### 1.9 Tests de référence (31 août 2026)
+### 1.9 Tests de référence (mis à jour après le checkpoint G1-0.1, 1er sept. 2026)
 
-- Front : `npm test` → **55 fichiers / 475 tests / 0 échec** ; `npm run
-  lint` OK ; `npm run build` OK (< 500 kB) ; `npm audit --audit-level=high`
-  → 0 vuln.
-- Back : `./mvnw clean test` → **686 tests** ; **7 échecs** dans
-  `AttendanceIntegrationTests` — voir §9 (blocage de fenêtre horaire,
-  bug latent hors périmètre G1, se résout de lui-même). Aucun bloc de
-  code métier G1 ne démarre tant que le back n'est pas re-vert et
-  reproductible.
+- Front : `npm test -- --watch=false` → **55 fichiers / 475 tests / 0
+  échec** ; `npm run lint` OK ; `npm run build` `483.26 kB` (0 alerte de
+  budget) ; `npm audit --audit-level=high` → 0 vuln.
+- Back : `./mvnw clean test` → **693 tests / 0 échec / 0 erreur**
+  (686 → 693 : +7 de `AttendanceServiceSessionDateTests`), **vert dans
+  les trois modes de fuseau** (`TZ` non forcé, `TZ=UTC`,
+  `TZ=Europe/Paris`). Le blocage de fenêtre horaire décrit dans les
+  versions antérieures de ce plan est **corrigé au checkpoint G1-0.1**
+  (`G1_IMPLEMENTATION_PROGRESS.md` §9 + section « Correctif G1-0.1 »).
+  Le contournement « runs back sous `TZ=UTC` » n'est plus nécessaire.
 
 ---
 
@@ -179,29 +181,35 @@ d'implémentation dans `planning.internal`.
 ### 4.2 Migration `V12__create_planning_tables.sql`
 
 Tables (conventions V11) :
-`planning_import_job` (statuts `SIMULATED`/`PUBLISHED`/`CANCELLED`/`EXPIRED`/`FAILED`),
+`planning_import_job` (statuts `SIMULATED`/`PUBLISHED`/`CANCELLED`/`EXPIRED`/`FAILED` —
+`FAILED` écrit hors transaction de publication, cf. DEC-G1-003),
 `planning_import_job_issue`, `planning_import_row`
-(`row_status ∈ {VALID,WARNING,ERROR}`, `planned_action ∈ {CREATE,REUSE,UPDATE,NOOP,CONFLICT}`,
-`business_key`), `planning_import_row_issue`,
+(`row_status ∈ {VALID,WARNING,ERROR}`, `planned_action ∈ {ADDED,MODIFIED,UNCHANGED,REMOVED,CONFLICT}`,
+`slot_key`), `planning_import_row_issue`,
 `planning_schedule` (`class_group_id`, `academic_year_id`,
 `current_version_number`, statut), `planning_version`
 (`version_number`, `status ∈ {DRAFT,PUBLISHED,SUPERSEDED}`,
 `source_import_job_id`, `replaced_by_version_id`, unique
 `(planning_schedule_id, version_number)`),
-`planning_entry` (`business_key`, `class_group_id`, `teacher_user_id`,
+`planning_entry` (`slot_key`, `class_group_id`, `teacher_user_id`
+(clé SQL interne au module, **jamais exposée** — cf. DEC-G1-001),
 `room_id` NULL, `title`, `starts_at_utc`, `ends_at_utc`, `time_zone_id`,
-`source`, `state`, `session_public_id` NULL, contrainte anti-doublon sur
-`(planning_version_id, business_key)`).
+`source`, `state`, `session_public_id` NULL, unicité
+`(planning_schedule_id, slot_key)` — cf. DEC-G1-002).
 Fichier jamais persisté (SHA-256 seul). `CASCADE` sur la chaîne
 `planning_import_*` uniquement.
 
-### 4.3 Migration `V13` (partagée avec G1-C)
+### 4.3 Migration `V13__link_course_session_to_planning.sql` (G1-B)
 
-`course_session` : `+ planning_entry_public_id BINARY(16) NULL` (index),
-`+ superseded_by_scheduling BOOLEAN NOT NULL DEFAULT FALSE`,
-nullabilité de `exception_reason` déjà NULL. `+ teacher_substitution`
-(MDD §18.3). `session_cancellation_request` : **non** en G1 (annulation
-directe, pas de workflow de demande — cf. DEC-G1-004 / scope G1-C).
+`course_session` : `+ planning_entry_public_id BINARY(16) NULL UNIQUE`
+(index) — **lien vers l'entrée de planning ET discriminant d'origine**
+(`NULL` ⇒ séance exceptionnelle manuelle) ;
+`+ superseded_by_scheduling BOOLEAN NOT NULL DEFAULT FALSE` ;
+`exception_reason` **rendue nullable** (`ALTER … MODIFY … NULL`, additif —
+aujourd'hui `NOT NULL` sur toute séance). Aucun `teacher_substitution`
+ici : il relève de `V14` (G1-C). Le schéma `course_session` réel ne
+comporte **pas** de `room_id` / `site_id` : rien n'est retiré, rien
+n'est supposé.
 
 ### 4.4 Services
 
@@ -230,16 +238,18 @@ l'implémentation, cf. DEC-G1-003), `PlanningCsvParser`,
 
 ### 4.6 Matrice rôle × action (planning)
 
-| Action | SUPER_ADMIN | ADMIN | SCHOOL_ADMIN | PEDAGOGICAL_MANAGER | TEACHER | STUDENT |
-|---|---|---|---|---|---|---|
-| Importer / simuler | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ |
-| Revue / revalidation / annulation | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ |
-| Publier | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ (RG-031) | ❌ |
-| Lire versions | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ |
-| Lire son planning publié | ✅ | ✅ | ✅ | ✅ | ✅ (ses séances) | ✅ (ses inscriptions) |
+| Action | SUPER_ADMIN | ADMIN | SCHOOL_ADMIN | PEDAGOGICAL_MANAGER | TEACHER | STUDENT | Source |
+|---|---|---|---|---|---|---|---|
+| Importer / simuler | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ | `CDC §10.1` autorise `ADMIN`/`SCHOOL_ADMINISTRATION`/`PEDAGOGICAL_MANAGER` pour l'**import apprenant** ; pour le **planning**, `CDC §10.1 / §13.1` désigne le `PEDAGOGICAL_MANAGER` comme propriétaire — l'ouverture aux 3 rôles administratifs est une **décision `DEC-G1-B`** (cohérence avec l'import apprenant), pas une exigence explicite |
+| Revue / revalidation / annulation du job | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ | `DEC-G1-B` (même périmètre que « importer ») |
+| Publier | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ | **`CDC §43 RG-030`** (« le RP publie son planning ») + **`RG-031`** (« le formateur ne publie pas ») — explicites. Ouverture à `ADMIN`/`SCHOOL_ADMINISTRATION` = `DEC-G1-B` |
+| Lire versions | ✅ | ✅ | ✅ | ✅ (périmètre) | ❌ | ❌ | `DEC-G1-B` (silence documentaire ; aligné sur « publier ») |
+| Lire son planning publié | ✅ | ✅ | ✅ | ✅ | ✅ (ses séances) | ✅ (ses inscriptions) | `CDC §6.6 / §6.7` (le formateur consulte son planning, l'apprenant le sien) — explicite |
 
 Autorité dérivée : JWT + rôles + `AcademicScopeDirectory` +
-`EnrollmentDirectory`. Jamais d'un `userPublicId` client.
+`EnrollmentDirectory`. Jamais d'un `userPublicId` client. Les cases sans
+exigence numérotée sont des **décisions d'architecture `DEC-G1-B`**
+(colonne « Source »), jamais présentées comme des règles préexistantes.
 
 ### 4.7 Front
 
@@ -264,13 +274,16 @@ planning étudiant ; erreurs ; axe-core.
 
 ## 5. G1-C — plan détaillé
 
-Migration : réutilise `V13` (`teacher_substitution` ; colonnes
-`course_session`). Services : `CourseSessionService.update` (séance
-`exceptional=true` **et** `PLANNED` uniquement ; verrou optimiste),
-`.cancel` (motif obligatoire ; `PLANNED`/`OPEN` → `CANCELLED` ; aucun
-jeton ; aucune absence dérivée), `SubstitutionService` (compte actif
-`TEACHER` ; formateur initial conservé ; exception historisée ;
-notification après commit). Endpoints : `PATCH /api/v1/sessions/{id}`,
+Migration **`V14__create_session_lifecycle_tables.sql`**
+(`teacher_substitution` ; `session_cancellation_request` **seulement si**
+le workflow de demande est retenu — sinon annulation directe, pas de
+table). Services : `CourseSessionService.update` (séance **d'origine
+manuelle** — `planning_entry_public_id IS NULL` — **et** `PLANNED`
+uniquement ; verrou optimiste), `.cancel` (motif obligatoire ;
+`PLANNED`/`OPEN` → `CANCELLED` ; aucun jeton ; aucune absence dérivée),
+`SubstitutionService` (compte actif `TEACHER` ; formateur initial
+conservé ; exception historisée ; notification après commit). Endpoints :
+`PATCH /api/v1/sessions/{id}`,
 `POST /api/v1/sessions/{id}/cancel`,
 `POST /api/v1/sessions/{id}/substitute`,
 `GET /api/v1/sessions/{id}/history`. Front : actions contextuelles,
@@ -283,9 +296,12 @@ audit ; front.
 
 ## 6. G1-D — plan détaillé
 
-Migration `V14__create_notification_table.sql` (DEC-G1-007). Listeners
-`@TransactionalEventListener(AFTER_COMMIT)` en `REQUIRES_NEW`, idempotents
-(`dedup_key` UNIQUE), destinataires dérivés serveur. Événements source :
+Migration `V15__create_notification_table.sql` (DEC-G1-007). Listener
+`@TransactionalEventListener(AFTER_COMMIT)` en `REQUIRES_NEW`, idempotent
+(`dedup_key` UNIQUE) — motif du **seul** `StudentImportAuditListener`
+(pas celui des 9 autres listeners d'audit, en `@EventListener` synchrone
+— cf. `G1_ARCHITECTURE_DECISIONS.md` §Contexte). Destinataires dérivés
+serveur. Événements source :
 planning publié / séance modifiée / annulée / remplaçant / invitation
 émise / justificatif accepté-refusé / import apprenant appliqué.
 Endpoints `GET /api/v1/me/notifications`, `…/unread-count`,
@@ -310,7 +326,7 @@ compteur Hibernate), `401/403`, axe-core.
 
 ## 8. G1-E — plan détaillé
 
-Migration `V15__create_justification_attachment_table.sql`. Port
+Migration `V16__create_justification_attachment_table.sql`. Port
 `attendance.JustificationFileStorage` + `LocalFilesystemJustificationFileStorage`
 (DEC-G1-008). Séquence upload → validation (extension, MIME, **magic
 bytes**, taille, nom neutralisé, SHA-256, anti-polyglotte) → transaction
@@ -364,15 +380,19 @@ historiques — **sans réécrire l'histoire**).
 
 ---
 
-## 11. Migrations prévues (récapitulatif — DEC-G1-012)
+## 11. Migrations prévues (récapitulatif — DEC-G1-012, renumérotées en G1-0.1)
+
+Un domaine par fichier ; chaque checkpoint a ses migrations ; jamais la
+structure d'un bloc ultérieur dans la migration d'un bloc antérieur.
 
 | Fichier | Bloc | Nature | Destructive ? |
 |---|---|---|---|
 | `V12__create_planning_tables.sql` | G1-B | `CREATE TABLE` ×7 | non |
-| `V13__extend_course_session_for_planning_and_lifecycle.sql` | G1-B/C | `ADD COLUMN` nullable + `CREATE TABLE teacher_substitution` | non |
-| `V14__create_notification_table.sql` | G1-D | `CREATE TABLE` | non |
-| `V15__create_justification_attachment_table.sql` | G1-E | `CREATE TABLE` | non |
-| `V16__…` | G1-F | index de couverture **si** justifié par un test | non |
+| `V13__link_course_session_to_planning.sql` | G1-B | `ADD COLUMN` (dont `planning_entry_public_id` UNIQUE, discriminant d'origine) + `MODIFY exception_reason … NULL` | non |
+| `V14__create_session_lifecycle_tables.sql` | G1-C | `CREATE TABLE teacher_substitution` (+ `session_cancellation_request` si workflow retenu) | non |
+| `V15__create_notification_table.sql` | G1-D | `CREATE TABLE` | non |
+| `V16__create_justification_attachment_table.sql` | G1-E | `CREATE TABLE` | non |
+| `V17__…` | G1-F | index de couverture **si** justifié par un test | non |
 
 Aucune modification de `V1`–`V11`. Un fichier par numéro. Numéro écrit
 seulement avec son fichier.

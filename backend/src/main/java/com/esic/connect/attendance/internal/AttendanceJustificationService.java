@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -252,7 +252,11 @@ class AttendanceJustificationService {
 
     private EnrollmentDirectory.EnrollmentRef resolveOwnEnrollment(String studentSubject, SessionRef session) {
         UUID userPublicId = parseUuid(studentSubject, AttendanceException.Kind.OPERATION_FORBIDDEN);
-        LocalDate sessionDay = LocalDate.ofInstant(session.startsAt(), ZoneOffset.UTC);
+        // Date civile de la séance dans son fuseau persisté (et non en UTC) :
+        // même convention que AttendanceService / AttendanceManagementService /
+        // AttendanceReportService — une séance qui commence juste après minuit
+        // local ne doit pas être rattachée à la veille.
+        LocalDate sessionDay = session.startsAt().atZone(persistedZone(session.timeZoneId())).toLocalDate();
         List<EnrollmentDirectory.EnrollmentRef> matching = enrollmentDirectory
                 .findActiveEnrollmentsForUserOn(userPublicId, sessionDay).stream()
                 .filter(e -> session.classGroupPublicIds().contains(e.classGroupPublicId()))
@@ -384,6 +388,20 @@ class AttendanceJustificationService {
             return UUID.fromString(value.trim());
         } catch (IllegalArgumentException | NullPointerException notAUuid) {
             throw new AttendanceException(kind);
+        }
+    }
+
+    /**
+     * Fuseau IANA <em>persisté</em> d'une séance. Une valeur invalide est un
+     * état interne corrompu (validé à l'écriture) : erreur interne contrôlée
+     * plutôt qu'un repli silencieux sur UTC. Même convention que
+     * {@code AttendanceReportService.persistedZone}.
+     */
+    private static ZoneId persistedZone(String id) {
+        try {
+            return ZoneId.of(id);
+        } catch (RuntimeException invalid) {
+            throw new IllegalStateException("Fuseau horaire persisté invalide pour une séance");
         }
     }
 }

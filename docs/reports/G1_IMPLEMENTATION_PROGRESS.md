@@ -9,7 +9,8 @@
 ## Date de référence
 
 ```text
-31 août 2026
+31 août 2026 — checkpoint G1-0
+1er septembre 2026 — checkpoint correctif G1-0.1
 ```
 
 ## Base Git
@@ -37,71 +38,106 @@ npm 11.6.2, `.env` local chargé, base back jetable `esic_test`.
 | `npm run build` | bundle OK, 0 alerte de budget (< 500 kB) |
 | `npm audit --audit-level=high` | **0 vulnérabilité** |
 
-### Back-end — VERT sous `TZ=UTC` ; 7 échecs sous `TZ=Europe/Paris` dans la fenêtre 00:00–02:00 CEST
+### Back-end — VERT dans les trois modes de fuseau (après correctif G1-0.1)
 
 | Run | Résultat |
 |---|---|
-| `./mvnw clean test` (TZ machine = `Europe/Paris`, ~01:30 CEST, base `esic_connect`) | `Tests run: 686, Failures: 7, Errors: 0` — **7 échecs** dans `AttendanceIntegrationTests` |
-| `./mvnw clean test` (idem, base **jetable** `esic_test`) | **mêmes 7 échecs** → reproductible, indépendant de la contamination de base |
-| `./mvnw test -Dtest=AttendanceIntegrationTests` **`TZ=UTC`** | **`Tests run: 25, Failures: 0`** → vert |
-| `./mvnw clean test` **`TZ=UTC`** (base `esic_test`) | **`Tests run: 686, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** → **baseline back VERTE confirmée** (1er sept. 2026, ~01:55 CEST) |
+| `./mvnw clean test` (sans `TZ` forcé — machine `Europe/Paris`) | **`Tests run: 693, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** |
+| `TZ=UTC ./mvnw clean test` | **`Tests run: 693, Failures: 0` — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **`Tests run: 693, Failures: 0` — BUILD SUCCESS** |
 
-> **Conclusion baseline.** Front-end vert (475). Back-end vert (686/0)
-> sous `TZ=UTC` (= environnement CI). Les 7 échecs observés en
-> `TZ=Europe/Paris` sont l'artefact de fenêtre horaire décrit au §9, sur
-> un bug latent hors périmètre G1. **La base est verte** : les blocs de
-> code G1 peuvent démarrer, runs back sous `TZ=UTC`.
+> **Conclusion baseline (1er sept. 2026, après G1-0.1).** Front-end vert
+> (475). Back-end vert (**693 / 0**) dans les trois modes de fuseau, y
+> compris exécuté dans la fenêtre `00:00–02:00 CEST` autrefois cassante.
+> Les 686 → 693 = +7 tests déterministes de
+> `AttendanceServiceSessionDateTests` (horloge figée). Le contournement
+> « runs back sous `TZ=UTC` » n'est **plus nécessaire** : voir §9.
 
-## §9 — Analyse du blocage back-end (fenêtre horaire)
+> **Historique (avant G1-0.1).** Baseline G1-0 : back « vert sous
+> `TZ=UTC` uniquement ; 7 échecs `AttendanceIntegrationTests` sous
+> `TZ=Europe/Paris` dans la fenêtre `00:00–02:00 CEST` » (686 tests). Ce
+> défaut est corrigé au checkpoint G1-0.1.
 
-**Cause racine (bug latent PRÉ-EXISTANT, hors périmètre G1) :**
+## §9 — Défaut temporel du socle : corrigé (checkpoint G1-0.1)
 
-- `EnrollmentService.create`
+**Cause racine (bug latent PRÉ-EXISTANT).**
+
+- `EnrollmentService.enroll`
   (`backend/.../enrollment/internal/EnrollmentService.java:101`) fixe par
   défaut `start_date = LocalDate.now(clock)` avec une `Clock` en **zone
   système** (`Clock.systemDefaultZone()` — `ClockConfig`). Machine en
   `Europe/Paris` → `2026-09-01`.
 - `AttendanceService.validate`
-  (`backend/.../attendance/internal/AttendanceService.java:130`) résout
-  les inscriptions actives avec
+  (`backend/.../attendance/internal/AttendanceService.java:131`, avant
+  correctif) résolvait les inscriptions actives avec
   `LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC)` → **`2026-08-31`**
-  tant que l'heure UTC n'a pas franchi minuit.
-- `DefaultEnrollmentDirectory.coversDate` évalue alors
+  tant que l'heure UTC n'avait pas franchi minuit. **Double erreur** :
+  (a) c'est la date *courante*, pas la date *de la séance* ; (b) elle est
+  projetée en UTC, pas dans le fuseau de la séance.
+- `DefaultEnrollmentDirectory.coversDate` évaluait alors
   `startDate(2026-09-01) <= date(2026-08-31)` → `false` →
   `ATT_NOT_ENROLLED` (`409`).
-- `AttendanceIntegrationTests` n'installe **pas** de `Clock` figée : le
-  décalage se manifeste uniquement dans la fenêtre où la date locale
-  (Paris, été = UTC+2) diffère de la date UTC, soit **`00:00–02:00 CEST`**.
+- `AttendanceIntegrationTests` n'installait **pas** de `Clock` figée : le
+  décalage ne se manifestait que dans la fenêtre où la date locale
+  (Paris, été = UTC+2) diffère de la date UTC, soit **`00:00–02:00 CEST`**
+  (6 échecs `ATT_NOT_ENROLLED` + 1 concurrence dépendante).
 
-**Portée.** 6 échecs `ATT_NOT_ENROLLED` + 1
-(`twoConcurrentValidationsYieldExactlyOne200AndOne409`, qui dépend d'une
-validation réussie). Tous dans `AttendanceIntegrationTests`. Les
-baselines F1 / F6 (« 682 » puis « 686 ») étaient vertes car exécutées
-hors de cette fenêtre.
+**Politique retenue (date métier d'une séance).** Pour décider si une
+inscription couvre une validation de présence, utiliser la **date civile
+de la séance** :
 
-**Statut.** **Non bloquant.** La suite back est **verte** (686 / 0) sous
-`TZ=UTC` — l'environnement de la CI. Les blocs de code G1 démarrent, avec
-runs back sous `TZ=UTC`. Le point reste une **dette identifiée** (bug
-latent hors périmètre G1).
+```java
+session.startsAt().atZone(ZoneId.of(session.timeZoneId())).toLocalDate()
+```
 
-**Contournements (aucun changement de code) :**
-1. `TZ=UTC ./mvnw clean test` — c'est déjà l'environnement de la CI
-   (`compose.yaml` : `mysql` `TZ: UTC`, `--default-time-zone=+00:00` ;
-   service MySQL CI éphémère). Retenu comme mode de run local pendant G1.
-2. Attendre 02:00 CEST (réalignement date locale / UTC).
+Jamais la date courante, jamais une projection UTC. C'est déjà la
+convention de `AttendanceManagementService.sessionLocalDate` et de
+`AttendanceReportService.persistedZone` (correctif PR #22). Un fuseau
+persisté invalide lève une erreur interne contrôlée (jamais un repli
+silencieux sur UTC).
 
-**Décision.** Ne **pas** corriger ce bug dans G1 (hors périmètre
-« montée en gamme fonctionnelle » ; toucher `attendance` /
-`enrollment` sans exigence viole les règles anti-régression). Le
-consigner ici, dans `docs/06-risques.md` (R-G1-20) et dans le rapport
-final comme dette identifiée. Les runs back de G1 sont faits sous
-`TZ=UTC` et ce point est rappelé à chaque bloc.
+**Corrections de code (checkpoint G1-0.1).**
+
+| Fichier | Avant | Après |
+|---|---|---|
+| `AttendanceService.validate` | `LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC)` | `sessionLocalDate(session)` (startsAt projeté dans le fuseau persisté) + helpers `sessionLocalDate` / `persistedZone` |
+| `AttendanceJustificationService.resolveOwnEnrollment` | `LocalDate.ofInstant(session.startsAt(), ZoneOffset.UTC)` | `session.startsAt().atZone(persistedZone(session.timeZoneId())).toLocalDate()` (même défaut de fuseau, plus discret : une séance commençant juste après minuit local était rattachée à la veille) |
+| `AttendanceIntegrationTests` (fixtures) | inscriptions sans `startDate` (défaut `LocalDate.now`) | `startDate = 2026-08-01` explicite (antérieure à toutes les dates de séance des fixtures) → suite indépendante de l'heure d'exécution |
+
+`ClockConfig` **n'est pas** modifié : `Clock.systemDefaultZone()` reste
+correct pour les usages légitimes de « maintenant » (`EnrollmentService`
+date de début par défaut, `AcademicScopeGuard`, calcul du retard réel
+dans `AttendanceService`, purge d'import…). Aucune bascule globale vers
+UTC.
+
+**Tests ajoutés — `AttendanceServiceSessionDateTests` (7, déterministes,
+horloge figée, aucune dépendance à l'heure réelle) :**
+
+- couverture d'inscription évaluée à la date civile de la séance
+  `2026-03-30` (séance saisie à `Europe/Paris`, début `2026-03-29T22:30Z`
+  = `00:30` heure locale) — vérifiée pour **5 valeurs d'horloge**
+  (`@ParameterizedTest`), dont `2026-08-31T23:30:00Z` (la fenêtre de la
+  panne, UTC = 31/08 ≠ Paris = 01/09) et deux instants très éloignés de
+  la séance : la valeur de l'horloge n'entre jamais dans la décision ;
+- la date de décision n'est **jamais** égale à la date UTC de `startsAt`
+  (`2026-03-29`) ni à `LocalDate.now(clock)` ;
+- séance dont la date métier **est** couverte par l'inscription → `200`
+  (`PRESENT` ou `LATE`) ;
+- séance dont la date métier **n'est pas** couverte → `AttendanceException`
+  `NOT_ENROLLED`, même si une couverture existerait à la date UTC (elle
+  n'est jamais consultée) ;
+- l'horloge fournie aux tests est `Clock.fixed(...)`.
+
+**Statut.** **Résolu.** Suite back **verte (693 / 0)** dans les trois
+modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
+`docs/06-risques.md` R-G1-20 mis à jour (résolu).
 
 ## Blocs
 
 | Bloc | Intitulé | Statut | Commit |
 |---|---|---|---|
-| G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | _à venir : `docs(g1): figer les exigences et décisions d'architecture`_ |
+| G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | `f3691bd` — `docs(g1): figer les exigences et décisions d'architecture` |
+| G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | _ce commit : `fix(g1): stabiliser les dates métier et corriger le socle`_ |
 | G1-A | Interfaces Angular des API existantes | `NOT_STARTED` | — |
 | G1-B | Module `planning` complet | `NOT_STARTED` | — |
 | G1-C | Cycle de vie avancé des séances | `NOT_STARTED` | — |
@@ -121,25 +157,73 @@ final comme dette identifiée. Les runs back de G1 sont faits sous
 | 5 — Plan d'implémentation | `docs/reports/G1_IMPLEMENTATION_PLAN.md` | créé |
 | 6 — Suivi d'avancement | ce fichier | créé |
 
-## Décisions ouvertes (à trancher au moment de leur bloc)
+## Correctif G1-0.1 (1er septembre 2026)
 
-- `DEC-G1-002` — forme exacte de la `business_key` (attributs retenus) :
-  esquisse figée, à confirmer sur données réelles au bloc G1-B.
-- `DEC-G1-003` — extraction du guard CSV vers `shared` **ou** duplication
-  minimale : décidé à la lecture du code `studentimport.internal` en G1-B.
-- `DEC-G1-003` — correction ligne à ligne du planning **ou** annulation +
-  réimport : décidé en G1-B selon la complexité réelle.
-- `DEC-G1-007` — Event Publication Registry (`spring-modulith-starter-jpa`)
-  vs listeners applicatifs idempotents : **listeners retenus pour G1** ;
-  registry tracé comme dette post-G1.
+**Défaut.** Baseline G1-0 verte **uniquement** sous `TZ=UTC` : 7 échecs
+`AttendanceIntegrationTests` sous `TZ=Europe/Paris` dans la fenêtre
+`00:00–02:00 CEST`. La baseline masquait le défaut au lieu de le
+corriger.
+
+**Cause racine.** `AttendanceService.validate` décidait la couverture
+d'une inscription avec `LocalDate.ofInstant(clock.instant(),
+ZoneOffset.UTC)` — la date *courante* en UTC — au lieu de la **date
+civile de la séance**. Dans la fenêtre où la date locale diffère de la
+date UTC, une inscription tout juste créée pour le jour local était
+écartée → `ATT_NOT_ENROLLED` (`409`). Variante latente identique dans
+`AttendanceJustificationService` (`session.startsAt()` projeté en UTC et
+non dans le fuseau de la séance). Détail : §9.
+
+**Solution.** Projeter `session.startsAt()` dans
+`ZoneId.of(session.timeZoneId())` (convention déjà en place dans
+`AttendanceManagementService` / `AttendanceReportService`). Helpers
+privés `sessionLocalDate` / `persistedZone` ajoutés aux deux services
+(fuseau invalide → erreur interne contrôlée, jamais de repli UTC).
+`ClockConfig` **inchangé** (aucune bascule globale UTC). Fixtures
+`AttendanceIntegrationTests` : `startDate` d'inscription explicite
+(`2026-08-01`) → suite indépendante de l'heure d'exécution.
+
+**Tests ajoutés.** `AttendanceServiceSessionDateTests` (7 ; Mockito ;
+`Clock.fixed` ; `@ParameterizedTest` sur 5 valeurs d'horloge dont la
+fenêtre de la panne et deux instants très éloignés ; couvert / non
+couvert ; assertion « ≠ date UTC » et « ≠ `LocalDate.now(clock)` »).
+
+**Validation.** `./mvnw clean test` **693 / 0** sans `TZ`, sous `TZ=UTC`
+et sous `TZ=Europe/Paris` (exécuté dans la fenêtre autrefois cassante).
+Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
+`npm run build` `483.26 kB` (0 alerte de budget), `npm audit
+--audit-level=high` 0 vuln.
+
+**Contradictions documentaires corrigées (audit factuel du socle) :**
+
+| Réf | Constat vérifié dans le code | Correction |
+|---|---|---|
+| A — listeners d'audit | 10 classes, **9** en `@EventListener` (synchrone) + `@Transactional(REQUIRES_NEW)` ; **1 seule** (`StudentImportAuditListener`) en `@TransactionalEventListener(AFTER_COMMIT)`. `SecurityAuditEventListener` a 2 méthodes → 11 *méthodes* de handler. Les javadoc du code disent explicitement « contrairement au motif … du reste du projet » et « migration globale vers `AFTER_COMMIT` … reste à faire ». | `G1_ARCHITECTURE_DECISIONS.md` §Contexte + `DEC-G1-007` : « 11 listeners `AFTER_COMMIT` » → motif réel décrit ; `DEC-G1-007` note que le nouveau listener de notifications sera `AFTER_COMMIT` + `REQUIRES_NEW` (aligné sur le seul `StudentImportAuditListener`, pas sur la majorité). |
+| B — RG-012 / RG-015 | Deux numérotations : `CAD §24` (`RG-01..RG-30`) et `CDC §43` (`RG-001..RG-088`). `CDC §43 RG-012` = « un apprenant appartient à une seule classe principale active » ; « un remplacement est autorisé et audité » est `CAD §24 RG-12`. `CDC §43 RG-015` = « une séance peut posséder un remplaçant autorisé » (citation correcte). | `G1_REQUIREMENTS_TRACEABILITY.md` §1 + §4 : RG-012 re-cité en `CAD §24 RG-12` ; note sur les deux numérotations ; `CDC §43 RG-015` + `RG-017` conservés. |
+| C — identité d'un créneau | `DEC-G1-002` met `start_time`/`end_time` dans la `business_key` **et** `DEC-G1-004` règle 5 présente un changement d'horaire comme une *modification* du même créneau → contradiction (avec l'horaire dans la clé, un changement d'horaire = nouvelle clé). | `DEC-G1-002` : identité stable explicite = colonne `slot_key` **obligatoire dans le CSV G1** (extension assumée de `CDC §13.3`, qui ne l'interdit pas) ; unicité `(planning_schedule_id, slot_key)` ; date/horaire/titre/formateur/salle = propriétés modifiables. **Repli documenté** si `slot_key` refusé : un changement d'horaire devient `REMOVED` + `ADDED` (pas de reconnaissance de modification sans identité stable). `DEC-G1-004` règle 5 alignée. |
+| D — port inter-modules | `DEC-G1-001` expose `long teacherUserId` (clé SQL interne) dans `PlannedSession`. | `DEC-G1-001` : `UUID teacherPublicId` ; `roomPublicId` conservé (nullable, déjà prévu) ; `coursesession` résout l'UUID en interne. Aucune clé SQL dans un port public. |
+| E — publication atomique / `FAILED` | `DEC-G1-003` : « rollback tout **et** le job passe `FAILED` » dans la même transaction → impossible (le `FAILED` serait annulé). | `DEC-G1-003` : publication = **une** transaction atomique ; l'orchestrateur externe, après rollback, écrit `FAILED` dans une transaction `REQUIRES_NEW` **distincte, sans donnée métier publiée** ; conflits métier → `ProblemDetail` contrôlé, jamais `500`. Tests correspondants listés. |
+| F — contrainte MySQL | `DEC-G1-001` parle d'« unique `(planning_entry_public_id)` **partielle** » — MySQL n'a pas d'index partiel. | `DEC-G1-001` : `UNIQUE (planning_entry_public_id)` simple ; documenté que MySQL autorise plusieurs `NULL` sous un index `UNIQUE` et garde les UUID non nuls uniques. |
+| G — ordre des migrations | `DEC-G1-012` : `V13` étiquetée « G1-B + G1-C » (mélange planning + `teacher_substitution`). | `DEC-G1-012` + plan §11 : un domaine par migration — `V12` planning ; `V13` lien `course_session ↔ planning_entry` + discriminant d'origine (G1-B) ; `V14` cycle de vie + `teacher_substitution` (G1-C) ; `V15` `notification` (G1-D) ; `V16` `justification_attachment` (G1-E). Références `V14`/`V15` propagées dans les autres docs. |
+| H — matrice de rôles | Matrice planning (plan §4.6) sans distinction « exigence explicite » vs « décision d'architecture ». | Plan §4.6 : colonne « Source » (RG-030/031 explicites ; le reste = `DEC-G1` faute d'exigence numérotée) ; aucune hypothèse présentée comme règle existante. |
+| I — schéma `course_session` réel | `DEC-G1-001` / `DEC-G1-004` parlent de `exceptional = true/false` comme d'une colonne. Réel (V9 + entité) : **pas** de colonne `exceptional`, **pas** de `room`/`site`/`subject` ; `exception_reason` `VARCHAR(500) NOT NULL` sur **toute** séance ; `status ∈ {PLANNED,OPEN,CLOSED}`. | `DEC-G1-001` / `DEC-G1-004` : « séance exceptionnelle » = description, pas un champ ; G1-B **ajoute** en `V13` un discriminant d'origine (`planning_entry_public_id IS NULL` ⇒ exceptionnelle) ; les colonnes `room`/`site` supposées sont retirées du texte. |
+
+**Décisions réellement encore ouvertes (inchangées) :**
+- `DEC-G1-002` — attributs exacts de `slot_key` / `business_key` : à
+  confirmer sur données réelles au bloc G1-B ; le repli (`REMOVED` +
+  `ADDED` sur changement d'horaire) est arrêté.
+- `DEC-G1-003` — guard CSV : extraction vers `shared` **ou** duplication
+  minimale — décidé à la lecture de `studentimport.internal` en G1-B.
+- `DEC-G1-003` — correction planning ligne à ligne **ou** annulation +
+  réimport — décidé en G1-B.
+- `DEC-G1-007` — Event Publication Registry vs listeners idempotents :
+  **listeners retenus pour G1** ; registry tracé comme dette post-G1.
 - `DEC-G1-011` — Playwright vs démonstration API automatisée : vérifié au
   bloc G1-G.
-- Bug latent de fuseau (§9) : **non corrigé en G1**, tracé comme dette.
 
 ## Dernier commit produit
 
 ```text
-(aucun — G1-0 prêt à être commité)
+(G1-0.1 prêt à être commité : fix(g1): stabiliser les dates métier et corriger le socle)
 ```
 
 ## Commandes de reprise
@@ -154,13 +238,16 @@ set -a && source .env && set +a
 docker exec -i esic-connect-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
   -e "CREATE DATABASE IF NOT EXISTS esic_test; GRANT ALL ON esic_test.* TO '$MYSQL_USER'@'%';"
 
-# Backend — TOUJOURS sous TZ=UTC pendant G1 (cf. §9)
+# Backend — le contournement TZ=UTC n'est plus nécessaire depuis G1-0.1
+# (cf. §9). Les trois modes doivent être verts.
 cd backend
 export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
 export PATH="$JAVA_HOME/bin:$PATH"
 set -a && source ../.env && set +a
 export MYSQL_DATABASE=esic_test
+./mvnw clean test
 TZ=UTC ./mvnw clean test
+TZ=Europe/Paris ./mvnw clean test
 
 # Frontend
 cd ../frontend
@@ -169,10 +256,11 @@ npm ci && npm test -- --watch=false && npm run lint && npm run build && npm audi
 
 ## Prochaine étape
 
-1. `git add` des six livrables G1-0, `git diff --check`, commit
-   `docs(g1): figer les exigences et décisions d'architecture`.
-2. **Avant G1-A** : confirmer la suite back verte (686 / 0 échec) via
-   `TZ=UTC ./mvnw clean test` (run en cours) ou après 02:00 CEST.
+1. G1-0 commité (`f3691bd`). G1-0.1 commité (`fix(g1): stabiliser les
+   dates métier et corriger le socle`). **Rien n'est poussé, aucune PR.**
+2. **Avant G1-A** : suite back **verte (693 / 0)** dans les trois modes
+   de fuseau, confirmée au checkpoint G1-0.1 — plus de contournement
+   `TZ=UTC`.
 3. Démarrer G1-A : audit endpoint → écran (§3.1 du plan), puis écrans
    `organization`, écritures `academic`, affectations pédagogiques,
    profils / inscriptions / transferts, émission d'invitation.

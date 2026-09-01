@@ -1612,21 +1612,21 @@ Personas :
 | Valeur métier | livrer le chaînon principal du parcours prioritaire de `CLAUDE.md`, aujourd'hui `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) |
 | Risques | publication partielle, duplication de séances, conflit concurrent, migration défectueuse, couplage `planning` ↔ `coursesession` (cf. `docs/06-risques.md` R-G1-01..R-G1-06) |
 | Critères d'acceptation | AC-007 (séances uniquement après publication), AC-008 (modification ⇒ nouvelle version) ; simulation sans écriture métier ; publication transactionnelle tout-ou-rien, idempotente, `409` sur conflit métier, jamais `500` ; `ModularityTests` vert |
-| Définition de fini | migration `V12` (+ `V13` partagée) ; module + port `coursesession.PlanningSessionWriter` ; endpoints terminés ; écrans `/planning/**` + `/my-planning` ; suite back (parseur, simulation, conflits, alternance, publication, rollback, idempotence, concurrence, versionnement, sécurité, audit) + front + axe-core ; docs |
+| Définition de fini | migrations `V12` (tables planning) + `V13` (lien `course_session ↔ planning_entry`, discriminant d'origine, `exception_reason` nullable) ; module + port `coursesession.PlanningSessionWriter` (UUID publics, aucune clé SQL) ; identité de créneau = `slot_key` (DEC-G1-002, repli `REMOVED`+`ADDED`) ; publication atomique + `FAILED` en `REQUIRES_NEW` séparé (DEC-G1-003) ; endpoints terminés ; écrans `/planning/**` + `/my-planning` ; suite back (parseur, simulation, conflits, alternance, publication, rollback, idempotence, concurrence, versionnement, sécurité, audit) + front + axe-core ; docs |
 | Statut initial | `HORS_PÉRIMÈTRE_ASSUMÉ` → cible `IMPLEMENTED_AND_TESTED` |
-| Preuves attendues | `com.esic.connect.planning`, `V12`, tests nommés, `docs/demo-data/planning-demo.csv` |
+| Preuves attendues | `com.esic.connect.planning`, `V12`+`V13`, tests nommés, `docs/demo-data/planning-demo.csv` |
 
 ## G1-C — Cycle de vie avancé des séances
 
 | Champ | Valeur |
 |---|---|
-| Exigences liées | EF-SES-004, EF-SES-005 ; RG-012, RG-015 (CDC §43–§44) ; CDC §15.1 (modification d'une séance exceptionnelle) |
+| Exigences liées | EF-SES-004, EF-SES-005 ; CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 ; CDC §15.1 (modification d'une séance exceptionnelle) — cf. note « deux numérotations RG » dans `G1_REQUIREMENTS_TRACEABILITY.md` §4 |
 | Épics concernés | EP-09 |
 | Priorité | SHOULD |
 | Valeur métier | modifier / annuler une séance exceptionnelle `PLANNED`, désigner un remplaçant, tracer l'historique |
 | Risques | modification d'une séance `OPEN`/`CLOSED`, absence dérivée d'une séance annulée, conflit concurrent |
 | Critères d'acceptation | `OPEN`/`CLOSED` non modifiables ; `CANCELLED` non ouvrable, sans jeton, sans absence dérivée ; motif obligatoire ; audité ; `409` métier ; séance issue d'un planning non modifiable structurellement (nouvelle version requise) |
-| Définition de fini | `V13` (`teacher_substitution`, colonnes) ; endpoints `PATCH`/`cancel`/`substitute`/`history` ; suite back (transitions, concurrence, sécurité, audit, planning vs exceptionnel) + front |
+| Définition de fini | `V14` (`teacher_substitution` ; `session_cancellation_request` si workflow retenu) ; endpoints `PATCH`/`cancel`/`substitute`/`history` ; `PATCH` limité aux séances d'origine manuelle (`planning_entry_public_id IS NULL`) `PLANNED` ; suite back (transitions, concurrence, sécurité, audit, planning vs manuel) + front |
 | Statut initial | `NOT_IMPLEMENTED` |
 | Preuves attendues | `CourseSessionService.update/cancel`, `SubstitutionService`, tests |
 
@@ -1640,9 +1640,9 @@ Personas :
 | Valeur métier | informer les acteurs des événements (planning publié, séance modifiée / annulée, remplaçant, invitation, justificatif, import appliqué) dans un centre consultable |
 | Risques | perte d'événement, notification dupliquée, contenu sensible en base, rollback métier provoqué par un échec de notification |
 | Critères d'acceptation | notifications persistées **après commit**, transaction indépendante, idempotentes (`dedup_key`) ; un échec de notification ne rollback pas le métier ; destinataires dérivés serveur ; aucun jeton / PII / IP / chemin / secret ; isolation (AC-017) |
-| Définition de fini | `V14` (`notification`) ; listeners `AFTER_COMMIT` / `REQUIRES_NEW` ; endpoints `/me/notifications*` ; cloche + badge front ; suite back (after-commit, rollback métier, idempotence, destinataires, sécurité) + front |
+| Définition de fini | `V15` (`notification`) ; listener `AFTER_COMMIT` / `REQUIRES_NEW` (motif du seul `StudentImportAuditListener`) ; endpoints `/me/notifications*` ; cloche + badge front ; suite back (after-commit, rollback métier, idempotence, destinataires, sécurité) + front |
 | Statut initial | `PARTIAL` (email d'activation seul) |
-| Preuves attendues | `com.esic.connect.notification` étendu, `V14`, tests |
+| Preuves attendues | `com.esic.connect.notification` étendu, `V15`, tests |
 
 ## G1-F — Tableaux de bord par rôle
 
@@ -1668,9 +1668,9 @@ Personas :
 | Valeur métier | joindre une preuve (PDF/JPEG/PNG) à un justificatif métier, avec stockage sûr et téléchargement contrôlé |
 | Risques | traversal, fichier malveillant / polyglotte, stockage sensible, incohérence base / fichier, volume disque |
 | Critères d'acceptation | contrôle extension + MIME + magic bytes + taille (`413` > 5 Mo) ; nom neutralisé ; stockage **hors webroot** via port abstrait ; contenu jamais en base ; téléchargement `attachment` + `nosniff`, MIME re-dérivé ; accès = propriétaire / examinateur périmètre, sinon `403` ; compensation base ↔ fichier documentée et testée |
-| Définition de fini | `V15` (`justification_attachment`) ; port `JustificationFileStorage` + implémentation locale ; endpoints upload / liste / download / suppression logique ; suite back (formats, extension trompeuse, magic bytes, taille, traversal, accès croisé, en-têtes, rollback, nettoyage, audit) + front |
+| Définition de fini | `V16` (`justification_attachment`) ; port `JustificationFileStorage` + implémentation locale ; endpoints upload / liste / download / suppression logique ; suite back (formats, extension trompeuse, magic bytes, taille, traversal, accès croisé, en-têtes, rollback, nettoyage, audit) + front |
 | Statut initial | `PARTIAL` (justificatif métier sans fichier) |
-| Preuves attendues | `JustificationAttachment*`, `V15`, tests, `docs/demo-data/*` fictifs |
+| Preuves attendues | `JustificationAttachment*`, `V16`, tests, `docs/demo-data/*` fictifs |
 
 ## G1-G — Recette globale, tests e2e et documentation finale
 

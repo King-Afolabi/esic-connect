@@ -34,9 +34,24 @@
   `AcademicScopeDirectory`, `enrollment.EnrollmentDirectory`,
   `coursesession.CourseSessionDirectory` — aucun partage d'entité JPA,
   vérifié par `ModularityTests`.
-- Événements métier : `*ChangeEvent` publiés dans la transaction,
-  consommés par `audit` via `@TransactionalEventListener`
-  (`AFTER_COMMIT`) — 11 listeners d'audit.
+- Événements métier : `*ChangeEvent` publiés dans la transaction
+  appelante. **Motif d'audit réel vérifié** (`audit/internal/`, 1er sept.
+  2026) : **10 classes listener**, dont **9** en `@EventListener`
+  *synchrone* + `@Transactional(propagation = REQUIRES_NEW)`
+  (`Academic`, `AccountLifecycle`, `Alternation`, `Attendance`,
+  `AttendanceCheckpoint`, `CourseSession`, `Enrollment`, `Organization`,
+  `SecurityAuditEventListener` — cette dernière avec 2 méthodes, soit
+  **11 méthodes de handler** au total) et **1 seule**
+  (`StudentImportAuditListener`) en
+  `@TransactionalEventListener(phase = AFTER_COMMIT)` +
+  `@Transactional(REQUIRES_NEW)`. Les javadoc du code le disent
+  explicitement : « contrairement au motif `@EventListener` +
+  `REQUIRES_NEW` du reste du projet » / « la migration globale vers
+  `@TransactionalEventListener(AFTER_COMMIT)` reste à planifier ». Un
+  audit écrit en `@EventListener` + `REQUIRES_NEW` est **committé même si
+  la transaction métier appelante rollback ensuite** — dette connue,
+  assumée. La formulation antérieure de cette note (« 11 listeners
+  `AFTER_COMMIT` ») était fausse : corrigée au checkpoint G1-0.1.
 - Front : Angular 21.2 zoneless / standalone / Material ; JWT + contexte
   de rôle **en mémoire seule** (asserté) ; budget de bundle initial
   < 500 kB ; `axe-core` en `devDependencies` (tests a11y).
@@ -49,11 +64,18 @@
 ## DEC-G1-001 — Frontière `planning` ↔ `coursesession`
 
 **Contexte.** Le module `coursesession` gère aujourd'hui des séances
-**exceptionnelles** créées manuellement (`exceptional = true`, motif
-obligatoire, cycle `PLANNED → OPEN → CLOSED`). G1-B doit créer des
-séances **normales** à partir d'un planning publié (EF-SES-001, RG-016).
-`coursesession` expose déjà `CourseSessionDirectory` (lecture / accès),
-mais **aucun port d'écriture**.
+créées manuellement, toutes **exceptionnelles au sens fonctionnel** :
+`exception_reason` (`VARCHAR(500) NOT NULL`) obligatoire sur **toute**
+séance, cycle `PLANNED → OPEN → CLOSED`. **Schéma réel vérifié** (V9 +
+`CourseSession.java`, 1er sept. 2026) : colonnes `public_id`,
+`teacher_user_id`, `title` (NULL), `status ∈ {PLANNED,OPEN,CLOSED}`,
+`starts_at`, `ends_at`, `time_zone_id`, `exception_reason`, `opened_*`,
+`closed_*`, horodatage, `version`. **Il n'y a PAS** de colonne
+`exceptional`, ni `room_id` / `site_id`, ni `subject`. « Exceptionnelle »
+est donc une *description*, pas un champ — G1-B devra **ajouter** en
+`V13` un discriminant d'origine (voir Conséquences). `coursesession`
+expose déjà `CourseSessionDirectory` (lecture / accès), mais **aucun
+port d'écriture**.
 
 **Documents.** ARCH §7.5, §7.7, §8.1–§8.4 ; MDD §17–§18 ; CDC §43
 RG-016, RG-030, RG-031 ; `G1_REQUIREMENTS_TRACEABILITY.md` §3.
@@ -77,7 +99,9 @@ RG-016, RG-030, RG-031 ; `G1_REQUIREMENTS_TRACEABILITY.md` §3.
 
 - Nouveau port : `com.esic.connect.coursesession.PlanningSessionWriter`
   (package racine du module, à côté de `CourseSessionDirectory`).
-- Signature (esquisse, figée à l'implémentation) :
+- Signature (esquisse, figée à l'implémentation) — **aucune clé SQL
+  interne dans le port** (correctif G1-0.1) : les références d'identité
+  sont des `UUID` publics, `coursesession` les résout en interne.
   ```java
   interface PlanningSessionWriter {
       /** Applique un lot d'entrées de planning publié à l'ensemble des
@@ -89,33 +113,47 @@ RG-016, RG-030, RG-031 ; `G1_REQUIREMENTS_TRACEABILITY.md` §3.
                              UUID classGroupPublicId,
                              UUID academicYearPublicId,
                              List<PlannedSession> entries) { }
-  record PlannedSession(UUID entryPublicId, long teacherUserId,
-                        UUID roomPublicId /*nullable*/, String title,
+  record PlannedSession(UUID entryPublicId, UUID teacherPublicId,
+                        UUID roomPublicId /*nullable, si un référentiel salle est branché*/,
+                        String title,
                         Instant startsAt, Instant endsAt, String timeZoneId) { }
   record PlanningSyncResult(List<Created> created, List<Reused> reused,
                             List<Superseded> superseded) { }
   ```
-- `coursesession` gère : création d'une `course_session`
-  (`exceptional = false`, `status = PLANNED`, `planning_entry_public_id`
-  renseigné), réutilisation si une séance `planning` de même
-  `entryPublicId` existe et que la règle de réutilisation est sûre
-  (DEC-G1-002), supersession logique (`status = CANCELLED` +
-  `superseded_by_version`) des séances `planning` **futures et `PLANNED`**
-  absentes de la nouvelle version. Les séances `OPEN`/`CLOSED` ne sont
-  **jamais** réécrites (DEC-G1-004).
+  `teacherPublicId` = `public_id` du `user_account` (jamais
+  `teacher_user_id`). `roomPublicId` n'est transmis que si un référentiel
+  de salle est effectivement consommé par `coursesession` (aujourd'hui
+  `course_session` **n'a pas** de `room_id` — cf. Contexte) ; sinon il
+  reste `null` (`RG-035` : salle affectable après l'import).
+- `coursesession` gère : création d'une `course_session` d'origine
+  planning (`status = PLANNED`, `planning_entry_public_id` renseigné — le
+  discriminant d'origine ajouté en `V13`), réutilisation si une séance
+  planning de même `entryPublicId` existe et que la règle de réutilisation
+  est sûre (DEC-G1-002), supersession logique (`status = CANCELLED` +
+  `superseded_by_scheduling = true`) des séances planning **futures et
+  `PLANNED`** absentes de la nouvelle version. Les séances `OPEN`/`CLOSED`
+  ne sont **jamais** réécrites (DEC-G1-004).
 - `planning` ne connaît que des `UUID` et le port. `coursesession` ne
   connaît pas `planning`.
 
-**Conséquences.** Une migration `coursesession` (V13) ajoute
-`course_session.planning_entry_public_id` (BINARY(16) NULL, indexé),
-`superseded_by_scheduling` et la nullabilité de champs aujourd'hui liés à
-l'exceptionnel. `ModularityTests` reste vert (nouveau port dans le
-package racine).
+**Conséquences.** Migration `coursesession` **`V13`** :
+`course_session.planning_entry_public_id` (`BINARY(16) NULL`, `UNIQUE`,
+indexé) — sert **à la fois** de lien vers l'entrée de planning et de
+**discriminant d'origine** (`NULL` ⇒ séance exceptionnelle manuelle, non
+`NULL` ⇒ séance issue d'un planning) ; `superseded_by_scheduling BOOLEAN
+NOT NULL DEFAULT FALSE`. `exception_reason` doit devenir **nullable**
+(une séance planning n'a pas de motif d'exception) — `ALTER … MODIFY …
+NULL`, additif non destructif. `ModularityTests` reste vert (nouveau port
+dans le package racine).
 
 **Risques.** Publication partielle si le port échoue → **atténué** :
 appel synchrone dans la transaction, toute exception rollback l'ensemble.
-Duplication de séances → **atténué** : idempotence par `entryPublicId`
-(clé unique `(planning_entry_public_id)` partielle).
+Duplication de séances → **atténué** : idempotence par `entryPublicId` via
+`UNIQUE (planning_entry_public_id)`. MySQL **n'a pas** d'index partiel :
+une contrainte `UNIQUE` sur une colonne nullable autorise **plusieurs
+`NULL`** (les séances exceptionnelles) tout en gardant les UUID non nuls
+uniques — c'est exactement le comportement voulu, aucune colonne générée
+nécessaire.
 
 **Sécurité.** Le port ne prend **aucun** paramètre d'identité client :
 l'autorité de publication est vérifiée dans `planning` (rôle + périmètre
@@ -146,45 +184,72 @@ de ligne.
 **Documents.** MDD §17.4 (`schedule_slot.source_import_row_id`) ; CDC
 §13.3 ; `G1_REQUIREMENTS_TRACEABILITY.md` §3 (EF-PLAN-005, AC-008).
 
+**Contradiction corrigée (G1-0.1).** L'esquisse initiale mettait
+`start_time`/`end_time` **dans** la clé, tout en présentant ailleurs
+(DEC-G1-004 règle 5) un changement d'horaire comme une *modification* du
+même créneau. C'est contradictoire : si l'horaire est dans la clé, un
+changement d'horaire produit une **nouvelle** clé (donc `REMOVED` +
+`ADDED`), jamais une modification reconnue. Il faut une **identité
+stable** explicite, indépendante des propriétés modifiables.
+
 **Options.**
 1. Numéro de ligne du fichier — **rejeté** : instable (réordonnancement,
    ajout/suppression au milieu).
-2. Hachage de la ligne brute entière — **rejeté** : toute correction de
-   forme (espace, casse formateur) casserait l'identité.
-3. **Clé métier normalisée** = hachage stable (SHA-256, tronqué) de la
-   concaténation canonique de :
-   `academic_year` + `class_code` + `session_date` (UTC) +
-   `start_time` + `end_time` + `title` normalisé.
-   Le formateur et la salle **ne participent pas** à la clé : un
-   changement de formateur/salle sur le même créneau est une
-   **modification** de la séance, pas une nouvelle séance.
+2. Hachage de la ligne brute entière ou d'un sous-ensemble incluant
+   l'horaire — **rejeté** : toute correction de forme ou de créneau
+   casse l'identité (cf. contradiction ci-dessus).
+3. **Colonne `slot_key` obligatoire dans le CSV G1** : identifiant de
+   créneau **fourni par le responsable**, stable d'une version à la
+   suivante. `CDC §13.3` liste les colonnes du planning sans `slot_key`
+   mais ne l'interdit pas — G1 l'**ajoute** comme colonne obligatoire
+   (extension assumée, tracée ici et dans `docs/02` le jour du bloc
+   G1-B). Unicité : `(planning_schedule_id, slot_key)`. La clé métier de
+   simulation (`planning_import_row.business_key` /
+   `planning_entry.business_key`) **dérive** de
+   `(planning_schedule_id, slot_key)` — c'est un identifiant technique
+   stable, pas un hachage de propriétés. `session_date`, `start_time`,
+   `end_time`, `title`, `teacher_email`, `room_code` sont des
+   **propriétés modifiables** du créneau, hors de la clé.
 
-**Décision.** Option 3. La clé est calculée à la simulation, portée par
-`planning_import_row.business_key` puis recopiée sur `planning_entry.business_key`
-et transmise au port (`entryPublicId` = `public_id` de la `planning_entry`,
-elle-même stable tant que la `business_key` est stable entre versions du
-même `schedule`).
+**Décision.** Option 3.
+- même `slot_key` d'une version à l'autre, propriétés identiques ⇒
+  `UNCHANGED` ;
+- même `slot_key`, au moins une propriété différente ⇒ `MODIFIED`
+  (séance réutilisée puis mise à jour si `PLANNED` — DEC-G1-004) ;
+- `slot_key` présent seulement dans la nouvelle version ⇒ `ADDED`
+  (création) ;
+- `slot_key` disparu de la nouvelle version ⇒ `REMOVED` (supersession si
+  la séance est `PLANNED` future).
 
-**Conséquences.** Deux entrées de la même version avec la même
-`business_key` = doublon fichier → ligne `ERROR` (RG-034). Entre
-versions, même `business_key` ⇒ réutilisation de la séance ;
-`business_key` absente de la nouvelle version ⇒ supersession si la séance
-est `PLANNED` future.
+**Repli explicite** si la colonne `slot_key` est refusée à la revue
+métier : l'identité stable **n'existe pas**, donc un changement
+d'horaire (ou de toute propriété entrant alors dans une clé dérivée)
+devient `REMOVED` + `ADDED`. On ne prétendra **pas** reconnaître une
+« modification » de créneau sans identité stable. DEC-G1-004 règle 5 est
+alignée sur ce repli (elle ne couvre alors que formateur / salle).
 
-**Risques.** Deux créneaux légitimement identiques (même classe, même
-horaire, même titre, deux salles) → considérés comme un doublon. Jugé
-acceptable pour un prototype ; documenté comme limite. Contournement :
-différencier le `title`.
+**Conséquences.** Deux lignes de la même version avec le même `slot_key`
+= doublon fichier → ligne `ERROR` (RG-034). `slot_key` absent / vide sur
+une ligne → `ERROR` (colonne obligatoire). `entryPublicId` =
+`public_id` de la `planning_entry`, stable tant que le `slot_key` est
+stable pour le même `schedule`.
 
-**Sécurité.** La `business_key` ne contient pas de donnée personnelle
-(pas d'email formateur). Non exposée au client (interne à la trace de
-résolution).
+**Risques.** Le responsable doit gérer des `slot_key` cohérents entre
+imports. Atténué : l'assistant d'import (hors périmètre G1, `CDC §13.10`)
+pourra les proposer ; en G1, un `slot_key` = simple libellé court
+documenté dans le modèle CSV.
+
+**Sécurité.** `slot_key` et la `business_key` dérivée ne contiennent
+aucune donnée personnelle (pas d'email formateur). Non exposées au
+client (internes à la trace de résolution).
 
 **Transactions.** N/A (valeur dérivée).
 
-**Tests attendus.** stabilité de la clé sous réordonnancement /
-correction de casse ; détection de doublon intra-fichier ; réutilisation
-inter-versions ; supersession.
+**Tests attendus.** stabilité de l'identité (`slot_key`) sous
+réordonnancement / correction de casse des propriétés ; `slot_key`
+manquant ⇒ `ERROR` ; doublon de `slot_key` intra-fichier ⇒ `ERROR` ;
+`UNCHANGED` / `MODIFIED` / `ADDED` / `REMOVED` inter-versions ; (mode
+repli) changement d'horaire ⇒ `REMOVED` + `ADDED`.
 
 **Impact déploiement.** Aucun.
 
@@ -205,39 +270,70 @@ e-mail/audit `AFTER_COMMIT`. G1-B doit s'aligner.
 1. Réécrire une mécanique ad hoc pour le planning — rejeté (risque,
    incohérence).
 2. **Reprendre le modèle `studentimport`** : statuts
-   `SIMULATED → PUBLISHED | CANCELLED | EXPIRED` (+ `FAILED` **présent**
-   ici, cf. §10.1 du prompt), verrou de ligne à la publication,
-   re-validation, idempotence par état + par `entryPublicId`, TTL de
-   simulation (`expires_at`), audit `AFTER_COMMIT` / `REQUIRES_NEW`.
+   `SIMULATED → PUBLISHED | CANCELLED | EXPIRED`, verrou de ligne à la
+   publication, re-validation, idempotence par état + par `entryPublicId`,
+   TTL de simulation (`expires_at`), audit `AFTER_COMMIT` /
+   `REQUIRES_NEW`. **Pas** de statut `FAILED` : un échec de publication
+   rollback tout et le job reste `SIMULATED`, republiable après
+   correction.
+3. Option 2 **+ statut `FAILED`**, écrit hors de la transaction de
+   publication.
 
-**Décision.** Option 2. Différence assumée avec `studentimport` :
-`planning_import_job` **a** un statut `FAILED` (une publication qui
-échoue après avoir dépassé la re-validation — p. ex. le port
-`coursesession` lève — rollback tout, et le job passe `FAILED` avec une
-`planning_import_job_issue` explicative ; il n'est plus republiable, un
-nouvel import est nécessaire). Raison : la publication planning touche un
-autre module (séances) et un échec y est un signal fort, à distinguer
-d'un simple `SIMULATED` réutilisable.
+**Contradiction corrigée (G1-0.1).** L'esquisse initiale disait
+« rollback tout **et** le job passe `FAILED` [dans la même transaction] »
+— impossible : si la transaction de publication rollback, l'écriture du
+statut `FAILED` est annulée avec elle.
 
-**Conséquences.** `CHECK (status IN ('SIMULATED','PUBLISHED','CANCELLED','EXPIRED','FAILED'))`.
-Republication d'un job **`PUBLISHED`** = idempotent (retourne le même
-résultat, ne recrée rien). Republication d'un job `FAILED` / `CANCELLED`
-/ `EXPIRED` → `409`.
+**Décision.** **Option 3**, avec séparation transactionnelle stricte :
+
+- `PlanningPublicationOrchestrator` (hors transaction) :
+  1. appelle `PlanningPublicationService.publish(jobId)` — **une seule
+     transaction atomique** : verrou `SELECT … FOR UPDATE` du job,
+     re-validation complète, création/mise à jour/supersession de **toutes**
+     les séances via `PlanningSessionWriter.sync`, création des
+     remplacements éventuels, écriture de la `planning_version` `PUBLISHED`
+     + bascule de l'ancienne en `SUPERSEDED`, passage du job `PUBLISHED`.
+     **Aucun état partiellement publié.**
+  2. si `publish` lève : la transaction a rollback (aucune séance, aucune
+     version). L'orchestrateur écrit alors `status = FAILED` +
+     `planning_import_job_issue` explicative dans une transaction
+     **`REQUIRES_NEW` distincte**, qui **ne contient aucune donnée métier
+     publiée** (uniquement le statut du job et son issue).
+- Un **conflit métier attendu** (ligne `ERROR`, périmètre, état de job
+  incompatible, concurrence) n'est **pas** un `FAILED` : c'est un
+  `ProblemDetail` contrôlé (`409` / `422`), le job reste `SIMULATED`,
+  republiable. `FAILED` est réservé à un échec **inattendu** après
+  re-validation (p. ex. le port `coursesession` lève).
+
+**Conséquences.** `CHECK (status IN
+('SIMULATED','PUBLISHED','CANCELLED','EXPIRED','FAILED'))`. Republication
+d'un job `PUBLISHED` = idempotente (même résultat, ne recrée rien).
+Republication d'un job `FAILED` / `CANCELLED` / `EXPIRED` → `409` : un
+nouvel import est nécessaire. Jamais de `500` générique pour un conflit
+métier.
 
 **Risques.** Concurrence de deux publications du même job → verrou de
 ligne : la seconde voit l'état changé après acquisition → idempotent
-(si `PUBLISHED`) ou `409` métier. **Jamais `500`.**
+(si `PUBLISHED`) ou `409` métier. **Jamais `500`.** Crash de la JVM
+entre le rollback et l'écriture `FAILED` → le job reste `SIMULATED`
+(aucune donnée publiée) : re-tentative possible, pas d'incohérence.
 
 **Sécurité.** Périmètre re-vérifié à la publication (pas seulement à la
 simulation) : un RP dont le périmètre a changé entre les deux ne peut
 pas publier hors périmètre.
 
 **Transactions.** Une seule transaction pour toute la publication
-(job + version + entrées + séances via port). Rollback total testé (T3
-équivalent).
+(job + version + entrées + séances via port + remplacements). Rollback
+total testé (T3 équivalent). Le passage `FAILED` est une transaction
+`REQUIRES_NEW` **séparée**, portée par l'orchestrateur, sans donnée
+métier.
 
-**Tests attendus.** T1 (simulation sans écriture), T3 (rollback total),
-idempotence, concurrence, `EXPIRED` refusé, `FAILED` non republiable.
+**Tests attendus.** T1 (simulation sans écriture), T3 (rollback total ⇒
+0 séance, 0 version, job non `PUBLISHED`), `FAILED` écrit en
+`REQUIRES_NEW` après un port qui lève (et ne contient aucune séance),
+conflit métier ⇒ `ProblemDetail` `409`/`422` et job resté `SIMULATED`,
+idempotence (double publish `PUBLISHED`), concurrence (2 publications),
+`EXPIRED` refusé, `FAILED` non republiable.
 
 **Impact déploiement.** Tâche `@Scheduled` de purge des jobs
 `SIMULATED`/`EXPIRED` (comme `studentimport`) — documentée dans
@@ -260,26 +356,32 @@ AC-008.
 2. Republication (même `schedule`) ⇒ `version_number = N+1`, statut
    `PUBLISHED` ; l'ancienne version passe `SUPERSEDED`
    (`replaced_by_version_id`).
-3. Séances `planning` en statut **`OPEN` ou `CLOSED`** : **jamais**
+3. Séances planning en statut **`OPEN` ou `CLOSED`** : **jamais**
    modifiées ni supersédées (l'émargement en cours / fait fait foi).
-   Si leur `business_key` disparaît de la version N+1, elles restent
+   Si leur `slot_key` disparaît de la version N+1, elles restent
    telles quelles ; une `planning_import_job_issue` de niveau `WARNING`
    le signale.
-4. Séances `planning` **futures et `PLANNED`** dont la `business_key`
-   n'est plus dans la version N+1 : `status = CANCELLED`,
+4. Séances planning **futures et `PLANNED`** dont le `slot_key` n'est
+   plus dans la version N+1 : `status = CANCELLED`,
    `cancellation_reason = "Superseded by schedule version N+1"`,
    `superseded_by_scheduling = true`. **Aucune suppression physique.**
-5. Entrées dont la `business_key` est inchangée : la séance est
-   **réutilisée** ; si le formateur / la salle / l'horaire diffèrent et
-   que la séance est `PLANNED`, elle est **mise à jour** (et un
+5. Entrées dont le `slot_key` est inchangé : la séance est **réutilisée** ;
+   si une propriété modifiable (formateur, salle, **horaire**, titre)
+   diffère et que la séance est `PLANNED`, elle est **mise à jour** (et un
    `PlanningEntryChangedEvent` porte les champs modifiés pour G1-D).
-6. Nouvelles `business_key` : **création** d'une séance.
-7. Séances **exceptionnelles** (`exceptional = true`) : hors du champ du
-   planning, jamais touchées par une publication.
+   *Mode repli DEC-G1-002 (sans `slot_key`)* : seuls formateur / salle
+   déclenchent une mise à jour ; un changement d'horaire est un
+   `REMOVED` + `ADDED` (règles 4 + 6).
+6. Nouveaux `slot_key` : **création** d'une séance.
+7. Séances **exceptionnelles manuelles** (`planning_entry_public_id IS
+   NULL` — le discriminant d'origine ajouté en `V13`, cf. DEC-G1-001) :
+   hors du champ du planning, jamais touchées par une publication.
 
-**Conséquences.** Migration V13 : `course_session.superseded_by_scheduling`
-BOOLEAN NOT NULL DEFAULT FALSE ; `planning_entry.session_public_id`
-BINARY(16) NULL.
+**Conséquences.** Migration **`V13`** (cf. DEC-G1-001, DEC-G1-012) :
+`course_session.superseded_by_scheduling BOOLEAN NOT NULL DEFAULT FALSE`,
+`course_session.planning_entry_public_id BINARY(16) NULL UNIQUE`
+(lien **et** discriminant d'origine), `exception_reason` rendue nullable ;
+`planning_entry.session_public_id BINARY(16) NULL`.
 
 **Risques.** Un formateur ayant ouvert par erreur une séance « fantôme »
 la fige. Accepté : le formateur peut la clôturer, le RP peut créer une
@@ -393,36 +495,48 @@ n'élargit pas le périmètre.
 
 **Contexte.** G1-D crée un **centre de notifications persistantes**
 (EF-NOTIF-001/002, RG-033). Le module `notification` actuel n'a **pas**
-de table (email d'activation seul, `@TransactionalEventListener`
-`AFTER_COMMIT` synchrone). Spring Modulith 1.4.12 est présent, **sans**
+de table : seul `InvitationEmailListener` existe, en
+`@TransactionalEventListener(phase = AFTER_COMMIT)`, envoi SMTP dans un
+`try/catch` (vérifié). Spring Modulith 1.4.12 est présent, **sans**
 `spring-modulith-starter-jpa` (donc sans Event Publication Registry).
 
 **Documents.** ARCH §8.2, §8.3, §18.2 ; MDD §23.1 ; CDC §14, §23, §43
 RG-033 ; `backend/pom.xml`.
+
+**État réel du module `notification`** (vérifié 1er sept. 2026) :
+`InvitationEmailListener` = `@TransactionalEventListener(AFTER_COMMIT)`,
+envoi SMTP dans un `try/catch` (aucune table, aucune transaction propre).
+Le module `audit`, lui, utilise majoritairement `@EventListener`
+*synchrone* + `REQUIRES_NEW` (cf. §Contexte, corrigé en G1-0.1) — ce
+**n'est pas** le motif à imiter ici.
 
 **Options.**
 1. Ajouter `spring-modulith-starter-jpa` → Event Publication Registry
    (table `event_publication`, republication au démarrage des events non
    traités). Avantage : garantie de livraison « au moins une fois ».
    Coût : nouvelle dépendance, nouvelle table gérée par Modulith (ou
-   par une migration Flyway `event_publication`), changement de
-   sémantique des listeners d'audit existants (risque de régression sur
-   11 listeners), schéma géré hors `ddl-auto=validate`.
-2. **Listeners applicatifs `@TransactionalEventListener(AFTER_COMMIT)` +
+   par une migration Flyway `event_publication`), impact potentiel sur
+   **tous** les listeners d'événements du projet (10 classes d'audit +
+   `InvitationEmailListener`), schéma géré hors `ddl-auto=validate`.
+2. **Listener applicatif `@TransactionalEventListener(AFTER_COMMIT)` +
    idempotence en base** (clé `dedup_key` unique sur `notification`) +
    transaction **`REQUIRES_NEW`** pour l'écriture des notifications, de
-   sorte qu'un échec de notification **ne rollback pas** le métier
-   (exigence §12 du prompt). Reprise = tâche `@Scheduled` optionnelle
-   qui rejoue les événements « ratés » depuis les données métier
+   sorte qu'un échec de notification **ne rollback pas** le métier.
+   C'est le motif du **seul** `StudentImportAuditListener`
+   (`AFTER_COMMIT` + `REQUIRES_NEW`), pas celui de la majorité des
+   listeners d'audit. Reprise = tâche `@Scheduled` optionnelle qui
+   rejoue les événements « ratés » depuis les données métier
    (idempotence garantit l'absence de doublon).
 
 **Décision.** Option 2 pour G1 (ne pas changer la version ni le socle
-Modulith sans justification forte — règle §12 du prompt). L'Event
-Publication Registry est **recommandé pour l'après-G1** et tracé comme
-dette dans `docs/07` et le rapport final.
+Modulith sans justification forte). L'Event Publication Registry est
+**recommandé pour l'après-G1** et tracé comme dette dans `docs/07` et le
+rapport final. Migrer *aussi* les 9 listeners d'audit `@EventListener`
+vers `AFTER_COMMIT` est une dette distincte, hors périmètre G1.
 
 **Conséquences.**
-- Migration `V14` : table `notification` (`id`, `public_id`,
+- Migration **`V15`** (renumérotée en G1-0.1, cf. DEC-G1-012) : table
+  `notification` (`id`, `public_id`,
   `recipient_user_id`, `type`, `title`, `body` neutre, `resource_type`,
   `resource_public_id`, `status ∈ {UNREAD, READ, ARCHIVED}`,
   `dedup_key` UNIQUE, `created_at`, `read_at`, `version`).
@@ -587,7 +701,7 @@ bornée, sans N+1.
   restent des requêtes SQL bornées). Tracé comme évolution possible.
 
 **Conséquences.** Pas de nouvelle table. Éventuels index de couverture
-ajoutés par migration `V16` **uniquement si** un test de non-régression
+ajoutés par migration `V17` **uniquement si** un test de non-régression
 de performance le justifie (sinon aucun).
 
 **Risques.** N+1 masqué. Atténué : test qui compte les requêtes (compteur
@@ -661,15 +775,22 @@ numéro réservé sans fichier.
 **Documents.** MDD §44 ; V1–V11 ; CS (« schéma en version 11,
 `ddl-auto=validate` »).
 
-**Décision — attribution des numéros (un domaine par migration).**
+**Décision — attribution des numéros (un domaine par migration ;
+renumérotée en G1-0.1 pour ne pas mélanger G1-B et G1-C dans un même
+fichier).**
 
 | Migration | Bloc | Contenu |
 |---|---|---|
 | `V12__create_planning_tables.sql` | G1-B | `planning_import_job`, `planning_import_job_issue`, `planning_import_row`, `planning_import_row_issue`, `planning_schedule`, `planning_version`, `planning_entry` (+ index, `CHECK`) |
-| `V13__extend_course_session_for_planning_and_lifecycle.sql` | G1-B + G1-C | `course_session.planning_entry_public_id`, `superseded_by_scheduling`, nullabilité ; `teacher_substitution` ; `session_cancellation_request` (si retenu) ; index |
-| `V14__create_notification_table.sql` | G1-D | `notification` (+ `dedup_key` UNIQUE, index) |
-| `V15__create_justification_attachment_table.sql` | G1-E | `justification_attachment` (+ FK vers le justificatif, `status`, `sha256`, index) |
-| `V16__…` | G1-F | **uniquement si** un index de performance s'avère nécessaire ; sinon **non créée** |
+| `V13__link_course_session_to_planning.sql` | **G1-B** | `course_session.planning_entry_public_id BINARY(16) NULL UNIQUE` (lien **et** discriminant d'origine), `superseded_by_scheduling BOOLEAN NOT NULL DEFAULT FALSE`, `exception_reason` rendue nullable ; `planning_entry.session_public_id BINARY(16) NULL` ; index |
+| `V14__create_session_lifecycle_tables.sql` | **G1-C** | `teacher_substitution` (MDD §18.3) ; `session_cancellation_request` **uniquement si** le workflow de demande est retenu (sinon annulation directe, pas de table) ; index |
+| `V15__create_notification_table.sql` | G1-D | `notification` (+ `dedup_key` UNIQUE, index) |
+| `V16__create_justification_attachment_table.sql` | G1-E | `justification_attachment` (+ FK vers le justificatif, `status`, `sha256`, index) |
+| `V17__…` | G1-F | **uniquement si** un index de performance s'avère nécessaire (test de non-régression) ; sinon **non créée** |
+
+Chaque checkpoint a donc **ses** migrations : G1-B → `V12`+`V13`, G1-C →
+`V14`, G1-D → `V15`, G1-E → `V16`. Aucune structure d'un bloc ultérieur
+n'est posée par anticipation dans la migration d'un bloc antérieur.
 
 - Chaque migration suit les conventions V1/V4–V11 : PK `BIGINT UNSIGNED
   AUTO_INCREMENT`, `public_id BINARY(16)` unique, `TIMESTAMP(6)` UTC,
@@ -683,8 +804,7 @@ numéro réservé sans fichier.
   par sa migration.
 
 **Conséquences.** L'ordre des blocs (G1-B avant G1-C avant G1-D avant
-G1-E) est cohérent avec l'ordre des numéros. Si G1-C n'a pas besoin de
-nouvelle colonne au-delà de V13, aucune migration V-supplémentaire.
+G1-E) est cohérent avec l'ordre des numéros, un domaine par fichier.
 
 **Risques.** Migration destructive impossible à rollback
 automatiquement → **aucune** migration G1 n'est destructive (toutes
@@ -696,8 +816,8 @@ additives : `CREATE TABLE`, `ADD COLUMN` nullable). Documenté dans
 **Transactions.** Flyway par migration (MySQL : DDL auto-commit — d'où
 l'exigence « additive uniquement »).
 
-**Tests attendus.** `./mvnw test` sur base vierge (Flyway rejoue V1→V16),
-`ModularityTests`, `ddl-auto=validate` sans erreur.
+**Tests attendus.** `./mvnw test` sur base vierge (Flyway rejoue
+V1→V17), `ModularityTests`, `ddl-auto=validate` sans erreur.
 
 **Impact déploiement.** Migrations rejouables sur une base de staging
 vierge ; pas de downtime (additif).
