@@ -3,9 +3,7 @@ package com.esic.connect.notification.internal;
 import com.esic.connect.identity.UserDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.UnexpectedRollbackException;
 
 import java.time.Clock;
 import java.util.Set;
@@ -24,11 +22,15 @@ import java.util.UUID;
  * déjà committé.
  *
  * <p><strong>G1-D.1 — isolation par destinataire.</strong> Chaque
- * destinataire est traité indépendamment : un doublon de {@code dedup_key}
- * (course entre deux livraisons de l'événement) est considéré comme un
- * <em>succès idempotent</em> ; toute autre erreur d'écriture est
- * <em>journalisée sans donnée personnelle</em> et le destinataire suivant
- * est quand même traité. Le modèle de livraison reste
+ * destinataire est traité indépendamment. La cause d'un échec est classée
+ * par {@link NotificationErrorClassifier} : une collision <em>réellement
+ * attribuable</em> à {@code uq_notification_dedup} (course entre deux
+ * livraisons de l'événement) est un <em>succès idempotent</em> ; toute
+ * autre erreur — autre contrainte d'intégrité,
+ * {@code UnexpectedRollbackException} nue, base indisponible — est une
+ * <strong>vraie erreur</strong>, <em>journalisée sans donnée
+ * personnelle</em> (jamais confondue avec un doublon), et le destinataire
+ * suivant est quand même traité. Le modèle de livraison reste
  * <strong>« au mieux » après commit</strong> (DEC-G1-007) : sans outbox
  * transactionnelle, un arrêt de la JVM entre le commit métier et
  * l'écriture d'une notification peut perdre l'événement — l'idempotence
@@ -88,15 +90,21 @@ public class NotificationWriter {
         try {
             rowWriter.write(recipientInternalId, type, title, body, resourceType, resourcePublicId,
                     dedupKey, now);
-        } catch (DataIntegrityViolationException | UnexpectedRollbackException raceDuplicate) {
-            // Course sur `dedup_key` (une autre livraison a inséré la même
-            // ligne entre le pré-contrôle et le flush) : succès idempotent.
-            log.debug("Notification deja delivree (course dedup) : type={}", type);
         } catch (RuntimeException failure) {
-            // Livraison « au mieux » : ce destinataire échoue, on n'empêche
-            // pas les autres. Aucune donnée personnelle dans le journal.
-            log.warn("Echec d'ecriture d'une notification (best effort) : type={}, cause={}",
-                    type, failure.getClass().getSimpleName());
+            if (NotificationErrorClassifier.isDedupKeyCollision(failure)) {
+                // Course réellement attribuée à `uq_notification_dedup` : une
+                // autre livraison du même événement a inséré la ligne entre le
+                // pré-contrôle et le flush. Succès idempotent.
+                log.debug("Notification deja delivree (course uq_notification_dedup) : type={}", type);
+                return;
+            }
+            // Toute autre erreur (autre contrainte d'intégrité, rollback
+            // inattendu nu, base indisponible) : VRAIE erreur — jamais
+            // assimilée à un doublon. Journalisée SANS donnée personnelle ; le
+            // destinataire suivant du même événement est quand même traité ;
+            // aucune exception ne remonte vers le métier déjà committé.
+            log.warn("Echec d'ecriture d'une notification (best effort, vraie erreur) : type={}, cause={}",
+                    type, NotificationErrorClassifier.rootCauseName(failure));
         }
     }
 }

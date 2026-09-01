@@ -8,9 +8,16 @@ import com.esic.connect.identity.internal.UserAccount;
 import com.esic.connect.identity.internal.UserAccountRepository;
 import com.esic.connect.identity.internal.UserRole;
 import com.esic.connect.identity.internal.UserRoleRepository;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -66,10 +73,14 @@ class NotificationDeliveryResilienceIntegrationTests {
         static final AtomicInteger calls = new AtomicInteger();
         /** Nombre d'appels initiaux du writer qui lèvent une exception. */
         static volatile int failFirstN = 0;
+        /** Exception levée par les {@code failFirstN} premiers appels. */
+        static volatile java.util.function.Supplier<RuntimeException> failure =
+                () -> new RuntimeException("panne simulee d'ecriture de notification");
 
         static void reset() {
             calls.set(0);
             failFirstN = 0;
+            failure = () -> new RuntimeException("panne simulee d'ecriture de notification");
         }
 
         @Bean
@@ -80,7 +91,7 @@ class NotificationDeliveryResilienceIntegrationTests {
                 void write(long recipientUserId, NotificationType type, String title, String body,
                           String resourceType, UUID resourcePublicId, String dedupKey, Instant createdAt) {
                     if (calls.incrementAndGet() <= failFirstN) {
-                        throw new RuntimeException("panne simulee d'ecriture de notification");
+                        throw failure.get();
                     }
                     repository.saveAndFlush(new Notification(recipientUserId, type, title, body,
                             resourceType, resourcePublicId, dedupKey, createdAt));
@@ -111,15 +122,37 @@ class NotificationDeliveryResilienceIntegrationTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    private ListAppender<ILoggingEvent> logs;
+    private ch.qos.logback.classic.Logger writerLogger;
+
     @BeforeEach
     void setUp() {
         rest.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
         FlakyRowWriterConfig.reset();
+        LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        writerLogger = context.getLogger(NotificationWriter.class);
+        logs = new ListAppender<>();
+        logs.start();
+        writerLogger.addAppender(logs);
+        writerLogger.setLevel(Level.DEBUG);
     }
 
     @AfterEach
     void tearDown() {
         FlakyRowWriterConfig.reset();
+        if (writerLogger != null && logs != null) {
+            writerLogger.detachAppender(logs);
+        }
+    }
+
+    private boolean loggedRealError() {
+        return logs.list.stream().anyMatch(e -> e.getLevel() == Level.WARN
+                && e.getFormattedMessage().contains("vraie erreur"));
+    }
+
+    private boolean loggedIdempotentDedup() {
+        return logs.list.stream().anyMatch(e -> e.getLevel() == Level.DEBUG
+                && e.getFormattedMessage().contains("uq_notification_dedup"));
     }
 
     // ------------------------------------------------------------------
@@ -165,6 +198,80 @@ class NotificationDeliveryResilienceIntegrationTests {
                 recipients, "t", "b");
 
         assertThat(notificationRows(resource)).isEqualTo(2L);
+    }
+
+    // ------------------------------------------------------------------
+    // Correctif G1-D.1 — classification précise des erreurs d'idempotence
+    // ------------------------------------------------------------------
+
+    @Test
+    void aGenuineDedupKeyCollisionIsAnIdempotentSuccessAndDoesNotBlockTheNextRecipient() {
+        Account a = account(RoleCode.TEACHER);
+        Account b = account(RoleCode.TEACHER);
+        UUID resource = UUID.randomUUID();
+        UUID eventKey = UUID.randomUUID();
+
+        // Le premier destinataire subit une violation NOMMANT uq_notification_dedup
+        // (course réelle entre deux livraisons) ; le second réussit.
+        FlakyRowWriterConfig.failFirstN = 1;
+        FlakyRowWriterConfig.failure = () -> new DataIntegrityViolationException(
+                "could not execute statement [Duplicate entry 'abc' for key "
+                        + "'notification.uq_notification_dedup']");
+
+        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
+                new java.util.LinkedHashSet<>(List.of(
+                        UUID.fromString(a.publicId()), UUID.fromString(b.publicId()))),
+                "t", "b");
+
+        assertThat(notificationRows(resource)).as("le second destinataire est notifié").isEqualTo(1L);
+        assertThat(loggedIdempotentDedup()).as("collision dedup = succès idempotent (DEBUG)").isTrue();
+        assertThat(loggedRealError()).as("aucune vraie erreur journalisée").isFalse();
+    }
+
+    @Test
+    void anotherIntegrityViolationIsARealErrorNotADuplicateAndTheNextRecipientIsStillNotified() {
+        Account a = account(RoleCode.TEACHER);
+        Account b = account(RoleCode.TEACHER);
+        UUID resource = UUID.randomUUID();
+        UUID eventKey = UUID.randomUUID();
+
+        // Violation d'une AUTRE contrainte d'unicité : ne prouve PAS une collision
+        // de dedup_key → vraie erreur, jamais assimilée à un doublon.
+        FlakyRowWriterConfig.failFirstN = 1;
+        FlakyRowWriterConfig.failure = () -> new DataIntegrityViolationException(
+                "could not execute statement [Duplicate entry 'x' for key "
+                        + "'notification.uq_notification_public_id']");
+
+        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
+                new java.util.LinkedHashSet<>(List.of(
+                        UUID.fromString(a.publicId()), UUID.fromString(b.publicId()))),
+                "t", "b");
+
+        assertThat(notificationRows(resource)).as("le destinataire suivant est traité").isEqualTo(1L);
+        assertThat(loggedRealError()).as("classée comme vraie erreur (WARN)").isTrue();
+        assertThat(loggedIdempotentDedup()).as("jamais assimilée à un doublon dedup").isFalse();
+    }
+
+    @Test
+    void aBareUnexpectedRollbackIsARealErrorNotADuplicateAndTheNextRecipientIsStillNotified() {
+        Account a = account(RoleCode.TEACHER);
+        Account b = account(RoleCode.TEACHER);
+        UUID resource = UUID.randomUUID();
+        UUID eventKey = UUID.randomUUID();
+
+        // UnexpectedRollbackException NUE (aucune cause de doublon) : vraie erreur.
+        FlakyRowWriterConfig.failFirstN = 1;
+        FlakyRowWriterConfig.failure = () -> new UnexpectedRollbackException(
+                "Transaction silently rolled back because it has been marked as rollback-only");
+
+        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
+                new java.util.LinkedHashSet<>(List.of(
+                        UUID.fromString(a.publicId()), UUID.fromString(b.publicId()))),
+                "t", "b");
+
+        assertThat(notificationRows(resource)).as("le destinataire suivant est traité").isEqualTo(1L);
+        assertThat(loggedRealError()).as("rollback nu = vraie erreur (WARN)").isTrue();
+        assertThat(loggedIdempotentDedup()).as("jamais assimilé à un doublon dedup").isFalse();
     }
 
     // ------------------------------------------------------------------
