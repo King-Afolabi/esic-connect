@@ -142,7 +142,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-B | Module `planning` complet | `IMPLEMENTED_FULL_SUITE_GREEN` — back-end (schéma `e4793e7`, simulation `24cc9f5`, publication `dafd23a`) **+ parcours Angular** (`429f45b`). Reste post-G1 : avertissements d'alternance (`DEC-G1-006`), création manuelle plein calendrier (`EF-PLAN-006`, hors périmètre G1). | `e4793e7` + `24cc9f5` + `dafd23a` + `429f45b` |
 | G1-B.1 | Audit correctif du bloc `planning` | `IMPLEMENTED_FULL_SUITE_GREEN` — identité de créneau (`planning_slot_public_id`), concurrence idempotente durcie, rollback+`FAILED` déterministe, garde centralisée « séance supersédée = inactive », conflit vs séances déjà publiées (formateur/classe), traçabilité reclassée, script de démo. Suites **719/0** (3 fuseaux) / **550/0**. | `fix(planning): consolider l'identité et la publication atomique` + `docs(g1): corriger la traçabilité après audit du planning` |
 | G1-C.1 | Annulation des séances (`CANCELLED`) | `IMPLEMENTED_FULL_SUITE_GREEN` — V14, `SessionLifecycle.CANCELLED`, `POST /sessions/{id}/cancel`, garde `operational()`, purge jetons, UI. Back **723/0**, front **554/0**. | `feat(coursesession): gérer l'annulation des séances` |
-| G1-C.2 | Remplacements de formateur | `IMPLEMENTED_FULL_SUITE_GREEN` — `TeacherSubstitution` + service + 3 endpoints, `AccessGuard` étendu (substitut actif ⇒ `MANAGE`), UI panneau remplacements. Back **729/0**, front **559/0**. | `feat(coursesession): gérer les remplacements de formateur` |
+| G1-C.2 | Remplacements de formateur | `IMPLEMENTED_FULL_SUITE_GREEN` — `TeacherSubstitution` + service + 3 endpoints, `AccessGuard` étendu (substitut actif ⇒ `MANAGE`), UI panneau remplacements. Back **729/0**, front **557/0**. | `feat(coursesession): gérer les remplacements de formateur` |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
 | G1-E | Pièces jointes des justificatifs | `NOT_STARTED` | — |
@@ -780,7 +780,7 @@ Commit `feat(coursesession): gérer les remplacements de formateur`.
   rôles + séance annulée non substituable ; concurrence → 1 seule `ACTIVE`,
   jamais `5xx`). Front **+3** (`session-detail` liste/ajout/fin,
   masquage non-manager ; `sessions-api` contrat). Suites : back
-  **723 → 729**, front **556 → 559**.
+  **723 → 729**, front **554 → 557**.
 
 ## État de reprise autonome
 
@@ -796,7 +796,7 @@ Commit `feat(coursesession): gérer les remplacements de formateur`.
   `CourseSessionChangeEvent` `CANCELLED` / `SUBSTITUTION_*` sont déjà
   publiés, prêts à être consommés par un module `notification` étendu).
 - **Fichiers non terminés** : aucun.
-- **Tests verts** : back **729/0** (3 fuseaux) ; front **559/0** ;
+- **Tests verts** : back **729/0** (3 fuseaux) ; front **557/0** ;
   `ModularityTests` vert.
 - **Tests rouges** : aucun.
 - **Commande suivante** (G1-D) : lire `notification.internal` +

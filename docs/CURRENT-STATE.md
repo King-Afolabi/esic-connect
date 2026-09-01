@@ -43,7 +43,7 @@ finalisation se fait sur `chore/project-finalization-f2-f6`.
 | `academic` | année scolaire, formation, niveau, promotion, classe, affectation pédagogique + contrôle de périmètre | V5, V6 |
 | `enrollment` | profil apprenant, inscription, changement de classe historisé | V7 |
 | `alternation` | modèles de rythme, affectation historisée à une classe, exceptions individuelles, résolution `SCHOOL`/`COMPANY`/`UNKNOWN` | V8 |
-| `coursesession` | séance **exceptionnelle** (création manuelle), cycle `PLANNED → OPEN → CLOSED`, points de contrôle multiples | V9, V10 |
+| `coursesession` | séance (création manuelle **ou** issue d'un planning publié — G1-B), cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C), points de contrôle multiples, remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
 | `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction / annulation, justificatif métier sans fichier, rapports + export CSV | V9, V10 |
 | `studentimport` | import CSV contrôlé des apprenants (lecture sécurisée, simulation, confirmation transactionnelle, purge) | V11 |
 | `notification` | email d'activation via SMTP local (Mailpit), envoi asynchrone après commit | — |
@@ -114,9 +114,11 @@ enregistrée dans le dépôt.
   `/alternation` en **lecture et écriture**.
 
 ### Séances & émargement
-- Séance **exceptionnelle** créée manuellement (motif obligatoire),
-  cycle strict `PLANNED → OPEN → CLOSED`, pas de réouverture, pas de
-  `PATCH` / annulation / remplaçant.
+- Séance créée manuellement (motif obligatoire) **ou** issue d'un
+  planning publié (G1-B, `planning_slot_public_id` renseigné) ; cycle
+  strict `PLANNED → OPEN → CLOSED`, pas de réouverture ;
+  `PLANNED`/`OPEN → CANCELLED` avec motif (G1-C.1) ; remplacements de
+  formateur datés (G1-C.2). Pas de `PATCH`.
 - Points de contrôle multiples par séance (`START` / `END` / `CUSTOM`),
   transitions concurrentes → `409`, jamais `500`.
 - Jeton d'émargement **opaque** + **code court** dans Redis (TTL,
@@ -301,7 +303,7 @@ remplacement »). Audit `SESSION_SUBSTITUTION_ADDED` / `…_ENDED`. Front
 `/sessions/:publicId` : section « Remplacements ». Pas d'endpoint
 `/history` dédié. `EF-SES-005` / `CAD §24 RG-12` / `CDC §43 RG-015` →
 **`IMPLEMENTED_AND_TESTED`**. Suites : back **729/0** (3 fuseaux),
-front **559/0**.
+front **557/0**.
 
 **G1-C est terminé** (C.1 + C.2). Reste non livré : `PATCH /sessions/{id}`
 d'une séance manuelle `PLANNED` (non requis) ; notifications persistantes
