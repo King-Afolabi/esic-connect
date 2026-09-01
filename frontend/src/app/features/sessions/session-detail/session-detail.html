@@ -130,6 +130,93 @@
         </p>
       }
 
+      <!-- Remplacements de formateur (G1-C.2) -->
+      <section class="sessions__section" aria-label="Remplacements de formateur">
+        <div class="sessions__header">
+          <h2 class="sessions__subtitle">Remplacements</h2>
+          @if (canAddSubstitution()) {
+            <button mat-stroked-button type="button" (click)="toggleSubstitutionForm()">
+              <mat-icon aria-hidden="true">person_add</mat-icon> Ajouter un remplaçant
+            </button>
+          }
+        </div>
+
+        @if (showSubstitutionForm()) {
+          <form
+            class="sessions__inline-form"
+            [formGroup]="substitutionForm"
+            (ngSubmit)="submitSubstitution()"
+          >
+            <mat-form-field appearance="outline">
+              <mat-label>Remplaçant</mat-label>
+              <mat-select formControlName="substituteTeacherPublicId">
+                @for (t of eligibleTeachers(); track t.publicId) {
+                  <mat-option [value]="t.publicId">{{ t.firstName }} {{ t.lastName }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Début (validité)</mat-label>
+              <input matInput type="datetime-local" formControlName="validFrom" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Fin (validité)</mat-label>
+              <input matInput type="datetime-local" formControlName="validUntil" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Motif</mat-label>
+              <input matInput formControlName="reason" maxlength="500" required />
+            </mat-form-field>
+            <div class="sessions__form-actions">
+              <button
+                mat-flat-button
+                type="submit"
+                [disabled]="substitutionBusy() || substitutionForm.invalid"
+              >
+                Affecter
+              </button>
+              <button mat-button type="button" (click)="toggleSubstitutionForm()">Annuler</button>
+            </div>
+          </form>
+        }
+        @if (substitutionError()) {
+          <p class="sessions__inline-error" role="alert">{{ substitutionError() }}</p>
+        }
+
+        @if (substitutionsState() === 'error') {
+          <p class="sessions__inline-error" role="alert">
+            Les remplacements n'ont pas pu être chargés.
+          </p>
+        } @else if (substitutions().length === 0) {
+          <p class="sessions__status" role="note">Aucun remplacement.</p>
+        } @else {
+          <ul class="sessions__plain-list">
+            @for (s of substitutions(); track s.publicId) {
+              <li>
+                <span>
+                  {{ s.substitute.firstName }} {{ s.substitute.lastName }}
+                  remplace {{ s.originalTeacher.firstName }} {{ s.originalTeacher.lastName }}
+                </span>
+                <span>
+                  du {{ formatInstantUtc(s.validFrom) }} au {{ formatInstantUtc(s.validUntil) }}
+                  — {{ s.status === 'ACTIVE' ? 'actif' : 'terminé' }}
+                </span>
+                @if (s.status === 'ACTIVE' && canManageSubstitutions()) {
+                  <button
+                    mat-button
+                    type="button"
+                    (click)="endSubstitution(s.publicId)"
+                    [disabled]="substitutionBusy()"
+                  >
+                    Terminer
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
       <!-- Points de contrôle -->
       <section class="sessions__section" aria-label="Points de contrôle">
         <div class="sessions__header">

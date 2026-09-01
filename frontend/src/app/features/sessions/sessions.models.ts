@@ -345,6 +345,35 @@ export interface CancelSessionRequest {
   reason: string;
 }
 
+/** `TeacherSubstitutionStatus` (G1-C.2). */
+export type SubstitutionStatus = 'ACTIVE' | 'ENDED';
+
+/**
+ * `SubstitutionResponse` (G1-C.2) — le formateur principal
+ * (`originalTeacher`) et le remplaçant (`substitute`) côte à côte :
+ * l'affectation principale n'est jamais écrasée.
+ */
+export interface SubstitutionResponse {
+  publicId: string;
+  status: SubstitutionStatus;
+  reason: string;
+  /** `Instant` ISO-8601. */
+  validFrom: string;
+  validUntil: string;
+  substitute: SessionTeacherView;
+  originalTeacher: SessionTeacherView;
+  createdAt: string;
+  endedAt: string | null;
+}
+
+/** `CourseSessionRequests.CreateSubstitution` (G1-C.2). */
+export interface CreateSubstitutionRequest {
+  substituteTeacherPublicId: string;
+  reason: string;
+  validFrom: string;
+  validUntil: string;
+}
+
 /** `AttendanceRequests.Validate` — exactement l'un des deux champs. */
 export interface ValidateAttendanceRequest {
   token?: string | null;

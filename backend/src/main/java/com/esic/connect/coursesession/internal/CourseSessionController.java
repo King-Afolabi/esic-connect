@@ -28,9 +28,11 @@ import java.util.List;
 class CourseSessionController {
 
     private final CourseSessionService service;
+    private final SubstitutionService substitutionService;
 
-    CourseSessionController(CourseSessionService service) {
+    CourseSessionController(CourseSessionService service, SubstitutionService substitutionService) {
         this.service = service;
+        this.substitutionService = substitutionService;
     }
 
     @GetMapping
@@ -95,5 +97,40 @@ class CourseSessionController {
                 @Valid @RequestBody CourseSessionRequests.Cancel request,
                 @AuthenticationPrincipal Jwt caller) {
         service.cancel(publicId, request.reason(), CourseSessionWeb.subject(caller));
+    }
+
+    // ------------------------------------------------------------------
+    // Remplacements de formateur (G1-C.2 ; EF-SES-005)
+    // ------------------------------------------------------------------
+
+    @GetMapping("/{publicId}/substitutions")
+    @PreAuthorize(CourseSessionWeb.READ_ROLES)
+    List<SubstitutionResponse> listSubstitutions(@PathVariable String publicId,
+                                                 @AuthenticationPrincipal Jwt caller) {
+        return substitutionService.list(publicId, CourseSessionWeb.subject(caller));
+    }
+
+    /**
+     * Affecte un remplaçant sur une séance {@code PLANNED} / {@code OPEN}
+     * (G1-C.2). Réservé aux rôles de gestion pédagogique
+     * ({@code CREATE_ROLES}, {@code TEACHER} exclu : « ne valide pas
+     * lui-même son remplacement », CDC §12.4). {@code 201}.
+     */
+    @PostMapping("/{publicId}/substitutions")
+    @PreAuthorize(CourseSessionWeb.CREATE_ROLES)
+    @ResponseStatus(HttpStatus.CREATED)
+    SubstitutionResponse addSubstitution(@PathVariable String publicId,
+                                         @Valid @RequestBody CourseSessionRequests.CreateSubstitution request,
+                                         @AuthenticationPrincipal Jwt caller) {
+        return substitutionService.create(publicId, request, CourseSessionWeb.subject(caller));
+    }
+
+    @PostMapping("/{publicId}/substitutions/{substitutionId}/end")
+    @PreAuthorize(CourseSessionWeb.CREATE_ROLES)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void endSubstitution(@PathVariable String publicId,
+                         @PathVariable String substitutionId,
+                         @AuthenticationPrincipal Jwt caller) {
+        substitutionService.end(publicId, substitutionId, CourseSessionWeb.subject(caller));
     }
 }

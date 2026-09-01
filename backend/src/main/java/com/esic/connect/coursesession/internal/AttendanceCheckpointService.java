@@ -202,7 +202,7 @@ class AttendanceCheckpointService {
                 .filter(Optional::isPresent)
                 .map(ref -> ref.get().publicId())
                 .collect(Collectors.toUnmodifiableSet());
-        if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, callerSubject)) {
+        if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, callerSubject)) {
             throw new CourseSessionException(accessGuard.isPedagogicalManagerScoped()
                     ? CourseSessionException.Kind.SCOPE_FORBIDDEN
                     : CourseSessionException.Kind.OPERATION_FORBIDDEN);

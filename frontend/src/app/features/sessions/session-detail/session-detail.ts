@@ -32,10 +32,14 @@ import {
   CheckpointAttendance,
   CheckpointView,
   CourseSessionResponse,
+  CreateSubstitutionRequest,
   SESSION_ATTENDANCE_MANAGE_ROLES,
+  SESSION_CREATE_ROLES,
   SESSION_MANAGE_ROLES,
   SESSION_READ_ROLES,
   SessionAttendanceResponse,
+  SubstitutionResponse,
+  TeacherOptionResponse,
   attendanceCandidateLabel,
   attendanceSourceLabel,
   attendanceStatusLabel,
@@ -183,6 +187,20 @@ export class SessionDetail {
     reason: ['', [Validators.required, Validators.maxLength(500)]],
   });
 
+  // --- Remplacements de formateur (G1-C.2) -------------------------
+  protected readonly substitutions = signal<SubstitutionResponse[]>([]);
+  protected readonly substitutionsState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  protected readonly substitutionError = signal<string | null>(null);
+  protected readonly eligibleTeachers = signal<TeacherOptionResponse[]>([]);
+  protected readonly showSubstitutionForm = signal(false);
+  protected readonly substitutionBusy = signal(false);
+  protected readonly substitutionForm = this.fb.nonNullable.group({
+    substituteTeacherPublicId: ['', [Validators.required]],
+    validFrom: ['', [Validators.required]],
+    validUntil: ['', [Validators.required]],
+    reason: ['', [Validators.required, Validators.maxLength(500)]],
+  });
+
   private renewHandle: ReturnType<typeof setTimeout> | null = null;
   private pollSubscribed = false;
 
@@ -201,6 +219,17 @@ export class SessionDetail {
   /** G1-C — annulable : séance PLANNED ou OPEN + droit de gestion. */
   protected readonly canCancel = computed(
     () => this.canManageCheckpoint() && (this.isPlanned() || this.isOpen()),
+  );
+  /**
+   * G1-C.2 — gestion des remplacements : réservée aux rôles de gestion
+   * pédagogique (`SESSION_CREATE_ROLES`, TEACHER exclu — « ne valide pas
+   * lui-même son remplacement »). La liste reste visible à tout lecteur.
+   */
+  protected readonly canManageSubstitutions = computed(() =>
+    holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_CREATE_ROLES),
+  );
+  protected readonly canAddSubstitution = computed(
+    () => this.canManageSubstitutions() && (this.isPlanned() || this.isOpen()),
   );
 
   /**
@@ -280,6 +309,13 @@ export class SessionDetail {
         this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
         this.checkpointCancelForm.reset({ reason: '' });
         this.sessionCancelForm.reset({ reason: '' });
+        this.showSubstitutionForm.set(false);
+        this.substitutionForm.reset({
+          substituteTeacherPublicId: '',
+          validFrom: '',
+          validUntil: '',
+          reason: '',
+        });
       }
     });
     // §4/§5 — perte du droit de **gestion des présences** : ferme la
@@ -381,6 +417,101 @@ export class SessionDetail {
         }
       },
     );
+  }
+
+  // --- Remplacements de formateur (G1-C.2) ---------------------
+
+  protected toggleSubstitutionForm(): void {
+    if (!this.showSubstitutionForm() && !this.canAddSubstitution()) {
+      return;
+    }
+    this.substitutionError.set(null);
+    this.showSubstitutionForm.update((v) => !v);
+    if (this.showSubstitutionForm() && this.eligibleTeachers().length === 0) {
+      this.api
+        .listEligibleTeachers()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({ next: (list) => this.eligibleTeachers.set(list), error: () => undefined });
+    }
+  }
+
+  protected submitSubstitution(): void {
+    if (this.substitutionForm.invalid || this.substitutionBusy()) {
+      this.substitutionForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.substitutionForm.getRawValue();
+    const body: CreateSubstitutionRequest = {
+      substituteTeacherPublicId: raw.substituteTeacherPublicId,
+      reason: raw.reason.trim(),
+      validFrom: new Date(raw.validFrom).toISOString(),
+      validUntil: new Date(raw.validUntil).toISOString(),
+    };
+    this.substitutionBusy.set(true);
+    this.substitutionError.set(null);
+    this.api
+      .addSubstitution(this.publicId, body)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.substitutionBusy.set(false);
+          if (!this.canManageSubstitutions()) {
+            return;
+          }
+          this.notifications.info('Remplaçant affecté.');
+          this.showSubstitutionForm.set(false);
+          this.substitutionForm.reset({
+            substituteTeacherPublicId: '',
+            validFrom: '',
+            validUntil: '',
+            reason: '',
+          });
+          this.loadSubstitutions();
+        },
+        error: (error: unknown) => {
+          this.substitutionBusy.set(false);
+          this.substitutionError.set(toSessionError(error).message);
+        },
+      });
+  }
+
+  protected endSubstitution(substitutionId: string): void {
+    if (this.substitutionBusy() || !this.canManageSubstitutions()) {
+      return;
+    }
+    this.substitutionBusy.set(true);
+    this.substitutionError.set(null);
+    this.api
+      .endSubstitution(this.publicId, substitutionId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.substitutionBusy.set(false);
+          this.notifications.info('Remplacement terminé.');
+          this.loadSubstitutions();
+        },
+        error: (error: unknown) => {
+          this.substitutionBusy.set(false);
+          this.substitutionError.set(toSessionError(error).message);
+        },
+      });
+  }
+
+  private loadSubstitutions(): void {
+    if (!this.canReadAttendance()) {
+      return;
+    }
+    this.substitutionsState.set('loading');
+    this.api
+      .listSubstitutions(this.publicId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          this.substitutions.set(list);
+          this.substitutionsState.set('ready');
+        },
+        error: () => this.substitutionsState.set('error'),
+      });
   }
 
   // --- Points de contrôle --------------------------------------
@@ -861,6 +992,7 @@ export class SessionDetail {
         if (this.showManualForm() && this.canManageAttendance()) {
           this.loadCandidates();
         }
+        this.loadSubstitutions();
         this.maybeStartPolling();
       },
       error: (error: unknown) => {

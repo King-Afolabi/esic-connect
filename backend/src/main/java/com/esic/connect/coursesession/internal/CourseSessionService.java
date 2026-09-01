@@ -278,7 +278,7 @@ class CourseSessionService {
 
     private void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {
         Set<UUID> classPublicIds = classPublicIds(session);
-        if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, callerSubject)) {
+        if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, callerSubject)) {
             throw new CourseSessionException(accessGuard.isPedagogicalManagerScoped()
                     ? CourseSessionException.Kind.SCOPE_FORBIDDEN
                     : CourseSessionException.Kind.OPERATION_FORBIDDEN);

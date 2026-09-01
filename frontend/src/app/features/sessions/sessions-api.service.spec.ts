@@ -91,6 +91,28 @@ describe('SessionsApiService', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
 
+  it('substitution endpoints hit /sessions/{id}/substitutions[...] with public ids only', () => {
+    service.listSubstitutions('s-1').subscribe();
+    expect(http.expectOne(`${BASE}/sessions/s-1/substitutions`).request.method).toBe('GET');
+
+    const body = {
+      substituteTeacherPublicId: 'sub-t',
+      reason: 'Congé',
+      validFrom: '2026-09-10T07:00:00.000Z',
+      validUntil: '2026-09-10T10:00:00.000Z',
+    };
+    service.addSubstitution('s-1', body).subscribe();
+    const add = http.expectOne(`${BASE}/sessions/s-1/substitutions`);
+    expect(add.request.method).toBe('POST');
+    expect(add.request.body).toEqual(body);
+    add.flush({}, { status: 201, statusText: 'Created' });
+
+    service.endSubstitution('s-1', 'sub-1').subscribe();
+    const end = http.expectOne(`${BASE}/sessions/s-1/substitutions/sub-1/end`);
+    expect(end.request.method).toBe('POST');
+    end.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
   it('issueAttendanceToken POSTs to /sessions/{id}/attendance-token (never a GET, never a token in the URL)', () => {
     service.issueAttendanceToken('s-1').subscribe();
     const req = http.expectOne(`${BASE}/sessions/s-1/attendance-token`);

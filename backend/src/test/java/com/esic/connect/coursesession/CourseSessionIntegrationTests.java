@@ -214,6 +214,178 @@ class CourseSessionIntegrationTests {
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    // ------------------------------------------------------------------
+    // G1-C.2 — remplacements de formateur
+    // ------------------------------------------------------------------
+
+    @Test
+    void substitutionKeepsThePrincipalGrantsTheSubstituteAndIsAudited() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        Account other = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), "Cours"), admin).get("publicId");
+
+        Map<String, Object> body = subBody(substitute.publicId(), -3600, 3600);
+        Map<String, Object> sub = created("/api/v1/sessions/" + id + "/substitutions", body, admin);
+        assertThat(sub.get("status")).isEqualTo("ACTIVE");
+        assertThat(((Map<?, ?>) sub.get("substitute")).get("publicId")).isEqualTo(substitute.publicId());
+        assertThat(((Map<?, ?>) sub.get("originalTeacher")).get("publicId")).isEqualTo(principal.publicId());
+        assertThat(sub).doesNotContainKeys("id", "courseSessionId", "substituteTeacherUserId");
+
+        // Le formateur principal est intact : GET séance montre toujours principal.
+        assertThat(((Map<?, ?>) getMap("/api/v1/sessions/" + id, admin).get("teacher")).get("publicId"))
+                .isEqualTo(principal.publicId());
+
+        // Le remplaçant ACTIF (période couvrant maintenant) peut ouvrir la séance ;
+        // le principal aussi ; un autre formateur non.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(other)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        // Liste + audit.
+        List<Map<String, Object>> list = list("/api/v1/sessions/" + id + "/substitutions", admin);
+        assertThat(list).hasSize(1);
+        assertThat(auditActions(id)).contains("SESSION_SUBSTITUTION_ADDED");
+    }
+
+    @Test
+    void substitutionRejectsIneligibleSameAsPrincipalOverlapAndBadPeriod() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Compte inconnu -> 409 NOT_ELIGIBLE.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(UUID.randomUUID().toString(), -3600, 3600), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTE_NOT_ELIGIBLE");
+        // Remplaçant = principal -> 409 IS_ORIGINAL.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(principal.publicId(), -3600, 3600), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTE_IS_ORIGINAL");
+        // Période inversée -> 400.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), 3600, -3600), admin).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // Chevauchement : 1re OK, 2e qui chevauche -> 409, 3e non chevauchante -> OK.
+        created("/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), 0, 7200), admin);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), 3600, 10800), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_OVERLAP");
+        created("/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), 7200, 14400), admin);
+    }
+
+    @Test
+    void endingASubstitutionRevokesTheSubstituteAndIsIdempotencySafe() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        String subId = (String) created("/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), admin).get("publicId");
+
+        // Le remplaçant peut ouvrir tant que la substitution est ACTIVE.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        assertThat(status(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/substitutions/" + subId + "/end", null, admin))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        // Double fin -> 409.
+        assertThat(exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/substitutions/" + subId + "/end", null, admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_ALREADY_ENDED");
+        // La substitution terminée retire le droit : le remplaçant ne peut plus fermer.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/close", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(auditActions(id)).contains("SESSION_SUBSTITUTION_ENDED");
+    }
+
+    @Test
+    void anExpiredSubstitutionGrantsNoRight() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        // Période entièrement dans le passé.
+        created("/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), -7200, -3600), admin);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void substitutionRolesAreEnforcedAndCancelledSessionIsNotSubstitutable() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // TEACHER (principal) -> 403 (CREATE_ROLES exclut TEACHER : « ne valide pas lui-même »).
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), tokenFor(principal)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        // STUDENT -> 403.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), tokenFor(RoleCode.STUDENT)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        // Séance annulée -> plus substituable (404, garde « opérationnelle »).
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "x"), admin);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), admin))
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void concurrentOverlappingSubstitutionCreatesResolveToOneWithoutServerError() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        Callable<HttpStatus> call = () -> (HttpStatus) exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), 0, 7200), admin)
+                .getStatusCode();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<HttpStatus> statuses;
+        try {
+            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(call, call));
+            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        // Au plus une substitution ACTIVE : exactement une création réussie.
+        long active = list("/api/v1/sessions/" + id + "/substitutions", admin).stream()
+                .filter(s -> "ACTIVE".equals(s.get("status"))).count();
+        assertThat(active).isEqualTo(1);
+    }
+
+    private Map<String, Object> subBody(String substitutePublicId, long fromOffsetSec, long untilOffsetSec) {
+        Instant base = Instant.now();
+        java.util.HashMap<String, Object> body = new java.util.HashMap<>();
+        body.put("substituteTeacherPublicId", substitutePublicId);
+        body.put("reason", "Formateur principal indisponible");
+        body.put("validFrom", base.plusSeconds(fromOffsetSec).toString());
+        body.put("validUntil", base.plusSeconds(untilOffsetSec).toString());
+        return body;
+    }
+
     @Test
     void concurrentOpenAndCancelResolveToOneTerminalStateWithoutServerError() throws Exception {
         String admin = adminToken();

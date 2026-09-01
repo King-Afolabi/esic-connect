@@ -281,10 +281,34 @@ ouvrir/annuler → `409` via `@ExceptionHandler(OptimisticLockingFailureExceptio
 jamais `500`. Front `/sessions/:publicId` : bouton « Annuler la séance »
 + confirmation avec motif. `EF-SES-004` → **`IMPLEMENTED_AND_TESTED`**.
 Suites : back **723/0**, front **554/0**.
-`EF-SES-005` (remplaçant) = **G1-C.2, en cours**.
+
+### Bloc G1-C.2 — remplacements de formateur (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN`. Table `teacher_substitution` (V14)
+consommée : entité `TeacherSubstitution` + `SubstitutionService` +
+endpoints `GET/POST /api/v1/sessions/{id}/substitutions` et
+`POST …/{substitutionId}/end`. Le **formateur principal n'est jamais
+écrasé** (`original_teacher_user_id` figé). Contrôles : remplaçant
+`TEACHER` actif ≠ principal, période valide + motif obligatoire, **une
+seule substitution `ACTIVE` applicable** (verrou de ligne sur la séance
++ contrôle de chevauchement), séance `CLOSED` non substituable,
+`CANCELLED`/supersédée → `404`. `CourseSessionAccessGuard` étendu : un
+remplaçant dont une substitution `ACTIVE` couvre l'instant courant
+obtient `MANAGE` ; un remplaçant expiré ou terminé n'a aucun droit ;
+décision **serveur**, la lecture n'est pas élargie. `POST` réservé à
+`CREATE_ROLES` (`TEACHER` exclu — « ne valide pas lui-même son
+remplacement »). Audit `SESSION_SUBSTITUTION_ADDED` / `…_ENDED`. Front
+`/sessions/:publicId` : section « Remplacements ». Pas d'endpoint
+`/history` dédié. `EF-SES-005` / `CAD §24 RG-12` / `CDC §43 RG-015` →
+**`IMPLEMENTED_AND_TESTED`**. Suites : back **729/0** (3 fuseaux),
+front **559/0**.
+
+**G1-C est terminé** (C.1 + C.2). Reste non livré : `PATCH /sessions/{id}`
+d'une séance manuelle `PLANNED` (non requis) ; notifications persistantes
+= **G1-D**.
 
 Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
-finalisation F2) **reste d'actualité** tant que les blocs G1-C.2 à G1-G
+finalisation F2) **reste d'actualité** tant que les blocs G1-D à G1-G
 ne sont pas livrés.
 
 ## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)
@@ -299,9 +323,9 @@ des `docs/01` et `docs/02`.
   **livré au bloc G1-B** (voir « Mise à jour G1 » ci-dessus).
   `EF-PLAN-006` (création manuelle plein calendrier) reste
   `HORS_PÉRIMÈTRE_ASSUMÉ`.
-- Séances : ~~annulation (EF-SES-004)~~ → **livrée au bloc G1-C.1** ;
-  affectation d'un remplaçant (EF-SES-005) — **en cours (G1-C.2)** ;
-  `PATCH` d'une séance manuelle `PLANNED` — non livré (G1-C.2 ou différé).
+- Séances : ~~annulation (EF-SES-004)~~ → **livrée (G1-C.1)** ;
+  ~~affectation d'un remplaçant (EF-SES-005)~~ → **livrée (G1-C.2)** ;
+  `PATCH` d'une séance manuelle `PLANNED` — non livré (non requis).
 - QR fixe de salle + contrôle réseau CIDR (référentiel `site_network_range`
   présent, non consommé) — EF-ROOM-002, EF-ATT-008.
 - Scan caméra mobile (code court uniquement).

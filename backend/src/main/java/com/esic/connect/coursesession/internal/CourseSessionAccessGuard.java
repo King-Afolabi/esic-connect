@@ -8,6 +8,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -36,22 +37,31 @@ class CourseSessionAccessGuard {
 
     private final CurrentUserResolver currentUserResolver;
     private final AcademicScopeDirectory academicScope;
+    private final TeacherSubstitutionRepository substitutionRepository;
+    private final Clock clock;
 
     CourseSessionAccessGuard(CurrentUserResolver currentUserResolver,
-                             AcademicScopeDirectory academicScope) {
+                             AcademicScopeDirectory academicScope,
+                             TeacherSubstitutionRepository substitutionRepository,
+                             Clock clock) {
         this.currentUserResolver = currentUserResolver;
         this.academicScope = academicScope;
+        this.substitutionRepository = substitutionRepository;
+        this.clock = clock;
     }
 
     /**
-     * @param teacherUserId        formateur de la séance (identifiant interne)
-     * @param classGroupPublicIds  classes rattachées à la séance
-     * @param level                niveau d'accès demandé
-     * @param callerSubject        sujet du JWT de l'appelant
+     * @param teacherUserId             formateur principal de la séance
+     * @param courseSessionInternalId   clé SQL de la séance, ou {@code null}
+     *                                  pour ignorer le contrôle « remplaçant
+     *                                  actif » (G1-C.2)
+     * @param classGroupPublicIds       classes rattachées à la séance
+     * @param level                     niveau d'accès demandé
+     * @param callerSubject             sujet du JWT de l'appelant
      * @return {@code true} si l'accès est accordé
      */
-    boolean isAllowed(long teacherUserId, Set<UUID> classGroupPublicIds, AccessLevel level,
-                      String callerSubject) {
+    boolean isAllowed(long teacherUserId, Long courseSessionInternalId, Set<UUID> classGroupPublicIds,
+                      AccessLevel level, String callerSubject) {
         Set<String> roles = authorities();
         boolean adminLike = roles.contains("ROLE_ADMIN") || roles.contains("ROLE_SUPER_ADMIN");
         if (adminLike) {
@@ -66,10 +76,28 @@ class CourseSessionAccessGuard {
         }
         if (roles.contains("ROLE_TEACHER")) {
             return currentUserResolver.resolveInternalId(callerSubject)
-                    .map(internalId -> internalId == teacherUserId)
+                    .map(internalId -> internalId == teacherUserId
+                            || isActiveSubstitute(courseSessionInternalId, internalId))
                     .orElse(false);
         }
         return false;
+    }
+
+    /**
+     * Vrai si {@code userInternalId} est un remplaçant <strong>ACTIVE</strong>
+     * de la séance dont la période de validité couvre l'instant courant
+     * (G1-C.2). Un remplaçant expiré ou dont la substitution est terminée
+     * n'a plus aucun droit de gestion.
+     */
+    private boolean isActiveSubstitute(Long courseSessionInternalId, long userInternalId) {
+        if (courseSessionInternalId == null) {
+            return false;
+        }
+        var now = clock.instant();
+        return substitutionRepository
+                .findByCourseSessionIdAndStatus(courseSessionInternalId, TeacherSubstitutionStatus.ACTIVE)
+                .stream()
+                .anyMatch(s -> s.getSubstituteTeacherUserId() == userInternalId && s.coversInstant(now));
     }
 
     /** Vrai si l'appelant a un accès global en lecture (filtrage de liste inutile). */

@@ -37,6 +37,19 @@ class CourseSessionException extends RuntimeException {
         OPERATION_FORBIDDEN,
         /** Motif d'annulation manquant ou vide (G1-C). */
         CANCEL_REASON_REQUIRED,
+        // --- Remplacements (G1-C.2) ---
+        /** Le compte remplaçant est inconnu, non actif ou sans rôle TEACHER actif. */
+        SUBSTITUTE_NOT_ELIGIBLE,
+        /** Le remplaçant proposé est le formateur principal de la séance. */
+        SUBSTITUTE_IS_ORIGINAL,
+        /** Période de validité invalide (fin ≤ début, ou hors bornes acceptées). */
+        SUBSTITUTION_PERIOD_INVALID,
+        /** Une autre substitution active de la séance chevauche la période demandée. */
+        SUBSTITUTION_OVERLAP,
+        /** Aucune substitution pour cet identifiant dans cette séance. */
+        SUBSTITUTION_NOT_FOUND,
+        /** La substitution est déjà terminée. */
+        SUBSTITUTION_ALREADY_ENDED,
         // --- Points de contrôle (V10) ---
         /** Aucun point de contrôle pour cet identifiant dans cette séance. */
         CHECKPOINT_NOT_FOUND,

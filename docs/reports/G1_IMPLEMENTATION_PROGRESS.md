@@ -142,7 +142,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-B | Module `planning` complet | `IMPLEMENTED_FULL_SUITE_GREEN` — back-end (schéma `e4793e7`, simulation `24cc9f5`, publication `dafd23a`) **+ parcours Angular** (`429f45b`). Reste post-G1 : avertissements d'alternance (`DEC-G1-006`), création manuelle plein calendrier (`EF-PLAN-006`, hors périmètre G1). | `e4793e7` + `24cc9f5` + `dafd23a` + `429f45b` |
 | G1-B.1 | Audit correctif du bloc `planning` | `IMPLEMENTED_FULL_SUITE_GREEN` — identité de créneau (`planning_slot_public_id`), concurrence idempotente durcie, rollback+`FAILED` déterministe, garde centralisée « séance supersédée = inactive », conflit vs séances déjà publiées (formateur/classe), traçabilité reclassée, script de démo. Suites **719/0** (3 fuseaux) / **550/0**. | `fix(planning): consolider l'identité et la publication atomique` + `docs(g1): corriger la traçabilité après audit du planning` |
 | G1-C.1 | Annulation des séances (`CANCELLED`) | `IMPLEMENTED_FULL_SUITE_GREEN` — V14, `SessionLifecycle.CANCELLED`, `POST /sessions/{id}/cancel`, garde `operational()`, purge jetons, UI. Back **723/0**, front **554/0**. | `feat(coursesession): gérer l'annulation des séances` |
-| G1-C.2 | Remplacements de formateur | `IN_PROGRESS` — table `teacher_substitution` en base (V14), code à écrire | — |
+| G1-C.2 | Remplacements de formateur | `IMPLEMENTED_FULL_SUITE_GREEN` — `TeacherSubstitution` + service + 3 endpoints, `AccessGuard` étendu (substitut actif ⇒ `MANAGE`), UI panneau remplacements. Back **729/0**, front **559/0**. | `feat(coursesession): gérer les remplacements de formateur` |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
 | G1-E | Pièces jointes des justificatifs | `NOT_STARTED` | — |
@@ -723,47 +723,96 @@ Commit `feat(coursesession): gérer l'annulation des séances`.
   motif + rôles ; concurrence open vs cancel sans `500`). Suites :
   **719 → 723** back, **550 → 554** front.
 
-### G1-C.2 — Remplacements (à faire)
+### G1-C.2 — Remplacements de formateur (livré)
 
-Table `teacher_substitution` déjà en base (V14). Reste :
-`TeacherSubstitution` (entité + repo), `SubstitutionService`, endpoints
-`POST/GET /api/v1/sessions/{id}/substitutions` +
-`POST .../substitutions/{substitutionId}/end`, extension de
-`CourseSessionAccessGuard` (le substitut actif peut ouvrir / gérer la
-séance pendant sa période), historique borné, UI (panneau remplacements
-sur `/sessions/:publicId`), tests (éligibilité, chevauchement, fin, accès,
-concurrence, sécurité, audit).
+Commit `feat(coursesession): gérer les remplacements de formateur`.
+
+- Entité `TeacherSubstitution` + `TeacherSubstitutionStatus` (`ACTIVE` /
+  `ENDED`) + repo (verrous pessimistes). Le formateur principal de
+  `course_session` **n'est jamais écrasé** — `original_teacher_user_id`
+  figé à la création.
+- `SubstitutionService` : `create` / `list` / `end`.
+  - Sérialisation de la création concurrente par **verrou de ligne sur la
+    séance** (`CourseSessionRepository.findByIdForUpdate` — nouveau) :
+    un `SELECT … FOR UPDATE` d'un ensemble vide de substitutions actives
+    ne bloque pas un insert (gap locks compatibles).
+  - Contrôles : remplaçant = `TEACHER` actif éligible (`TeacherDirectory`)
+    → sinon `409 SESSION_SUBSTITUTE_NOT_ELIGIBLE` ; remplaçant ≠ principal
+    → `409 SESSION_SUBSTITUTE_IS_ORIGINAL` ; `validUntil > validFrom` +
+    motif non vide → `400 SESSION_SUBSTITUTION_PERIOD_INVALID` ;
+    chevauchement avec une autre `ACTIVE` de la séance (intervalles
+    bornes-exclusives) → `409 SESSION_SUBSTITUTION_OVERLAP` ; séance
+    `CLOSED` → `409 SESSION_INVALID_STATE` ; séance `CANCELLED` / supersédée
+    → `404` (garde `operational()`).
+  - `end` : `404 SESSION_SUBSTITUTION_NOT_FOUND` si l'id n'appartient pas
+    à la séance ; `409 SESSION_SUBSTITUTION_ALREADY_ENDED` si déjà terminé.
+- **`CourseSessionAccessGuard`** étendu : un remplaçant dont une
+  substitution `ACTIVE` **couvre l'instant courant** obtient le niveau
+  `MANAGE` sur la séance (ouvrir / fermer / annuler / points de contrôle).
+  Un remplaçant expiré ou dont la substitution est terminée n'a **aucun**
+  droit. Signature `isAllowed(teacherUserId, courseSessionInternalId,
+  classGroupPublicIds, level, callerSubject)` — le paramètre
+  `courseSessionInternalId` propagé aux 4 appelants ; décision toujours
+  **serveur** (le remplaçant est lu en base, jamais d'un paramètre
+  client). N'élargit **pas** la lecture (`READ` inchangé côté rôles).
+- Endpoints (sur `CourseSessionController`, couvert par le même
+  `@ExceptionHandler`) :
+  `GET /api/v1/sessions/{id}/substitutions` (`READ_ROLES`),
+  `POST /api/v1/sessions/{id}/substitutions` (`201` ; `CREATE_ROLES` —
+  **`TEACHER` exclu** : « ne valide pas lui-même son remplacement »,
+  CDC §12.4),
+  `POST /api/v1/sessions/{id}/substitutions/{substitutionId}/end` (`204`).
+- **Historique** : pas d'endpoint `/history` dédié — `GET …/substitutions`
+  renvoie déjà les substitutions `ENDED`, et `GET /sessions/{id}` expose
+  l'annulation (`cancellationReason` / `cancelledAt`). Un journal générique
+  des changements de séance (au-delà de G1-C) n'est pas requis ; il n'est
+  pas exposé pour ne pas divulguer `audit_event` sans filtrage.
+- Front `/sessions/:publicId` : section « Remplacements » — liste
+  (principal + remplaçant côte à côte, période, statut ; visible à tout
+  lecteur), formulaire d'ajout (sélecteur de formateur éligible, période,
+  motif) + action « Terminer », réservés à `SESSION_CREATE_ROLES` ;
+  actions masquées selon le rôle, back-end autorité ; `ProblemDetail`
+  rendu en ligne.
+- Tests back : `CourseSessionIntegrationTests` **+6**
+  (principal conservé + remplaçant actif autorisé + autre formateur
+  interdit + audit ; inéligible / = principal / chevauchement / période ;
+  fin + double fin + révocation ; substitution expirée = aucun droit ;
+  rôles + séance annulée non substituable ; concurrence → 1 seule `ACTIVE`,
+  jamais `5xx`). Front **+3** (`session-detail` liste/ajout/fin,
+  masquage non-manager ; `sessions-api` contrat). Suites : back
+  **723 → 729**, front **556 → 559**.
 
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : `feat(coursesession): gérer l'annulation des séances`
-  (chaîne : `db80beb` → `fix(planning): consolider l'identité…` →
-  `docs(g1): corriger la traçabilité…` → ce commit).
+- **HEAD attendu** : `feat(coursesession): gérer les remplacements de
+  formateur` (chaîne : `db80beb` → `fix(planning): consolider l'identité…`
+  → `docs(g1): corriger la traçabilité…` →
+  `feat(coursesession): gérer l'annulation des séances` → ce commit).
 - **Working tree** : propre après commit.
-- **Bloc courant** : **G1-C.2** — remplacements de formateur (EF-SES-005,
-  CAD §24 RG-12, CDC §43 RG-015).
-- **Fichiers non terminés** : aucun. À créer en **G1-C.2** :
-  `coursesession/internal/TeacherSubstitution` (+ repo),
-  `SubstitutionService` + `SubstitutionController`,
-  `CourseSessionRequests.CreateSubstitution`, extension de
-  `CourseSessionAccessGuard` (substitut actif = accès `MANAGE`),
-  DTO `SubstitutionResponse`, endpoints, écran remplacements + specs.
-- **Tests verts** : back **723/0** (3 fuseaux à re-vérifier au prochain
-  checkpoint) ; front **554/0** ; `ModularityTests` vert.
+- **Bloc courant** : **G1-C terminé** (C.1 annulation + C.2 remplacements).
+  Prochain bloc du grand lot : **G1-D** — notifications métier
+  persistantes (l'événement `planning.PlanningPublishedEvent` **et** les
+  `CourseSessionChangeEvent` `CANCELLED` / `SUBSTITUTION_*` sont déjà
+  publiés, prêts à être consommés par un module `notification` étendu).
+- **Fichiers non terminés** : aucun.
+- **Tests verts** : back **729/0** (3 fuseaux) ; front **559/0** ;
+  `ModularityTests` vert.
 - **Tests rouges** : aucun.
-- **Commande suivante** : lire `identity.TeacherDirectory` (éligibilité)
-  + `CourseSessionAccessGuard`, puis créer `TeacherSubstitution` + repo,
-  puis `SubstitutionService`.
-- **Risques** : « une seule substitution ACTIVE applicable à un instant »
-  = contrôle applicatif (MySQL sans index partiel) — bien tester la
-  concurrence. L'extension de l'`AccessGuard` doit rester **serveur**
-  (jamais un paramètre client) et ne pas élargir la lecture.
-- **Décisions tranchées (G1-C.1)** : annulation **directe** (pas de
-  workflow) ; `PLANNED` **et** `OPEN` annulables, `CLOSED` non ; double
-  annulation → `409` (pas idempotent) ; motif hors audit/événement ;
-  garde `operational()` = source unique d'exclusion (supersédée +
-  `CANCELLED`).
+- **Commande suivante** (G1-D) : lire `notification.internal` +
+  `DEC-G1-007`, puis créer la migration `V15` (`notification`,
+  `dedup_key` UNIQUE) + les listeners `@TransactionalEventListener(AFTER_COMMIT)`
+  + `REQUIRES_NEW`.
+- **Risques G1-D** : idempotence par `dedup_key` ; un échec de
+  notification ne doit pas rollback le métier ; destinataires **dérivés
+  serveur** ; contenu **sans PII / sans jeton**.
+- **Décisions tranchées (G1-C)** : annulation **directe** (pas de
+  workflow) ; `PLANNED`+`OPEN` annulables, `CLOSED` non ; double
+  annulation → `409` ; motif hors audit/événement ; garde `operational()`
+  = source unique d'exclusion (supersédée + `CANCELLED`) ; remplacement =
+  ligne datée jamais supprimée, principal jamais écrasé, substitut actif
+  ⇒ `MANAGE` pendant sa période ; `TEACHER` ne crée pas de substitution ;
+  pas de `PATCH /sessions/{id}` ni d'endpoint `/history` (non requis).
 
 ## Dernier commit produit
 

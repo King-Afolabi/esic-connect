@@ -64,7 +64,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         }
         CourseSession session = found.get();
         Set<UUID> classPublicIds = classPublicIds(session);
-        if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, currentSubject())) {
+        if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, currentSubject())) {
             return new SessionAccess(Access.FORBIDDEN, null);
         }
         return new SessionAccess(Access.GRANTED, toRef(session, classPublicIds));

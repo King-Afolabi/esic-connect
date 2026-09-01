@@ -107,6 +107,36 @@ class CourseSessionExceptionHandler {
                 code = "SESSION_CANCEL_REASON_REQUIRED";
                 message = "Un motif est obligatoire pour annuler une séance.";
             }
+            case SUBSTITUTE_NOT_ELIGIBLE -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_SUBSTITUTE_NOT_ELIGIBLE";
+                message = "Ce compte n'est pas un formateur actif : il ne peut pas remplacer sur cette séance.";
+            }
+            case SUBSTITUTE_IS_ORIGINAL -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_SUBSTITUTE_IS_ORIGINAL";
+                message = "Le remplaçant ne peut pas être le formateur principal de la séance.";
+            }
+            case SUBSTITUTION_PERIOD_INVALID -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_SUBSTITUTION_PERIOD_INVALID";
+                message = "La période du remplacement est invalide (fin postérieure au début attendue).";
+            }
+            case SUBSTITUTION_OVERLAP -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_SUBSTITUTION_OVERLAP";
+                message = "Un remplacement actif de cette séance chevauche déjà la période demandée.";
+            }
+            case SUBSTITUTION_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SESSION_SUBSTITUTION_NOT_FOUND";
+                message = "Aucun remplacement ne correspond à cet identifiant pour cette séance.";
+            }
+            case SUBSTITUTION_ALREADY_ENDED -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_SUBSTITUTION_ALREADY_ENDED";
+                message = "Ce remplacement est déjà terminé.";
+            }
             case CHECKPOINT_NOT_FOUND -> {
                 status = HttpStatus.NOT_FOUND;
                 code = "ATT_CHECKPOINT_NOT_FOUND";

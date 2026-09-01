@@ -12,6 +12,7 @@ import { SessionDetail } from './session-detail';
 
 const GET_URL = '/api/v1/sessions/s-1';
 const ATTENDANCE_URL = '/api/v1/sessions/s-1/attendance';
+const SUBSTITUTIONS_URL = '/api/v1/sessions/s-1/substitutions';
 const CANDIDATES_URL = '/api/v1/sessions/s-1/attendance/candidates';
 const EXPORT_URL = '/api/v1/sessions/s-1/attendance/export';
 const TOKEN_URL = '/api/v1/sessions/s-1/checkpoints/cp-1/attendance-token';
@@ -103,6 +104,14 @@ interface DetailInternals {
   sessionCancelForm: { patchValue: (v: Record<string, unknown>) => void; reset: () => void };
   canCancel: () => boolean;
   isCancelled: () => boolean;
+  toggleSubstitutionForm: () => void;
+  submitSubstitution: () => void;
+  endSubstitution: (id: string) => void;
+  substitutionForm: { patchValue: (v: Record<string, unknown>) => void };
+  substitutions: () => { publicId: string; status: string }[];
+  canManageSubstitutions: () => boolean;
+  canAddSubstitution: () => boolean;
+  substitutionError: () => string | null;
   refreshToken: () => void;
   refreshAttendance: () => void;
   toggleCheckpointForm: () => void;
@@ -165,6 +174,7 @@ function setup(roles: Role[]) {
 function initialLoad(http: HttpTestingController, session = OPEN_SESSION): void {
   http.expectOne(GET_URL).flush(session);
   http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+  http.match(SUBSTITUTIONS_URL).forEach((req) => req.flush([]));
 }
 
 describe('SessionDetail', () => {
@@ -179,6 +189,11 @@ describe('SessionDetail', () => {
     http.match(ATTENDANCE_URL).forEach((req) => {
       if (!req.cancelled) {
         req.flush(EMPTY_ATTENDANCE);
+      }
+    });
+    http.match(SUBSTITUTIONS_URL).forEach((req) => {
+      if (!req.cancelled) {
+        req.flush([]);
       }
     });
     http.verify();
@@ -243,6 +258,64 @@ describe('SessionDetail', () => {
     expect(text()).toContain('Annulée');
     expect(text()).toContain('Alerte incendie');
     expect(text()).toContain("aucune absence n'est comptée");
+  });
+
+  it('lists substitutions, adds one for a manager, and ends it', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    http.expectOne(GET_URL).flush(OPEN_SESSION);
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    http.expectOne(SUBSTITUTIONS_URL).flush([
+      {
+        publicId: 'sub-1',
+        status: 'ACTIVE',
+        reason: 'Congé',
+        validFrom: '2026-09-10T05:00:00Z',
+        validUntil: '2026-09-10T12:00:00Z',
+        substitute: { publicId: 'sub-t', firstName: 'Bea', lastName: 'Roux' },
+        originalTeacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+        createdAt: '2026-09-01T10:00:00Z',
+        endedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+    expect(text()).toContain('Bea Roux');
+    expect(text()).toContain('remplace Alice Martin');
+    expect(internals.canManageSubstitutions()).toBe(true);
+
+    // Ajout.
+    internals.toggleSubstitutionForm();
+    http
+      .expectOne('/api/v1/sessions/teachers')
+      .flush([{ publicId: 'sub-t', firstName: 'Bea', lastName: 'Roux' }]);
+    internals.substitutionForm.patchValue({
+      substituteTeacherPublicId: 'sub-t',
+      validFrom: '2026-09-10T09:00',
+      validUntil: '2026-09-10T12:00',
+      reason: 'Congé',
+    });
+    internals.submitSubstitution();
+    const add = http.expectOne((r) => r.url === SUBSTITUTIONS_URL && r.method === 'POST');
+    expect((add.request.body as { substituteTeacherPublicId: string }).substituteTeacherPublicId).toBe(
+      'sub-t',
+    );
+    add.flush({}, { status: 201, statusText: 'Created' });
+    http.expectOne(SUBSTITUTIONS_URL).flush([]);
+
+    // Fin d'un remplacement.
+    internals.endSubstitution('sub-1');
+    http.expectOne((r) => r.url === `${SUBSTITUTIONS_URL}/sub-1/end` && r.method === 'POST').flush(null, {
+      status: 204,
+      statusText: 'No Content',
+    });
+    http.expectOne(SUBSTITUTIONS_URL).flush([]);
+  });
+
+  it('hides the substitution add button for a non-manager (TEACHER)', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    initialLoad(http);
+    fixture.detectChanges();
+    expect(internals.canManageSubstitutions()).toBe(false);
+    expect(text()).not.toContain('Ajouter un remplaçant');
   });
 
   it('hides the cancel button for a CLOSED session', () => {
