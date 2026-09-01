@@ -50,11 +50,8 @@
               <p class="notif__meta">
                 {{ formatInstantUtc(n.createdAt) }}
                 @if (n.status !== 'UNREAD') { · lu }
-                @if (n.resourceType === 'COURSE_SESSION') {
-                  · <a [routerLink]="['/sessions', n.resourcePublicId]">Voir la séance</a>
-                }
-                @if (n.resourceType === 'PLANNING_VERSION') {
-                  · <a routerLink="/planning/versions">Voir les versions</a>
+                @if (linkFor(n); as link) {
+                  · <a [routerLink]="link.commands">{{ link.label }}</a>
                 }
               </p>
             </div>

@@ -70,6 +70,11 @@ class NotificationListener {
         Set<UUID> recipients = new HashSet<>();
         recipients.add(session.principalTeacherPublicId());
         recipients.addAll(session.substituteTeacherPublicIds());
+        // Utilisateurs explicitement désignés par l'occurrence (G1-D.1) :
+        // pour SUBSTITUTION_ENDED, le remplaçant qui vient de terminer
+        // n'est plus ACTIVE et ne figure donc pas dans
+        // substituteTeacherPublicIds — il est ici.
+        recipients.addAll(event.affectedUserPublicIds());
 
         String label = sessionLabel(session);
         String title = switch (type) {

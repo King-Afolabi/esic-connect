@@ -3,10 +3,14 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationBell } from './notification-bell';
 import { NotificationsBadgeService } from '../notifications-badge.service';
 
 const UNREAD_URL = '/api/v1/me/notifications/unread-count';
+
+/** Session authentifiée factice : le compteur ne sonde qu'authentifié (G1-D.1). */
+const authedStub = { isAuthenticated: () => true, roles: () => [] as string[] };
 
 interface Internals {
   unread: () => number;
@@ -16,7 +20,12 @@ interface Internals {
 function setup() {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    providers: [
+      provideRouter([]),
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      { provide: AuthService, useValue: authedStub },
+    ],
   });
   const fixture = TestBed.createComponent(NotificationBell);
   const http = TestBed.inject(HttpTestingController);
@@ -62,5 +71,24 @@ describe('NotificationBell', () => {
     TestBed.inject(NotificationsBadgeService).refresh();
     http.expectOne(UNREAD_URL).flush('boom', { status: 500, statusText: 'Server Error' });
     expect(internals.unread()).toBe(5);
+  });
+
+  it('does not poll and stays at zero when the session is not authenticated (G1-D.1)', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: { isAuthenticated: () => false, roles: () => [] } },
+      ],
+    });
+    fixture = TestBed.createComponent(NotificationBell);
+    http = TestBed.inject(HttpTestingController);
+    internals = fixture.componentInstance as unknown as Internals;
+    fixture.detectChanges();
+
+    http.expectNone(UNREAD_URL);
+    expect(internals.unread()).toBe(0);
   });
 });

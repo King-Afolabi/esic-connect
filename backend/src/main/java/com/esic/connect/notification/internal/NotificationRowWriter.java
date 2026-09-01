@@ -1,8 +1,5 @@
 package com.esic.connect.notification.internal;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,15 +9,24 @@ import java.util.UUID;
 
 /**
  * Écrit <strong>une</strong> ligne {@code notification} dans sa propre
- * transaction {@code REQUIRES_NEW} (G1-D). Une transaction par ligne : un
- * doublon de {@code dedup_key} (course entre deux livraisons du même
- * événement) fait échouer <em>uniquement</em> cette ligne — jamais les
- * autres destinataires du même événement.
+ * transaction {@code REQUIRES_NEW} (G1-D).
+ *
+ * <p><strong>G1-D.1 — frontière transactionnelle.</strong> Cette méthode
+ * ne « rattrape » plus l'exception de persistance : une
+ * {@code DataIntegrityViolationException} (course sur {@code dedup_key})
+ * ou toute autre erreur est <em>laissée remonter</em>. La transaction
+ * {@code REQUIRES_NEW} de cette ligne rollbacke alors <em>proprement</em>
+ * et l'exception d'origine est propagée (jamais une
+ * {@code UnexpectedRollbackException} : rien n'est avalé ici, donc le
+ * proxy ne tente pas de committer une transaction marquée
+ * {@code rollback-only}). C'est {@link NotificationWriter}, bean
+ * <em>non transactionnel</em>, qui décide destinataire par destinataire
+ * s'il faut ignorer (doublon = idempotent) ou seulement journaliser
+ * (échec best-effort) — sans jamais interrompre les autres destinataires
+ * du même événement.
  */
 @Component
 class NotificationRowWriter {
-
-    private static final Logger log = LoggerFactory.getLogger(NotificationRowWriter.class);
 
     private final NotificationRepository repository;
 
@@ -31,13 +37,7 @@ class NotificationRowWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     void write(long recipientUserId, NotificationType type, String title, String body,
               String resourceType, UUID resourcePublicId, String dedupKey, Instant createdAt) {
-        try {
-            repository.saveAndFlush(new Notification(recipientUserId, type, title, body,
-                    resourceType, resourcePublicId, dedupKey, createdAt));
-        } catch (DataIntegrityViolationException duplicate) {
-            // Déjà notifié (dedup_key unique). Rien à faire : la
-            // transaction REQUIRES_NEW de cette ligne rollbacke seule.
-            log.debug("Notification deja delivree (dedup) : type={}", type);
-        }
+        repository.saveAndFlush(new Notification(recipientUserId, type, title, body,
+                resourceType, resourcePublicId, dedupKey, createdAt));
     }
 }

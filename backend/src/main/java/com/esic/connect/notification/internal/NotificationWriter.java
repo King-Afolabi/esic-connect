@@ -1,7 +1,11 @@
 package com.esic.connect.notification.internal;
 
 import com.esic.connect.identity.UserDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.UnexpectedRollbackException;
 
 import java.time.Clock;
 import java.util.Set;
@@ -12,16 +16,29 @@ import java.util.UUID;
  * (G1-D). Résout les destinataires <strong>actifs</strong> et délègue
  * l'écriture d'<em>une ligne par destinataire</em> à
  * {@link NotificationRowWriter} (chacune dans sa propre transaction
- * {@code REQUIRES_NEW}) : un doublon de {@code dedup_key} n'affecte jamais
- * les autres destinataires.
+ * {@code REQUIRES_NEW}).
  *
  * <p>Aucun {@code @Transactional} ici : cette méthode est appelée par
  * {@link NotificationListener} en {@code AFTER_COMMIT} (hors transaction).
  * Un échec de notification <strong>ne rollbacke jamais</strong> le métier
  * déjà committé.
+ *
+ * <p><strong>G1-D.1 — isolation par destinataire.</strong> Chaque
+ * destinataire est traité indépendamment : un doublon de {@code dedup_key}
+ * (course entre deux livraisons de l'événement) est considéré comme un
+ * <em>succès idempotent</em> ; toute autre erreur d'écriture est
+ * <em>journalisée sans donnée personnelle</em> et le destinataire suivant
+ * est quand même traité. Le modèle de livraison reste
+ * <strong>« au mieux » après commit</strong> (DEC-G1-007) : sans outbox
+ * transactionnelle, un arrêt de la JVM entre le commit métier et
+ * l'écriture d'une notification peut perdre l'événement — l'idempotence
+ * garantit l'absence de doublon si une reprise est ajoutée plus tard
+ * (dette G1-D-OUTBOX).
  */
 @Component
 public class NotificationWriter {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationWriter.class);
 
     private final NotificationRowWriter rowWriter;
     private final NotificationRepository repository;
@@ -40,7 +57,8 @@ public class NotificationWriter {
      * Crée une notification par destinataire <strong>actif</strong>
      * distinct, dédupliquée par {@code dedup_key}. {@code recipientPublicIds}
      * peut contenir des {@code null} et des doublons : ils sont ignorés.
-     * Un compte inconnu ou archivé n'est jamais destinataire.
+     * Un compte inconnu ou archivé n'est jamais destinataire. L'échec
+     * d'un destinataire n'empêche jamais les autres d'être notifiés.
      */
     public void write(NotificationType type, String resourceType, UUID resourcePublicId, UUID eventKey,
                       Set<UUID> recipientPublicIds, String title, String body) {
@@ -60,8 +78,25 @@ public class NotificationWriter {
             if (repository.existsByDedupKey(dedupKey)) {
                 continue; // rejeu de l'événement : déjà notifié
             }
-            rowWriter.write(recipient.internalId(), type, title, body, resourceType, resourcePublicId,
+            deliverOne(recipient.internalId(), type, title, body, resourceType, resourcePublicId, dedupKey, now);
+        }
+    }
+
+    private void deliverOne(long recipientInternalId, NotificationType type, String title, String body,
+                            String resourceType, UUID resourcePublicId, String dedupKey,
+                            java.time.Instant now) {
+        try {
+            rowWriter.write(recipientInternalId, type, title, body, resourceType, resourcePublicId,
                     dedupKey, now);
+        } catch (DataIntegrityViolationException | UnexpectedRollbackException raceDuplicate) {
+            // Course sur `dedup_key` (une autre livraison a inséré la même
+            // ligne entre le pré-contrôle et le flush) : succès idempotent.
+            log.debug("Notification deja delivree (course dedup) : type={}", type);
+        } catch (RuntimeException failure) {
+            // Livraison « au mieux » : ce destinataire échoue, on n'empêche
+            // pas les autres. Aucune donnée personnelle dans le journal.
+            log.warn("Echec d'ecriture d'une notification (best effort) : type={}, cause={}",
+                    type, failure.getClass().getSimpleName());
         }
     }
 }

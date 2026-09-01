@@ -141,6 +141,119 @@ class NotificationIntegrationTests {
     }
 
     // ------------------------------------------------------------------
+    // G1-D.1 — fin d'un remplacement : le remplaçant qui vient de
+    // terminer (n'est plus ACTIVE) doit être notifié via l'événement
+    // ------------------------------------------------------------------
+
+    @Test
+    void endingASubstitutionNotifiesThePrincipalAndTheJustEndedSubstitute() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = account(RoleCode.TEACHER);
+        Account substitute = account(RoleCode.TEACHER);
+        Account bystander = account(RoleCode.TEACHER);
+        String sessionId = createSession(admin, principal, chain.classA());
+        Instant start = Instant.parse((String) session(admin, sessionId).get("startsAt"));
+        Instant end = Instant.parse((String) session(admin, sessionId).get("endsAt"));
+
+        String substitutionId = (String) created(admin,
+                "/api/v1/sessions/" + sessionId + "/substitutions", Map.of(
+                        "substituteTeacherPublicId", substitute.publicId(),
+                        "reason", "Congé",
+                        "validFrom", start.minusSeconds(600).toString(),
+                        "validUntil", end.plusSeconds(600).toString())).get("publicId");
+
+        assertThat(post(admin,
+                "/api/v1/sessions/" + sessionId + "/substitutions/" + substitutionId + "/end", null))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        assertThat(endedCount(tokenFor(substitute), sessionId))
+                .as("le remplaçant tout juste terminé reçoit exactement une notification ENDED")
+                .isEqualTo(1L);
+        assertThat(endedCount(tokenFor(principal), sessionId))
+                .as("le formateur principal reçoit exactement une notification ENDED")
+                .isEqualTo(1L);
+        assertThat(notifications(tokenFor(bystander)))
+                .as("aucun autre formateur n'est notifié")
+                .noneMatch(n -> "SESSION_SUBSTITUTION_ENDED".equals(n.get("type")));
+        // La notification ENDED ne contient aucun identifiant SQL.
+        notifications(tokenFor(substitute)).stream()
+                .filter(n -> "SESSION_SUBSTITUTION_ENDED".equals(n.get("type")))
+                .forEach(n -> assertThat(n).doesNotContainKeys("id", "recipientUserId", "dedupKey"));
+    }
+
+    @Test
+    void acrossSuccessiveSubstitutionsOnlyTheConcernedSubstituteIsNotifiedOfItsOwnEnd() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = account(RoleCode.TEACHER);
+        Account subA = account(RoleCode.TEACHER);
+        Account subB = account(RoleCode.TEACHER);
+        String sessionId = createSession(admin, principal, chain.classA());
+        Instant start = Instant.parse((String) session(admin, sessionId).get("startsAt"));
+        Instant end = Instant.parse((String) session(admin, sessionId).get("endsAt"));
+        Instant mid = start.plusSeconds((end.getEpochSecond() - start.getEpochSecond()) / 2);
+
+        String a = (String) created(admin, "/api/v1/sessions/" + sessionId + "/substitutions", Map.of(
+                "substituteTeacherPublicId", subA.publicId(), "reason", "A",
+                "validFrom", start.minusSeconds(600).toString(),
+                "validUntil", mid.toString())).get("publicId");
+        post(admin, "/api/v1/sessions/" + sessionId + "/substitutions/" + a + "/end", null);
+
+        String b = (String) created(admin, "/api/v1/sessions/" + sessionId + "/substitutions", Map.of(
+                "substituteTeacherPublicId", subB.publicId(), "reason", "B",
+                "validFrom", mid.toString(),
+                "validUntil", end.plusSeconds(600).toString())).get("publicId");
+        post(admin, "/api/v1/sessions/" + sessionId + "/substitutions/" + b + "/end", null);
+
+        assertThat(endedCount(tokenFor(subA), sessionId)).isEqualTo(1L); // seulement sa propre fin
+        assertThat(endedCount(tokenFor(subB), sessionId)).isEqualTo(1L); // seulement sa propre fin
+        assertThat(endedCount(tokenFor(principal), sessionId)).isEqualTo(2L); // les deux fins
+    }
+
+    @Test
+    void concurrentEndOfTheSameSubstitutionProducesNoDuplicateNotificationAndNo5xx() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = account(RoleCode.TEACHER);
+        Account substitute = account(RoleCode.TEACHER);
+        String sessionId = createSession(admin, principal, chain.classA());
+        Instant start = Instant.parse((String) session(admin, sessionId).get("startsAt"));
+        Instant end = Instant.parse((String) session(admin, sessionId).get("endsAt"));
+        String subId = (String) created(admin, "/api/v1/sessions/" + sessionId + "/substitutions", Map.of(
+                "substituteTeacherPublicId", substitute.publicId(), "reason", "x",
+                "validFrom", start.minusSeconds(600).toString(),
+                "validUntil", end.plusSeconds(600).toString())).get("publicId");
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
+        java.util.concurrent.Callable<Integer> call = () -> {
+            barrier.await();
+            return exchange(HttpMethod.POST,
+                    "/api/v1/sessions/" + sessionId + "/substitutions/" + subId + "/end", null, admin)
+                    .getStatusCode().value();
+        };
+        java.util.concurrent.Future<Integer> f1 = pool.submit(call);
+        java.util.concurrent.Future<Integer> f2 = pool.submit(call);
+        int s1 = f1.get();
+        int s2 = f2.get();
+        pool.shutdownNow();
+
+        assertThat(List.of(s1, s2)).allSatisfy(s -> assertThat(s).isLessThan(500));
+        assertThat(List.of(s1, s2)).contains(HttpStatus.NO_CONTENT.value());
+        assertThat(endedCount(tokenFor(substitute), sessionId))
+                .as("une seule mutation réussie ⇒ une seule notification ENDED")
+                .isEqualTo(1L);
+    }
+
+    private long endedCount(String token, String sessionId) {
+        return notifications(token).stream()
+                .filter(n -> "SESSION_SUBSTITUTION_ENDED".equals(n.get("type")))
+                .filter(n -> sessionId.equals(n.get("resourcePublicId")))
+                .count();
+    }
+
+    // ------------------------------------------------------------------
     // Livraison après commit — publication de planning (événement direct)
     // ------------------------------------------------------------------
 

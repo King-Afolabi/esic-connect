@@ -7,14 +7,17 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { NotificationsApiService } from '../notifications-api.service';
 import { NotificationsBadgeService } from '../notifications-badge.service';
 import { toNotificationError } from '../notification-errors';
 import {
+  NotificationLink,
   NotificationStatus,
   NotificationView,
   formatInstantUtc,
+  notificationLink,
   notificationTypeLabel,
 } from '../notifications.models';
 
@@ -49,10 +52,20 @@ export class NotificationList {
   private readonly api = inject(NotificationsApiService);
   private readonly badge = inject(NotificationsBadgeService);
   private readonly toasts = inject(NotificationService);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly typeLabel = notificationTypeLabel;
   protected readonly formatInstantUtc = formatInstantUtc;
+
+  /**
+   * Lien interne sûr d'une notification selon les rôles réels de
+   * l'appelant (liste blanche par `resourceType`). `null` ⇒ pas de lien,
+   * la notification reste lisible. Le back-end demeure l'autorité.
+   */
+  protected linkFor(n: NotificationView): NotificationLink | null {
+    return notificationLink(n, this.auth.roles());
+  }
 
   protected readonly filter = signal<'ALL' | 'UNREAD'>('ALL');
   protected readonly state = signal<ListState>({ kind: 'loading' });

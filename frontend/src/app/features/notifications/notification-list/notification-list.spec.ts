@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { NotificationList } from './notification-list';
 import { NotificationView } from '../notifications.models';
@@ -38,7 +39,7 @@ interface Internals {
   hasUnread: () => boolean;
 }
 
-function setup() {
+function setup(roles: string[] = ['TEACHER']) {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     providers: [
@@ -46,6 +47,7 @@ function setup() {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: NotificationService, useValue: { info: vi.fn(), error: vi.fn() } },
+      { provide: AuthService, useValue: { isAuthenticated: () => true, roles: () => roles } },
     ],
   });
   const fixture = TestBed.createComponent(NotificationList);
@@ -137,6 +139,42 @@ describe('NotificationList', () => {
     // Rien de non lu -> aucun appel.
     internals.markAllRead();
     http.expectNone((r) => r.url === `${LIST_URL}/read-all`);
+  });
+
+  it('shows the session link for a TEACHER but hides the planning link (G1-D.1)', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    flushInitial([
+      notif({ publicId: 's', resourceType: 'COURSE_SESSION', resourcePublicId: '11111111-1111-4111-8111-111111111111' }),
+      notif({ publicId: 'p', type: 'PLANNING_PUBLISHED', resourceType: 'PLANNING_VERSION', resourcePublicId: '22222222-2222-4222-8222-222222222222' }),
+    ]);
+    fixture.detectChanges();
+    const hrefs = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')).map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(hrefs).toContain('/sessions/11111111-1111-4111-8111-111111111111');
+    expect(hrefs).not.toContain('/planning/versions');
+  });
+
+  it('shows the planning link for a PEDAGOGICAL_MANAGER (G1-D.1)', () => {
+    ({ fixture, http, internals } = setup(['PEDAGOGICAL_MANAGER']));
+    flushInitial([
+      notif({ publicId: 'p', type: 'PLANNING_PUBLISHED', resourceType: 'PLANNING_VERSION', resourcePublicId: '22222222-2222-4222-8222-222222222222' }),
+    ]);
+    fixture.detectChanges();
+    const hrefs = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')).map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(hrefs).toContain('/planning/versions');
+  });
+
+  it('renders the body even when no safe link is available (G1-D.1)', () => {
+    ({ fixture, http, internals } = setup([]));
+    flushInitial([
+      notif({ resourceType: 'COURSE_SESSION', resourcePublicId: '33333333-3333-4333-8333-333333333333' }),
+    ]);
+    fixture.detectChanges();
+    expect(text()).toContain('La séance');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.notif__meta a')).toBeNull();
   });
 
   it('never exposes a SQL identifier in the rendered rows', () => {

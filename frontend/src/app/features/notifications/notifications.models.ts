@@ -65,6 +65,65 @@ export interface UnreadCount {
   unread: number;
 }
 
+/**
+ * Rôles pour lesquels un lien du centre de notifications est proposé.
+ * Repris **à l'identique** des gardes de route (`app.routes.ts`) :
+ * - `/sessions/:id` → `SESSION_READ_ROLES` (`CourseSessionWeb.READ_ROLES`) ;
+ * - `/planning/versions` → `PLANNING_MANAGE_ROLES` (`PlanningWeb.MANAGE_ROLES`).
+ *
+ * Le back-end reste l'autorité : ce filtrage n'accorde aucun droit, il
+ * évite seulement de proposer un lien qui mènerait à un `403` silencieux.
+ * Le corps de la notification reste lisible même sans lien.
+ */
+const SESSION_LINK_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+const PLANNING_LINK_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Cible de navigation interne sûre d'une notification, ou `null`. */
+export interface NotificationLink {
+  /** Commandes `routerLink` (toujours un chemin interne, jamais une URL libre). */
+  commands: unknown[];
+  label: string;
+}
+
+/**
+ * Lien interne d'une notification, **liste blanche stricte** par
+ * `resourceType` et vérification de capacité de rôle. Renvoie `null` si
+ * aucun lien sûr n'est calculable : la notification reste affichée, sans
+ * lien. Aucun chemin ni paramètre libre n'est jamais accepté du back-end.
+ */
+export function notificationLink(
+  n: Pick<NotificationView, 'resourceType' | 'resourcePublicId'>,
+  roles: readonly string[],
+): NotificationLink | null {
+  const has = (allowed: readonly string[]): boolean =>
+    roles.some((r) => (allowed as readonly string[]).includes(r));
+
+  if (
+    n.resourceType === 'COURSE_SESSION' &&
+    UUID_RE.test(n.resourcePublicId) &&
+    has(SESSION_LINK_ROLES)
+  ) {
+    return { commands: ['/sessions', n.resourcePublicId], label: 'Voir la séance' };
+  }
+  if (n.resourceType === 'PLANNING_VERSION' && has(PLANNING_LINK_ROLES)) {
+    return { commands: ['/planning/versions'], label: 'Voir les versions' };
+  }
+  return null;
+}
+
 /** `Instant` ISO-8601 → `jj/mm/aaaa hh:mm UTC`. `—` si absent / illisible. */
 export function formatInstantUtc(value: string | null | undefined): string {
   if (!value) {

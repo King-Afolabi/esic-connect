@@ -128,7 +128,7 @@ class SubstitutionService {
                 session.getId(), substitute.internalId(), session.getTeacherUserId(),
                 reason, request.validFrom(), request.validUntil(), actorId));
         changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.SUBSTITUTION_ADDED,
-                actorId, "substitute=" + substitute.publicId());
+                actorId, "substitute=" + substitute.publicId(), Set.of(substitute.publicId()));
         return toResponse(saved, session);
     }
 
@@ -152,8 +152,17 @@ class SubstitutionService {
         }
         Long actorId = changePublisher.actorId(callerSubject);
         substitution.end(clock.instant(), actorId);
+        // Le remplaçant vient de passer ENDED : l'état committé ne le
+        // désigne plus comme ACTIVE. On porte donc son UUID public dans
+        // l'événement pour que le module notification puisse le notifier
+        // de la fin de son remplacement (G1-D.1).
+        UUID substitutePublicId = userDirectory
+                .findByInternalId(substitution.getSubstituteTeacherUserId())
+                .map(UserDirectory.UserRef::publicId)
+                .orElse(null);
+        Set<UUID> affected = substitutePublicId == null ? Set.of() : Set.of(substitutePublicId);
         changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.SUBSTITUTION_ENDED,
-                actorId, null);
+                actorId, substitutePublicId == null ? null : "substitute=" + substitutePublicId, affected);
     }
 
     // ------------------------------------------------------------------

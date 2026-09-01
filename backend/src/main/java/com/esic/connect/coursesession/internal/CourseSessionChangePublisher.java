@@ -9,6 +9,7 @@ import com.esic.connect.identity.CurrentUserResolver;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -34,9 +35,21 @@ class CourseSessionChangePublisher {
     }
 
     void publish(UUID sessionPublicId, CourseSessionChangeAction action, Long actorId, String detail) {
+        publish(sessionPublicId, action, actorId, detail, Set.of());
+    }
+
+    /**
+     * Publie un changement de séance en désignant explicitement les
+     * utilisateurs concernés par cette occurrence
+     * ({@code affectedUserPublicIds}, UUID publics uniquement) — utile
+     * quand l'état committé ne permet plus de les retrouver (fin d'un
+     * remplacement : le remplaçant n'est plus {@code ACTIVE}).
+     */
+    void publish(UUID sessionPublicId, CourseSessionChangeAction action, Long actorId, String detail,
+                 Set<UUID> affectedUserPublicIds) {
         eventPublisher.publishEvent(new CourseSessionChangeEvent(
                 UUID.randomUUID(), CourseSessionResourceType.COURSE_SESSION,
-                sessionPublicId, actorId, action, detail));
+                sessionPublicId, actorId, action, detail, affectedUserPublicIds));
     }
 
     void publishCheckpoint(UUID sessionPublicId, UUID checkpointPublicId,
