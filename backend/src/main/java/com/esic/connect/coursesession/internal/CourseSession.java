@@ -53,8 +53,21 @@ class CourseSession extends BaseEntity {
     @Column(name = "time_zone_id", nullable = false)
     private String timeZoneId;
 
-    @Column(name = "exception_reason", nullable = false)
+    // Nullable depuis V13 : une séance d'origine planning n'a pas de motif
+    // d'exception (une séance manuelle en garde un — contrôle applicatif).
+    @Column(name = "exception_reason")
     private String exceptionReason;
+
+    // V13 (DEC-G1-001) : identifiant public de l'entrée de planning à
+    // l'origine de la séance. NULL ⇒ séance exceptionnelle manuelle ;
+    // non NULL ⇒ séance issue d'un planning publié (RG-016).
+    @Column(name = "planning_entry_public_id", updatable = false)
+    private java.util.UUID planningEntryPublicId;
+
+    // V13 (DEC-G1-004 règle 4) : une republication a retiré le créneau
+    // d'origine. La séance est alors filtrée de l'affichage.
+    @Column(name = "superseded_by_scheduling", nullable = false)
+    private boolean supersededByScheduling;
 
     @Column(name = "opened_at")
     private Instant openedAt;
@@ -159,6 +172,14 @@ class CourseSession extends BaseEntity {
 
     String getExceptionReason() {
         return exceptionReason;
+    }
+
+    java.util.UUID getPlanningEntryPublicId() {
+        return planningEntryPublicId;
+    }
+
+    boolean isSupersededByScheduling() {
+        return supersededByScheduling;
     }
 
     Instant getOpenedAt() {

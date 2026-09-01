@@ -104,3 +104,16 @@ app:
       applied-rows-ttl: ${STUDENT_IMPORT_APPLIED_ROWS_TTL:P30D}
       number-sequence-width: ${STUDENT_IMPORT_NUMBER_SEQUENCE_WIDTH:5}
       number-alloc-max-retries: ${STUDENT_IMPORT_NUMBER_ALLOC_MAX_RETRIES:5}
+  planning:
+    # Import CSV, versionnement et publication d'un planning de classe
+    # (docs/02 §13 ; G1_ARCHITECTURE_DECISIONS.md DEC-G1-005 ; bloc G1-B).
+    # Bornes de durée d'un créneau et fenêtre horaire habituelle
+    # configurables ; toute valeur invalide fait échouer le démarrage
+    # (PlanningProperties).
+    max-rows: ${PLANNING_MAX_ROWS:500}
+    max-file-bytes: ${PLANNING_MAX_FILE_BYTES:2097152}
+    simulation-ttl: ${PLANNING_SIMULATION_TTL:P7D}
+    min-duration: ${PLANNING_MIN_DURATION:PT15M}
+    max-duration: ${PLANNING_MAX_DURATION:PT8H}
+    working-day-start: ${PLANNING_WORKING_DAY_START:08:00}
+    working-day-end: ${PLANNING_WORKING_DAY_END:19:00}
