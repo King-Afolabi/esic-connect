@@ -187,6 +187,62 @@ enregistrée dans le dépôt.
 | Accessibilité (docs/08 §16) | structure sémantique, labels, `role="alert"`, clavier (revendiqués par composant) | audit outillé — voir F3 |
 | EF-USER-001 | création via invitation / fixtures | pas d'endpoint `POST /users` de création `PENDING_ACTIVATION` |
 
+## Mise à jour G1 — livraison des blocs G1-A et G1-B (1er septembre 2026)
+
+> Le **grand lot produit G1** (branche
+> `feature/master-level-product-expansion`) lève une partie du périmètre
+> classé `HORS_PÉRIMÈTRE_ASSUMÉ` à la finalisation F2. Suivi détaillé,
+> commandes et résultats exacts :
+> [`docs/reports/G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md).
+
+- **G1-A — référentiel organisationnel Angular** (`IMPLEMENTED_FULL_SUITE_GREEN`,
+  commit `feat(frontend): exposer les parcours administratifs existants`).
+  Le module back-end `organization` (V4) avait ses endpoints mais **aucun
+  écran** : livré de bout en bout — sites (liste / création / modification
+  / archivage), bâtiments et salles (création + liste + archivage depuis la
+  fiche d'un site), plages réseau CIDR pour un contexte `SUPER_ADMIN`.
+  `EF-ROOM-001` → `IMPLEMENTED_AND_TESTED` (écrans). Les écritures
+  `academic` / `enrollment` / affectations / émission d'invitation restent
+  une **dette de G1-A** (API prêtes, aucune UI ne simule un endpoint
+  absent — cf. `G1_IMPLEMENTATION_PLAN.md` §3.1).
+- **G1-B — module `planning` complet** (`IMPLEMENTED_FULL_SUITE_GREEN`,
+  commits `feat(planning): créer le schéma et le modèle du module planning`,
+  `feat(planning): simuler les imports CSV de planning`,
+  `feat(planning): publier des plannings versionnés en séances`,
+  `feat(frontend): ajouter le parcours planning`). Nouveau module Spring
+  Modulith `planning` + migrations **V12** (7 tables) et **V13** (lien
+  additif `course_session ↔ planning_entry`). Parcours livré et testé :
+  **import CSV → simulation (aucune séance créée — invariant T1, AC-007)
+  → revue des lignes / anomalies → publication atomique → versionnement
+  N/N+1 (ancienne version `SUPERSEDED`, AC-008) → séances `course_session`
+  d'origine planning créées / réutilisées / supersédées via le port
+  public `coursesession.PlanningSessionWriter` (DEC-G1-001, aucun partage
+  d'entité JPA)**. Détection de conflit formateur / classe / salle +
+  hors plage horaire intra-fichier (DEC-G1-005). Endpoints
+  `POST /api/v1/planning-imports`, `GET .../{id}`, `.../{id}/rows`,
+  `.../{id}/publish`, `.../{id}/cancel`,
+  `GET /api/v1/planning/versions(/{id})`. Écrans Angular
+  `/planning/import`, `/planning/import/:jobId`, `/planning/versions`.
+  → **`EF-PLAN-001..005`, `EF-PLAN-007`, `EF-SES-001`, `RG-016`,
+  `RG-030..RG-035`, `AC-007`, `AC-008` : `IMPLEMENTED_AND_TESTED`**.
+  Restent hors G1-B : `EF-PLAN-006` (création manuelle plein calendrier,
+  `HORS_PÉRIMÈTRE_ASSUMÉ`), les avertissements d'alternance sur un créneau
+  jour-entreprise (DEC-G1-006), le conflit avec des séances déjà publiées
+  hors du fichier courant (post-G1).
+- **État des suites** après G1-B :
+  `cd backend && ./mvnw clean test` → **713 tests, 0 échec, 0 erreur**
+  (schéma V13, `ModularityTests` vert) ;
+  `cd frontend && npm test -- --watch=false` → **66 fichiers / 548 tests /
+  0 échec** ; `npm run lint` OK ; `npm run build` **484,68 kB** brut
+  (0 alerte de budget) ; `npm audit --audit-level=high` → 0 vulnérabilité.
+- Jeux de données de démonstration ajoutés :
+  `docs/demo-data/planning-demo.csv` et `planning-conflicts-demo.csv`
+  (fictifs, résultats attendus décrits dans `docs/demo-data/README.md`).
+
+Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
+finalisation F2) **reste d'actualité** tant que les blocs G1-C à G1-G ne
+sont pas livrés.
+
 ## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)
 
 Décidé pour cette livraison (prototype), assumé et documenté — jamais
@@ -194,14 +250,13 @@ présenté comme livré. Détail dans le README (§ « Périmètre non livré »
 `docs/reports/PROJECT_FINAL_AUDIT.md` §7.4 et l'addendum de finalisation
 des `docs/01` et `docs/02`.
 
-- **Import du planning + publication + création des séances depuis un
-  planning** — EF-PLAN-001..007, EF-SES-001, RG-016, AC-007, AC-008.
-  Aucun module `planning`, aucune table, aucun endpoint, aucun écran.
-  Le prototype ne permet que la **création de séances exceptionnelles
-  manuelles**. C'est la lacune la plus visible du parcours prioritaire
-  de `CLAUDE.md` — **assumée pour cette livraison**.
+- ~~**Import du planning + publication + création des séances depuis un
+  planning** — EF-PLAN-001..007, EF-SES-001, RG-016, AC-007, AC-008~~ →
+  **livré au bloc G1-B** (voir « Mise à jour G1 » ci-dessus).
+  `EF-PLAN-006` (création manuelle plein calendrier) reste
+  `HORS_PÉRIMÈTRE_ASSUMÉ`.
 - Séances : `PATCH` / annulation / affectation d'un remplaçant
-  (EF-SES-004, EF-SES-005).
+  (EF-SES-004, EF-SES-005) — **prévu au bloc G1-C**.
 - QR fixe de salle + contrôle réseau CIDR (référentiel `site_network_range`
   présent, non consommé) — EF-ROOM-002, EF-ATT-008.
 - Scan caméra mobile (code court uniquement).

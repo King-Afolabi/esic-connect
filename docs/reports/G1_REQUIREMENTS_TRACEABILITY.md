@@ -42,15 +42,19 @@
 
 ## 1. Vue d'ensemble par bloc
 
-| Bloc | Intitulé | Exigences pilotes | Décisions | Statut avant G1 |
-|---|---|---|---|---|
-| G1-A | Interfaces Angular des API existantes | EF-ROOM-001, EF-ACA-001..005, EF-USER-001..003, EF-AUTH-004 | DEC-G1-A1 | `PARTIAL` (API livrées, écrans absents ou lecture seule) |
-| G1-B | Module `planning` complet | EF-PLAN-001, EF-PLAN-002, EF-PLAN-003, EF-PLAN-004, EF-PLAN-005, EF-PLAN-007, EF-SES-001, RG-016, RG-030..RG-035, AC-007, AC-008 | DEC-G1-001..006, DEC-G1-012 | `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) |
-| G1-C | Cycle de vie avancé des séances | EF-SES-004, EF-SES-005, CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 | DEC-G1-004, DEC-G1-005 | `NOT_IMPLEMENTED` (séances exceptionnelles `PLANNED→OPEN→CLOSED` seulement) |
-| G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) |
-| G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010 | `PARTIAL` (dashboard générique unique) |
-| G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) |
-| G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) |
+> **Avancement (1er septembre 2026, session autonome).** G1-A et G1-B
+> sont **livrés et verts** (suites back 713/0, front 548/0). Détail par
+> commit : `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
+
+| Bloc | Intitulé | Exigences pilotes | Décisions | Statut avant G1 | Statut après cette session |
+|---|---|---|---|---|---|
+| G1-A | Interfaces Angular des API existantes | EF-ROOM-001, EF-ACA-001..005, EF-USER-001..003, EF-AUTH-004 | DEC-G1-A1 | `PARTIAL` (API livrées, écrans absents ou lecture seule) | **`IMPLEMENTED_AND_TESTED`** pour `EF-ROOM-001` (écrans `organization`) ; `EF-ACA-001..005` / `EF-USER-001` / `EF-AUTH-004` = **dette G1-A** (API prêtes, pas d'écran d'écriture ; plan §3.1) |
+| G1-B | Module `planning` complet | EF-PLAN-001, EF-PLAN-002, EF-PLAN-003, EF-PLAN-004, EF-PLAN-005, EF-PLAN-007, EF-SES-001, RG-016, RG-030..RG-035, AC-007, AC-008 | DEC-G1-001..006, DEC-G1-012 | `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) | **`IMPLEMENTED_AND_TESTED`** — module `planning`, V12/V13, simulation (T1), publication atomique + versionnement, port `PlanningSessionWriter`, écrans `/planning/**`. `EF-PLAN-003` (correction ligne à ligne) = **`PARTIAL`** (annulation + réimport, DEC-G1-003) ; `EF-PLAN-006` = `HORS_PÉRIMÈTRE_ASSUMÉ` ; `DEC-G1-006` (alternance) post-G1 |
+| G1-C | Cycle de vie avancé des séances | EF-SES-004, EF-SES-005, CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 | DEC-G1-004, DEC-G1-005 | `NOT_IMPLEMENTED` (séances exceptionnelles `PLANNED→OPEN→CLOSED` seulement) | `NOT_STARTED` |
+| G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) | `NOT_STARTED` (l'événement `planning.PlanningPublishedEvent` existe déjà, prêt à être consommé) |
+| G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010 | `PARTIAL` (dashboard générique unique) | `NOT_STARTED` |
+| G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | `NOT_STARTED` |
+| G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | `PARTIAL` — jeux de données `planning-demo.csv` / `planning-conflicts-demo.csv` ajoutés ; docs `CURRENT-STATE` / README / ce fichier mis à jour ; recette e2e complète + `docs/11` restent à faire |
 
 ---
 

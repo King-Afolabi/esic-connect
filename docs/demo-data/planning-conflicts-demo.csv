@@ -1,0 +1,6 @@
+slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code
+S1-LUN-AM,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique,__TEACHER_PUBLIC_ID__,A101
+S1-LUN-CHEVAUCHE,2026-09-07,10:00,13:00,Europe/Paris,Bases de données,__TEACHER_PUBLIC_ID__,A101
+S1-SANS-TITRE,2026-09-08,09:00,12:00,Europe/Paris,,__TEACHER_PUBLIC_ID__,B12
+S1-DATE-KO,32/13/2026,09:00,12:00,Europe/Paris,Réseaux,__TEACHER_PUBLIC_ID__,B12
+S1-FORMATEUR-KO,2026-09-09,09:00,12:00,Europe/Paris,Anglais,00000000-0000-0000-0000-000000000000,C03

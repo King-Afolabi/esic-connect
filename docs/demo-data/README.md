@@ -43,3 +43,38 @@ reconfirmation → `200` + `alreadyApplied: true`.
 
 Le téléphone est facultatif : quelques valeurs `06000000xx` fictives,
 le reste vide.
+
+## `planning-demo.csv` et `planning-conflicts-demo.csv` (bloc G1-B)
+
+Fichiers d'import CSV d'un **planning de classe** (module `planning`,
+schéma G1 : `slot_key` obligatoire — `DEC-G1-002` — et `teacher_public_id`
+plutôt que `teacher_email` — `DEC-G1-B`). Une seule classe par import :
+elle est choisie dans l'écran `/planning/import` (pas dans le fichier).
+
+**Avant usage** : remplacer le marqueur `__TEACHER_PUBLIC_ID__` par le
+`publicId` d'un compte portant un rôle `TEACHER` actif (visible dans
+`/administration` ou via `GET /api/v1/sessions/teachers`).
+
+### `planning-demo.csv` — 5 créneaux valides
+
+Simulation attendue (`POST /api/v1/planning-imports`, classe cible sans
+planning publié) : `status = SIMULATED`, `totalRows = 5`, `validRows = 5`,
+`errorRows = 0`, `addedRows = 5`, `confirmable = true`. Publication
+(`POST …/{id}/publish`) → `versionNumber = 1`, 5 séances `course_session`
+d'origine planning (`status = PLANNED`, sans motif d'exception) visibles
+dans `/sessions` et via `GET /api/v1/planning/versions`.
+
+Republier une version modifiée du même fichier (horaire changé, créneau
+retiré, créneau ajouté) → `versionNumber = 2`, la version 1 passe
+`SUPERSEDED`, les séances sont réutilisées / supersédées / créées en
+conséquence (AC-008).
+
+### `planning-conflicts-demo.csv` — 5 créneaux fautifs
+
+Simulation attendue : `errorRows = 5`, `confirmable = false`. Anomalies :
+`PLAN_CONFLICT_CLASS` + `PLAN_CONFLICT_TEACHER` + `PLAN_CONFLICT_ROOM`
+(deux créneaux qui se chevauchent), `PLAN_TITLE_REQUIRED` (titre vide),
+`PLAN_DATE_INVALID` (`32/13/2026`), `PLAN_TEACHER_NOT_ELIGIBLE`
+(identifiant nul). La publication d'un tel job est refusée
+(`409 PLAN_BLOCKING_ISSUES`) : c'est le comportement recherché
+(prévisualisation → correction → nouvel import).

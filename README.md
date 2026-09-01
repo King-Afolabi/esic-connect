@@ -38,19 +38,27 @@ piste d'audit.
 
 ## Périmètre non livré (décision de finalisation — assumée)
 
+> **Mise à jour G1 (1er septembre 2026).** Le lot produit G1 (branche
+> `feature/master-level-product-expansion`) a **livré** deux des éléments
+> ci-dessous : le **référentiel organisationnel Angular** (G1-A) et
+> l'**import → simulation → publication versionnée du planning et la
+> création des séances associées** (G1-B, module `planning` réel,
+> migrations V12/V13, endpoints et écrans). `EF-PLAN-001..005`,
+> `EF-PLAN-007`, `EF-SES-001`, `RG-016`, `RG-030..RG-035`, `AC-007`,
+> `AC-008` sont désormais `IMPLEMENTED_AND_TESTED`. Détail :
+> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` et
+> `docs/CURRENT-STATE.md` (§ « Mise à jour G1 »). La liste ci-dessous
+> reflète l'état **avant G1** ; les items barrés sont livrés.
+
 Pour cette livraison de prototype, les éléments suivants **ne sont pas
 implémentés** et ne doivent jamais être présentés comme livrés :
 
-- **Import du planning → prévisualisation → publication → versionnement →
-  création automatique des séances depuis un planning.** Aucun module
-  `planning`, aucune table, aucun endpoint, aucun écran. Le prototype ne
-  permet que la **création manuelle de séances exceptionnelles**.
-  Exigences classées `HORS_PÉRIMÈTRE_ASSUMÉ` : **EF-PLAN-001 à
-  EF-PLAN-007, EF-SES-001, RG-016, AC-007, AC-008**. C'est la lacune la
-  plus visible du parcours prioritaire de `CLAUDE.md` ; elle est **assumée
-  et signalée** ici, dans `docs/01-cadrage.md`, `docs/02-cahier-des-charges.md`
-  et devra l'être en soutenance.
-- Séances : `PATCH`, annulation, affectation d'un remplaçant.
+- ~~**Import du planning → prévisualisation → publication → versionnement →
+  création automatique des séances depuis un planning.**~~ **Livré au bloc
+  G1-B.** Seul `EF-PLAN-006` (création manuelle plein calendrier) reste
+  `HORS_PÉRIMÈTRE_ASSUMÉ`.
+- Séances : `PATCH`, annulation, affectation d'un remplaçant — **prévu au
+  bloc G1-C** (non livré à ce jour).
 - QR fixe de salle + contrôle réseau CIDR (référentiel présent, non
   consommé) ; scan caméra mobile (code court uniquement).
 - WebAuthn / passkeys, MFA TOTP, anti-bot (Turnstile).

@@ -1587,6 +1587,12 @@ Personas :
 > Statut initial (avant travaux) ci-dessous. Il est mis à jour **bloc par
 > bloc**, uniquement sur preuve (code présent + test exécuté + résultat
 > consigné).
+>
+> **Avancement (1er septembre 2026).** **G1-A** et **G1-B** sont livrés et
+> verts (back `./mvnw clean test` → **713 tests, 0 échec** ; front
+> `npm test` → **548 tests, 0 échec** ; `lint`/`build`/`audit` verts).
+> **G1-C, G1-D, G1-E, G1-F, G1-G** : non démarrés. Détail par checkpoint
+> et commande : `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
 
 ## G1-A — Interfaces Angular des API administratives existantes
 
@@ -1600,6 +1606,7 @@ Personas :
 | Critères d'acceptation | chaque écran reprend à l'identique les rôles du contrôleur ; états `400/401/403/404/409/5xx` gérés ; axe-core sur ≥ 1 formulaire ; aucune régression des 475 tests front |
 | Définition de fini | services + composants + routes + gardes testés ; `npm test` / `lint` / `build` / `audit` verts ; doc de traçabilité mise à jour |
 | Statut initial | `PARTIAL` (API livrées, écrans absents ou en lecture seule) |
+| **Statut (01/09/2026)** | **`IMPLEMENTED_AND_TESTED` pour `EF-ROOM-001`** (écrans `organization` livrés, +48 tests front) ; `EF-ACA-001..005` / `EF-USER-001` / `EF-AUTH-004` = **dette G1-A** (API prêtes, audit rôles figé au plan §3.1, aucune UI d'écriture) |
 | Preuves attendues | `frontend/src/app/features/organization/**`, formulaires `academic`, `*.spec.ts`, capture du parcours |
 
 ## G1-B — Module `planning` (import CSV → simulation → publication versionnée → séances)
@@ -1614,6 +1621,7 @@ Personas :
 | Critères d'acceptation | AC-007 (séances uniquement après publication), AC-008 (modification ⇒ nouvelle version) ; simulation sans écriture métier ; publication transactionnelle tout-ou-rien, idempotente, `409` sur conflit métier, jamais `500` ; `ModularityTests` vert |
 | Définition de fini | migrations `V12` (tables planning) + `V13` (lien `course_session ↔ planning_entry`, discriminant d'origine, `exception_reason` nullable) ; module + port `coursesession.PlanningSessionWriter` (UUID publics, aucune clé SQL) ; identité de créneau = `slot_key` (DEC-G1-002, repli `REMOVED`+`ADDED`) ; publication atomique + `FAILED` en `REQUIRES_NEW` séparé (DEC-G1-003) ; endpoints terminés ; écrans `/planning/**` + `/my-planning` ; suite back (parseur, simulation, conflits, alternance, publication, rollback, idempotence, concurrence, versionnement, sécurité, audit) + front + axe-core ; docs |
 | Statut initial | `HORS_PÉRIMÈTRE_ASSUMÉ` → cible `IMPLEMENTED_AND_TESTED` |
+| **Statut (01/09/2026)** | **`IMPLEMENTED_AND_TESTED`** — module `com.esic.connect.planning`, `V12`+`V13`, simulation (T1), publication atomique + versionnement, port `PlanningSessionWriter`, écrans `/planning/**` ; back +20 tests (693→713), front +25 (523→548). `EF-PLAN-003` = `PARTIAL` (annulation + réimport, `DEC-G1-003`) ; `EF-PLAN-006` reste `HORS_PÉRIMÈTRE_ASSUMÉ` ; `DEC-G1-006` (alternance) + conflit vs séances déjà publiées = post-G1 |
 | Preuves attendues | `com.esic.connect.planning`, `V12`+`V13`, tests nommés, `docs/demo-data/planning-demo.csv` |
 
 ## G1-C — Cycle de vie avancé des séances
