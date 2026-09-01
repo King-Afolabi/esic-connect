@@ -600,6 +600,37 @@ rollback métier, destinataires, isolation (AC-017), contenu sans PII,
 **Impact déploiement.** Table supplémentaire ; pas de service nouveau ;
 volume borné (purge à prévoir, `docs/07`).
 
+### Révision à la livraison G1-D (1er septembre 2026)
+
+- **Idempotence par occurrence.** `CourseSessionChangeEvent` gagne un
+  champ `UUID eventId` (additif, un seul site de construction dans
+  `CourseSessionChangePublisher`, `audit` l'ignore). `dedup_key` =
+  `SHA-256(type | resourcePublicId | recipientUserId | eventKey)` où
+  `eventKey` = `eventId` pour un événement de séance, `versionPublicId`
+  pour un `PlanningPublishedEvent` (unique par publication). Pas
+  d'ajout de `spring-modulith-starter-jpa` : décision inchangée.
+- **Une transaction par ligne.** `NotificationWriter` (orchestration,
+  **sans** `@Transactional`) délègue à `NotificationRowWriter`
+  (`@Transactional(REQUIRES_NEW)`) : un doublon de `dedup_key` (course
+  entre deux livraisons) fait échouer *uniquement* la ligne concernée,
+  jamais les autres destinataires du même événement (un flush en échec
+  aurait sinon empoisonné la transaction du lot entier).
+- **Périmètre des destinataires G1-D = formateurs.** Le port
+  `coursesession.CourseSessionDirectory` est étendu de deux méthodes
+  **100 % UUID publics** : `findSessionNotificationInfo(sessionPublicId)`
+  (formateur principal + remplaçants `ACTIVE`) et
+  `findPrincipalTeacherPublicIds(sessionPublicIds)` (chargement groupé,
+  pas de N+1). Notifier aussi les **apprenants** des classes et les
+  **responsables pédagogiques** du périmètre demande de nouveaux ports
+  `enrollment` / `academic` : tracé comme prolongement de G1-D
+  (`G1_IMPLEMENTATION_PROGRESS.md`), CDC §18/§23 les conditionne à
+  « si requis » — non numériquement exigé.
+- **Pas de `notification_preference`.** Le seul canal livré est in-app ;
+  une désactivation par type est un agrément post-G1 (DEC-G1-007 la
+  conditionne à une exigence réelle, non établie).
+- **`ARCHIVED`** reste une valeur d'énumération réservée : aucune action
+  d'archivage exposée en G1-D.
+
 ---
 
 ## DEC-G1-008 — Stockage des pièces jointes

@@ -46,7 +46,7 @@ finalisation se fait sur `chore/project-finalization-f2-f6`.
 | `coursesession` | séance (création manuelle **ou** issue d'un planning publié — G1-B), cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C), points de contrôle multiples, remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
 | `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction / annulation, justificatif métier sans fichier, rapports + export CSV | V9, V10 |
 | `studentimport` | import CSV contrôlé des apprenants (lecture sécurisée, simulation, confirmation transactionnelle, purge) | V11 |
-| `notification` | email d'activation via SMTP local (Mailpit), envoi asynchrone après commit | — |
+| `notification` | email d'activation via SMTP local (Mailpit) **+ centre de notifications métier persistantes** (G1-D) : table `notification`, listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant, idempotence `dedup_key`, API `/api/v1/me/notifications` | V15 |
 | `audit` | piste d'audit `audit_event` alimentée par les événements métier | V1 |
 | `bootstrap` | amorçage `demo` (comptes fictifs, profil `demo` uniquement) | — |
 | `shared` | types transverses, `BaseEntity`, `ApiError`, `GlobalExceptionHandler`, `ClockConfig` | — |
@@ -70,9 +70,10 @@ V5  référentiel académique    V12 module planning (7 tables)        [G1-B]
 V6  affectations pédagogiques V13 lien course_session ↔ créneau     [G1-B]
 V7  profils apprenant         V14 cycle de vie séances (CANCELLED,  [G1-C]
     + inscriptions                teacher_substitution)
+                              V15 table notification                [G1-D]
 ```
 
-Schéma **en version 14**. `spring.jpa.hibernate.ddl-auto = validate`.
+Schéma **en version 15**. `spring.jpa.hibernate.ddl-auto = validate`.
 Aucune donnée métier insérée par une migration. V12/V13 corrigées en
 place à l'audit G1-B.1, en-tête de `V13` re-précisé au checkpoint G1-C.3
 (jamais poussées ; une base ayant appliqué l'ancienne forme ne se répare
@@ -185,7 +186,7 @@ enregistrée dans le dépôt.
 | Retards (EF-ATT-005) | seuil unique `PT10M` → `LATE` | paliers 15 / 30 min, validation manuelle automatique après 30 min |
 | Alternance ↔ assiduité | contexte résolu, consommé par le reporting | pas de module `planning` : les « demi-journées attendues » reposent sur des séances exceptionnelles saisies à la main |
 | Justificatif (EF-JUS-001/002) | métadonnée métier + cycle d'examen | aucune pièce jointe (docs/02 §21) |
-| Notifications (EF-NOTIF-001/002) | email d'activation seulement | in-app, email métier (planning, remplacement…), push PWA, file persistante / DLQ |
+| Notifications (EF-NOTIF-001/002) | email d'activation **+ centre in-app persistant** (G1-D) : planning publié / séance annulée / remplaçant → notifications after-commit pour les **formateurs** ; API `/api/v1/me/notifications` + cloche + centre Angular | notifications aux **apprenants / responsables pédagogiques** (nouveaux ports requis), email métier, push PWA, préférences par type, file persistante / DLQ, purge |
 | Rapports « officiels » (docs/02 §24.5) | calcul demi-journées + export CSV | mise en page (logo ESIC, PDF, identifiant de document), export Excel |
 | OpenAPI | `/v3/api-docs` + `/swagger-ui` au runtime | pas d'`openapi.json` versionné (voir F3) |
 | Redis | jetons d'émargement uniquement | cache de planning, rate-limiting, droits calculés |
@@ -359,11 +360,59 @@ RG-015` → **`IMPLEMENTED_AND_TESTED`** (consolidés). Détail :
 § « Audit G1-C.3 ».
 
 **G1-C est terminé et consolidé** (C.1 + C.2 + C.3). Reste non livré :
-`PATCH /sessions/{id}` d'une séance manuelle `PLANNED` (non requis) ;
-notifications persistantes = **G1-D**.
+`PATCH /sessions/{id}` d'une séance manuelle `PLANNED` (non requis).
+
+### Bloc G1-D — centre de notifications persistantes (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN`. Migration **`V15`** : table `notification`
+(`recipient_user_id` FK `RESTRICT`, `type`, `title`, `body` **neutre**,
+`resource_type` / `resource_public_id`, `status ∈ {UNREAD,READ,ARCHIVED}`,
+`dedup_key CHAR(64) UNIQUE`, `CHECK ((status='UNREAD') = (read_at IS NULL))`,
+index `(recipient, status, created_at)`).
+
+- **Livraison après commit** : `NotificationListener`
+  (`@TransactionalEventListener(AFTER_COMMIT)`) consomme
+  `planning.PlanningPublishedEvent` et
+  `coursesession.CourseSessionChangeEvent` (`CANCELLED` /
+  `SUBSTITUTION_ADDED` / `SUBSTITUTION_ENDED`). Une transaction métier qui
+  rollbacke ⇒ **aucune** notification (testé). `open` / `close` d'une
+  séance ⇒ aucune notification.
+- **Idempotence** : `NotificationWriter` (orchestration) →
+  `NotificationRowWriter` (`REQUIRES_NEW` **par ligne**) ; `dedup_key` =
+  `SHA-256(type | resourcePublicId | recipientUserId | eventKey)` avec
+  `eventKey` = `CourseSessionChangeEvent.eventId` (nouveau champ `UUID`,
+  additif) ou `versionPublicId`. Un rejeu du listener ⇒ **1** ligne.
+- **Destinataires dérivés serveur** = **formateurs** (principal +
+  remplaçants `ACTIVE`), via deux nouvelles méthodes 100 % UUID publics
+  de `CourseSessionDirectory` (chargement groupé, pas de N+1). Un compte
+  **archivé** n'est jamais destinataire. Apprenants / responsables
+  pédagogiques : **prolongement documenté** (nouveaux ports
+  `enrollment` / `academic` requis).
+- **API** `/api/v1/me/notifications` (`@PreAuthorize("isAuthenticated()")`,
+  isolation par destinataire côté service) : liste paginée (tri
+  `createdAt DESC, id DESC`, `size ≤ 100`), `unread-count`, `{id}/read`
+  (idempotent ; `404` — pas `403` — sur une notif d'autrui), `read-all`
+  (borné au destinataire). `NotificationExceptionHandler` : `NOTIF_NOT_FOUND`
+  (`404`), `NOTIF_INVALID_STATUS` (`400`), `NOTIF_UNAUTHENTICATED` (`401`).
+- **Front** : cloche `mat-badge` dans l'`app-shell` (rafraîchie init /
+  navigation / 60 s), route `/notifications` (tout rôle) — centre avec
+  filtre Toutes / Non lues, marquage lu / tout lu, `loading` / `empty` /
+  `error` + reprise, pagination, lien vers la séance / les versions.
+- **Limites** : audience formateur uniquement ; pas de préférences, pas
+  de push PWA / email métier, pas de purge (dettes documentées) ;
+  `SESSION_SUBSTITUTION_ENDED` ne notifie pas le remplaçant tout juste
+  terminé.
+
+Suites : back **735 → 743/0** (3 fuseaux ; Flyway `V1→V15` rejoué sur
+`esic_test` vierge), front **559 → 570/0**, `lint` / `build`
+(484,81 kB) / `audit` verts. `EF-NOTIF-001` → `IMPLEMENTED_AND_TESTED` ;
+`EF-NOTIF-002` / `RG-033` → `IMPLEMENTED_AND_TESTED` (audience formateur ;
+apprenants / RP prolongement documenté). Détail :
+[`G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md)
+§ « G1-D ».
 
 Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
-finalisation F2) **reste d'actualité** tant que les blocs G1-D à G1-G
+finalisation F2) **reste d'actualité** tant que les blocs G1-E à G1-G
 ne sont pas livrés.
 
 ## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)

@@ -424,7 +424,7 @@ coursesession  → planning, academic, identity, room, shared
 attendance     → coursesession, enrollment, identity, shared
 justification  → attendance, identity, shared
 claim          → identity, attendance, coursesession, shared
-notification   → identity, shared
+notification   → identity, coursesession, planning, shared   (G1-D : consomme leurs événements publics)
 reporting      → academic, enrollment, attendance, shared
 audit          → identity, shared
 ai             → planning, shared
@@ -458,10 +458,10 @@ iot            → attendance, coursesession, shared
 > | `academic` | §7.2 (+ affectations pédagogiques et `AcademicScopeGuard`) | V5, V6 |
 > | `enrollment` | §7.3 | V7 |
 > | `alternation` | §7.4 | V8 |
-> | `coursesession` | §7.7 — **séances exceptionnelles manuelles uniquement** (pas de création depuis un planning) | V9, V10 |
+> | `coursesession` | §7.7 — séances manuelles **et** issues d'un planning publié (G1-B) ; cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C) ; remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
 > | `attendance` | §7.8 (+ le justificatif métier **sans fichier** de §7.9 et une partie du reporting de §7.12) | V9, V10 |
 > | `studentimport` | **nouveau** — import CSV contrôlé des apprenants (non prévu explicitement en §7 ; parcours d'import de §7.3) | V11 |
-> | `notification` | §7.11 — email d'activation seulement, envoi asynchrone après commit, **pas de file persistante** | — |
+> | `notification` | §7.11 — email d'activation **+ centre de notifications internes persistantes** (G1-D : table `notification`, listeners `AFTER_COMMIT`, API `/api/v1/me/notifications`) ; **pas de file persistante / DLQ, pas de push, audience formateur uniquement** | V15 |
 > | `audit` | §7.13 | V1 |
 > | `bootstrap` | **nouveau** — amorçage `demo` (comptes fictifs, profil `demo` uniquement) | — |
 > | `shared` | §7.16 | — |
@@ -660,6 +660,22 @@ Responsabilités :
 - préférences ;
 - files de traitement ;
 - nouvelles tentatives.
+
+**État réel (bloc G1-D, 1er septembre 2026).** Le module est
+**implémenté** pour les notifications internes persistantes : table
+`notification` (`V15`, `dedup_key` UNIQUE), listeners
+`@TransactionalEventListener(AFTER_COMMIT)` sur `planning.PlanningPublishedEvent`
+et `coursesession.CourseSessionChangeEvent` (`CANCELLED` /
+`SUBSTITUTION_ADDED` / `SUBSTITUTION_ENDED`), écriture idempotente
+`REQUIRES_NEW` **par ligne** (`NotificationWriter` → `NotificationRowWriter`),
+API `/api/v1/me/notifications` (liste paginée, `unread-count`, `read`,
+`read-all`), front cloche + centre. **Destinataires dérivés serveur =
+formateurs** (principal + remplaçants `ACTIVE`). Restent **non
+implémentés** : notifications aux **apprenants / responsables
+pédagogiques** (nouveaux ports `enrollment` / `academic` requis),
+**préférences** par type, **email métier**, **push PWA**, **file
+persistante / DLQ** et **purge** (dettes documentées dans
+`docs/CURRENT-STATE.md` et `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`).
 
 ## 7.12 `reporting`
 

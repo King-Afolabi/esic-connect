@@ -1588,12 +1588,13 @@ Personas :
 > bloc**, uniquement sur preuve (code présent + test exécuté + résultat
 > consigné).
 >
-> **Avancement (1er septembre 2026).** **G1-A**, **G1-B** et **G1-C**
-> (C.1 annulation + C.2 remplacements + C.3 audit correctif) sont livrés
-> et verts (back `./mvnw clean test` → **735 tests, 0 échec** — 3 fuseaux ;
-> front `npm test` → **559 tests, 0 échec** ; `lint`/`build`/`audit`
-> verts). **G1-D, G1-E, G1-F, G1-G** : non démarrés. Détail par
-> checkpoint et commande : `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
+> **Avancement (1er septembre 2026).** **G1-A**, **G1-B**, **G1-C**
+> (C.1–C.3) et **G1-D** (notifications persistantes, audience formateur)
+> sont livrés et verts (back `./mvnw clean test` → **743 tests, 0 échec**
+> — 3 fuseaux ; front `npm test` → **570 tests, 0 échec** ;
+> `lint`/`build`/`audit` verts). **G1-E, G1-F, G1-G** : non démarrés.
+> Détail par checkpoint et commande :
+> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
 
 ## G1-A — Interfaces Angular des API administratives existantes
 
@@ -1653,6 +1654,7 @@ Personas :
 | Définition de fini | `V15` (`notification`) ; listener `AFTER_COMMIT` / `REQUIRES_NEW` (motif du seul `StudentImportAuditListener`) ; endpoints `/me/notifications*` ; cloche + badge front ; suite back (after-commit, rollback métier, idempotence, destinataires, sécurité) + front |
 | Statut initial | `PARTIAL` (email d'activation seul) |
 | Preuves attendues | `com.esic.connect.notification` étendu, `V15`, tests |
+| **Statut (01/09/2026)** | **`IMPLEMENTED_FULL_SUITE_GREEN`** — `V15` (table `notification`, `dedup_key` UNIQUE) ; `NotificationListener` (`AFTER_COMMIT`) sur `PlanningPublishedEvent` + `CourseSessionChangeEvent(CANCELLED / SUBSTITUTION_ADDED / SUBSTITUTION_ENDED)` ; `NotificationWriter` → `NotificationRowWriter` (`REQUIRES_NEW` **par ligne**) ; idempotence `dedup_key` (SHA-256, `eventId` / `versionPublicId`) ; 4 endpoints `/api/v1/me/notifications` (liste paginée bornée, `unread-count`, `{id}/read` idempotent, `read-all`), isolation par destinataire (`404` sur une notif d'autrui), `NOTIF_*` ; front cloche `mat-badge` (`app-shell`) + centre `/notifications`. Destinataires = **formateurs** (principal + remplaçants `ACTIVE`) ; **apprenants / responsables pédagogiques = prolongement documenté** (nouveaux ports `enrollment` / `academic`). Pas de préférences, pas de push, pas de purge (dettes documentées). `EF-NOTIF-001` → `IMPLEMENTED_AND_TESTED` ; `EF-NOTIF-002` / `RG-033` → `IMPLEMENTED_AND_TESTED` (audience formateur). Back +8 tests (735→743, 3 fuseaux) ; front +11 (559→570). Détail : `G1_IMPLEMENTATION_PROGRESS.md` § « G1-D » |
 
 ## G1-F — Tableaux de bord par rôle
 
