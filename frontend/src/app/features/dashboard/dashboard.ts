@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { interval, startWith } from 'rxjs';
 
@@ -10,22 +12,54 @@ import { AuthService } from '../../core/auth/auth.service';
 import { RoleContextService } from '../../core/auth/role-context.service';
 import { roleLabel } from '../../core/models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../core/navigation/navigation';
+import { DashboardApiService } from './dashboard-api.service';
+import { DashboardResponse, shortInstant } from './dashboard.models';
+
+type DashboardState =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'forbidden' }
+  | { kind: 'ready'; data: DashboardResponse };
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MatCardModule, MatIconModule, MatListModule],
+  imports: [
+    RouterLink,
+    MatCardModule,
+    MatIconModule,
+    MatListModule,
+    MatButtonModule,
+    MatProgressBarModule,
+  ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
 export class Dashboard {
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly dashboardApi = inject(DashboardApiService);
 
   protected readonly roleLabel = roleLabel;
+  protected readonly shortInstant = shortInstant;
 
   protected readonly session = this.auth.session;
   protected readonly roles = this.auth.roles;
+
+  // --- Tableau de bord par rôle (bloc G1-F) -----------------------
+  protected readonly dashState = signal<DashboardState>({ kind: 'loading' });
+  protected readonly dash = computed(() => {
+    const s = this.dashState();
+    return s.kind === 'ready' ? s.data : null;
+  });
+  /** Le contexte de rôle du front est ergonomique ; le serveur seul décide. */
+  protected readonly canLinkSessions = computed(() =>
+    this.roleContext
+      .effectiveRoles()
+      .some((r) =>
+        ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER', 'TEACHER'].includes(r),
+      ),
+  );
 
   /** Contexte d'utilisation actif (docs/02 §6.1) — affichage seul. */
   protected readonly activeContextLabel = this.roleContext.activeLabel;
@@ -42,6 +76,24 @@ export class Dashboard {
       (item) => item.path !== '/dashboard' && item.path !== '/notifications',
     ),
   );
+
+  constructor() {
+    this.loadDashboard();
+  }
+
+  protected loadDashboard(): void {
+    this.dashState.set({ kind: 'loading' });
+    this.dashboardApi.getDashboard().subscribe({
+      next: (data) => this.dashState.set({ kind: 'ready', data }),
+      error: (error: unknown) => {
+        const status =
+          typeof error === 'object' && error !== null && 'status' in error
+            ? (error as { status: number }).status
+            : 0;
+        this.dashState.set({ kind: status === 403 ? 'forbidden' : 'error' });
+      },
+    });
+  }
 
   protected readonly expiresLabel = computed(() => {
     this.tick();
