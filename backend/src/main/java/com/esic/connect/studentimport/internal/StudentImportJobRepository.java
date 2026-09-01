@@ -33,4 +33,7 @@ interface StudentImportJobRepository
     List<StudentImportJob> findByStatusAndCreatedAtBefore(StudentImportJobStatus status, Instant cutoff);
 
     List<StudentImportJob> findByStatusAndConfirmedAtBefore(StudentImportJobStatus status, Instant cutoff);
+
+    /** Derniers jobs, du plus récent au plus ancien — borné par un {@code Pageable} (bloc G1-F). */
+    List<StudentImportJob> findAllByOrderByCreatedAtDesc(org.springframework.data.domain.Pageable pageable);
 }

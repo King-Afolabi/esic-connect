@@ -20,4 +20,9 @@ interface AttendanceJustificationRepository
     List<AttendanceJustification> findBySubmittedByIdOrderBySubmittedAtDesc(Long submittedById);
 
     List<AttendanceJustification> findByStatusInOrderBySubmittedAtAsc(Collection<JustificationStatus> statuses);
+
+    /** Décompte borné (bloc G1-F). */
+    long countByStatus(JustificationStatus status);
+
+    long countBySubmittedByIdAndStatus(Long submittedById, JustificationStatus status);
 }

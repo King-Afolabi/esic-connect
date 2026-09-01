@@ -50,6 +50,17 @@ class DefaultClassGroupDirectory implements ClassGroupDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ClassGroupRef> findByInternalIds(java.util.Collection<Long> classGroupInternalIds) {
+        if (classGroupInternalIds == null || classGroupInternalIds.isEmpty()) {
+            return List.of();
+        }
+        return classGroupRepository.findAllById(classGroupInternalIds).stream()
+                .map(DefaultClassGroupDirectory::toRef)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ClassGroupResolution resolveForImport(String programCode, String classCode, String academicYearCode) {
         String program = trimOrEmpty(programCode);
         String klass = trimOrEmpty(classCode);

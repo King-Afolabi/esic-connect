@@ -79,6 +79,18 @@ public interface CourseSessionDirectory {
     List<SessionRef> findSessionsInRange(Instant from, Instant to);
 
     /**
+     * Séances <strong>opérationnelles</strong> du formateur principal
+     * {@code teacherPublicId} dont le début tombe dans {@code [from, to]}
+     * ({@code null} = borne ouverte), triées par début, <strong>bornées</strong>
+     * à {@code limit} (le module {@code dashboard} borne à ≤ 10).
+     * Contrat d'entrée en UUID public ; sans contrôle d'accès de
+     * l'appelant (le {@code dashboard} a déjà résolu que l'appelant
+     * <em>est</em> ce formateur). Les séances où l'utilisateur n'intervient
+     * que comme remplaçant ne sont pas incluses (limite documentée G1-F).
+     */
+    List<SessionRef> findUpcomingForTeacher(UUID teacherPublicId, Instant from, Instant to, int limit);
+
+    /**
      * Fenêtres des séances <strong>opérationnelles</strong> (hors
      * supersédées / annulées) dont l'intervalle {@code [startsAt, endsAt)}
      * chevauche {@code [from, to)}. Contrat <strong>100 % UUID publics</strong> :

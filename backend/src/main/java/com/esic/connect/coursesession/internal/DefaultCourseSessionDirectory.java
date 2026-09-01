@@ -155,6 +155,33 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<SessionRef> findUpcomingForTeacher(UUID teacherPublicId, Instant from, Instant to, int limit) {
+        Long teacherId = userDirectory.findByPublicId(teacherPublicId)
+                .map(UserDirectory.UserRef::internalId)
+                .orElse(null);
+        if (teacherId == null) {
+            return List.of();
+        }
+        int bounded = Math.max(1, Math.min(limit, 10));
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
+        specs.add(CourseSessionSpecifications.taughtBy(teacherId));
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs),
+                        org.springframework.data.domain.PageRequest.of(0, bounded,
+                                Sort.by(Sort.Direction.ASC, "startsAt")))
+                .stream()
+                .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ExistingSessionWindow> findOperationalSessionWindows(Instant from, Instant to) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
         specs.add(CourseSessionSpecifications.operational());
