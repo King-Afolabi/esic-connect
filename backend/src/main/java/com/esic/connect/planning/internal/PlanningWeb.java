@@ -31,4 +31,9 @@ final class PlanningWeb {
 
     private PlanningWeb() {
     }
+
+    /** Sujet ({@code sub}) du JWT de l'appelant, ou {@code null}. */
+    static String subject(org.springframework.security.oauth2.jwt.Jwt caller) {
+        return caller != null ? caller.getSubject() : null;
+    }
 }

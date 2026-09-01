@@ -139,7 +139,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | `f3691bd` — `docs(g1): figer les exigences et décisions d'architecture` |
 | G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | `01a6068` — `fix(g1): stabiliser les dates métier et corriger le socle` |
 | G1-A | Interfaces Angular des API existantes | `IMPLEMENTED_FULL_SUITE_GREEN` (référentiel organisationnel livré ; écritures `academic`/`enrollment`/affectations/invitation = dette assumée, cf. plan §3.1) | `2cf1416` — `feat(frontend): exposer les parcours administratifs existants` |
-| G1-B | Module `planning` complet | `IN_PROGRESS` — checkpoint **schéma + modèle** vert (`V12` + `V13`, 7 entités + repos, socle interne, port `coursesession.PlanningSessionWriter`) ; simulation / publication / UI = checkpoints suivants | _ce commit : `feat(planning): créer le schéma et le modèle du module planning`_ |
+| G1-B | Module `planning` complet | `IN_PROGRESS` — checkpoints **schéma + modèle** (`e4793e7`) **et simulation CSV** verts ; publication atomique / versionnement / UI = checkpoints suivants | `e4793e7` + _ce commit : `feat(planning): simuler les imports CSV de planning`_ |
 | G1-C | Cycle de vie avancé des séances | `NOT_STARTED` | — |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
@@ -359,47 +359,109 @@ Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
   endpoints REST, purge `@Scheduled`, écrans Angular — **non
   implémentés**.
 
+## Bloc G1-B — checkpoint simulation CSV (1er septembre 2026)
+
+- **HEAD de départ** : `e4793e7`.
+- **État** : `IMPLEMENTED_TARGETED_TESTS_GREEN` pour le checkpoint
+  simulation ; publication / versionnement / UI = checkpoints suivants.
+- **Fichiers back principaux ajoutés** (`planning/internal/`) :
+  `PlanningColumn` (8 colonnes, `slot_key` + `teacher_public_id` +
+  `room_code`), `PlanningCsvGuard` (duplication minimale de
+  `CsvFileGuard`, `DEC-G1-003`), `PlanningCsvValues` (date / heure /
+  fuseau / SHA-256 / troncature), `PlanningCsvParser` +
+  `ParsedPlanningCsv` (RFC 4180, séparateur auto, en-tête par nom),
+  `PlanningReferenceResolver` (ports `ClassGroupDirectory` /
+  `AcademicScopeDirectory` / `TeacherDirectory`),
+  `PlanningSimulationService` (invariant T1 : n'écrit que
+  `planning_import_*` ; valeurs, formateur, doublon `slot_key`
+  intra-fichier, conflits formateur/classe/salle + hors plage horaire —
+  `DEC-G1-005` ; comparaison `ADDED`/`MODIFIED`/`UNCHANGED` + compteur de
+  retraits — `DEC-G1-002/004`), `PlanningQueryService` (get / rows
+  paginé / cancel idempotent ; périmètre serveur : jobs de l'appelant),
+  `PlanningResponses` / `PlanningPageResponse` / `PlanningQuerySupport`,
+  `PlanningExceptionHandler` (codes `PLAN_*`), `PlanningImportController`.
+- **Endpoints ajoutés** :
+  `POST /api/v1/planning-imports` (multipart `file` + `classGroupPublicId`,
+  `201`), `GET /api/v1/planning-imports/{id}`,
+  `GET /api/v1/planning-imports/{id}/rows` (paginé, tri liste blanche),
+  `POST /api/v1/planning-imports/{id}/cancel` (`204`, idempotent).
+- **Migrations** : aucune (V12/V13 déjà en place).
+- **Tests ajoutés** : `PlanningCsvParserTests` (7, pur) +
+  `PlanningImportIntegrationTests` (7, `@SpringBootTest` MySQL réel :
+  simulation `ADDED` sans fuite d'`id`, formateur non éligible + doublon
+  `slot_key` bloquants, conflit de chevauchement classe/formateur/salle,
+  colonne manquante → `400` avant tout job, upload non-CSV → `415`,
+  cancel idempotent, sécurité `401`/`403` STUDENT/TEACHER + périmètre
+  `PEDAGOGICAL_MANAGER` → `403 PLAN_SCOPE_FORBIDDEN`). **+14** tests back.
+- **Commandes** :
+  `./mvnw test -Dtest='PlanningCsvParserTests,PlanningImportIntegrationTests,ModularityTests'`
+  → **15 / 0 — BUILD SUCCESS** ; `./mvnw clean test` (suite complète) →
+  **`Tests run: 707, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS**
+  (693 → 707 : +14, aucune régression).
+- **Décisions confirmées** : `DEC-G1-003` → guard CSV **dupliqué**
+  (pas d'extraction `shared`) ; le job cible **une classe** portée par
+  la requête (`classGroupPublicId`), l'année dérivée de la classe ;
+  correction ligne à ligne **non retenue** en G1-B — un fichier fautif se
+  corrige et se re-téléverse (annulation + réimport, `DEC-G1-003`).
+- **Non couvert (checkpoints suivants)** : publication atomique
+  (`PlanningPublicationService` + `DefaultPlanningSessionWriter`,
+  `DEC-G1-001/003`), versionnement + comparaison de versions
+  (EF-PLAN-005/007), conflit avec des séances **déjà publiées**,
+  avertissements d'alternance (`DEC-G1-006`), purge `@Scheduled`, écrans
+  Angular `/planning/**`.
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu après ce commit** : commit
-  `feat(planning): créer le schéma et le modèle du module planning`
-  (parent `2cf1416`).
+- **HEAD attendu après ce commit** : `feat(planning): simuler les imports
+  CSV de planning` (parent `e4793e7`).
 - **Working tree** : propre après commit.
-- **Bloc courant** : G1-B, sous-tâche suivante = **simulation d'un
-  import CSV de planning** (checkpoint `feat(planning): simuler les
-  imports CSV`).
-- **Fichiers non terminés** : aucun (le checkpoint schéma + modèle est
-  cohérent et vert). À créer au checkpoint suivant : `PlanningCsvGuard`
-  (réutilise / duplique la logique `studentimport.CsvFileGuard` —
-  décider extraction `shared` vs duplication), `PlanningCsvParser`,
-  `PlanningReferenceResolver` (ports `ClassGroupDirectory` /
-  `TeacherDirectory` / `AcademicScopeDirectory`),
-  `PlanningSimulationService` (invariant T1 : aucune écriture métier),
-  `PlanningConflictDetector` (DEC-G1-005), `PlanningExceptionHandler`
-  (quand un contrôleur existe), `PlanningResponses` / `PlanningRequests`,
-  `PlanningImportController` (`POST /api/v1/planning-imports`,
-  `GET .../{id}`, `.../{id}/rows`, `.../{id}/revalidate`,
-  `.../{id}/cancel`), specs unitaires + IT + sécurité.
-- **Tests verts** : suite front 523/0 ; suite back (à consigner au
-  commit) ; `ModularityTests` + `AuditEventTests` verts avec `V1 → V13`.
+- **Bloc courant** : G1-B, sous-tâche suivante = **publication atomique**
+  (checkpoint `feat(planning): publier les séances`) :
+  `DefaultPlanningSessionWriter` (impl du port dans
+  `coursesession.internal`, création / réutilisation / supersession de
+  `course_session`), `PlanningPublicationService` (transaction unique,
+  verrou `FOR UPDATE` du job + du schedule, re-validation, version N/N+1,
+  `PlanningPublicationOrchestrator` pour le `FAILED` en `REQUIRES_NEW`),
+  `POST /api/v1/planning-imports/{id}/publish`,
+  `GET /api/v1/planning/versions` + `/{id}`,
+  `PlanningPublishedEvent` (pour G1-D), purge `@Scheduled`. Tests :
+  rollback total (T3), idempotence (double publish), concurrence
+  (2 publications), `FAILED` après port qui lève, `ModularityTests`.
+- **Fichiers non terminés** : aucun (les checkpoints schéma+modèle et
+  simulation sont cohérents et verts). À créer au checkpoint
+  « publication » : `DefaultPlanningSessionWriter`
+  (`coursesession.internal`, impl du port `PlanningSessionWriter`),
+  `PlanningPublicationService` + `PlanningPublicationOrchestrator`,
+  `PlanningVersionService` / `PlanningVersionController`,
+  `PlanningPublishedEvent`, `PlanningPurgeService` (`@Scheduled`),
+  `POST /api/v1/planning-imports/{id}/publish`,
+  `GET /api/v1/planning/versions(/{id})`, specs (rollback T3,
+  idempotence, concurrence, `FAILED` en `REQUIRES_NEW`, `ModularityTests`).
+- **Tests verts** : suite front 523/0 ; suite back **707/0** ; `ModularityTests` vert avec le module
+  `planning` complet (contrôleur + advice + services).
 - **Tests rouges** : aucun.
-- **Commande suivante** : lire `studentimport.internal.CsvParser` /
-  `CsvRowNormalizer` / `CsvValueNormalizer` / `StudentImportSimulationService`
-  en détail, puis écrire `PlanningCsvGuard` + `PlanningCsvParser`.
-- **Risques** : `ddl-auto=validate` est strict (char/varchar, int/bigint,
+- **Commande suivante** : lire `CourseSessionService` (création d'une
+  séance + `SessionClass` + `AttendanceCheckpoint`) puis écrire
+  `DefaultPlanningSessionWriter` (création / réutilisation / supersession
+  par `entryPublicId`).
+- **Risques** : `ddl-auto=validate` strict (char/varchar, int/bigint,
   `@JdbcTypeCode`) — comparer chaque colonne à son équivalent
-  `studentimport` ; `esic_test` peut être `DROP`/`CREATE` librement
-  (`TEST_ISOLATION_DECISION.md`), jamais `esic_connect`.
-- **Décisions encore ouvertes** : `DEC-G1-003` (guard CSV : extraction
-  `shared` ou duplication) ; `DEC-G1-003` (correction ligne à ligne ou
-  annulation + réimport) ; format exact des colonnes CSV (modèle fictif à
-  fournir en G1-G).
+  `studentimport` ; la publication crée des `course_session` d'origine
+  planning (`exception_reason` nul, `planning_entry_public_id` renseigné)
+  — vérifier le `CHECK chk_course_session_open_state` de V9 (PLANNED ⇒
+  `opened_at`/`closed_at` nuls : OK à la création) ; `esic_test`
+  `DROP`/`CREATE` libre, jamais `esic_connect`.
+- **Décisions encore ouvertes** : `DEC-G1-003` guard extraction `shared`
+  → **tranchée** (duplication) ; `DEC-G1-003` correction ligne à ligne →
+  **tranchée** (annulation + réimport) ; guard CSV `slot_key` format —
+  modèle CSV fictif `docs/demo-data/planning-demo.csv` à fournir en G1-G ;
+  `DEC-G1-006` (alternance) reporté au checkpoint publication ou G1-G.
 
 ## Dernier commit produit
 
 ```text
-(G1-B schéma+modèle prêt à être commité : feat(planning): créer le schéma et le modèle du module planning)
+(G1-B simulation prêt à être commité : feat(planning): simuler les imports CSV de planning)
 ```
 
 ## Commandes de reprise
