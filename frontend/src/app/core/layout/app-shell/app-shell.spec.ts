@@ -45,7 +45,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Administration / Apprenants / Import / Référentiels / Organisation / Alternance / Séances screens for an ADMIN', () => {
+  it('renders the dashboard and the delivered Administration / Apprenants / Import / Référentiels / Organisation / Planning / Alternance / Séances screens for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/administration',
@@ -53,6 +53,7 @@ describe('AppShell', () => {
       '/students/import',
       '/academic',
       '/organization',
+      '/planning',
       '/alternation',
       '/sessions',
       '/attendance-management',
@@ -63,6 +64,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Import apprenants');
     expect(text()).toContain('Référentiels');
     expect(text()).toContain('Organisation');
+    expect(text()).toContain('Planning');
     expect(text()).toContain('Alternance');
     expect(text()).toContain('Séances');
   });

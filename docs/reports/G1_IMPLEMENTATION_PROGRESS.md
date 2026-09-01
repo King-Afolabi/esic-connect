@@ -139,7 +139,7 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-0 | Gel des exigences et décisions d'architecture | `DONE` (documentaire) | `f3691bd` — `docs(g1): figer les exigences et décisions d'architecture` |
 | G1-0.1 | Correctif : dates métier + audit documentaire du socle | `DONE` | `01a6068` — `fix(g1): stabiliser les dates métier et corriger le socle` |
 | G1-A | Interfaces Angular des API existantes | `IMPLEMENTED_FULL_SUITE_GREEN` (référentiel organisationnel livré ; écritures `academic`/`enrollment`/affectations/invitation = dette assumée, cf. plan §3.1) | `2cf1416` — `feat(frontend): exposer les parcours administratifs existants` |
-| G1-B | Module `planning` complet | `IN_PROGRESS` — back-end **complet** (schéma `e4793e7`, simulation `24cc9f5`, **publication atomique + versionnement** ce commit) ; reste = écrans Angular `/planning/**` | `e4793e7` + `24cc9f5` + _ce commit : `feat(planning): publier des plannings versionnés en séances`_ |
+| G1-B | Module `planning` complet | `IMPLEMENTED_FULL_SUITE_GREEN` — back-end (schéma `e4793e7`, simulation `24cc9f5`, publication `dafd23a`) **+ parcours Angular** ce commit. Reste post-G1 : avertissements d'alternance (`DEC-G1-006`), conflit vs séances déjà publiées, création manuelle plein calendrier (`EF-PLAN-006`, hors périmètre G1). | `e4793e7` + `24cc9f5` + `dafd23a` + _ce commit : `feat(frontend): ajouter le parcours planning`_ |
 | G1-C | Cycle de vie avancé des séances | `NOT_STARTED` | — |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
@@ -480,47 +480,98 @@ Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
   `/my-planning` ; avertissements d'alternance (`DEC-G1-006`) ; conflit
   avec des séances **déjà publiées** hors du fichier courant.
 
+## Bloc G1-B — checkpoint parcours Angular planning (1er septembre 2026)
+
+- **HEAD de départ** : `dafd23a`.
+- **État** : `IMPLEMENTED_FULL_SUITE_GREEN` — **G1-B est complet**
+  (back-end + front) hors éléments explicitement post-G1.
+- **Fichiers front** (`frontend/src/app/features/planning/`) :
+  `planning.models.ts` (miroir exact des DTO), `planning-api.service.ts`
+  (+ `.spec`), `planning-errors.ts` (liste blanche `PLAN_*`, +`.spec`),
+  `planning.shared.scss`, `planning-import/` (upload + choix de la
+  classe via `AcademicApiService.listClassGroups`, validation
+  `.csv`/2 Mo côté client, `.spec` + `.a11y.spec`),
+  `planning-import-review/` (synthèse job + tableau des lignes/anomalies
+  + publication avec confirmation en ligne + annulation, `.spec`),
+  `planning-versions/` (choix classe → liste des versions → détail des
+  créneaux déplié).
+- **Câblage** : `app.routes.ts` (`/planning/**`, garde
+  `PLANNING_MANAGE_ROLES` = `PlanningWeb.MANAGE_ROLES`),
+  `core/navigation/navigation.ts` (entrée « Planning »),
+  `navigation.spec.ts` + `app-shell.spec.ts` mis à jour.
+- **Routes UI** : `/planning/import`, `/planning/import/:jobId`,
+  `/planning/versions`.
+- **Tests ajoutés** : front **+25** (523 → 548) — service, mapper,
+  `planning-import` (chargement classes, rejet non-CSV, simulation →
+  navigation, erreur serveur, storage), `planning-import-review`
+  (synthèse + lignes, publication + confirmation + rechargement, `409`
+  bloquant, action masquée si non confirmable, `404`), a11y axe-core.
+- **Commandes** : `npm run lint` OK ; `npm test -- --watch=false` →
+  **66 fichiers / 548 tests / 0 échec** ; `npm run build` → **484,68 kB**
+  brut (0 alerte de budget < 500 kB) ; `npm audit --audit-level=high` →
+  **0 vulnérabilité** ; back-end inchangé (713/0 depuis `dafd23a`).
+- **Décision** : `DEC-G1-B-UI` respecté — pas de bibliothèque calendrier,
+  la revue et le détail des versions sont des tableaux Material ; la
+  « vue semaine » riche est reportée (non requise).
+- **Non livré (post-G1, documenté)** : `EF-PLAN-006` (création manuelle
+  plein calendrier) reste `HORS_PÉRIMÈTRE_ASSUMÉ` ; avertissements
+  d'alternance (`DEC-G1-006`) ; conflit avec des séances déjà publiées
+  hors du fichier courant.
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu après ce commit** : `feat(planning): publier des
-  plannings versionnés en séances` (parent `24cc9f5`).
+- **HEAD attendu après ce commit** : `feat(frontend): ajouter le parcours
+  planning` (parent `dafd23a`).
 - **Working tree** : propre après commit.
-- **Bloc courant** : G1-B — reste **le parcours Angular planning**
-  (checkpoint `feat(frontend): ajouter le parcours planning`) :
-  `features/planning/` (service API typé, mapper d'erreurs `PLAN_*`,
-  `planning-import` upload + revue des lignes/anomalies + bouton publier,
-  `planning-versions` liste + détail (vue semaine CSS grid, pas de lib
-  calendrier), gardes `MANAGE_ROLES`), routes `/planning/**`, entrée de
-  navigation. Puis **G1-C** (annulation + remplaçant, migration `V14`).
-- **Fichiers non terminés** : aucun (les trois checkpoints back G1-B —
-  schéma+modèle, simulation, publication — sont cohérents et verts). À
-  créer au checkpoint suivant : `frontend/src/app/features/planning/`
-  (service API typé + mapper `PLAN_*`, `planning-import` upload + revue
-  lignes/anomalies + publier, `planning-versions` liste + détail),
-  routes `/planning/**`, entrée de navigation, specs front + a11y.
-- **Tests verts** : suite front 523/0 ; suite back **713/0** ; `ModularityTests` vert avec `planning`
-  back-end complet + `DefaultPlanningSessionWriter` dans
-  `coursesession.internal`.
+- **Bloc courant** : **G1-C** — cycle de vie avancé des séances
+  (EF-SES-004 annulation, EF-SES-005 remplaçant, CAD §24 RG-12) :
+  migration `V14__create_session_lifecycle_tables.sql`
+  (`teacher_substitution` ; `session_cancellation_request` seulement si
+  workflow de demande retenu — sinon annulation directe),
+  `CourseSessionService.cancel` (motif obligatoire ; `PLANNED`/`OPEN` →
+  `CANCELLED` — ajouter la valeur à l'enum `SessionLifecycle` + au
+  `CHECK chk_course_session_open_state` de V9 via `V14` ; révoquer les
+  jetons ; aucune absence dérivée), `SubstitutionService`
+  (`POST /api/v1/sessions/{id}/substitute` ; compte `TEACHER` actif ;
+  formateur initial conservé ; audit), `PATCH /api/v1/sessions/{id}`
+  (séance d'origine **manuelle** + `PLANNED` uniquement),
+  `GET /api/v1/sessions/{id}/history`. UI : actions contextuelles sur
+  `/sessions/:publicId`. Tests : transitions, double annulation,
+  ouverture d'une séance annulée, jeton révoqué, éligibilité remplaçant,
+  concurrence, sécurité, audit.
+- **Fichiers non terminés** : aucun — **G1-B est complet** (back + front).
+  À créer en **G1-C** : `V14__create_session_lifecycle_tables.sql`,
+  `SessionLifecycle.CANCELLED` (+ `CHECK` V9 ajusté via V14),
+  `CourseSessionService.cancel`, `SubstitutionService`,
+  `teacher_substitution` (entité + repo), endpoints `cancel` /
+  `substitute` / `PATCH /sessions/{id}` / `GET /sessions/{id}/history`,
+  actions contextuelles sur `/sessions/:publicId`, specs.
+- **Tests verts** : suite front **548/0** ; suite back **713/0** ;
+  `ModularityTests` vert (module `planning` complet + parcours Angular).
 - **Tests rouges** : aucun.
-- **Commande suivante** : lire `features/students/import/*` (patterns
-  upload multipart + revue Angular) puis écrire
-  `features/planning/planning-api.service.ts` + `planning-errors.ts`.
-- **Risques** : le budget de bundle front (< 500 kB) — la vue semaine du
-  planning doit rester en CSS grid, aucune lib calendrier (DEC-G1-B-UI) ;
-  `esic_test` `DROP`/`CREATE` libre, jamais `esic_connect`.
-- **Décisions tranchées** : guard CSV **dupliqué** ; correction ligne à
-  ligne **non retenue** (annulation + réimport) ; identité stable de
-  créneau = UUID déterministe `(schedule.public_id, slot_key)` porté par
-  `course_session.planning_entry_public_id`, `planning_entry.public_id`
-  reste aléatoire. **Encore ouvert** : modèle CSV fictif
-  `docs/demo-data/planning-demo.csv` (G1-G) ; `DEC-G1-006` (alternance)
-  reporté à G1-G ; conflit planning vs séances déjà publiées (post-G1).
+- **Commande suivante** : lire `CourseSessionException` +
+  `CourseSessionController` + V9/V10 `course_session`, puis écrire `V14`
+  (`ALTER TABLE course_session DROP CHECK chk_course_session_open_state`
+  + `ADD CONSTRAINT` incluant `CANCELLED` ; `CREATE TABLE
+  teacher_substitution`).
+- **Risques** : `V14` touche le `CHECK` de V9 — vérifier qu'une séance
+  `CANCELLED` (sans `opened_at`) reste cohérente ; `esic_test`
+  `DROP`/`CREATE` libre, jamais `esic_connect`.
+- **Décisions tranchées (G1-B)** : guard CSV **dupliqué** ; correction
+  ligne à ligne **non retenue** ; identité stable de créneau = UUID
+  déterministe `(schedule.public_id, slot_key)` porté par
+  `course_session.planning_entry_public_id` ; `DEC-G1-B-UI` respecté
+  (tableaux Material, pas de lib calendrier). **Encore ouvert** : modèle
+  CSV fictif `docs/demo-data/planning-demo.csv` (G1-G) ; `DEC-G1-006`
+  (alternance, post-G1) ; conflit planning vs séances déjà publiées
+  (post-G1) ; `EF-PLAN-006` (création manuelle plein calendrier) =
+  `HORS_PÉRIMÈTRE_ASSUMÉ`.
 
 ## Dernier commit produit
 
 ```text
-(G1-B publication prêt à être commité : feat(planning): publier des plannings versionnés en séances)
+(G1-B parcours Angular prêt à être commité : feat(frontend): ajouter le parcours planning)
 ```
 
 ## Commandes de reprise

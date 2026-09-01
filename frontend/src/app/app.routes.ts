@@ -62,6 +62,21 @@ const ORGANIZATION_READ_ROLES = [
 const ORGANIZATION_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN'] as const;
 
 /**
+ * Import, versionnement et publication d'un planning
+ * (`com.esic.connect.planning`). Périmètre repris **à l'identique** de
+ * `PlanningWeb.MANAGE_ROLES` ; un `PEDAGOGICAL_MANAGER` est en plus
+ * filtré par périmètre pédagogique côté serveur
+ * (`AcademicScopeDirectory`) et ne voit que ses propres jobs. Spring
+ * Security reste l'autorité : un `403` est rendu « accès refusé ».
+ */
+const PLANNING_MANAGE_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
+/**
  * Séances : lecture ouverte à
  * `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` / `PEDAGOGICAL_MANAGER` / `TEACHER`
  * (`CourseSessionWeb.READ_ROLES`) ; un `TEACHER` ne voit que ses séances
@@ -321,6 +336,45 @@ export const routes: Routes = [
             title: `Modifier un site — ${APP_NAME}`,
             loadComponent: () =>
               import('./features/organization/site-form/site-form').then((m) => m.SiteForm),
+          },
+        ],
+      },
+      {
+        // Import CSV, simulation, versionnement et publication d'un
+        // planning de classe (`com.esic.connect.planning`, EF-PLAN-001..007,
+        // EF-SES-001) : `/planning/import` (upload + choix de la classe),
+        // `/planning/import/:jobId` (revue des lignes + anomalies +
+        // publication), `/planning/versions` (versions publiées + détail).
+        // Périmètre aligné sur `PlanningWeb.MANAGE_ROLES` ; Spring Security
+        // reste l'autorité (un `403` est rendu « accès refusé »).
+        path: 'planning',
+        canActivate: [roleGuard([...PLANNING_MANAGE_ROLES])],
+        canActivateChild: [roleGuard([...PLANNING_MANAGE_ROLES])],
+        title: `Planning — ${APP_NAME}`,
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'import' },
+          {
+            path: 'import',
+            loadComponent: () =>
+              import('./features/planning/planning-import/planning-import').then(
+                (m) => m.PlanningImport,
+              ),
+          },
+          {
+            path: 'import/:jobId',
+            title: `Revue d'un import de planning — ${APP_NAME}`,
+            loadComponent: () =>
+              import(
+                './features/planning/planning-import-review/planning-import-review'
+              ).then((m) => m.PlanningImportReview),
+          },
+          {
+            path: 'versions',
+            title: `Versions de planning — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/planning/planning-versions/planning-versions').then(
+                (m) => m.PlanningVersions,
+              ),
           },
         ],
       },

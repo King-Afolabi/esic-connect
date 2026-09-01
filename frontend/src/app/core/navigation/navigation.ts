@@ -83,6 +83,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
+    // Écran livré : import CSV, simulation, revue et publication d'un
+    // planning de classe, puis consultation des versions publiées
+    // (`com.esic.connect.planning`). Périmètre aligné sur
+    // `PlanningWeb.MANAGE_ROLES` ; un `PEDAGOGICAL_MANAGER` reste limité à
+    // son périmètre côté serveur.
+    label: 'Planning',
+    path: '/planning',
+    icon: 'calendar_month',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
     // Écran livré : gestion et consultation de l'alternance (modèles de
     // rythme, affectations aux classes, exceptions individuelles,
     // résolution de contexte). Périmètre aligné sur

@@ -39,6 +39,18 @@ describe('NAV_ITEMS', () => {
     ]);
   });
 
+  it('exposes /planning as a real screen gated on PlanningWeb.MANAGE_ROLES', () => {
+    const planning = NAV_ITEMS.find((i) => i.path === '/planning');
+    expect(planning).toBeDefined();
+    expect(planning?.placeholder).toBeUndefined();
+    expect(planning?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+    ]);
+  });
+
   it('exposes /alternation as a real screen gated on AlternationWeb read roles', () => {
     const alternation = NAV_ITEMS.find((i) => i.path === '/alternation');
     expect(alternation).toBeDefined();
@@ -127,6 +139,15 @@ describe('visibleNavItems', () => {
     }
     for (const role of ['TEACHER', 'STUDENT'] as const) {
       expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/organization');
+    }
+  });
+
+  it('shows /planning for PlanningWeb.MANAGE_ROLES, and hides it otherwise', () => {
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/planning');
+    }
+    for (const role of ['TEACHER', 'STUDENT'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/planning');
     }
   });
 
