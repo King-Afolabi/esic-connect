@@ -82,4 +82,18 @@ class CourseSessionController {
     void close(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
         service.close(publicId, CourseSessionWeb.subject(caller));
     }
+
+    /**
+     * Annule une séance {@code PLANNED} / {@code OPEN} avec un motif
+     * obligatoire (G1-C ; EF-SES-004 ; CDC §15.4). {@code 204}.
+     * {@code CLOSED} / déjà {@code CANCELLED} → {@code 409}.
+     */
+    @PostMapping("/{publicId}/cancel")
+    @PreAuthorize(CourseSessionWeb.MANAGE_ROLES)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void cancel(@PathVariable String publicId,
+                @Valid @RequestBody CourseSessionRequests.Cancel request,
+                @AuthenticationPrincipal Jwt caller) {
+        service.cancel(publicId, request.reason(), CourseSessionWeb.subject(caller));
+    }
 }

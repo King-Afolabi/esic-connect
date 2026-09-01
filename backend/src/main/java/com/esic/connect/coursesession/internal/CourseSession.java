@@ -72,6 +72,16 @@ class CourseSession extends BaseEntity {
     @Column(name = "superseded_by_scheduling", nullable = false)
     private boolean supersededByScheduling;
 
+    // V14 (G1-C) : annulation avec motif d'une séance PLANNED / OPEN.
+    @Column(name = "cancellation_reason")
+    private String cancellationReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancelled_by_id")
+    private Long cancelledById;
+
     @Column(name = "opened_at")
     private Instant openedAt;
 
@@ -181,6 +191,21 @@ class CourseSession extends BaseEntity {
         this.updatedById = actorId;
     }
 
+    /**
+     * Annule une séance {@code PLANNED} ou {@code OPEN} avec un motif
+     * obligatoire (G1-C). Transition terminale ; {@code opened_at} est
+     * conservé si la séance était {@code OPEN}. La purge des jetons Redis
+     * et l'annulation des points de contrôle sont pilotées par le
+     * service.
+     */
+    void cancel(String reason, Instant at, Long actorId) {
+        this.status = SessionLifecycle.CANCELLED;
+        this.cancellationReason = reason;
+        this.cancelledAt = at;
+        this.cancelledById = actorId;
+        this.updatedById = actorId;
+    }
+
     boolean isPlanned() {
         return status == SessionLifecycle.PLANNED;
     }
@@ -189,17 +214,29 @@ class CourseSession extends BaseEntity {
         return status == SessionLifecycle.OPEN;
     }
 
+    boolean isCancelled() {
+        return status == SessionLifecycle.CANCELLED;
+    }
+
+    /** Séance {@code PLANNED} ou {@code OPEN} : annulable (G1-C). */
+    boolean isCancellable() {
+        return status == SessionLifecycle.PLANNED || status == SessionLifecycle.OPEN;
+    }
+
     /**
      * Séance <strong>opérationnelle</strong> : consultable, ouvrable,
-     * émargeable, comptée dans l'assiduité et les rapports. Exclut les
-     * séances d'origine planning retirées par une republication
-     * (DEC-G1-004 règle 4 ; garde centralisée, audit G1-B.1). L'état
-     * {@code CANCELLED} du bloc G1-C viendra s'ajouter à cette condition.
+     * émargeable, comptée dans l'assiduité et les rapports. Exclut :
+     * <ul>
+     *   <li>les séances d'origine planning retirées par une republication
+     *       ({@code superseded_by_scheduling} — DEC-G1-004 règle 4 ;
+     *       garde centralisée, audit G1-B.1) ;</li>
+     *   <li>les séances {@code CANCELLED} (G1-C).</li>
+     * </ul>
      * Seul l'historique des versions de planning (module {@code planning})
      * continue de référencer une séance non opérationnelle.
      */
     boolean isOperational() {
-        return !supersededByScheduling;
+        return !supersededByScheduling && status != SessionLifecycle.CANCELLED;
     }
 
     Long getTeacherUserId() {
@@ -236,6 +273,14 @@ class CourseSession extends BaseEntity {
 
     boolean isSupersededByScheduling() {
         return supersededByScheduling;
+    }
+
+    String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    Instant getCancelledAt() {
+        return cancelledAt;
     }
 
     Instant getOpenedAt() {

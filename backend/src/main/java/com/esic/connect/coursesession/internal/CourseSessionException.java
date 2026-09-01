@@ -33,8 +33,10 @@ class CourseSessionException extends RuntimeException {
         CLASS_INACTIVE,
         /** La classe visée est hors du périmètre pédagogique de l'appelant. */
         SCOPE_FORBIDDEN,
-        /** L'appelant n'a pas le droit d'ouvrir / fermer cette séance. */
+        /** L'appelant n'a pas le droit d'ouvrir / fermer / annuler cette séance. */
         OPERATION_FORBIDDEN,
+        /** Motif d'annulation manquant ou vide (G1-C). */
+        CANCEL_REASON_REQUIRED,
         // --- Points de contrôle (V10) ---
         /** Aucun point de contrôle pour cet identifiant dans cette séance. */
         CHECKPOINT_NOT_FOUND,

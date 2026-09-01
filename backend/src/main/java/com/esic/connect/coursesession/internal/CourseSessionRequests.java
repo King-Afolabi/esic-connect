@@ -32,4 +32,13 @@ final class CourseSessionRequests {
             @NotBlank @Size(max = 500) String reason,
             @Size(max = 191) String title) {
     }
+
+    /**
+     * Annulation d'une séance (G1-C ; EF-SES-004). {@code reason} : motif
+     * obligatoire et borné — la validation fine (vide après trim) est
+     * refaite côté service.
+     */
+    record Cancel(
+            @NotBlank @Size(max = 500) String reason) {
+    }
 }

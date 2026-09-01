@@ -62,16 +62,19 @@ fichier), `claim`, `reporting` (fusionné dans `attendance`), `ai`, `iot`.
 ## Migrations Flyway réelles
 
 ```text
-V1  identité + audit          V7  profils apprenant + inscriptions
-V2  seed des 6 rôles          V8  alternance
-V3  invitations               V9  séances + émargement
-V4  organisation              V10 gestion d'assiduité + reporting
-V5  référentiel académique    V11 import CSV apprenants
-V6  affectations pédagogiques
+V1  identité + audit          V8  alternance
+V2  seed des 6 rôles          V9  séances + émargement
+V3  invitations               V10 gestion d'assiduité + reporting
+V4  organisation              V11 import CSV apprenants
+V5  référentiel académique    V12 module planning (7 tables)        [G1-B]
+V6  affectations pédagogiques V13 lien course_session ↔ créneau     [G1-B]
+V7  profils apprenant         V14 cycle de vie séances (CANCELLED,  [G1-C]
+    + inscriptions                teacher_substitution)
 ```
 
-Schéma **en version 11**. `spring.jpa.hibernate.ddl-auto = validate`.
-Aucune donnée métier insérée par une migration.
+Schéma **en version 14**. `spring.jpa.hibernate.ddl-auto = validate`.
+Aucune donnée métier insérée par une migration. V12/V13 corrigées en
+place à l'audit G1-B.1 (jamais poussées — cf. en-tête de `V13`).
 
 ## Fonctionnalités livrées (`IMPLEMENTED_AND_TESTED`)
 
@@ -239,9 +242,50 @@ enregistrée dans le dépôt.
   `docs/demo-data/planning-demo.csv` et `planning-conflicts-demo.csv`
   (fictifs, résultats attendus décrits dans `docs/demo-data/README.md`).
 
+### Audit correctif G1-B.1 (1er septembre 2026)
+
+Voir `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` § « Audit G1-B.1 » et
+`docs/reports/G1_REQUIREMENTS_TRACEABILITY.md` §3bis. Principaux effets :
+- identité de créneau corrigée : `course_session.planning_entry_public_id`
+  (nom trompeur) → **`planning_slot_public_id`** (identité *stable*
+  déterministe) ; `planning_entry.slot_public_id` ajouté ; V12/V13
+  corrigées en place (jamais poussées) ;
+- publication concurrente **strictement idempotente** (le perdant renvoie
+  `alreadyPublished=true`, jamais `FAILED`) ; test rollback + `FAILED`
+  **déterministe** ;
+- garde centralisée `CourseSession.isOperational()` : une séance
+  supersédée est **inactive** partout (liste, résolution d'émargement,
+  ouverture, jeton, rapports) ; seul l'historique de planning la montre ;
+- conflit **formateur / classe** vs séances *déjà publiées* détecté à la
+  simulation (port `CourseSessionDirectory.findOperationalSessionWindows`) ;
+  conflit **salle** vs existant non couvert (`coursesession` sans
+  `room_code` — documenté) ;
+- exigences reclassées : `EF-PLAN-007`/`RG-032`/`RG-033`/`RG-034`/`RG-035`
+  → **`PARTIAL`** ; `AC-008` versionnement OK, devenir des séances
+  `PARTIAL` ; G1-A **bloc** = `PARTIAL` ;
+- suites **719/0** back (3 fuseaux) / **550/0** front.
+
+### Bloc G1-C.1 — annulation des séances (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN`. Migration **V14** :
+`course_session` gagne `cancellation_reason` / `cancelled_at` /
+`cancelled_by_id` + `CHECK` étendu ; table `teacher_substitution` créée
+(consommée en G1-C.2). `SessionLifecycle.CANCELLED` ;
+`POST /api/v1/sessions/{id}/cancel {reason}` (`204` ; `MANAGE_ROLES` ;
+motif obligatoire → `400` ; `CLOSED`/déjà `CANCELLED` → `409` ;
+transitions strictes, pas d'idempotence). Effets : points de contrôle
+non terminaux → `CANCELLED`, jetons Redis purgés (événement `CANCELLED`),
+**aucune absence dérivée** (garde `operational()`), audit
+`SESSION_CANCELLED` (motif hors événement). Course concurrente
+ouvrir/annuler → `409` via `@ExceptionHandler(OptimisticLockingFailureException)`,
+jamais `500`. Front `/sessions/:publicId` : bouton « Annuler la séance »
++ confirmation avec motif. `EF-SES-004` → **`IMPLEMENTED_AND_TESTED`**.
+Suites : back **723/0**, front **554/0**.
+`EF-SES-005` (remplaçant) = **G1-C.2, en cours**.
+
 Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
-finalisation F2) **reste d'actualité** tant que les blocs G1-C à G1-G ne
-sont pas livrés.
+finalisation F2) **reste d'actualité** tant que les blocs G1-C.2 à G1-G
+ne sont pas livrés.
 
 ## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)
 
@@ -255,8 +299,9 @@ des `docs/01` et `docs/02`.
   **livré au bloc G1-B** (voir « Mise à jour G1 » ci-dessus).
   `EF-PLAN-006` (création manuelle plein calendrier) reste
   `HORS_PÉRIMÈTRE_ASSUMÉ`.
-- Séances : `PATCH` / annulation / affectation d'un remplaçant
-  (EF-SES-004, EF-SES-005) — **prévu au bloc G1-C**.
+- Séances : ~~annulation (EF-SES-004)~~ → **livrée au bloc G1-C.1** ;
+  affectation d'un remplaçant (EF-SES-005) — **en cours (G1-C.2)** ;
+  `PATCH` d'une séance manuelle `PLANNED` — non livré (G1-C.2 ou différé).
 - QR fixe de salle + contrôle réseau CIDR (référentiel `site_network_range`
   présent, non consommé) — EF-ROOM-002, EF-ATT-008.
 - Scan caméra mobile (code court uniquement).

@@ -183,9 +183,16 @@ class AttendanceCheckpointService {
     }
 
     private CourseSession requireSession(String sessionPublicId) {
-        return sessionRepository
+        CourseSession session = sessionRepository
                 .findByPublicId(parseUuid(sessionPublicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
+        // Garde centralisée : une séance supersédée (audit G1-B.1) ou
+        // annulée (G1-C) est traitée comme inexistante pour la gestion
+        // des points de contrôle.
+        if (!session.isOperational()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
     }
 
     private void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {

@@ -42,14 +42,15 @@ export type SortDirection = 'asc' | 'desc';
 // Énumérations (valeurs exactes du back-end)
 // ---------------------------------------------------------------------------
 
-/** `SessionLifecycle`. */
-export const SESSION_STATUSES = ['PLANNED', 'OPEN', 'CLOSED'] as const;
+/** `SessionLifecycle` — `CANCELLED` ajouté au bloc G1-C. */
+export const SESSION_STATUSES = ['PLANNED', 'OPEN', 'CLOSED', 'CANCELLED'] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 export const SESSION_STATUS_LABELS: Record<SessionStatus, string> = {
   PLANNED: 'Planifiée',
   OPEN: 'Ouverte',
   CLOSED: 'Clôturée',
+  CANCELLED: 'Annulée',
 };
 
 export function sessionStatusLabel(status: string): string {
@@ -240,6 +241,9 @@ export interface CourseSessionResponse {
   timeZoneId: string;
   openedAt: string | null;
   closedAt: string | null;
+  /** G1-C : motif + instant d'annulation (non nuls uniquement si `status === 'CANCELLED'`). */
+  cancellationReason: string | null;
+  cancelledAt: string | null;
   /** Compat V9 : premier point de contrôle (START). */
   checkpointPublicId: string | null;
   checkpointOpen: boolean;
@@ -334,6 +338,11 @@ export interface CreateSessionRequest {
   timeZoneId: string;
   reason: string;
   title?: string | null;
+}
+
+/** `CourseSessionRequests.Cancel` (G1-C) — motif obligatoire, borné à 500. */
+export interface CancelSessionRequest {
+  reason: string;
 }
 
 /** `AttendanceRequests.Validate` — exactement l'un des deux champs. */

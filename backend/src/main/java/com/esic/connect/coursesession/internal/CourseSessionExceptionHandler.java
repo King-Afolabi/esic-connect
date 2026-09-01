@@ -2,6 +2,7 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.shared.web.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,6 +19,22 @@ import java.util.UUID;
  */
 @RestControllerAdvice(assignableTypes = {CourseSessionController.class, AttendanceCheckpointController.class})
 class CourseSessionExceptionHandler {
+
+    /**
+     * Course concurrente sur le cycle de vie d'une séance / d'un point de
+     * contrôle (ouvrir / fermer / annuler simultanés) : le perdant du
+     * verrou optimiste voit un {@code 409} contrôlé, jamais un {@code 500}.
+     * La transition qu'il tentait n'est de toute façon plus valide depuis
+     * l'état courant.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ResponseEntity<ApiError> handleConcurrentChange(HttpServletRequest request) {
+        ApiError body = new ApiError(Instant.now(), HttpStatus.CONFLICT.value(),
+                "SESSION_INVALID_STATE",
+                "L'état de la séance a changé entre-temps : rechargez avant de réessayer.",
+                request.getRequestURI(), UUID.randomUUID().toString(), List.of());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
 
     @ExceptionHandler(CourseSessionException.class)
     ResponseEntity<ApiError> handle(CourseSessionException ex, HttpServletRequest request) {
@@ -84,6 +101,11 @@ class CourseSessionExceptionHandler {
                 status = HttpStatus.FORBIDDEN;
                 code = "SESSION_OPERATION_FORBIDDEN";
                 message = "Vous n'êtes pas autorisé à effectuer cette opération sur cette séance.";
+            }
+            case CANCEL_REASON_REQUIRED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_CANCEL_REASON_REQUIRED";
+                message = "Un motif est obligatoire pour annuler une séance.";
             }
             case CHECKPOINT_NOT_FOUND -> {
                 status = HttpStatus.NOT_FOUND;

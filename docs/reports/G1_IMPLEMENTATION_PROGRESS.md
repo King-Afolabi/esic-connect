@@ -141,7 +141,8 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-A | Interfaces Angular des API existantes | `IMPLEMENTED_FULL_SUITE_GREEN` (référentiel organisationnel livré ; écritures `academic`/`enrollment`/affectations/invitation = dette assumée, cf. plan §3.1) | `2cf1416` — `feat(frontend): exposer les parcours administratifs existants` |
 | G1-B | Module `planning` complet | `IMPLEMENTED_FULL_SUITE_GREEN` — back-end (schéma `e4793e7`, simulation `24cc9f5`, publication `dafd23a`) **+ parcours Angular** (`429f45b`). Reste post-G1 : avertissements d'alternance (`DEC-G1-006`), création manuelle plein calendrier (`EF-PLAN-006`, hors périmètre G1). | `e4793e7` + `24cc9f5` + `dafd23a` + `429f45b` |
 | G1-B.1 | Audit correctif du bloc `planning` | `IMPLEMENTED_FULL_SUITE_GREEN` — identité de créneau (`planning_slot_public_id`), concurrence idempotente durcie, rollback+`FAILED` déterministe, garde centralisée « séance supersédée = inactive », conflit vs séances déjà publiées (formateur/classe), traçabilité reclassée, script de démo. Suites **719/0** (3 fuseaux) / **550/0**. | `fix(planning): consolider l'identité et la publication atomique` + `docs(g1): corriger la traçabilité après audit du planning` |
-| G1-C | Cycle de vie avancé des séances | `IN_PROGRESS` (démarré après G1-B.1) | — |
+| G1-C.1 | Annulation des séances (`CANCELLED`) | `IMPLEMENTED_FULL_SUITE_GREEN` — V14, `SessionLifecycle.CANCELLED`, `POST /sessions/{id}/cancel`, garde `operational()`, purge jetons, UI. Back **723/0**, front **554/0**. | `feat(coursesession): gérer l'annulation des séances` |
+| G1-C.2 | Remplacements de formateur | `IN_PROGRESS` — table `teacher_substitution` en base (V14), code à écrire | — |
 | G1-D | Notifications métier persistantes | `NOT_STARTED` | — |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
 | G1-E | Pièces jointes des justificatifs | `NOT_STARTED` | — |
@@ -658,56 +659,111 @@ non « réellement observés »).
 - Séances supersédées : encore `PLANNED` + drapeau (inactives via garde) ;
   bascule vers `CANCELLED` prévue **dans la migration G1-C**.
 
+## G1-C — 1er septembre 2026
+
+Cycle de vie avancé des séances. **Découpé en deux checkpoints** :
+`G1-C.1` (annulation — livré) et `G1-C.2` (remplacements — en cours).
+
+### Migration
+
+**`V14__create_session_lifecycle_tables.sql`** (un domaine = cycle de vie
+des séances) :
+- `course_session` : `+ cancellation_reason VARCHAR(500)`,
+  `+ cancelled_at TIMESTAMP(6)`, `+ cancelled_by_id BIGINT UNSIGNED`
+  (FK RESTRICT) ; `CHECK chk_course_session_open_state` **remplacé** pour
+  accepter `CANCELLED` (`closed_at IS NULL`, `cancelled_at IS NOT NULL`,
+  `cancellation_reason IS NOT NULL` ; `opened_at` libre — une séance
+  `OPEN` est annulable) ;
+- `teacher_substitution` (créée en `V14`, **consommée en G1-C.2**) :
+  `public_id`, `course_session_id`, `substitute_teacher_user_id`,
+  `original_teacher_user_id` (figé), `reason`, `valid_from`,
+  `valid_until`, `status ∈ {ACTIVE, ENDED}`, `ended_*`, `version` +
+  `CHECK` (période, substitut ≠ principal, cohérence `ended_at`).
+- **Pas** de `session_cancellation_request` : annulation **directe** par
+  rôle autorisé (les documents n'exigent pas de workflow de demande —
+  CDC §15.5 « demande d'annulation par le formateur » reportée).
+
+### G1-C.1 — Annulation (livré)
+
+Commit `feat(coursesession): gérer l'annulation des séances`.
+
+- `SessionLifecycle.CANCELLED` ; `CourseSession.cancel/isCancellable/isCancelled` ;
+  `isOperational()` exclut désormais `CANCELLED` **et** `superseded`.
+- `POST /api/v1/sessions/{publicId}/cancel {reason}` → `204` ;
+  `MANAGE_ROLES` (`SCHOOL_ADMINISTRATION` et `STUDENT` exclus → `403`).
+  Motif vide → `400 SESSION_CANCEL_REASON_REQUIRED`. `PLANNED`/`OPEN` →
+  `CANCELLED` ; `CLOSED` ou déjà `CANCELLED` → `409 SESSION_INVALID_STATE`
+  (transitions strictes, **pas** d'idempotence — cohérent avec
+  `open`/`close` ; décision documentée).
+- Effets : points de contrôle non terminaux → `CANCELLED` ; jetons Redis
+  purgés (l'événement `CourseSessionChangeAction.CANCELLED` est écouté par
+  `attendance.CourseSessionCloseListener`, comme `CLOSED`) ; **aucune
+  absence dérivée** (la garde `operational()` retire la séance de
+  `findSessionsForClasses` / `findSessionsInRange` → reporting et
+  assiduité l'ignorent) ; audit `SESSION_CANCELLED` (le motif, nominatif
+  possible, **n'entre pas** dans l'événement — il reste sur l'entité,
+  lisible aux seuls rôles autorisés).
+- **Garde renforcée** : `AttendanceCheckpointService.requireSession`
+  rejette désormais une séance non `isOperational()` (gap G1-B.1 +
+  G1-C) ; `DefaultCourseSessionDirectory` déjà couvert.
+- **Course concurrente** ouvrir vs annuler : nouvel
+  `@ExceptionHandler(OptimisticLockingFailureException)` sur
+  `CourseSessionExceptionHandler` → `409 SESSION_INVALID_STATE`, jamais
+  `500` (corrige aussi le cas pré-existant open vs close).
+- DTO `CourseSessionResponse` : `+ cancellationReason`, `+ cancelledAt`.
+- Front : `sessions.models` (`SESSION_STATUSES += CANCELLED`, champs DTO),
+  `SessionsApiService.cancelSession`, `SessionDetail` (bouton « Annuler la
+  séance » si `PLANNED`/`OPEN` + droit de gestion ; panneau de
+  confirmation avec **motif obligatoire** ; pas de rechargement après
+  succès — le serveur renverrait `404` — état patché en `CANCELLED` ;
+  `409` rendu en ligne). Specs : `session-detail` (+3), `sessions-api`
+  (+1).
+- Tests back : `CourseSessionIntegrationTests` **+4** (`PLANNED→CANCELLED`
+  + inactive partout + audit ; `OPEN→CANCELLED` OK / `CLOSED` refusé ;
+  motif + rôles ; concurrence open vs cancel sans `500`). Suites :
+  **719 → 723** back, **550 → 554** front.
+
+### G1-C.2 — Remplacements (à faire)
+
+Table `teacher_substitution` déjà en base (V14). Reste :
+`TeacherSubstitution` (entité + repo), `SubstitutionService`, endpoints
+`POST/GET /api/v1/sessions/{id}/substitutions` +
+`POST .../substitutions/{substitutionId}/end`, extension de
+`CourseSessionAccessGuard` (le substitut actif peut ouvrir / gérer la
+séance pendant sa période), historique borné, UI (panneau remplacements
+sur `/sessions/:publicId`), tests (éligibilité, chevauchement, fin, accès,
+concurrence, sécurité, audit).
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : `docs(g1): corriger la traçabilité après audit du
-  planning` (chaîne : `db80beb` → `fix(planning): consolider l'identité et
-  la publication atomique` → ce commit).
+- **HEAD attendu** : `feat(coursesession): gérer l'annulation des séances`
+  (chaîne : `db80beb` → `fix(planning): consolider l'identité…` →
+  `docs(g1): corriger la traçabilité…` → ce commit).
 - **Working tree** : propre après commit.
-- **Bloc courant** : **G1-C** — cycle de vie avancé des séances
-  (EF-SES-004 annulation, EF-SES-005 remplaçant, CAD §24 RG-12) :
-  migration `V14__create_session_lifecycle_tables.sql`
-  (`teacher_substitution` ; `session_cancellation_request` seulement si
-  workflow de demande retenu — sinon annulation directe),
-  `CourseSessionService.cancel` (motif obligatoire ; `PLANNED`/`OPEN` →
-  `CANCELLED` — ajouter la valeur à l'enum `SessionLifecycle` + au
-  `CHECK chk_course_session_open_state` de V9 via `V14` ; révoquer les
-  jetons ; aucune absence dérivée), `SubstitutionService`
-  (`POST /api/v1/sessions/{id}/substitute` ; compte `TEACHER` actif ;
-  formateur initial conservé ; audit), `PATCH /api/v1/sessions/{id}`
-  (séance d'origine **manuelle** + `PLANNED` uniquement),
-  `GET /api/v1/sessions/{id}/history`. UI : actions contextuelles sur
-  `/sessions/:publicId`. Tests : transitions, double annulation,
-  ouverture d'une séance annulée, jeton révoqué, éligibilité remplaçant,
-  concurrence, sécurité, audit.
-- **Fichiers non terminés** : aucun — **G1-B est complet** (back + front).
-  À créer en **G1-C** : `V14__create_session_lifecycle_tables.sql`,
-  `SessionLifecycle.CANCELLED` (+ `CHECK` V9 ajusté via V14),
-  `CourseSessionService.cancel`, `SubstitutionService`,
-  `teacher_substitution` (entité + repo), endpoints `cancel` /
-  `substitute` / `PATCH /sessions/{id}` / `GET /sessions/{id}/history`,
-  actions contextuelles sur `/sessions/:publicId`, specs.
-- **Tests verts** : suite front **548/0** ; suite back **713/0** ;
-  `ModularityTests` vert (module `planning` complet + parcours Angular).
+- **Bloc courant** : **G1-C.2** — remplacements de formateur (EF-SES-005,
+  CAD §24 RG-12, CDC §43 RG-015).
+- **Fichiers non terminés** : aucun. À créer en **G1-C.2** :
+  `coursesession/internal/TeacherSubstitution` (+ repo),
+  `SubstitutionService` + `SubstitutionController`,
+  `CourseSessionRequests.CreateSubstitution`, extension de
+  `CourseSessionAccessGuard` (substitut actif = accès `MANAGE`),
+  DTO `SubstitutionResponse`, endpoints, écran remplacements + specs.
+- **Tests verts** : back **723/0** (3 fuseaux à re-vérifier au prochain
+  checkpoint) ; front **554/0** ; `ModularityTests` vert.
 - **Tests rouges** : aucun.
-- **Commande suivante** : lire `CourseSessionException` +
-  `CourseSessionController` + V9/V10 `course_session`, puis écrire `V14`
-  (`ALTER TABLE course_session DROP CHECK chk_course_session_open_state`
-  + `ADD CONSTRAINT` incluant `CANCELLED` ; `CREATE TABLE
-  teacher_substitution`).
-- **Risques** : `V14` touche le `CHECK` de V9 — vérifier qu'une séance
-  `CANCELLED` (sans `opened_at`) reste cohérente ; `esic_test`
-  `DROP`/`CREATE` libre, jamais `esic_connect`.
-- **Décisions tranchées (G1-B)** : guard CSV **dupliqué** ; correction
-  ligne à ligne **non retenue** ; identité stable de créneau = UUID
-  déterministe `(schedule.public_id, slot_key)` porté par
-  `course_session.planning_entry_public_id` ; `DEC-G1-B-UI` respecté
-  (tableaux Material, pas de lib calendrier). **Encore ouvert** : modèle
-  CSV fictif `docs/demo-data/planning-demo.csv` (G1-G) ; `DEC-G1-006`
-  (alternance, post-G1) ; conflit planning vs séances déjà publiées
-  (post-G1) ; `EF-PLAN-006` (création manuelle plein calendrier) =
-  `HORS_PÉRIMÈTRE_ASSUMÉ`.
+- **Commande suivante** : lire `identity.TeacherDirectory` (éligibilité)
+  + `CourseSessionAccessGuard`, puis créer `TeacherSubstitution` + repo,
+  puis `SubstitutionService`.
+- **Risques** : « une seule substitution ACTIVE applicable à un instant »
+  = contrôle applicatif (MySQL sans index partiel) — bien tester la
+  concurrence. L'extension de l'`AccessGuard` doit rester **serveur**
+  (jamais un paramètre client) et ne pas élargir la lecture.
+- **Décisions tranchées (G1-C.1)** : annulation **directe** (pas de
+  workflow) ; `PLANNED` **et** `OPEN` annulables, `CLOSED` non ; double
+  annulation → `409` (pas idempotent) ; motif hors audit/événement ;
+  garde `operational()` = source unique d'exclusion (supersédée +
+  `CANCELLED`).
 
 ## Dernier commit produit
 

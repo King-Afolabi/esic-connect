@@ -83,6 +83,14 @@ describe('SessionsApiService', () => {
     close.flush(null, { status: 204, statusText: 'No Content' });
   });
 
+  it('cancelSession POSTs the reason to /sessions/{id}/cancel and accepts 204', () => {
+    service.cancelSession('s-1', 'Formateur absent').subscribe();
+    const req = http.expectOne(`${BASE}/sessions/s-1/cancel`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ reason: 'Formateur absent' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
   it('issueAttendanceToken POSTs to /sessions/{id}/attendance-token (never a GET, never a token in the URL)', () => {
     service.issueAttendanceToken('s-1').subscribe();
     const req = http.expectOne(`${BASE}/sessions/s-1/attendance-token`);

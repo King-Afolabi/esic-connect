@@ -84,6 +84,14 @@ export class SessionsApiService {
     return this.http.post<void>(`${this.base}/sessions/${encodeURIComponent(publicId)}/close`, {});
   }
 
+  /** `POST /api/v1/sessions/{publicId}/cancel` → 204 (G1-C — motif obligatoire). */
+  cancelSession(publicId: string, reason: string): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}/cancel`,
+      { reason },
+    );
+  }
+
   // --- Points de contrôle (V10) --------------------------------------
 
   /** `GET /api/v1/sessions/{sessionId}/checkpoints`. */

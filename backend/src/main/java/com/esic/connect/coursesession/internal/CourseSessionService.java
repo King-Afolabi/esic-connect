@@ -210,6 +210,51 @@ class CourseSessionService {
         changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.CLOSED, actorId, null);
     }
 
+    /**
+     * Annule une séance {@code PLANNED} ou {@code OPEN} avec un motif
+     * obligatoire (G1-C ; EF-SES-004, CDC §15.4). Terminal : pas de
+     * réouverture. Purge des jetons Redis (via l'événement
+     * {@code CANCELLED}), annulation des points de contrôle non
+     * terminaux, aucune présence ni absence dérivée. Une séance
+     * {@code CLOSED} ou déjà {@code CANCELLED} → {@code 409}
+     * ({@code SESSION_INVALID_STATE}) — cohérent avec {@link #open} /
+     * {@link #close} (transitions strictes, pas d'idempotence).
+     */
+    @Transactional
+    void cancel(String publicId, String reason, String callerSubject) {
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new CourseSessionException(CourseSessionException.Kind.CANCEL_REASON_REQUIRED);
+        }
+        if (trimmed.length() > 500) {
+            trimmed = trimmed.substring(0, 500);
+        }
+        // Lookup SANS le filtre « opérationnel » : une séance supersédée
+        // reste annulable (elle passe alors doublement inactive) ; une
+        // séance déjà CANCELLED est détectée ci-dessous pour renvoyer un
+        // 409 explicite plutôt qu'un 404.
+        CourseSession session = sessionRepository
+                .findByPublicId(parseUuid(publicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
+                .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
+        requireAccess(session, AccessLevel.MANAGE, callerSubject);
+        if (!session.isCancellable()) {
+            throw new CourseSessionException(CourseSessionException.Kind.INVALID_STATE);
+        }
+        Instant now = clock.instant();
+        Long actorId = changePublisher.actorId(callerSubject);
+        session.cancel(trimmed, now, actorId);
+        checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId())
+                .forEach(cp -> {
+                    if (cp.isPlanned() || cp.isOpen()) {
+                        cp.cancel("Séance annulée", actorId);
+                    }
+                });
+        // Détail non sensible : le motif (potentiellement nominatif) n'entre
+        // jamais dans l'événement / l'audit — il reste sur l'entité, visible
+        // aux seuls rôles autorisés via GET /sessions/{id}.
+        changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.CANCELLED, actorId, null);
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
@@ -330,6 +375,7 @@ class CourseSessionService {
         return new CourseSessionResponse(session.getPublicId(), session.getStatus(), session.getTitle(),
                 session.getExceptionReason(), teacherView, classViews, session.getStartsAt(), session.getEndsAt(),
                 session.getTimeZoneId(), session.getOpenedAt(), session.getClosedAt(),
+                session.getCancellationReason(), session.getCancelledAt(),
                 checkpointPublicId, checkpointOpen, checkpointViews,
                 session.getCreatedAt(), session.getUpdatedAt());
     }

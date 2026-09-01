@@ -41,6 +41,11 @@
             @if (isOpen()) {
               <button mat-stroked-button type="button" (click)="startClose()">Fermer la séance</button>
             }
+            @if (canCancel()) {
+              <button mat-stroked-button type="button" color="warn" (click)="startCancel()">
+                Annuler la séance
+              </button>
+            }
           </div>
         }
       </div>
@@ -57,6 +62,10 @@
             <div><dt>Fuseau de saisie</dt><dd>{{ current.timeZoneId }}</dd></div>
             <div><dt>Ouverte le</dt><dd>{{ formatInstantUtc(current.openedAt) }}</dd></div>
             <div><dt>Clôturée le</dt><dd>{{ formatInstantUtc(current.closedAt) }}</dd></div>
+            @if (isCancelled()) {
+              <div><dt>Annulée le</dt><dd>{{ formatInstantUtc(current.cancelledAt) }}</dd></div>
+              <div><dt>Motif d'annulation</dt><dd>{{ current.cancellationReason || '—' }}</dd></div>
+            }
           </dl>
         </mat-card-content>
       </mat-card>
@@ -82,8 +91,43 @@
           @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
         </div>
       }
+      @if (pendingAction() === 'cancel') {
+        <form
+          class="sessions__reveal"
+          role="group"
+          aria-label="Confirmer l'annulation"
+          [formGroup]="sessionCancelForm"
+          (ngSubmit)="confirmCancel()"
+        >
+          <p>L'annulation est définitive : les points de contrôle sont clos, les jetons d'émargement
+            deviennent invalides et aucune absence n'est dérivée pour cette séance.</p>
+          <mat-form-field appearance="outline">
+            <mat-label>Motif de l'annulation</mat-label>
+            <input matInput formControlName="reason" maxlength="500" required />
+          </mat-form-field>
+          <div class="sessions__form-actions">
+            <button
+              mat-flat-button
+              color="warn"
+              type="submit"
+              [disabled]="submitting() || sessionCancelForm.invalid"
+            >
+              Confirmer l'annulation
+            </button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+              Revenir
+            </button>
+          </div>
+          @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
+        </form>
+      }
       @if (isClosed()) {
         <p class="sessions__status" role="note">Séance clôturée : l'émargement est fermé.</p>
+      }
+      @if (isCancelled()) {
+        <p class="sessions__status" role="note">
+          Séance annulée : l'émargement est fermé et aucune absence n'est comptée.
+        </p>
       }
 
       <!-- Points de contrôle -->

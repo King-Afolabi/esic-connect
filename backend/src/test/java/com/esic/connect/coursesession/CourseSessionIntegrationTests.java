@@ -137,6 +137,112 @@ class CourseSessionIntegrationTests {
         assertConflict(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", admin, "SESSION_INVALID_STATE");
     }
 
+    // ------------------------------------------------------------------
+    // G1-C — annulation
+    // ------------------------------------------------------------------
+
+    @Test
+    void cancellingAPlannedSessionMakesItInactiveEverywhereAndIsAudited() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), "À annuler"), admin).get("publicId");
+
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "Formateur indisponible"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        // Inactive pour tout accès métier normal : GET / open / jeton -> 404 ; absente de la liste.
+        assertThat(exchange(HttpMethod.GET, "/api/v1/sessions/" + id, null, admin).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/attendance-token", null, admin)
+                .getStatusCode()).isIn(HttpStatus.NOT_FOUND, HttpStatus.CONFLICT);
+        List<?> sessionList = (List<?>) getMap(
+                "/api/v1/sessions?classGroup=" + chain.classA() + "&size=100", admin).get("content");
+        assertThat(sessionList).noneMatch(s -> id.equals(((Map<?, ?>) s).get("publicId")));
+
+        // Double annulation -> 409 (transitions strictes, cohérent avec open/close).
+        ResponseEntity<Map<String, Object>> again = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "encore"), admin);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(again.getBody().get("code")).isEqualTo("SESSION_INVALID_STATE");
+        assertThat(auditActions(id)).contains("SESSION_CREATED", "SESSION_CANCELLED");
+    }
+
+    @Test
+    void cancellingAnOpenSessionIsAllowedAndClosedSessionIsNot() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String open = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + open + "/open", null, admin);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + open + "/cancel",
+                Map.of("reason", "Alerte bâtiment"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        String closed = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + closed + "/open", null, admin);
+        status(HttpMethod.POST, "/api/v1/sessions/" + closed + "/close", null, admin);
+        ResponseEntity<Map<String, Object>> onClosed = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + closed + "/cancel", Map.of("reason", "trop tard"), admin);
+        assertThat(onClosed.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(onClosed.getBody().get("code")).isEqualTo("SESSION_INVALID_STATE");
+    }
+
+    @Test
+    void cancellationRequiresAReasonAndTheRightRole() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Motif vide -> 400.
+        ResponseEntity<Map<String, Object>> blank = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "   "), admin);
+        assertThat(blank.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // STUDENT -> 403 ; SCHOOL_ADMINISTRATION -> 403 (gestion exclue).
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "x"), tokenFor(RoleCode.STUDENT)).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "x"), tokenFor(RoleCode.SCHOOL_ADMINISTRATION)).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void concurrentOpenAndCancelResolveToOneTerminalStateWithoutServerError() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        Callable<HttpStatus> openCall = () -> (HttpStatus) exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/open", null, admin).getStatusCode();
+        Callable<HttpStatus> cancelCall = () -> (HttpStatus) exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "course"), admin).getStatusCode();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<HttpStatus> statuses;
+        try {
+            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(openCall, cancelCall));
+            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+        } finally {
+            pool.shutdownNow();
+        }
+        // Verrou optimiste : un gagnant (204), un perdant (409 contrôlé), jamais 5xx.
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        assertThat(statuses).containsExactlyInAnyOrder(HttpStatus.NO_CONTENT, HttpStatus.CONFLICT);
+        // État final cohérent : soit OPEN (open a gagné), soit annulée (GET -> 404).
+        HttpStatus getStatus = (HttpStatus) exchange(HttpMethod.GET, "/api/v1/sessions/" + id, null, admin)
+                .getStatusCode();
+        assertThat(getStatus).isIn(HttpStatus.OK, HttpStatus.NOT_FOUND);
+    }
+
     @Test
     void creationRejectsMissingReasonInvalidPeriodAndNonTeacher() {
         String admin = adminToken();

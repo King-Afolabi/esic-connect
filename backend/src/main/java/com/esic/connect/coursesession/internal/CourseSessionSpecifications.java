@@ -51,11 +51,14 @@ final class CourseSessionSpecifications {
     /**
      * Séances <strong>opérationnelles</strong> uniquement (garde
      * centralisée, audit G1-B.1) : exclut les séances retirées par une
-     * republication de planning. Point d'extension pour l'état
-     * {@code CANCELLED} du bloc G1-C.
+     * republication de planning (audit G1-B.1) <strong>et</strong> les
+     * séances {@code CANCELLED} (G1-C). Miroir de
+     * {@link CourseSession#isOperational()}.
      */
     static Specification<CourseSession> operational() {
-        return notSupersededByScheduling();
+        return (root, query, cb) -> cb.and(
+                cb.isFalse(root.get("supersededByScheduling")),
+                cb.notEqual(root.get("status"), SessionLifecycle.CANCELLED));
     }
 
     /**

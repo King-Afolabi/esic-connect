@@ -32,6 +32,8 @@ const SESSION: CourseSessionResponse = {
   timeZoneId: 'Europe/Paris',
   openedAt: '2026-09-10T05:55:00Z',
   closedAt: null,
+  cancellationReason: null,
+  cancelledAt: null,
   checkpointPublicId: 'cp-1',
   checkpointOpen: true,
   checkpoints: [],

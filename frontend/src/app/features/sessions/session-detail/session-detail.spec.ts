@@ -50,6 +50,8 @@ const OPEN_SESSION: CourseSessionResponse = {
   timeZoneId: 'Europe/Paris',
   openedAt: '2026-09-10T05:55:00Z',
   closedAt: null,
+  cancellationReason: null,
+  cancelledAt: null,
   checkpointPublicId: 'cp-1',
   checkpointOpen: true,
   checkpoints: [CP_OPEN],
@@ -95,6 +97,12 @@ interface DetailInternals {
   confirmOpen: () => void;
   startClose: () => void;
   confirmClose: () => void;
+  startCancel: () => void;
+  confirmCancel: () => void;
+  cancelAction: () => void;
+  sessionCancelForm: { patchValue: (v: Record<string, unknown>) => void; reset: () => void };
+  canCancel: () => boolean;
+  isCancelled: () => boolean;
   refreshToken: () => void;
   refreshAttendance: () => void;
   toggleCheckpointForm: () => void;
@@ -122,7 +130,7 @@ interface DetailInternals {
   canManageCheckpoint: () => boolean;
   canManageAttendance: () => boolean;
   canReadAttendance: () => boolean;
-  pendingAction: () => 'open' | 'close' | null;
+  pendingAction: () => 'open' | 'close' | 'cancel' | null;
   startCorrect: (id: string) => void;
   submitCorrect: () => void;
   correctForm: { patchValue: (v: Record<string, unknown>) => void };
@@ -207,6 +215,58 @@ describe('SessionDetail', () => {
     });
     http.expectOne(GET_URL).flush(OPEN_SESSION);
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+  });
+
+  it('cancels an OPEN session with a reason and shows the cancelled state without a scary error', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+    expect(text()).toContain('Annuler la séance');
+    expect(internals.canCancel()).toBe(true);
+
+    internals.startCancel();
+    fixture.detectChanges();
+    // Motif obligatoire : sans motif, aucune requête.
+    internals.confirmCancel();
+    http.expectNone((r) => r.url.endsWith('/cancel'));
+
+    internals.sessionCancelForm.patchValue({ reason: 'Alerte incendie' });
+    internals.confirmCancel();
+    const req = http.expectOne((r) => r.url.endsWith('/cancel') && r.method === 'POST');
+    expect(req.request.body).toEqual({ reason: 'Alerte incendie' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    // Pas de rechargement (le serveur renverrait 404) : état patché en local.
+    http.expectNone(GET_URL);
+    expect(internals.isCancelled()).toBe(true);
+    expect(text()).toContain('Annulée');
+    expect(text()).toContain('Alerte incendie');
+    expect(text()).toContain("aucune absence n'est comptée");
+  });
+
+  it('hides the cancel button for a CLOSED session', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http, { ...OPEN_SESSION, status: 'CLOSED', closedAt: '2026-09-10T07:00:00Z' });
+    fixture.detectChanges();
+    expect(internals.canCancel()).toBe(false);
+    expect(text()).not.toContain('Annuler la séance');
+  });
+
+  it('surfaces a 409 from cancel inline and keeps the session usable', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+    internals.startCancel();
+    internals.sessionCancelForm.patchValue({ reason: 'test' });
+    internals.confirmCancel();
+    http.expectOne((r) => r.url.endsWith('/cancel')).flush(
+      { status: 409, code: 'SESSION_INVALID_STATE', message: "L'état de la séance a changé entre-temps.", path: '', correlationId: null, details: [] },
+      { status: 409, statusText: 'Conflict' },
+    );
+    fixture.detectChanges();
+    expect(internals.isCancelled()).toBe(false);
+    expect(text()).toContain('changé entre-temps');
   });
 
   it('issues a checkpoint token, shows the short code and a <qrcode>, never the token as text', () => {
