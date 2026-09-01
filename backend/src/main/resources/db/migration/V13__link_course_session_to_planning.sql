@@ -39,12 +39,25 @@
 --
 -- NOTE DE MIGRATION (audit G1-B.1) : V12 et V13 n'ont jamais été poussées
 -- ni appliquées hors d'une base jetable `esic_test`. Elles ont été
--- corrigées en place (renommage `planning_entry_public_id` →
+-- corrigées EN PLACE (renommage `planning_entry_public_id` →
 -- `planning_slot_public_id`, ajout de `planning_entry.slot_public_id`)
 -- plutôt que par une migration corrective, afin de ne pas consommer le
--- numéro V14 réservé au bloc G1-C. Une base de développement locale
--- `esic_connect` déjà à V13 doit être recréée (`DROP DATABASE` +
--- `flyway`/redémarrage) ou réparée (`flyway repair`).
+-- numéro V14 réservé au bloc G1-C. À la date de cette décision, la base de
+-- développement locale `esic_connect` était encore en **V11** : aucune
+-- base partagée n'avait donc appliqué l'ancienne forme de V12/V13.
+--
+-- CORRECTION DOCUMENTAIRE (1er septembre 2026, checkpoint G1-C.3) : la
+-- formulation « ou réparée (`flyway repair`) » ci-dessus était TROMPEUSE.
+-- `flyway repair` ne corrige QUE l'historique et les sommes de contrôle de
+-- `flyway_schema_history` : il ne renomme AUCUNE colonne et n'ajoute
+-- AUCUNE colonne. Une base ayant réellement appliqué l'ancienne forme de
+-- V12/V13 doit donc être :
+--   * recréée depuis une sauvegarde ou une base jetable
+--     (`DROP DATABASE` + rejeu Flyway V1→…), OU
+--   * corrigée par une migration SQL corrective explicitement écrite.
+-- La correction en place n'a été légitime ici que parce que les seules
+-- bases concernées étaient jetables / non partagées (`esic_test`) et que
+-- `esic_connect` n'avait jamais dépassé V11.
 --
 -- Conventions V1/V4..V12. Aucune donnée métier modifiée.
 

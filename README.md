@@ -57,8 +57,12 @@ implémentés** et ne doivent jamais être présentés comme livrés :
   création automatique des séances depuis un planning.**~~ **Livré au bloc
   G1-B.** Seul `EF-PLAN-006` (création manuelle plein calendrier) reste
   `HORS_PÉRIMÈTRE_ASSUMÉ`.
-- Séances : `PATCH`, annulation, affectation d'un remplaçant — **prévu au
-  bloc G1-C** (non livré à ce jour).
+- Séances : ~~annulation, affectation d'un remplaçant~~ — **livrés au
+  bloc G1-C** (annulation `POST /sessions/{id}/cancel` ; remplacements
+  `teacher_substitution` + `GET/POST …/substitutions` ; séance
+  `CANCELLED` consultable, remplaçant actif visible et gestionnaire
+  pendant sa période, audit `AFTER_COMMIT` — checkpoint G1-C.3). `PATCH`
+  d'une séance manuelle `PLANNED` : non livré (non requis).
 - QR fixe de salle + contrôle réseau CIDR (référentiel présent, non
   consommé) ; scan caméra mobile (code court uniquement).
 - WebAuthn / passkeys, MFA TOTP, anti-bot (Turnstile).

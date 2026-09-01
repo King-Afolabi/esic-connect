@@ -539,9 +539,21 @@ Audit correctif du bloc G1-B **avant** G1-C. Commits :
 ### Migrations
 
 Aucune nouvelle migration. **V12 et V13 corrigées en place** (jamais
-poussées ni appliquées hors base jetable — cf. en-tête de `V13`). V14
-reste **libre** pour G1-C. Une base de dev `esic_connect` déjà à V13 doit
-être recréée ou `flyway repair`.
+poussées ni appliquées hors base jetable — cf. en-tête de `V13` ;
+`esic_connect` locale était encore en **V11** au moment de la décision).
+V14 reste **libre** pour G1-C.
+
+> **Correction documentaire (1er septembre 2026, checkpoint G1-C.3).** La
+> phrase « une base de dev `esic_connect` déjà à V13 doit être recréée ou
+> `flyway repair` » qui figurait ici était trompeuse : `flyway repair`
+> corrige seulement l'historique / les sommes de contrôle de
+> `flyway_schema_history`, il **ne renomme ni n'ajoute aucune colonne**.
+> Une base ayant réellement appliqué l'ancienne forme de V12/V13 doit être
+> **recréée** (depuis une sauvegarde ou une base jetable) **ou corrigée
+> par une migration SQL corrective explicitement écrite**. La correction
+> en place n'a été légitime que parce que les bases concernées étaient
+> jetables / non partagées et que `esic_connect` n'avait jamais dépassé
+> V11.
 
 ### Publication concurrente — durcissement
 
@@ -782,37 +794,278 @@ Commit `feat(coursesession): gérer les remplacements de formateur`.
   masquage non-manager ; `sessions-api` contrat). Suites : back
   **723 → 729**, front **554 → 557**.
 
+## Audit G1-C.3 — 1er septembre 2026
+
+Checkpoint correctif approfondi du bloc **G1-C** (annulation + remplacements)
+avant G1-D. Commits :
+`fix(coursesession): consolider l'historique et les droits du remplaçant`
+(+ `docs(g1): corriger les garanties transactionnelles et Flyway`).
+
+### 1. Lecture historique d'une séance `CANCELLED`
+
+Séparation explicite de trois concepts dans `coursesession.internal`
+(garde par méthode, jamais dupliquée dans les contrôleurs) :
+
+| Concept | Méthode entité / garde service | Politique |
+|---|---|---|
+| **existe + historiquement lisible** | `CourseSession.isHistoricallyReadable()` (`= !supersededByScheduling`) ; `CourseSessionService.requireExistingReadableSession` | `CANCELLED` **passe** ; supersédée par le planning **masquée** (seul l'historique des versions `planning` la montre — politique G1-B.1 conservée) |
+| **opérationnelle** | `CourseSession.isOperational()` (inchangé : `!superseded && != CANCELLED`) ; `requireOperationalSession` | ouverture / fermeture / jeton / points de contrôle (mutations) |
+| **existe brute** | `requireSessionRaw` | seule l'annulation (pour renvoyer `409` sur double annulation plutôt que `404`) |
+
+Effets :
+
+- `GET /api/v1/sessions/{publicId}` renvoie désormais une séance
+  `CANCELLED` aux rôles autorisés : `status = CANCELLED`,
+  `cancellationReason`, `cancelledAt`, `openedAt` conservé si la séance
+  avait été ouverte, `closedAt = null`, formateur principal, classes,
+  points de contrôle terminaux, **aucun identifiant SQL**
+  (`cancelledById` jamais exposé). Un rafraîchissement (nouvelle requête)
+  donne le même état persisté.
+- `GET /sessions/{id}/checkpoints` et `GET /sessions/{id}/substitutions`
+  restent consultables pour une séance `CANCELLED` (points terminaux,
+  historique des remplacements) — via `requireReadableSession`.
+- `open` / `close` / jeton / création-ouverture-fermeture-annulation de
+  point de contrôle / création-fin d'un remplacement → `404` sur une
+  séance `CANCELLED` (garde opérationnelle).
+- La séance `CANCELLED` **reste absente de la liste opérationnelle par
+  défaut** (`CourseSessionSpecifications.operational()` appliquée dans
+  `list` et le `DefaultCourseSessionDirectory`).
+- Le **front** (`session-detail`) ne « patche » plus l'état en local
+  après annulation : il **recharge** depuis le back-end (`load()`),
+  affiche l'état réellement persisté, un F5 est stable. La séance
+  `CANCELLED` n'appelle pas le tableau de présences (éviterait un `404`).
+- **Pas d'endpoint `/history` créé** : `GET /sessions/{id}` +
+  `GET /sessions/{id}/substitutions` couvrent le besoin documentaire ;
+  `audit_event` n'est jamais exposé sans filtrage.
+
+Tests (`CourseSessionIntegrationTests`) :
+`cancellingAPlannedSessionKeepsItReadableButBlocksOperationsAndIsAudited`
+(GET direct + rechargement, motif / date persistés, pas de champ SQL,
+absente de la liste, `open`/jeton → `404`, double annulation → `409`,
+**exactement une** ligne `SESSION_CANCELLED`), et
+`aCancelledSessionGetIsStillGuardedByRoleAndScope` (`401` sans jeton,
+`403` `STUDENT` / formateur étranger, `200` formateur principal).
+
+### 2. Séances supersédées par le planning — inchangé
+
+Une séance `superseded_by_scheduling = true` reste **inactive partout**
+(liste, résolution d'émargement, ouverture, jeton, rapports) et **masquée
+du GET métier normal** — `isHistoricallyReadable()` renvoie `false`.
+Seul l'historique des versions du module `planning` la référence encore.
+Aucune régression (suite `Planning*` verte).
+
+### 3. Droits du remplaçant actif — READ / MANAGE / liste alignés
+
+`CourseSessionService.list` : le périmètre d'un **formateur** est
+désormais « ses séances **OU** les séances où il est remplaçant `ACTIVE`
+couvrant l'instant courant ». Une **seule** requête bornée
+(`TeacherSubstitutionRepository.findActiveSubstitutedSessionIds(userId, now)`)
++ `CourseSessionSpecifications.hasInternalIdIn(...)` combinée en `OR` —
+**pas de N+1**, pas de requête par séance.
+
+`CourseSessionAccessGuard` (inchangé depuis G1-C.2) : un remplaçant dont
+une substitution `ACTIVE` couvre `now` obtient `MANAGE` (ouvrir / fermer /
+gérer les points de contrôle / jeton — mêmes droits qu'un formateur
+principal). Un remplaçant **futur**, **expiré** ou **terminé** n'a
+**aucun** droit (ni liste, ni GET, ni gestion). `SCHOOL_ADMINISTRATION`
+ne gagne **aucun** droit de gestion. Décision **serveur** (le remplaçant
+est lu en base). Le **front** affiche un bandeau « Vous intervenez comme
+remplaçant … Vos droits sont révoqués à la fin de cette période »
+(dérivé de `AuthService.session().subject` + la liste des substitutions ;
+purement informatif).
+
+Tests :
+`anActiveSubstituteSeesTheSessionInGetAndListAndCanManageItButNotOthers`,
+`futureAndEndedSubstitutesGetNoRightAndSchoolAdministrationGetsNoExtraRight`
++ specs front `session-detail` (bandeau visible / absent après la
+période).
+
+### 4. Période d'un remplacement vs séance
+
+`SubstitutionService` — nouvelle règle (`requirePeriodOverlapsSession`),
+en plus de `validUntil > validFrom` :
+
+- la période `[validFrom, validUntil)` doit **chevaucher réellement** la
+  séance `[startsAt, endsAt)` ;
+- `validFrom` peut précéder `startsAt` d'au plus **60 min** ;
+- `validUntil` peut dépasser `endsAt` d'au plus **60 min** ;
+- une période entièrement avant ou après la séance, ou débordant la
+  marge, est refusée.
+
+Codes `ProblemDetail` distincts :
+
+| Code | HTTP | Cas |
+|---|---|---|
+| `SESSION_SUBSTITUTION_PERIOD_INVALID` | `400` | `validUntil ≤ validFrom`, ou motif vide (période **malformée**) |
+| `SESSION_SUBSTITUTION_OUTSIDE_SESSION` | `422` | période bien formée mais **sans chevauchement réel** / hors marge de 60 min |
+
+Le dépôt n'ayant **aucune** règle temporelle globale d'ouverture de
+séance, on n'en crée pas : on impose seulement le chevauchement + la
+marge, documentés. Test
+`substitutionPeriodMustReallyOverlapTheSessionWindow` (avant / après /
+marge dépassée des deux côtés / borne exacte acceptée / `validUntil =
+validFrom` → `400` / chevauchement `ACTIVE` → `409`, jamais `5xx`), sous
+`TZ=UTC` **et** `TZ=Europe/Paris` (bornes calculées sur les instants
+réels de la séance, jamais « maintenant »).
+
+### 5. Audit écrit **après commit** uniquement
+
+`CourseSessionAuditListener` : `@EventListener` synchrone +
+`@Transactional(REQUIRES_NEW)` → **`@TransactionalEventListener(phase =
+AFTER_COMMIT)`** qui délègue à un bean séparé
+**`CourseSessionAuditWriter`** (`@Transactional(REQUIRES_NEW)`, appel
+inter-bean → proxy Spring → transaction neuve réelle). Une transaction
+métier qui rollbacke ne laisse donc **aucune** ligne d'audit de succès
+(`SESSION_CANCELLED`, `SESSION_SUBSTITUTION_ADDED/ENDED` et les autres
+`CourseSessionChangeEvent`). Les **9 autres** listeners d'audit du projet
+ne sont **pas** migrés (dette connue, `G1_ARCHITECTURE_DECISIONS.md`
+§Contexte) : seul le listener portant des événements du bloc G1-C est
+corrigé.
+
+Tests :
+
+- **succès** : `substitutionAuditWritesExactlyOneRowPerSuccessfulChange`
+  (**exactement une** ligne `SESSION_SUBSTITUTION_ADDED` / `…_ENDED`) +
+  `cancelling…` (**exactement une** `SESSION_CANCELLED`) ;
+- **rollback** : `aRollbackDuringCancelLeavesNoStateChangeNoAuditAndNoAfterCommitEffect`
+  — `@TestConfiguration` (aucun bean de production modifié) avec un
+  `@EventListener` **synchrone** qui, armé, lève une
+  `OptimisticLockingFailureException` (déjà mappée par le
+  `CourseSessionExceptionHandler` de production → `409
+  SESSION_INVALID_STATE` contrôlé, **jamais un `500` non maîtrisé**)
+  pendant la transaction, avant le commit. Le test prouve : réponse
+  `409` contrôlée · séance toujours `OPEN`, `cancellationReason` /
+  `cancelledAt` `null` · point de contrôle `START` **non** annulé
+  (rollback) · **aucune** nouvelle ligne `SESSION_CANCELLED` (listener
+  `AFTER_COMMIT` jamais atteint) · séance toujours pleinement utilisable
+  (émission d'un jeton OK) puis annulation réelle qui réussit une fois la
+  faute désarmée (exactement une `SESSION_CANCELLED`).
+
+### 6. Effets Redis après rollback
+
+`CourseSessionCloseListener` (purge des jetons Redis d'une séance à
+`CLOSED` / `CANCELLED`) **et** `AttendanceCheckpointCloseListener` :
+`@EventListener` synchrone → **`@TransactionalEventListener(AFTER_COMMIT)`**.
+La purge Redis — effet externe non transactionnel, non compensable — n'a
+donc lieu **qu'après commit réussi**. Une transaction d'annulation qui
+rollbacke laisse la séance `OPEN` **et** ses jetons intacts. Politique
+**fail-closed conservée mais désormais correcte** : le listener ne peut
+structurellement pas s'exécuter sans commit. Défense en profondeur
+inchangée : la validation d'un émargement est de toute façon bloquée dès
+que le point de contrôle est fermé. Vérifié par le test de rollback
+ci-dessus (jeton toujours émis après la tentative échouée) ; suites
+`Attendance*` vertes (aucune régression sur le chemin `CLOSED`).
+
+### 7. Correction documentaire Flyway
+
+Toute mention suggérant qu'un simple `flyway repair` peut corriger une
+base ayant déjà reçu l'ancienne forme de `V12`/`V13` est corrigée
+(en-tête de `V13`, ce fichier §Migrations, `docs/10-journal-ia.md`,
+`docs/CURRENT-STATE.md`, `README.md`) : `flyway repair` corrige
+l'historique et les sommes de contrôle, **il ne renomme ni n'ajoute
+aucune colonne**. Une telle base doit être **recréée** (sauvegarde /
+base jetable) **ou** corrigée par une **migration SQL corrective
+explicite**. La correction en place de `V12`/`V13` n'a été légitime que
+parce que les bases concernées étaient jetables / non partagées et que
+`esic_connect` locale était encore en **V11** au moment de la décision.
+La décision initiale est **conservée**, une correction datée du
+**1er septembre 2026** est ajoutée à chaque endroit.
+
+### 8. Contrats frontend
+
+- `sessions.models.ts` : `cancellationReason` / `cancelledAt` documentés
+  « non nuls ssi `status === 'CANCELLED'` » + note « GET consultable pour
+  une séance annulée depuis G1-C.3 » ; `CreateSubstitutionRequest`
+  documente les 3 refus (`400 PERIOD_INVALID`, `422 OUTSIDE_SESSION`,
+  `409 OVERLAP`).
+- `session-errors.ts` : liste blanche `SESSION_*` complétée
+  (`SESSION_CANCEL_REASON_REQUIRED`, `SESSION_SUBSTITUTE_*`,
+  `SESSION_SUBSTITUTION_PERIOD_INVALID`, **`SESSION_SUBSTITUTION_OUTSIDE_SESSION`**,
+  `SESSION_SUBSTITUTION_OVERLAP`, `…_NOT_FOUND`, `…_ALREADY_ENDED`) — ces
+  erreurs sont désormais rendues avec le message serveur (phrase
+  française sûre) au lieu du message générique.
+- `session-detail` : rechargement après annulation ; bandeau
+  « remplaçant » ; aucune donnée SQL ; aucun `confirm()` natif ;
+  `loading` / `empty` / `error` conservés.
+
+### Reclassement des exigences
+
+| ID | Avant G1-C.3 | Après G1-C.3 | Justification |
+|---|---|---|---|
+| EF-SES-004 (annulation) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** (consolidé) | GET historique, audit after-commit, rollback prouvé |
+| EF-SES-005 (remplaçant) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** (consolidé) | visibilité liste du remplaçant actif, période vs séance, audit after-commit |
+| CAD §24 RG-12 / CDC §43 RG-015 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | « autorisé **et audité** » : audit garanti after-commit (rollback ⇒ 0 ligne) |
+| Bloc **G1-C** | `IMPLEMENTED_FULL_SUITE_GREEN` (C.1+C.2) | **`IMPLEMENTED_FULL_SUITE_GREEN`** — accès historiques, droits du remplaçant, périodes et audit post-commit **prouvés** | tous les invariants du checkpoint G1-C.3 testés |
+
+### Validation G1-C.3
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw clean test` (défaut `Europe/Paris`) | **735 tests / 0 échec — BUILD SUCCESS** |
+| `TZ=UTC ./mvnw clean test` | **735 / 0 — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **735 / 0 — BUILD SUCCESS** |
+| `ModularityTests` | vert (nouveau bean `CourseSessionAuditWriter` dans `audit.internal`, aucune frontière franchie) |
+| Flyway `V1 → V14` sur `esic_test` vierge, `ddl-auto=validate` | sans erreur |
+| `npm test -- --watch=false` | **66 fichiers / 559 tests / 0 échec** |
+| `npm run lint` | « All files pass linting » |
+| `npm run build` | initial **484,68 kB** — 0 alerte de budget |
+| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| `git diff --check` | propre |
+
+Aucun `@Disabled` / `@Ignore` / `it.skip` ajouté ; aucun test supprimé ;
+aucune assertion affaiblie (les 6 tests G1-C.2 dont les fixtures
+utilisaient une fenêtre de séance figée au `2026-09-10` ont été recalées
+sur une fenêtre **relative à maintenant** — `now-3h → now+6h` — pour que
+les scénarios de remplacement gardent leur sémantique sous la nouvelle
+règle de chevauchement, et l'assertion `GET → 404` du test d'annulation
+est devenue `GET → 200 CANCELLED` conformément au nouveau contrat).
+
+### Limites connues après G1-C.3
+
+- `AttendanceCheckpointAuditListener` et les 8 autres listeners d'audit
+  restent `@EventListener` synchrone + `REQUIRES_NEW` (dette assumée,
+  hors périmètre G1-C — ils ne portent pas d'événement du bloc G1-C).
+- Aucune migration de données ne bascule les séances futures `PLANNED`
+  supersédées vers `CANCELLED` (garde `operational()` = source unique
+  d'exclusion, inchangé depuis G1-B.1).
+- `PATCH /sessions/{id}` d'une séance manuelle `PLANNED` : non livré
+  (non requis).
+- Pas de test e2e navigateur (specs de composant + IT `@SpringBootTest`).
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : `feat(coursesession): gérer les remplacements de
-  formateur` (chaîne : `db80beb` → `fix(planning): consolider l'identité…`
-  → `docs(g1): corriger la traçabilité…` →
-  `feat(coursesession): gérer l'annulation des séances` → ce commit).
+- **HEAD attendu** : `fix(coursesession): consolider l'historique et les
+  droits du remplaçant` (+ `docs(g1): corriger les garanties
+  transactionnelles et Flyway`) au-dessus de `1eedfd2`.
 - **Working tree** : propre après commit.
-- **Bloc courant** : **G1-C terminé** (C.1 annulation + C.2 remplacements).
-  Prochain bloc du grand lot : **G1-D** — notifications métier
-  persistantes (l'événement `planning.PlanningPublishedEvent` **et** les
-  `CourseSessionChangeEvent` `CANCELLED` / `SUBSTITUTION_*` sont déjà
-  publiés, prêts à être consommés par un module `notification` étendu).
+- **Bloc courant** : **G1-C terminé et consolidé** (C.1 annulation +
+  C.2 remplacements + C.3 audit correctif). Bloc suivant : **G1-D** —
+  notifications métier persistantes.
 - **Fichiers non terminés** : aucun.
-- **Tests verts** : back **729/0** (3 fuseaux) ; front **557/0** ;
+- **Tests verts** : back **735/0** (3 fuseaux) ; front **559/0** ;
   `ModularityTests` vert.
 - **Tests rouges** : aucun.
 - **Commande suivante** (G1-D) : lire `notification.internal` +
   `DEC-G1-007`, puis créer la migration `V15` (`notification`,
   `dedup_key` UNIQUE) + les listeners `@TransactionalEventListener(AFTER_COMMIT)`
-  + `REQUIRES_NEW`.
+  + `REQUIRES_NEW` (motif désormais aussi celui de
+  `CourseSessionAuditListener`).
 - **Risques G1-D** : idempotence par `dedup_key` ; un échec de
   notification ne doit pas rollback le métier ; destinataires **dérivés
   serveur** ; contenu **sans PII / sans jeton**.
-- **Décisions tranchées (G1-C)** : annulation **directe** (pas de
-  workflow) ; `PLANNED`+`OPEN` annulables, `CLOSED` non ; double
+- **Décisions tranchées (G1-C, y compris C.3)** : annulation **directe**
+  (pas de workflow) ; `PLANNED`+`OPEN` annulables, `CLOSED` non ; double
   annulation → `409` ; motif hors audit/événement ; garde `operational()`
-  = source unique d'exclusion (supersédée + `CANCELLED`) ; remplacement =
-  ligne datée jamais supprimée, principal jamais écrasé, substitut actif
-  ⇒ `MANAGE` pendant sa période ; `TEACHER` ne crée pas de substitution ;
-  pas de `PATCH /sessions/{id}` ni d'endpoint `/history` (non requis).
+  = source unique d'exclusion opérationnelle (supersédée + `CANCELLED`) ;
+  `isHistoricallyReadable()` = source de la lecture historique (masque la
+  supersédée, montre la `CANCELLED`) ; remplacement = ligne datée jamais
+  supprimée, principal jamais écrasé, substitut actif ⇒ `MANAGE` **et**
+  visible en liste pendant sa période ; période de remplacement doit
+  chevaucher la séance (± 60 min) ; audit `coursesession` **after-commit**
+  uniquement ; purge Redis **after-commit** uniquement ; `TEACHER` ne
+  crée pas de substitution ; pas de `PATCH /sessions/{id}` ni d'endpoint
+  `/history` (non requis).
 
 ## Dernier commit produit
 

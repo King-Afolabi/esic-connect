@@ -74,7 +74,10 @@ V7  profils apprenant         V14 cycle de vie séances (CANCELLED,  [G1-C]
 
 Schéma **en version 14**. `spring.jpa.hibernate.ddl-auto = validate`.
 Aucune donnée métier insérée par une migration. V12/V13 corrigées en
-place à l'audit G1-B.1 (jamais poussées — cf. en-tête de `V13`).
+place à l'audit G1-B.1, en-tête de `V13` re-précisé au checkpoint G1-C.3
+(jamais poussées ; une base ayant appliqué l'ancienne forme ne se répare
+**pas** par un simple `flyway repair` — recréation ou migration
+corrective explicite — voir en-tête de `V13`).
 
 ## Fonctionnalités livrées (`IMPLEMENTED_AND_TESTED`)
 
@@ -305,9 +308,59 @@ remplacement »). Audit `SESSION_SUBSTITUTION_ADDED` / `…_ENDED`. Front
 **`IMPLEMENTED_AND_TESTED`**. Suites : back **729/0** (3 fuseaux),
 front **557/0**.
 
-**G1-C est terminé** (C.1 + C.2). Reste non livré : `PATCH /sessions/{id}`
-d'une séance manuelle `PLANNED` (non requis) ; notifications persistantes
-= **G1-D**.
+### Bloc G1-C.3 — audit correctif (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN`. Checkpoint correctif de G1-C avant G1-D.
+
+- **Lecture historique d'une séance `CANCELLED`** : `GET /api/v1/sessions/{id}`
+  la renvoie désormais aux rôles autorisés (`status = CANCELLED`, motif,
+  `cancelledAt`, `openedAt` conservé, `closedAt = null`, formateur
+  principal, points de contrôle terminaux, **aucun identifiant SQL**).
+  Gardes explicites : `isHistoricallyReadable()` (`= !superseded` — la
+  `CANCELLED` passe, la supersédée par le planning est masquée) vs
+  `isOperational()` (mutations). `GET …/checkpoints` et `…/substitutions`
+  restent lisibles pour une `CANCELLED`. `open` / jeton / points de
+  contrôle → `404`. La séance reste absente de la liste opérationnelle.
+  Le front recharge l'état persisté après annulation (plus de patch
+  local ; F5 stable).
+- **Remplaçant actif visible en liste** : `GET /sessions` inclut, pour un
+  formateur, les séances où il est remplaçant `ACTIVE` couvrant l'instant
+  courant (une requête bornée, pas de N+1). Bandeau front « Vous
+  intervenez comme remplaçant ». Remplaçant futur / expiré / terminé :
+  aucun droit ; `SCHOOL_ADMINISTRATION` : aucun droit de gestion
+  supplémentaire.
+- **Période d'un remplacement vs séance** : doit **chevaucher réellement**
+  la séance, marge ≤ 60 min avant le début / après la fin. Nouveau code
+  `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION` (distinct de
+  `400 SESSION_SUBSTITUTION_PERIOD_INVALID` = période malformée).
+- **Audit `coursesession` après commit uniquement** :
+  `CourseSessionAuditListener` migré vers
+  `@TransactionalEventListener(AFTER_COMMIT)` + délégation à
+  `CourseSessionAuditWriter` (`REQUIRES_NEW`). Une transaction métier qui
+  rollbacke ne laisse **aucune** ligne d'audit de succès (test dédié avec
+  faute injectée, sans modifier de bean de production). Les 8 autres
+  listeners d'audit restent en dette assumée.
+- **Purge Redis après commit** : `CourseSessionCloseListener` et
+  `AttendanceCheckpointCloseListener` migrés vers `AFTER_COMMIT` — la
+  purge des jetons n'a lieu qu'après commit réussi (un rollback laisse la
+  séance `OPEN` et ses jetons intacts).
+- **Correction documentaire Flyway** : un simple `flyway repair` ne peut
+  **pas** corriger une base ayant appliqué l'ancienne forme de V12/V13
+  (repair ne modifie pas le schéma) — recréation ou migration corrective
+  explicite requise. Décision initiale conservée, correction datée
+  ajoutée à l'en-tête de `V13`, ce fichier, `G1_IMPLEMENTATION_PROGRESS.md`
+  et `docs/10-journal-ia.md`.
+
+Suites : back **729 → 735/0** (3 fuseaux ; Flyway `V1→V14` rejoué sur
+`esic_test` vierge), front **557 → 559/0**, `lint` / `build` (484,68 kB) /
+`audit` verts. `EF-SES-004`, `EF-SES-005`, `CAD §24 RG-12`, `CDC §43
+RG-015` → **`IMPLEMENTED_AND_TESTED`** (consolidés). Détail :
+[`G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md)
+§ « Audit G1-C.3 ».
+
+**G1-C est terminé et consolidé** (C.1 + C.2 + C.3). Reste non livré :
+`PATCH /sessions/{id}` d'une séance manuelle `PLANNED` (non requis) ;
+notifications persistantes = **G1-D**.
 
 Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
 finalisation F2) **reste d'actualité** tant que les blocs G1-D à G1-G

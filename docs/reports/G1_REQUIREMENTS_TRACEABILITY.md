@@ -164,6 +164,19 @@ endpoint absent.
 | CDC §43 RG-017 | `docs/02` §43 (`RG-017 : une séance exceptionnelle exige un motif.`) | Séance exceptionnelle ⇒ motif | Déjà en place : `course_session.exception_reason` `NOT NULL` sur toute séance manuelle ; non régressé (devient nullable pour les séances d'origine planning, cf. DEC-G1-001) |
 | — | CDC §15.1 (« Une séance exceptionnelle peut être créée par un responsable pédagogique ») + CS (« pas de `PATCH` ») | Modifier une séance exceptionnelle `PLANNED` | `PATCH /api/v1/sessions/{id}` limité aux séances **d'origine manuelle** (`planning_entry_public_id IS NULL`, cf. DEC-G1-001) **et** `PLANNED` ; séance issue d'un planning non modifiable structurellement (DEC-G1-004) ; verrou optimiste → `409` | `CourseSessionService.update` | tests `PLANNED` vs `OPEN`/`CLOSED` + planning vs manuel + concurrence |
 
+### 4bis. Consolidation au checkpoint G1-C.3 (1er septembre 2026)
+
+| ID | Statut G1-C.1/C.2 | Statut G1-C.3 | Ce que G1-C.3 a prouvé en plus |
+|---|---|---|---|
+| EF-SES-004 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** (consolidé) | séance `CANCELLED` **consultable** par `GET /sessions/{id}` (statut / motif / date / points terminaux, sans champ SQL) et par rechargement ; garde `isHistoricallyReadable()` distincte de `isOperational()` ; audit `SESSION_CANCELLED` écrit **after-commit** (rollback ⇒ **0** ligne, test à faute injectée) ; purge Redis after-commit |
+| EF-SES-005 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** (consolidé) | le remplaçant `ACTIVE` **voit la séance dans `GET /sessions` (liste)** et la gère (`MANAGE`), sans N+1 ; futur / expiré / terminé ⇒ aucun droit ; période **doit chevaucher la séance** (± 60 min) sinon `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION` ; audit `…_ADDED` / `…_ENDED` after-commit |
+| CAD §24 RG-12 / CDC §43 RG-015 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | « autorisé **et audité** » : l'audit est désormais **garanti** (jamais committé sans commit métier — `@TransactionalEventListener(AFTER_COMMIT)` + `CourseSessionAuditWriter` `REQUIRES_NEW`) |
+| Bloc **G1-C** | `IMPLEMENTED_FULL_SUITE_GREEN` | **`IMPLEMENTED_FULL_SUITE_GREEN`** — accès historiques, droits du remplaçant, périodes et audit post-commit **prouvés** | — |
+
+Suites : back **735/0** (3 fuseaux, Flyway `V1→V14` rejoué sur vierge) ;
+front **559/0**. Nouveaux codes : `SESSION_SUBSTITUTION_OUTSIDE_SESSION`
+(`422`). Détail : `G1_IMPLEMENTATION_PROGRESS.md` § « Audit G1-C.3 ».
+
 > `EF-SES-002` (ouvrir) et `EF-SES-003` (clôturer) sont déjà
 > `IMPLEMENTED_AND_TESTED` (CS) : aucune régression attendue.
 >

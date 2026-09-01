@@ -1588,11 +1588,12 @@ Personas :
 > bloc**, uniquement sur preuve (code présent + test exécuté + résultat
 > consigné).
 >
-> **Avancement (1er septembre 2026).** **G1-A** et **G1-B** sont livrés et
-> verts (back `./mvnw clean test` → **713 tests, 0 échec** ; front
-> `npm test` → **548 tests, 0 échec** ; `lint`/`build`/`audit` verts).
-> **G1-C, G1-D, G1-E, G1-F, G1-G** : non démarrés. Détail par checkpoint
-> et commande : `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
+> **Avancement (1er septembre 2026).** **G1-A**, **G1-B** et **G1-C**
+> (C.1 annulation + C.2 remplacements + C.3 audit correctif) sont livrés
+> et verts (back `./mvnw clean test` → **735 tests, 0 échec** — 3 fuseaux ;
+> front `npm test` → **559 tests, 0 échec** ; `lint`/`build`/`audit`
+> verts). **G1-D, G1-E, G1-F, G1-G** : non démarrés. Détail par
+> checkpoint et commande : `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
 
 ## G1-A — Interfaces Angular des API administratives existantes
 
@@ -1637,6 +1638,7 @@ Personas :
 | Définition de fini | `V14` (`teacher_substitution` ; `session_cancellation_request` si workflow retenu) ; endpoints `PATCH`/`cancel`/`substitute`/`history` ; `PATCH` limité aux séances d'origine manuelle (`planning_entry_public_id IS NULL`) `PLANNED` ; suite back (transitions, concurrence, sécurité, audit, planning vs manuel) + front |
 | Statut initial | `NOT_IMPLEMENTED` |
 | Preuves attendues | `CourseSessionService.update/cancel`, `SubstitutionService`, tests |
+| **Statut (01/09/2026)** | **`IMPLEMENTED_FULL_SUITE_GREEN`** — **G1-C.1** annulation (`V14`, `POST /sessions/{id}/cancel`), **G1-C.2** remplacements (`teacher_substitution`, `GET/POST …/substitutions`, `…/{id}/end`, `AccessGuard` étendu), **G1-C.3** audit correctif : séance `CANCELLED` **consultable** (`GET` historique, gardes `isHistoricallyReadable` vs `isOperational`), remplaçant `ACTIVE` **visible en liste** + `MANAGE`, période de remplacement devant **chevaucher la séance** (± 60 min, `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION`), audit `coursesession` + purge Redis **`AFTER_COMMIT`** (rollback ⇒ 0 audit, testé). `EF-SES-004`, `EF-SES-005`, `CAD §24 RG-12`, `CDC §43 RG-015` → `IMPLEMENTED_AND_TESTED`. `PATCH /sessions/{id}` d'une séance manuelle `PLANNED` : **non livré** (non requis). Back +6 tests G1-C.3 (729→735, 3 fuseaux) ; front +2 (557→559). Détail : `G1_IMPLEMENTATION_PROGRESS.md` §§ G1-C.1/C.2/« Audit G1-C.3 » |
 
 ## G1-D — Centre de notifications métier persistantes
 
