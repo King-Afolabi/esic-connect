@@ -35,29 +35,45 @@ import org.springframework.util.MultiValueMap;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Recette G1-G — parcours produit prioritaire rejoué de bout en bout
- * (CDC §47.2) + extensions du grand lot G1, par appels HTTP réels :
+ * (CDC §47.2) + extensions du grand lot G1, par appels HTTP réels sur les
+ * <strong>API publiques</strong> :
  *
  * <pre>
- *   import apprenants → import planning → simulation (AC-007) →
- *   publication → séances créées → ouverture par le formateur →
- *   émargement → rapport + export CSV
- *   puis : annulation → notification · remplacement · justificatif +
- *   pièce jointe → acceptation → notification propriétaire · dashboards.
+ *   import apprenants CSV → confirmation → activation d'un apprenant
+ *   RÉELLEMENT importé (jeton d'invitation → /account-invitations/activate)
+ *   → import planning → simulation (AC-007) → publication → séances créées
+ *   → ouverture par le formateur → CE MÊME apprenant émarge → rapport +
+ *   export CSV → annulation → notification · remplacement de formateur ·
+ *   justificatif + pièce jointe déposés par CE MÊME apprenant → acceptation
+ *   → notification propriétaire · tableaux de bord par rôle.
  * </pre>
  *
- * <p><strong>Repli e2e (DEC-G1-011).</strong> Playwright n'est pas ajouté
- * (dépendance et téléchargement de navigateur disproportionnés dans cet
- * environnement) : cette classe est le <em>repli API automatisé</em>. Le
- * e2e <em>navigateur</em> reste `PARTIAL` — non livré.
+ * <p>La chaîne est <strong>continue</strong> : l'apprenant qui émarge et
+ * dépose le justificatif est celui créé et inscrit par l'import (aucun
+ * compte apprenant parallèle). Le SQL direct ne sert qu'à observer des
+ * invariants ({@code accountCount}, {@code notificationCount}…).
+ *
+ * <p>Les dates sont construites <strong>relativement à l'horloge</strong>
+ * (aucune ne périme). Toutes les actions métier passent par l'API.
+ *
+ * <p><strong>Nature : recette d'intégration API Spring</strong> — ce
+ * n'est <em>pas</em> un e2e navigateur. Playwright n'est pas ajouté
+ * (DEC-G1-011 : dépendance et téléchargement de navigateur
+ * disproportionnés ici) ; le e2e navigateur reste {@code NOT_IMPLEMENTED}.
+ * Aucune démonstration manuelle n'est consignée
+ * ({@code IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED}).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -66,13 +82,20 @@ class PriorityPathRecetteIntegrationTests {
     private static final String PASSWORD = "S3cure-Pass!word";
     private static final byte[] PDF = "%PDF-1.4\njustificatif fictif ESIC\n%%EOF".getBytes(StandardCharsets.UTF_8);
 
+    /**
+     * Enregistre les jetons d'activation émis (aucun SMTP réel), pour
+     * activer un apprenant <strong>réellement issu de l'import</strong> via
+     * l'API publique {@code POST /account-invitations/activate}.
+     */
     @TestConfiguration
-    static class NoopMailerConfig {
+    static class RecordingMailerConfig {
+        static final ConcurrentHashMap<String, String> TOKENS = new ConcurrentHashMap<>();
+
         @Bean
         @Primary
-        InvitationMailer noopMailer() {
-            return (a, b, c, d) -> {
-            };
+        InvitationMailer recordingMailer() {
+            return (toEmail, firstName, rawToken, expiresAt) ->
+                    TOKENS.put(toEmail.toLowerCase(java.util.Locale.ROOT), rawToken);
         }
     }
 
@@ -92,6 +115,7 @@ class PriorityPathRecetteIntegrationTests {
     @BeforeEach
     void jdkClient() {
         rest.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+        RecordingMailerConfig.TOKENS.clear();
     }
 
     @Test
@@ -100,6 +124,12 @@ class PriorityPathRecetteIntegrationTests {
         String admin = tokenFor(account(RoleCode.ADMIN));
         Account teacher = account(RoleCode.TEACHER);
         Account substitute = account(RoleCode.TEACHER);
+
+        // Dates construites relativement à l'horloge : rien ne devient
+        // invalide avec le temps.
+        LocalDate ayStart = LocalDate.now().withDayOfMonth(1).minusMonths(1);
+        LocalDate ayEnd = ayStart.plusYears(1).minusDays(1);
+        LocalDate sessionDate = LocalDate.now().plusDays(10);
 
         // --- 1. Référentiel académique ---------------------------------
         String site = created(admin, "/api/v1/sites", Map.of("code", "SITE-" + suffix,
@@ -110,8 +140,8 @@ class PriorityPathRecetteIntegrationTests {
         String level = created(admin, "/api/v1/programs/" + program + "/levels", Map.of(
                 "code", "N1-" + suffix, "name", "BTS 1", "sequenceNumber", 1)).get("publicId").toString();
         String yearCode = "AY-" + suffix;
-        String year = created(admin, "/api/v1/academic-years", Map.of("code", yearCode, "name", "2026-2027",
-                "startDate", "2026-09-01", "endDate", "2027-08-31")).get("publicId").toString();
+        String year = created(admin, "/api/v1/academic-years", Map.of("code", yearCode, "name", "Année " + suffix,
+                "startDate", ayStart.toString(), "endDate", ayEnd.toString())).get("publicId").toString();
         String promo = created(admin, "/api/v1/promotions", Map.of("programPublicId", program,
                 "academicYearPublicId", year, "code", "P-" + suffix, "name", "Promotion")).get("publicId").toString();
         String classCode = "C-" + suffix;
@@ -136,10 +166,21 @@ class PriorityPathRecetteIntegrationTests {
         assertThat(applied.get("alreadyApplied")).isEqualTo(Boolean.FALSE);
         assertThat(accountCount("%" + suffix + "@example.test")).isEqualTo(3);
 
+        // --- 2b. Activation d'un apprenant RÉELLEMENT issu de l'import ----
+        // (parcours métier : jeton d'invitation -> POST /account-invitations/activate).
+        // L'inscription en classe a déjà été créée par l'import : la suite du
+        // scénario porte donc sur ce même apprenant, sans compte parallèle.
+        String importedStudentEmail = "camille." + suffix + "@example.test";
+        String activationToken = awaitActivationToken(importedStudentEmail);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/account-invitations/activate",
+                Map.of("token", activationToken, "password", PASSWORD), null).getStatusCode())
+                .as("activation de l'apprenant importé").isEqualTo(HttpStatus.NO_CONTENT);
+        String studentToken = tokenFor(new Account(null, importedStudentEmail));
+
         // --- 3. Import du planning : simulation (AC-007) puis publication
         String planningCsv = "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n"
-                + "S-" + suffix + "-1,2026-09-14,09:00,12:00,Europe/Paris,Algorithmique," + teacher.publicId() + ",A101\n"
-                + "S-" + suffix + "-2,2026-09-14,13:30,17:00,Europe/Paris,Bases de données," + teacher.publicId() + ",A101\n";
+                + "S-" + suffix + "-1," + sessionDate + ",09:00,12:00,Europe/Paris,Algorithmique," + teacher.publicId() + ",A101\n"
+                + "S-" + suffix + "-2," + sessionDate + ",13:30,17:00,Europe/Paris,Bases de données," + teacher.publicId() + ",A101\n";
         Map<String, Object> planJob = multipartCsvWithClass(admin, "apprenants-plan-" + suffix + ".csv",
                 planningCsv, classPublicId).getBody();
         String planId = planJob.get("publicId").toString();
@@ -163,18 +204,17 @@ class PriorityPathRecetteIntegrationTests {
                 .filter(s -> "Bases de données".equals(s.get("title")))
                 .map(s -> s.get("publicId").toString()).findFirst().orElseThrow();
 
+        Map<String, Object> algorithmiqueSession = teacherSessions.stream()
+                .filter(s -> "Algorithmique".equals(s.get("title"))).findFirst().orElseThrow();
+        Instant sessionStartsAt = Instant.parse(algorithmiqueSession.get("startsAt").toString());
+        Instant sessionEndsAt = Instant.parse(algorithmiqueSession.get("endsAt").toString());
+
         assertThat(post(teacherToken, "/api/v1/sessions/" + sessionId + "/open").getStatusCode())
                 .isEqualTo(HttpStatus.NO_CONTENT);
         Map<String, Object> token = post(teacherToken, "/api/v1/sessions/" + sessionId + "/attendance-token").getBody();
         String shortCode = token.get("shortCode").toString();
 
-        // --- 5. Un apprenant actif inscrit émarge --------------------
-        Account activeStudent = account(RoleCode.STUDENT);
-        String profile = created(admin, "/api/v1/student-profiles", Map.of("userPublicId", activeStudent.publicId(),
-                "studentNumber", "ESIC-2026-" + suffix)).get("publicId").toString();
-        created(admin, "/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
-                "classGroupPublicId", classPublicId, "startDate", "2026-08-01"));
-        String studentToken = tokenFor(activeStudent);
+        // --- 5. L'apprenant importé (activé, inscrit par l'import) émarge ---
         Map<String, Object> record = exchange(HttpMethod.POST, "/api/v1/attendance/validate",
                 Map.of("shortCode", shortCode), studentToken).getBody();
         assertThat(record.get("status")).isIn("PRESENT", "LATE");
@@ -185,8 +225,10 @@ class PriorityPathRecetteIntegrationTests {
         Map<String, Object> classesReport = getMap(admin,
                 "/api/v1/attendance/reports/classes?classGroup=" + classPublicId);
         assertThat(((Number) classesReport.get("totalElements")).intValue()).isGreaterThanOrEqualTo(1);
+        String exportFrom = Instant.now().minus(Duration.ofDays(1)).toString();
+        String exportTo = Instant.now().plus(Duration.ofDays(60)).toString();
         ResponseEntity<byte[]> export = rest.exchange(RequestEntity.get(URI.create(
-                        "/api/v1/attendance/reports/sessions/export?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z"))
+                        "/api/v1/attendance/reports/sessions/export?from=" + exportFrom + "&to=" + exportTo))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin).build(), byte[].class);
         assertThat(export.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(export.getHeaders().getContentType().toString()).startsWith("text/csv");
@@ -197,10 +239,10 @@ class PriorityPathRecetteIntegrationTests {
         assertThat(notificationCount(teacher.email(), "SESSION_CANCELLED")).isEqualTo(1L);
 
         // --- 7b. Remplacement de formateur --------------------------
-        // Séance « Algorithmique » : 2026-09-14 09:00–12:00 Europe/Paris = 07:00–10:00 UTC.
-        // La période du remplacement doit chevaucher la séance (marge ± 60 min).
-        Instant from = Instant.parse("2026-09-14T07:00:00Z");
-        Instant until = Instant.parse("2026-09-14T10:30:00Z");
+        // Période dérivée des instants réels de la séance (chevauchement +
+        // marge ≤ 60 min — G1-C.3), sans arithmétique de fuseau / DST.
+        Instant from = sessionStartsAt.minus(Duration.ofMinutes(30));
+        Instant until = sessionEndsAt.plus(Duration.ofMinutes(30));
         assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + sessionId + "/substitutions",
                 Map.of("substituteTeacherPublicId", substitute.publicId(), "validFrom", from.toString(),
                         "validUntil", until.toString(), "reason", "Formateur souffrant"), admin)
@@ -208,11 +250,12 @@ class PriorityPathRecetteIntegrationTests {
 
         // --- 7c. Justificatif + pièce jointe → acceptation → notif ---
         // Séance exceptionnelle dédiée (l'apprenant y est absent).
+        Instant absentStart = Instant.now().plus(Duration.ofDays(11));
         Map<String, Object> absentSession = created(admin, "/api/v1/sessions", Map.of(
                 "teacherPublicId", teacher.publicId(),
                 "classPublicIds", List.of(classPublicId),
-                "startsAt", "2026-09-15T08:00:00Z",
-                "endsAt", "2026-09-15T12:00:00Z",
+                "startsAt", absentStart.toString(),
+                "endsAt", absentStart.plus(Duration.ofHours(4)).toString(),
                 "timeZoneId", "Europe/Paris",
                 "reason", "séance exceptionnelle recette"));
         String absentSessionId = absentSession.get("publicId").toString();
@@ -232,7 +275,7 @@ class PriorityPathRecetteIntegrationTests {
                 .getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(exchange(HttpMethod.POST, "/api/v1/attendance/justifications/" + justifId + "/review",
                 Map.of("decision", "ACCEPTED"), admin).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(notificationCount(activeStudent.email(), "JUSTIFICATION_ACCEPTED")).isEqualTo(1L);
+        assertThat(notificationCount(importedStudentEmail, "JUSTIFICATION_ACCEPTED")).isEqualTo(1L);
         // L'examinateur télécharge la pièce.
         ResponseEntity<byte[]> dl = rest.exchange(RequestEntity.get(URI.create(
                         "/api/v1/attendance/justifications/" + justifId + "/attachment/download"))
@@ -259,6 +302,28 @@ class PriorityPathRecetteIntegrationTests {
     // ================================================================
     // Helpers
     // ================================================================
+
+    /**
+     * Jeton d'activation capté par le mailer de test (émis
+     * {@code AFTER_COMMIT} de la confirmation d'import). Court poll
+     * défensif : le listener est synchrone, mais on tolère un léger délai.
+     */
+    private String awaitActivationToken(String email) {
+        String key = email.toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < 40; i++) {
+            String token = RecordingMailerConfig.TOKENS.get(key);
+            if (token != null) {
+                return token;
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        throw new AssertionError("Aucun jeton d'activation capté pour " + email);
+    }
 
     private long accountCount(String emailLike) {
         Long n = jdbc.queryForObject("select count(*) from user_account where email like ?", Long.class, emailLike);
