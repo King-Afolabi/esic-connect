@@ -82,11 +82,18 @@ describe('NAV_ITEMS', () => {
     expect(attendance?.placeholder).toBeUndefined();
     expect(attendance?.roles).toEqual(['STUDENT']);
   });
+
+  it('exposes /notifications as a real screen visible to any authenticated user (G1-D)', () => {
+    const notifications = NAV_ITEMS.find((i) => i.path === '/notifications');
+    expect(notifications).toBeDefined();
+    expect(notifications?.placeholder).toBeUndefined();
+    expect(notifications?.roles).toBeUndefined();
+  });
 });
 
 describe('visibleNavItems', () => {
-  it('exposes only the dashboard when no role is held', () => {
-    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard']);
+  it('exposes the always-visible items (dashboard, notifications) when no role is held', () => {
+    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard', '/notifications']);
   });
 
   it('shows /administration for the roles that back UserAccountController READ_ROLES, and hides it otherwise', () => {

@@ -140,6 +140,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'insights',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
+  {
+    // Écran livré (G1-D) : centre de notifications de l'appelant —
+    // liste paginée, filtre lu / non lu, marquage lu / tout lu.
+    // `@PreAuthorize("isAuthenticated()")` : visible par tout rôle.
+    label: 'Notifications',
+    path: '/notifications',
+    icon: 'notifications',
+  },
 ];
 
 /**

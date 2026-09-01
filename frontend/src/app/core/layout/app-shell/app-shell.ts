@@ -13,6 +13,7 @@ import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
 import { roleLabel } from '../../models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
+import { NotificationBell } from '../../../features/notifications/notification-bell/notification-bell';
 import { RoleContextMenu } from '../role-context-menu/role-context-menu';
 
 /**
@@ -35,6 +36,7 @@ import { RoleContextMenu } from '../role-context-menu/role-context-menu';
     MatIconModule,
     MatButtonModule,
     RoleContextMenu,
+    NotificationBell,
   ],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.scss',

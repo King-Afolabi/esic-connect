@@ -146,6 +146,17 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
+        // Centre de notifications de l'appelant (G1-D). Aucune garde de
+        // rôle : `NotificationController` porte `@PreAuthorize("isAuthenticated()")`
+        // et l'isolation par destinataire est faite côté serveur.
+        path: 'notifications',
+        title: `Notifications — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/notifications/notification-list/notification-list').then(
+            (m) => m.NotificationList,
+          ),
+      },
+      {
         // Administration des comptes utilisateurs et de leurs rôles, en
         // LECTURE SEULE : liste → fiche → historique des rôles. Périmètre
         // de rôles aligné **à l'identique** sur le `@PreAuthorize` de

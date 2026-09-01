@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 
 import { AuthService } from '../../auth/auth.service';
 import { Role } from '../../models/role';
+import { NotificationsBadgeService } from '../../../features/notifications/notifications-badge.service';
 import { AppShell } from './app-shell';
 
 describe('AppShell', () => {
@@ -24,6 +25,10 @@ describe('AppShell', () => {
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: auth },
+        {
+          provide: NotificationsBadgeService,
+          useValue: { unread: signal(0), refresh: vi.fn() },
+        },
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: false, breakpoints: {} }) },
@@ -57,6 +62,7 @@ describe('AppShell', () => {
       '/alternation',
       '/sessions',
       '/attendance-management',
+      '/notifications',
     ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
@@ -79,19 +85,24 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/administration');
   });
 
-  it('shows a TEACHER only the dashboard and Séances (their own sessions server-side)', () => {
+  it('shows a TEACHER the dashboard, Séances (their own sessions server-side) and Notifications', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual(['/dashboard', '/sessions']);
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard',
+      '/sessions',
+      '/notifications',
+    ]);
   });
 
-  it('shows a STUDENT only the dashboard and Émargement', () => {
+  it('shows a STUDENT the dashboard, Émargement, Mes présences and Notifications', () => {
     roles.set(['STUDENT']);
     fixture.detectChanges();
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/attendance',
       '/my-attendance',
+      '/notifications',
     ]);
   });
 
