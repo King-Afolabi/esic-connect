@@ -53,7 +53,7 @@
 | G1-C | Cycle de vie avancé des séances | EF-SES-004, EF-SES-005, CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 | DEC-G1-004, DEC-G1-005 | `NOT_IMPLEMENTED` (séances exceptionnelles `PLANNED→OPEN→CLOSED` seulement) | `NOT_STARTED` |
 | G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) | **EF-NOTIF-001 `IMPLEMENTED_AND_TESTED`** ; **EF-NOTIF-002 / RG-033 `PARTIAL`** (audit G1-D.1) — module `notification` étendu (`V15`), listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant (**+ fin de remplacement**, G1-D.1), idempotence `dedup_key`, isolation par destinataire, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular (liens en liste blanche par rôle). Audience **formateur uniquement** ; apprenants / RP = dette G1-D-AUDIENCE ; livraison **best effort** sans reprise = dette G1-D-OUTBOX. Voir §5bis + §5ter. |
 | G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010 | `PARTIAL` (dashboard générique unique) | `NOT_STARTED` |
-| G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | `NOT_STARTED` |
+| G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | **`IMPLEMENTED_AND_TESTED`** — dépôt owner + endpoints + séquence base/fichier avec compensation + réconciliation `@Scheduled` + téléchargement sécurisé (owner + examinateur) + notification au propriétaire + écrans. `V16` consommée. **Antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; rétention pièces `À_DÉFINIR` (`R-G1-30`) ; pas de remplacement direct (retrait puis redépôt). Voir §7ter. |
 | G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | `PARTIAL` — jeux de données `planning-demo.csv` / `planning-conflicts-demo.csv` ajoutés ; docs `CURRENT-STATE` / README / ce fichier mis à jour ; recette e2e complète + `docs/11` restent à faire |
 
 ---
@@ -294,6 +294,26 @@ Bloc `IN_PROGRESS` — checkpoint « schéma + modèle + stockage » livré.
 | RG-072 | **`IMPLEMENTED_AND_TESTED`** (validateur) | liste blanche `.pdf`/`.jpg`/`.jpeg`/`.png` + magic bytes `%PDF-` / `FF D8 FF` / PNG ; tout autre contenu → `CONTENT_NOT_RECOGNISED` ; ZIP/OLE2 → `ARCHIVE_REJECTED` ; `.png` portant un PDF → `EXTENSION_CONTENT_MISMATCH`. |
 | RG-073 / RG-075 / RG-076 / AC-014 | `IMPLEMENTED_AND_TESTED` | inchangés, non régressés. |
 | CDC §21.5 (durcissement fichier) | `PARTIAL` | extension + type + magic bytes + taille + nom interne + hors répertoire public + anti-traversal **livrés et testés** ; `Content-Disposition: attachment` + `nosniff` = checkpoint endpoints ; **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS` — abstraction seule, jamais « garanti sans malware »). |
+
+### 7ter. Statut après les checkpoints 2-4 de G1-E (1er septembre 2026)
+
+Bloc **`IMPLEMENTED_FULL_SUITE_GREEN`** — dépôt, endpoints, réconciliation,
+notification et écrans livrés. Commits `1835532` + `5d5f451`. Détail :
+`G1_IMPLEMENTATION_PROGRESS.md` § « Checkpoints 2-4 ».
+
+| ID | Statut après 2-4 | Justification vérifiée dans le code / les tests |
+|---|---|---|
+| EF-JUS-001 | **`IMPLEMENTED_AND_TESTED`** | `JustificationAttachmentStore` (validation → `newStorageKey` → `PENDING_STORAGE` `REQUIRES_NEW` → `store(key, upload)` → vérif SHA-256/taille → `STORED` `REQUIRES_NEW`) + compensation (échec `store` ⇒ `markDeleted` immédiat, 0 fichier ; échec `markStored` ⇒ `PENDING_STORAGE` + fichier, récupérés par la réconciliation `@Scheduled` bornée) ; endpoints `POST/GET/DELETE /api/v1/me/attendance/justifications/{id}/attachment`. `JustificationAttachmentIntegrationTests` (15 : nominal, unicité `409`, concurrence 1 active, retrait+redépôt, dépôt sur justificatif examiné `409`, compensation, réconciliation ×3). |
+| EF-JUS-002 | **`IMPLEMENTED_AND_TESTED`** (consolidé) | `GET [/download] /api/v1/attendance/justifications/{id}/attachment` pour l'examinateur (`REVIEW_LIST_ROLES`) ; hors périmètre (autre `STUDENT`, `TEACHER` sans périmètre, RP hors périmètre) → **`404`**, jamais `403`. Testé. |
+| RG-071 | **`IMPLEMENTED_AND_TESTED`** | rejet `413` **avant écriture** (`JustificationAttachmentValidationException.TOO_LARGE`) + limite pendant le flux (adaptateur) + enveloppe servlet multipart portée à 6 Mo (`ATT_ATTACHMENT_TOO_LARGE`). `rejectsAnOversizedFileWith413AndPersistsNothing`. |
+| RG-072 | **`IMPLEMENTED_AND_TESTED`** | inchangé (validateur magic bytes) ; `415` HTTP mappé (`rejectsAWrongTypeWith415AndPersistsNothing`). |
+| RG-073 / RG-075 / RG-076 / AC-014 | **`IMPLEMENTED_AND_TESTED`** | non régressés. |
+| CDC §21.5 | **`IMPLEMENTED_AND_TESTED`** sauf **antivirus `NOT_IMPLEMENTED`** | `Content-Disposition: attachment` (+ `filename*`) + `X-Content-Type-Options: nosniff` + type **re-dérivé** + `Content-Length` + `Cache-Control: no-store`, pas de `Range` ; répertoire hors webroot, `toRealPath`, refus des liens symboliques, anti-traversal. Antivirus = `DEC-G1-E-ANTIVIRUS` (abstraction seule ; jamais « garanti sans malware »). |
+| EF-NOTIF-002 (audience justificatif) | **`IMPLEMENTED_AND_TESTED`** pour l'examen d'un justificatif | `JustificationReviewedEvent` → notification au **propriétaire** (destinataire unique porté par l'événement ; `dedup_key` = `justificationPublicId` ; corps neutre, jamais le motif de refus) ; rollback de l'examen ⇒ 0 notification (`AFTER_COMMIT`). `acceptingAJustificationNotifiesTheOwnerExactlyOnceAndRejectingToo`. L'audience apprenants/RP des événements **planning / séance** reste la dette **G1-D-AUDIENCE** (inchangé). |
+
+**Rétention** des fichiers / lignes `DELETED` : `À_DÉFINIR` (aucune durée
+documentaire ; `R-G1-30`, `docs/07` §14). La réconciliation ne traite que
+le **technique** (`PENDING_STORAGE` orphelins), pas le métier.
 
 ---
 

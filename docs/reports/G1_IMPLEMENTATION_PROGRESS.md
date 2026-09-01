@@ -145,8 +145,9 @@ modes de fuseau, y compris exécutée dans la fenêtre autrefois cassante.
 | G1-C.2 | Remplacements de formateur | `IMPLEMENTED_FULL_SUITE_GREEN` — `TeacherSubstitution` + service + 3 endpoints, `AccessGuard` étendu (substitut actif ⇒ `MANAGE`), UI panneau remplacements. Back **729/0**, front **557/0**. | `feat(coursesession): gérer les remplacements de formateur` |
 | G1-C.3 | Audit correctif du bloc G1-C | `IMPLEMENTED_FULL_SUITE_GREEN` — lecture historique `CANCELLED` (`isHistoricallyReadable`), remplaçant actif visible en liste, période vs séance (`422 …OUTSIDE_SESSION`), audit + purge Redis `AFTER_COMMIT`, correction doc Flyway. Back **735/0** (3 fuseaux), front **559/0**. | `fix(coursesession): consolider l'historique et les droits du remplaçant` + `docs(g1): corriger les garanties transactionnelles et Flyway` |
 | G1-D | Notifications métier persistantes | `IMPLEMENTED_FULL_SUITE_GREEN` — module `notification` étendu (V15, table `notification`), listeners `@TransactionalEventListener(AFTER_COMMIT)` sur `PlanningPublishedEvent` + `CourseSessionChangeEvent` (`CANCELLED` / `SUBSTITUTION_*`), idempotence `dedup_key`, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular. Destinataires = **formateurs** (principal + remplaçants actifs) ; apprenants / RP = prolongement documenté. Back **743/0** (3 fuseaux), front **570/0**. | `feat(notification): créer le modèle de notifications` + `feat(notification): ajouter la boîte de notifications persistantes` + `feat(frontend): ajouter le centre de notifications` |
+| G1-D.1 | Correctif résiduel — classification des erreurs d'idempotence | `IMPLEMENTED_FULL_SUITE_GREEN` — `NotificationErrorClassifier` : seule une collision réellement attribuée à `uq_notification_dedup` = succès idempotent ; toute autre erreur (autre contrainte, `UnexpectedRollbackException` nue) = vraie erreur journalisée, destinataire suivant traité. `Notification*` **17/0**. | `fix(notification): préciser la classification des erreurs d'idempotence` (`31ffc70`) + `docs(g1): consigner le correctif …` (`de972f8`) |
+| G1-E | Pièces jointes des justificatifs | `IMPLEMENTED_FULL_SUITE_GREEN` — cp1 (schéma/modèle/stockage, `d7a7d14`) + cp2-4 : port `store(key,upload)` + `newStorageKey()`, séquence base/fichier avec compensation (`JustificationAttachmentStore` / `…Preparer` / `…Finalizer`), réconciliation `@Scheduled` bornée, endpoints owner + examinateur (`404` hors périmètre), téléchargement forcé + type re-dérivé + `nosniff` + `no-store`, multipart servlet 6 Mo, notification au **propriétaire** (`JustificationReviewedEvent`), écrans (`my-attendance-detail`, `justification-queue`). **Antivirus `NOT_IMPLEMENTED`** ; rétention pièces `À_DÉFINIR` (`R-G1-30`). Back **792/0** (`TZ=UTC` ciblé 127/0), front **591/0**. | `feat(justification): orchestrer et exposer les pièces jointes sécurisées` (`1835532`) + `feat(frontend): ajouter les pièces jointes aux justificatifs` (`5d5f451`) + `docs(g1): consigner la livraison technique du bloc G1-E` |
 | G1-F | Tableaux de bord par rôle | `NOT_STARTED` | — |
-| G1-E | Pièces jointes des justificatifs | `IN_PROGRESS` — **checkpoint 1 « schéma + modèle + stockage »** livré et testé (V16 `justification_attachment`, port `JustificationFileStorage` + adaptateur local, validateur magic-bytes) ; endpoints REST + séquence base/fichier avec compensation + écran d'upload = checkpoints suivants | `feat(justification): créer le stockage sécurisé des pièces jointes` |
 | G1-G | Recette globale, e2e, documentation finale | `NOT_STARTED` | — |
 
 ## Livrables G1-0
@@ -1567,85 +1568,201 @@ en checkpoints** (motif G1-B). Commit du checkpoint 1 :
   `attendance.internal` — aucune frontière franchie). Front **inchangé**
   (aucun fichier front touché ; dernier vert **574/0**).
 
-### Non couvert (checkpoints G1-E suivants)
+### Checkpoints 2-4 — orchestration, endpoints, front (1er septembre 2026)
 
-- `AttendanceJustificationService` : dépôt d'une pièce (validation →
-  temporaire → `PENDING_STORAGE` en transaction → `store` after-commit →
-  `STORED`), remplacement, suppression logique ; **compensation**
-  (rollback SQL après `store` ⇒ suppression du fichier ; échec `store`
-  ⇒ pas de métadonnée ; tâche `@Scheduled` de réconciliation des
-  `PENDING_STORAGE` / `DELETED`).
-- Endpoints `POST /api/v1/attendance/justifications` (multipart, avec
-  pièce), `.../{id}/attachment` (GET métadonnées),
-  `.../{id}/attachment/download` (stream + `Content-Disposition: attachment`
-  + `X-Content-Type-Options: nosniff`, type re-dérivé) ; contrôle de
-  propriété (`STUDENT` = son justificatif) / de périmètre
-  (examinateur), `404` plutôt que fuite transverse.
-- Audit `AFTER_COMMIT` (pièce déposée / remplacée / supprimée) sans nom
-  ni chemin ; notification à l'apprenant sur accepté / refusé (si
-  l'audience G1-D.1 le permet).
-- Front : upload étudiant (contraintes taille / type, progression,
-  erreurs `413` / `415` / `409`), téléchargement, actions gestionnaire.
-- `DEC-G1-E-ANTIVIRUS` : abstraction `FileSafetyScanner` + politique
-  documentée ; antivirus réel `NOT_IMPLEMENTED`.
+`IMPLEMENTED_FULL_SUITE_GREEN` — **G1-E est fonctionnellement complet**
+(dépôt utilisable, pièce `STORED` consultable, téléchargement sécurisé,
+autorisations, compensation, réconciliation, audit, notification, écrans).
+Commits : `feat(justification): orchestrer et exposer les pièces jointes
+sécurisées` (`1835532`) + `feat(frontend): ajouter les pièces jointes aux
+justificatifs` (`5d5f451`).
+
+**Port modifié** (DEC-G1-008 révisé) : `JustificationFileStorage` gagne
+`String newStorageKey()` et `store(String storageKey, PendingUpload)` —
+la clé est **générée puis persistée** (`PENDING_STORAGE`) *avant* le
+déplacement (DEC-G1-009 étape 5 « stocker avec la storage_key
+persistée »). L'adaptateur local **n'écrase jamais** une cible existante
+(`FileAlreadyExistsException` → `IO_ERROR`), refuse les composants
+symboliques (`NOFOLLOW_LINKS` + parcours des parents), résout `base` /
+`tmp` vers leur **chemin réel** (`toRealPath`) à l'initialisation.
+Limite TOCTOU documentée (pas d'isolation d'un stockage objet).
+
+**Séquence base/fichier avec compensation** (`JustificationAttachmentStore`,
+non transactionnel) :
+1. `JustificationFileSafetyValidator.validate` (extension + type déclaré +
+   magic bytes → type re-dérivé + rejet ZIP/OLE2 + cohérence
+   extension↔contenu + taille) — échec ⇒ **0 ligne, 0 fichier** ;
+2. `newStorageKey()` ; SHA-256 des octets calculé en mémoire ;
+3. `JustificationAttachmentPreparer.insertPending` (`REQUIRES_NEW`,
+   n'attrape rien — `DataIntegrityViolationException` sur
+   `uq_justification_attachment_active` remonte, l'orchestrateur la
+   retraduit `409 ATT_ATTACHMENT_ALREADY_EXISTS`) ;
+4. `store(key, upload)` — échec ⇒ **compensation immédiate** :
+   `finalizer.markDeleted(rowId)` (créneau d'unicité libéré) + aucun
+   fichier ; erreur retraduite (`413` / `503`) ;
+5. vérification `stored.sha256 == expected && stored.sizeBytes == validé`
+   — sinon `storage.delete` + `markDeleted` + `503` ;
+6. `JustificationAttachmentFinalizer.markStored` (`REQUIRES_NEW`) — échec
+   ⇒ ligne `PENDING_STORAGE` + fichier **conservés** (réconciliation les
+   promeut), réponse `503 ATT_ATTACHMENT_STORAGE_FAILED` (pas de faux
+   succès) ;
+7. audit `ATTENDANCE_JUSTIFICATION_ATTACHMENT_STORED` publié **après** le
+   commit `STORED` (jamais dans une transaction) ⇒ pas d'audit si l'étape
+   6 échoue.
+
+**Réconciliation** (`JustificationAttachmentReconciliationService`,
+`@Scheduled` `0 */10 * * * *`, lot borné
+`app.attendance.justification-reconciliation-batch` défaut 100 ; seuil
+technique `…-reconciliation-after` défaut `PT15M`, **distinct de toute
+rétention métier** — aucune n'est définie, `R-G1-30`) : pour chaque
+`PENDING_STORAGE` plus vieux que le seuil —
+fichier valide (hash + taille) → `STORED` ; fichier absent → `DELETED`
+(redépôt possible) ; fichier incohérent → suppression + `DELETED` ;
+`OrderByCreatedAtAsc` + `PageRequest` = borne ; `reconcileOne` par ligne,
+erreur d'une ligne journalisée sans PII et ligne suivante traitée ;
+verrou optimiste `@Version` contre deux ordonnanceurs.
+
+**Endpoints** — propriétaire (`STUDENT`, `StudentAttendanceController`) :
+`POST` (multipart `file`, `201`), `GET`, `GET …/download`, `DELETE`
+(`204`, tant que le justificatif est `PENDING`) sur
+`/api/v1/me/attendance/justifications/{id}/attachment`. Examinateur
+(`AttendanceJustificationController`, `REVIEW_LIST_ROLES`) : `GET`,
+`GET …/download` sur `/api/v1/attendance/justifications/{id}/attachment`.
+Accès croisé (autre `STUDENT`, `TEACHER` sans périmètre, RP hors
+périmètre) → **`404`, jamais `403`**. Téléchargement :
+`Content-Disposition: attachment` (+ `filename*=UTF-8''`), type
+**re-dérivé** (`attachment.contentType`), `Content-Length`,
+`X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, pas de
+`Range`. Enveloppe servlet multipart `2MB → 6MB` (chaque module garde sa
+limite métier — `IMP_FILE_TOO_LARGE` / `PLAN_UNSUPPORTED_FILE` /
+`ATT_ATTACHMENT_TOO_LARGE`). `.env` **non modifié** ; `.env.example`
+documente `JUSTIFICATION_RECONCILIATION_*` / `MULTIPART_MAX_*`.
+
+**Notification** : événement public
+`attendance.JustificationReviewedEvent(justificationPublicId,
+ownerUserPublicId, accepted)` publié **dans** la transaction de `review` ;
+`NotificationListener.onJustificationReviewed` (`AFTER_COMMIT`) →
+`NotificationType.JUSTIFICATION_ACCEPTED` / `_REJECTED`, destinataire =
+**propriétaire** (porté par l'événement, résolu via `UserDirectory`, pas
+de nouveau port `enrollment` / `academic`), corps **neutre** (jamais le
+motif de refus), `dedup_key` = `justificationPublicId` (un justificatif
+est examiné une seule fois). Rollback de l'examen ⇒ 0 notification
+(garanti par la phase `AFTER_COMMIT`).
+
+**Antivirus** : `DEC-G1-E-ANTIVIRUS` inchangé — **`NOT_IMPLEMENTED`**,
+contrôle structurel seul, jamais « garanti sans malware » ; le
+téléchargement forcé + `nosniff` limite le risque résiduel, documenté.
+
+**Front** : `my-attendance-detail` section « Pièce jointe » (contrôle
+client type/extension/taille avant appel, dépôt multipart, états, download
+avec `object URL` révoquée, retrait si `PENDING`, erreurs
+`409` / `413` / `415` via liste blanche `ATT_ATTACHMENT_*`, masquage hors
+contexte `STUDENT`) ; `justification-queue` : pièce jointe + bouton de
+téléchargement dans le panneau d'examen ; `notificationLink` pour
+`JUSTIFICATION` → `/my-attendance` réservé au `STUDENT`.
+
+**Limites restantes après G1-E** :
+- antivirus `NOT_IMPLEMENTED` (`DEC-G1-E-ANTIVIRUS`) ;
+- **remplacement direct** d'une pièce non exposé : c'est retrait
+  (`DELETE`, tant que `PENDING`) puis nouveau dépôt (règle documentée) ;
+- **rétention** des fichiers / lignes `DELETED` : `À_DÉFINIR` (aucune
+  durée documentaire ; `R-G1-30`, `docs/07` §14) — la réconciliation
+  nettoie le **technique** (`PENDING_STORAGE` orphelins), pas le métier ;
+- **fichiers orphelins sans métadonnée** (crash entre `store` et le
+  commit `PENDING_STORAGE` — impossible dans la séquence retenue, la
+  ligne est committée avant `store`) : pas de scan actif du répertoire
+  (propriété du fichier incertaine) — limite assumée ;
+- pas de test e2e navigateur (specs de composant + IT `@SpringBootTest`).
+
+### Validation G1-E (checkpoints 2-4)
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw clean test` (défaut `Europe/Paris`) | **792 tests, 0 échec — BUILD SUCCESS** (772 → 792 : +15 `JustificationAttachmentIntegrationTests`, +2 `LocalFilesystem…Tests`, +3 `NotificationDeliveryResilienceIntegrationTests` déjà comptés en G1-D.1) |
+| `./mvnw test -Dtest='Justification*,Attendance*,Notification*,ModularityTests'` (base `esic_test` vierge → Flyway `V1→V16`) | vert, `ModularityTests` vert (`notification` → `attendance` par l'API publique) |
+| `npm test -- --watch=false` | **70 fichiers / 591 tests / 0 échec** (574 → 591) |
+| `npm run lint` | « All files pass linting » |
+| `npm run build` | initial **484,81 kB** — 0 alerte de budget |
+| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| `git diff --check` | propre |
+
+Aucun `@Disabled` / `@Ignore` / `it.skip` / `.only(` ajouté ; aucun test
+supprimé ; aucune assertion affaiblie ; `.env` inchangé.
+
+### Reclassement des exigences G1-E
+
+| ID | Avant (checkpoint 1) | Après (checkpoints 2-4) | Justification |
+|---|---|---|---|
+| EF-JUS-001 (déposer un justificatif **avec** pièce) | `PARTIAL` (socle) | **`IMPLEMENTED_AND_TESTED`** | dépôt multipart owner + validation + séquence base/fichier avec compensation + réconciliation + audit, testés |
+| EF-JUS-002 (valider / refuser + **télécharger** la pièce) | `IMPLEMENTED_AND_TESTED` (sans fichier) | **`IMPLEMENTED_AND_TESTED`** (consolidé) | l'examinateur télécharge la pièce dans son périmètre (`404` hors périmètre) |
+| RG-071 (5 Mo) | `PARTIAL` | **`IMPLEMENTED_AND_TESTED`** | `413` avant écriture (validateur) + limite pendant le flux (adaptateur) + enveloppe servlet 6 Mo ; testé |
+| RG-072 (PDF/JPEG/PNG) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | inchangé |
+| CDC §21.5 (durcissement fichier) | `PARTIAL` | **`IMPLEMENTED_AND_TESTED`** sauf **antivirus `NOT_IMPLEMENTED`** | extension + type + magic bytes + taille + nom interne + hors webroot + anti-traversal + `nosniff` + `Content-Disposition: attachment` ; antivirus reste `DEC-G1-E-ANTIVIRUS` |
+| AC-014 (`ABSENT → EXCUSED`) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | non régressé |
+| EF-NOTIF-002 (audience) | `PARTIAL` | **`PARTIAL`** (inchangé) | G1-E **ajoute** l'audience « propriétaire » pour l'examen d'un justificatif (destinataire unique, pas de dette d'audience) ; l'audience apprenants/RP des événements planning/séance reste la dette **G1-D-AUDIENCE** |
+
+## Documentation secondaire à reporter après G1
+
+> Section maintenue pour le report final (prompt §2). Aucun de ces
+> fichiers n'est modifié pendant la session ; les faits ci-dessous sont
+> à reporter au bloc G1-G / après G1.
+
+| Fichier cible | Section | Statut / faits à reporter | À retirer (obsolète) | Chiffres | Démo |
+|---|---|---|---|---|---|
+| `README.md` | « Capacités » / « Périmètre non livré » | pièces jointes des justificatifs **livrées** (dépôt owner, téléchargement owner + examinateur, réconciliation technique) ; schéma **V16** ; multipart servlet 6 Mo ; antivirus `NOT_IMPLEMENTED` ; rétention pièces `À_DÉFINIR` | mention « justificatif métier **sans fichier** » comme limite | back 792 / front 591 | non démontré manuellement |
+| `docs/CURRENT-STATE.md` | module `attendance` ; migrations ; « Fonctionnalités partielles » ligne Justificatif ; « Résultats du dernier audit » | Justificatif (EF-JUS-001/002) → `IMPLEMENTED_AND_TESTED` (pièce jointe complète) ; `V16` consommée (endpoints + réconciliation) ; retirer la ligne `PARTIAL` « dépôt d'une pièce via l'API … checkpoints G1-E suivants » | ligne `PARTIAL` justificatif ; totaux 749/574 | back **792/0**, front **591/0**, build **484,81 kB** | `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` |
+| `docs/05-product-backlog.md` | §9bis blocs G1 | G1-E **terminé** ; dettes : antivirus, rétention pièces (`R-G1-30`), pas de remplacement direct, pas de scan d'orphelins | « G1-E `IN_PROGRESS` » | — | — |
+| `docs/10-journal-ia.md` | ligne de session | session G1-D.1 résiduel → G1-E : commits `31ffc70`, `de972f8`, `1835532`, `5d5f451` (+ doc) ; `V16` consommée ; décisions port `store(key,…)`, compensation, réconciliation, notification propriétaire ; antivirus `NOT_IMPLEMENTED` | — | back 792 / front 591 | — |
+| `docs/11-guide-demonstration.md` | scénario | ajouter « déposer un PDF fictif sur un justificatif → examiner → télécharger la pièce » ; données `docs/demo-data/` (PDF/JPEG fictifs à générer sous `build/`) | — | — | à qualifier manuel/automatisé |
+| `docs/12-guide-utilisateur.md` | rôle `STUDENT` / examinateur | écran « Mes présences » → détail → section Pièce jointe (formats, 5 Mo, retrait tant que PENDING) ; examinateur : téléchargement dans le panneau d'examen ; erreurs `413`/`415`/`409` | — | — | — |
 
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : correctif résiduel G1-D.1
-  (`fix(notification): préciser la classification des erreurs
-  d'idempotence` `31ffc70` → `docs(g1): consigner le correctif de
-  classification des notifications` `de972f8`) **puis** la chaîne G1-E
-  (checkpoints 2+).
+- **HEAD attendu** : `feat(frontend): ajouter les pièces jointes aux
+  justificatifs` (`5d5f451`), puis le commit doc G1-E, puis **G1-F**.
+- **Chaîne de commits de la session** (parent `d7a7d14`) :
+  `31ffc70` fix(notification) classification erreurs d'idempotence →
+  `de972f8` docs(g1) →
+  `1835532` feat(justification) orchestrer et exposer les pièces jointes →
+  `5d5f451` feat(frontend) pièces jointes aux justificatifs →
+  (doc G1-E) → **G1-F à démarrer**.
 - **Working tree** : propre après chaque commit de checkpoint.
-- **Bloc courant** : **G1-E `IN_PROGRESS`** — checkpoint 1 (« schéma +
-  modèle + stockage ») livré et testé. **Sous-tâches restantes**
-  (session autonome G1-D.1→G1-G) :
-  1. checkpoint 2 — orchestration du dépôt (validation → `newStorageKey`
-     → `PENDING_STORAGE` en transaction courte → `store(key, upload)`
-     hors transaction → vérif SHA-256/taille → `STORED` en transaction
-     courte) + compensation (échec `store` ⇒ `markDeleted` + fichier
-     nettoyé ; échec `markStored` ⇒ ligne `PENDING_STORAGE` + fichier
-     récupérables) + `@Scheduled` de réconciliation bornée
-     (`PENDING_STORAGE` anciens : fichier valide → `STORED` ; fichier
-     absent → `DELETED` ; hash incohérent → suppression + `DELETED`) ;
-     commit `feat(justification): orchestrer le stockage et la
-     réconciliation des pièces` ;
-  2. checkpoint 3 — endpoints multipart (owner) + métadonnées + download
-     (`Content-Disposition: attachment` + `nosniff` + type re-dérivé +
-     `no-store`), autorisations owner/examinateur, `413/415/409/404` ;
-     bump `spring.servlet.multipart.max-file-size` défaut `2MB → 6MB`
-     (`.env` **non modifié**) ; commit `feat(justification): exposer les
-     pièces jointes sécurisées` ;
-  3. checkpoint 4 — front (upload étudiant, téléchargement, actions
-     gestionnaire) ; commit `feat(frontend): ajouter les pièces jointes
-     aux justificatifs` ;
-  4. checkpoint 5 — doc technique ; commit `docs(g1): consigner la
-     livraison technique du bloc G1-E`.
-- **Décision port (checkpoint 2)** : `JustificationFileStorage` gagne
-  `String newStorageKey()` et `store(String storageKey, PendingUpload)`
-  (la clé est générée puis **persistée** au statut `PENDING_STORAGE`
-  AVANT le déplacement — DEC-G1-009 étape 5 « stocker avec la storage_key
-  persistée ») ; l'adaptateur **n'écrase jamais** une cible existante.
-- **Audit pièce stockée** : `AttendanceChangeAction.JUSTIFICATION_ATTACHMENT_STORED`
-  publié par l'orchestrateur **après** le commit `STORED` (jamais dans
-  une transaction) ⇒ pas d'audit si `markStored` échoue.
-- **Notification examen** : événement public
-  `attendance.JustificationReviewedEvent(justificationPublicId,
-  ownerUserPublicId, accepted)` publié dans la transaction de `review` ;
-  `NotificationListener.onJustificationReviewed` (`AFTER_COMMIT`) →
-  notification au **propriétaire** (destinataire unique, résolu par
-  `submittedById`, pas de nouveau port `enrollment`/`academic`) ;
-  `dedup_key` = `justificationPublicId` (un justificatif est examiné une
-  seule fois — machine à états). Types `JUSTIFICATION_ACCEPTED` /
-  `JUSTIFICATION_REJECTED`.
-- **Fichiers non terminés** : aucun (checkpoint cohérent — pas de
+- **Bloc courant** : **G1-E `IMPLEMENTED_FULL_SUITE_GREEN`** (checkpoints
+  1-4 livrés). **Prochaine sous-tâche exacte** : **G1-F** — audit ciblé
+  (plan §7, `DEC-G1-010`, CDC §25, dashboard existant), matrice
+  `rôle | carte | source SQL/service | périmètre | borne | statut` dans
+  ce fichier, puis `GET /api/v1/me/dashboard` typé par rôle serveur
+  (agrégats bornés, `readOnly`, périmètre serveur, test anti-N+1 sur
+  `PEDAGOGICAL_MANAGER`), puis dashboards Angular par rôle, puis barrière
+  G1-F. Commande suivante :
+  ```bash
+  cd /Users/kingafolabi/Desktop/projet_final
+  rg -n 'dashboard' frontend/src/app/features/dashboard backend/src/main/java --files-with-matches
+  ```
+- **Décisions tranchées (G1-E, checkpoints 2-4)** : voir la section
+  « Checkpoints 2-4 » ci-dessus. En bref — port `store(String storageKey,
+  PendingUpload)` + `newStorageKey()` (clé persistée `PENDING_STORAGE`
+  avant le déplacement) ; adaptateur n'écrase jamais, refuse les liens
+  symboliques, `toRealPath` à l'init ; compensation immédiate sur échec
+  `store` (`markDeleted`), `PENDING_STORAGE` conservé sur échec
+  `markStored` (réconciliation) ; audit `…ATTACHMENT_STORED` après le
+  commit `STORED` ; notification examen au **propriétaire**
+  (`JustificationReviewedEvent`, destinataire porté, `dedup_key` =
+  `justificationPublicId`) ; téléchargement forcé + type re-dérivé +
+  `nosniff` + `no-store` ; enveloppe multipart 6 Mo ; antivirus
+  `NOT_IMPLEMENTED` ; pas de remplacement direct (retrait puis redépôt,
+  `PENDING` uniquement) ; rétention pièces `À_DÉFINIR` (`R-G1-30`).
+- **Fichiers non terminés** : aucun (chaque commit cohérent — pas de
   coquille vide, pas de `501`).
-- **Tests verts au démarrage de la session** : back **772/0** + **17/0**
-  `Notification*` (après G1-D.1 résiduel) ; front **574/0**.
+- **Tests verts** : back **792/0** (défaut `Europe/Paris`) ; `TZ=UTC`
+  ciblé `Justification*,Attendance*,Notification*,ModularityTests` →
+  **127/0 — BUILD SUCCESS** ; front **591/0** ; `lint` / `build`
+  (484,81 kB) / `audit` verts.
 - **Tests rouges** : aucun.
-- **Migrations** : schéma en **V16**. V17 libre (index de couverture des
-  tableaux de bord G1-F si un test de perf le justifie — DEC-G1-010).
+- **Migrations** : schéma en **V16** (consommée). **V17 libre** — index de
+  couverture des tableaux de bord G1-F *uniquement si* un test de perf le
+  justifie (`DEC-G1-010`), sinon non créée.
 - **Décisions tranchées (G1-E checkpoint 1)** : port public
   `attendance.JustificationFileStorage` (le métier ne dépend jamais de
   `java.nio.file`) ; adaptateur local (clé opaque dispersée, déplacement

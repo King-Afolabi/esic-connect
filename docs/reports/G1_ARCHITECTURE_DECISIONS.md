@@ -793,6 +793,90 @@ suppression logique (⇒ fichier retiré) ; upload concurrent.
 **Impact déploiement.** Tâche `@Scheduled` documentée ; fenêtre de
 réconciliation configurable.
 
+### Révision à la livraison G1-E checkpoints 2-4 (1er septembre 2026)
+
+- **Signature du port modifiée (DEC-G1-008).** L'esquisse
+  `store(PendingUpload)` — où l'adaptateur générait *lui-même* la clé et
+  la renvoyait — est **incompatible** avec DEC-G1-009 étape 3 (insérer la
+  ligne `PENDING_STORAGE`, dont `storage_key` est `NOT NULL UNIQUE`,
+  *avant* le déplacement) et avec l'étape 5 « **stocker avec la
+  storage_key persistée** ». Le port expose désormais
+  `String newStorageKey()` (l'adaptateur reste maître du schéma de
+  dispersion, jamais dérivé du nom client) **puis**
+  `StoredRef store(String storageKey, PendingUpload)`. Séquence réelle :
+  `newStorageKey()` → `insertPending(…, key)` (commit) → `store(key, …)`.
+  L'adaptateur **refuse d'écraser** une cible existante
+  (`FileAlreadyExistsException` / pré-contrôle → `IO_ERROR`), résout
+  `base` / `tmp` vers leur chemin réel (`toRealPath`) à l'initialisation
+  et **rejette tout composant symbolique** du chemin résolu
+  (`NOFOLLOW_LINKS` + parcours des parents). **Limite TOCTOU** documentée
+  honnêtement : cet adaptateur local ne prétend pas offrir l'isolation
+  d'un stockage objet.
+
+- **Contradiction corrigée (DEC-G1-009).** La formulation « échec du
+  stockage ⇒ **aucune métadonnée** » ne vaut que *tant que la ligne
+  `PENDING_STORAGE` n'est pas committée*. Une fois cette ligne committée
+  (étape 4), un échec du `store` laisse la ligne : elle est alors
+  **compensée immédiatement** en `DELETED` par l'orchestrateur
+  (`JustificationAttachmentStore`, non transactionnel → `finalizer.markDeleted`),
+  ce qui libère le créneau d'unicité `uq_justification_attachment_active`
+  et permet un nouveau dépôt sans attendre la réconciliation. Un échec
+  de la **bascule `STORED`** (étape 6), lui, laisse volontairement la
+  ligne `PENDING_STORAGE` **et** le fichier : la réconciliation les
+  finalise (fichier présent + empreinte cohérente → `STORED`). Aucune
+  atomicité distribuée n'est revendiquée. Les états terminaux de `V16`
+  (`PENDING_STORAGE / STORED / DELETED`) suffisent — **pas de `V17`**
+  pour G1-E.
+
+- **Audit après le fait.** L'événement
+  `AttendanceChangeAction.JUSTIFICATION_ATTACHMENT_STORED` est publié par
+  l'orchestrateur **après** le retour de `finalizer.markStored` (donc
+  après le commit `STORED`), hors de toute transaction : un échec de
+  l'étape 6 ⇒ aucune ligne d'audit « stored » pour une pièce non
+  `STORED`. Le listener d'audit `attendance` synchrone existant n'est
+  **pas** migré (dette assumée, hors périmètre — la publication après le
+  commit suffit à la garantie « pas d'audit sans le fait »).
+
+- **Réconciliation.** `JustificationAttachmentReconciliationService`
+  (`@Scheduled`, cron configurable) traite un **lot borné**
+  (`app.attendance.justification-reconciliation-batch`, défaut 100,
+  `PageRequest` + `OrderByCreatedAtAsc`) des `PENDING_STORAGE` plus vieux
+  qu'un **seuil technique** (`…-reconciliation-after`, défaut `PT15M`,
+  `Clock` injectée) — seuil **distinct de toute rétention métier**
+  (aucune n'est définie, `R-G1-30`). Chaque ligne dans sa propre
+  transaction (`JustificationAttachmentFinalizer`, `REQUIRES_NEW`) ;
+  erreur d'une ligne journalisée sans PII, ligne suivante traitée ;
+  verrou optimiste `@Version` contre deux ordonnanceurs. Cas D de
+  DEC-G1-009 (fichier orphelin sans métadonnée) : **pas** de scan actif
+  du répertoire — dans la séquence retenue la ligne est committée avant
+  `store`, l'orphelin est donc structurellement impossible hors panne
+  disque ; propriété d'un fichier inconnu incertaine ⇒ suppression
+  automatique refusée (limite assumée).
+
+- **Enveloppe multipart.** `spring.servlet.multipart.max-file-size` passe
+  de `2MB` à `6MB` (5 Mo métier + marge d'enveloppe) ; chaque module
+  garde sa **propre** limite re-vérifiée côté service
+  (`IMP_FILE_TOO_LARGE` / `PLAN_UNSUPPORTED_FILE` /
+  `ATT_ATTACHMENT_TOO_LARGE`). `.env` **non modifié** ; `.env.example`
+  documente `MULTIPART_MAX_*` et `JUSTIFICATION_RECONCILIATION_*`.
+
+- **Remplacement d'une pièce : non exposé.** Aucun endpoint de
+  remplacement direct. Le parcours est **retrait** (`DELETE`, uniquement
+  tant que le justificatif est `PENDING`) **puis** nouveau dépôt. Règle
+  documentée, testée (`removingOwnAttachmentThenReUploadingSucceeds`).
+
+- **Notification d'examen (nouveau).** Événement public
+  `attendance.JustificationReviewedEvent(justificationPublicId,
+  ownerUserPublicId, accepted)` publié **dans** la transaction de
+  `review` ; consommé `AFTER_COMMIT` par `notification`
+  (`JUSTIFICATION_ACCEPTED` / `_REJECTED`). Le destinataire (le
+  **propriétaire**) est **porté par l'événement** — résolu via
+  `identity.UserDirectory.findByInternalId` avant la publication —
+  aucun nouveau port `enrollment` / `academic`. Corps **neutre** (jamais
+  le motif de refus). `dedup_key` = `justificationPublicId` (un
+  justificatif est examiné une seule fois — machine à états ; pas besoin
+  d'un `eventId` d'occurrence).
+
 ---
 
 ## DEC-G1-010 — Agrégats des tableaux de bord
