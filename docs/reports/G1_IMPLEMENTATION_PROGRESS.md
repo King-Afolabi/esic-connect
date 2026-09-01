@@ -571,8 +571,23 @@ Front : `npm run lint` OK, `npm test -- --watch=false` **475 / 0**,
 ## Dernier commit produit
 
 ```text
-(G1-B parcours Angular prêt à être commité : feat(frontend): ajouter le parcours planning)
+1bed88c  docs(g1): consigner la livraison des blocs G1-A et G1-B
 ```
+
+Commits de la session autonome (1er septembre 2026), sur
+`feature/master-level-product-expansion`, parent `01a6068` :
+
+| # | Hash | Message |
+|---|---|---|
+| 1 | `2cf1416` | `feat(frontend): exposer les parcours administratifs existants` (G1-A) |
+| 2 | `e4793e7` | `feat(planning): créer le schéma et le modèle du module planning` (G1-B) |
+| 3 | `24cc9f5` | `feat(planning): simuler les imports CSV de planning` (G1-B) |
+| 4 | `dafd23a` | `feat(planning): publier des plannings versionnés en séances` (G1-B) |
+| 5 | `429f45b` | `feat(frontend): ajouter le parcours planning` (G1-B) |
+| 6 | `1bed88c` | `docs(g1): consigner la livraison des blocs G1-A et G1-B` (G1-G partiel) |
+
+**Aucun `push`, aucune PR.** Suites : back **713/0**, front **548/0**,
+`lint`/`build`/`audit` verts.
 
 ## Commandes de reprise
 
