@@ -61,6 +61,21 @@ class DefaultClassGroupDirectory implements ClassGroupDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ClassGroupRef> findByPublicIds(java.util.Collection<UUID> classGroupPublicIds) {
+        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = classGroupPublicIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return classGroupRepository.findByPublicIdIn(ids).stream()
+                .map(DefaultClassGroupDirectory::toRef)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ClassGroupResolution resolveForImport(String programCode, String classCode, String academicYearCode) {
         String program = trimOrEmpty(programCode);
         String klass = trimOrEmpty(classCode);

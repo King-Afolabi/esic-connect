@@ -127,12 +127,122 @@ class DashboardIntegrationTests {
     }
 
     @Test
-    void aMultiRoleUserGetsTheHighestPriorityDashboard() {
+    void aTeacherDashboardIncludesSessionsWhereTheyAreAnActiveSubstitute() {
+        String admin = tokenFor(account(RoleCode.ADMIN));
+        Chain chain = academicChain(admin);
+        Account principal = account(RoleCode.TEACHER);
+        Account substitute = account(RoleCode.TEACHER);
+        Account bystander = account(RoleCode.TEACHER);
+
+        // Séance dans 20 min ; substitution ACTIVE couvrant « maintenant »
+        // (période chevauchant la séance, marge ≤ 60 min — G1-C.3).
+        Instant startsAt = Instant.now().plusSeconds(20 * 60);
+        String sessionId = openSession(admin, principal, chain.classA(), startsAt);
+        createSubstitution(admin, sessionId, substitute,
+                Instant.now().minusSeconds(10 * 60), Instant.now().plusSeconds(50 * 60));
+
+        // Le remplaçant ACTIVE voit la séance sur son tableau de bord.
+        List<Map<String, Object>> subUpcoming = upcoming(dashboard(tokenFor(substitute)));
+        assertThat(subUpcoming).extracting(r -> r.get("sessionPublicId")).contains(sessionId);
+
+        // Le formateur principal la voit toujours.
+        assertThat(upcoming(dashboard(tokenFor(principal))))
+                .extracting(r -> r.get("sessionPublicId")).contains(sessionId);
+
+        // Un formateur non concerné ne la voit pas.
+        assertThat(upcoming(dashboard(tokenFor(bystander))))
+                .extracting(r -> r.get("sessionPublicId")).doesNotContain(sessionId);
+    }
+
+    @Test
+    void aTeacherDashboardExcludesSessionsWhereTheirSubstitutionHasEnded() {
+        String admin = tokenFor(account(RoleCode.ADMIN));
+        Chain chain = academicChain(admin);
+        Account principal = account(RoleCode.TEACHER);
+        Account substitute = account(RoleCode.TEACHER);
+
+        Instant startsAt = Instant.now().plusSeconds(20 * 60);
+        String sessionId = openSession(admin, principal, chain.classA(), startsAt);
+        String substitutionId = createSubstitution(admin, sessionId, substitute,
+                Instant.now().minusSeconds(10 * 60), Instant.now().plusSeconds(50 * 60));
+
+        assertThat(upcoming(dashboard(tokenFor(substitute))))
+                .extracting(r -> r.get("sessionPublicId")).contains(sessionId);
+
+        // Fin du remplacement -> plus aucun droit, plus sur le dashboard.
+        assertThat(post(admin, "/api/v1/sessions/" + sessionId + "/substitutions/" + substitutionId + "/end", null)
+                .getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        assertThat(upcoming(dashboard(tokenFor(substitute))))
+                .extracting(r -> r.get("sessionPublicId")).doesNotContain(sessionId);
+    }
+
+    @Test
+    void aTeacherWhoIsBothPrincipalAndActiveSubstituteSeesTheSessionOnce() {
+        String admin = tokenFor(account(RoleCode.ADMIN));
+        Chain chain = academicChain(admin);
+        Account principal = account(RoleCode.TEACHER);
+        Account other = account(RoleCode.TEACHER);
+
+        Instant startsAt = Instant.now().plusSeconds(20 * 60);
+        // « principal » enseigne la séance A ; il est aussi remplaçant ACTIVE
+        // de la séance B (dont « other » est le principal).
+        String sessionA = openSession(admin, principal, chain.classA(), startsAt);
+        String sessionB = openSession(admin, other, chain.classB(), startsAt.plusSeconds(30 * 60));
+        createSubstitution(admin, sessionB, principal,
+                Instant.now().minusSeconds(10 * 60), startsAt.plusSeconds(150 * 60));
+
+        List<Object> ids = upcoming(dashboard(tokenFor(principal))).stream()
+                .map(r -> r.get("sessionPublicId")).toList();
+        assertThat(ids).contains(sessionA, sessionB);
+        assertThat(ids).containsOnlyOnce(sessionA);
+        assertThat(ids).containsOnlyOnce(sessionB);
+    }
+
+    @Test
+    void aMultiRoleUserGetsTheHighestPriorityDashboardWithoutAContext() {
         Account both = account(RoleCode.STUDENT, RoleCode.TEACHER);
         assertThat(dashboard(tokenFor(both)).get("role")).isEqualTo("TEACHER");
 
         Account adminAndTeacher = account(RoleCode.TEACHER, RoleCode.ADMIN);
         assertThat(dashboard(tokenFor(adminAndTeacher)).get("role")).isEqualTo("ADMINISTRATION");
+    }
+
+    @Test
+    void aMonoRoleUserMayPassItsOwnContextButNothingElse() {
+        String token = tokenFor(account(RoleCode.TEACHER));
+        // Son propre rôle : accepté.
+        assertThat(dashboardWithContext(token, "TEACHER").get("role")).isEqualTo("TEACHER");
+        // Un rôle non détenu : 403, jamais d'élévation.
+        ResponseEntity<Map<String, Object>> forbidden = exchange(HttpMethod.GET,
+                "/api/v1/me/dashboard?context=ADMIN", null, token);
+        assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(forbidden.getBody().get("code")).isEqualTo("DASHBOARD_CONTEXT_NOT_HELD");
+    }
+
+    @Test
+    void aMultiRoleUserGetsTheDashboardOfEachContextItActuallyHolds() {
+        String token = tokenFor(account(RoleCode.PEDAGOGICAL_MANAGER, RoleCode.TEACHER, RoleCode.STUDENT));
+        assertThat(dashboardWithContext(token, "PEDAGOGICAL_MANAGER").get("role"))
+                .isEqualTo("PEDAGOGICAL_MANAGER");
+        assertThat(dashboardWithContext(token, "TEACHER").get("role")).isEqualTo("TEACHER");
+        assertThat(dashboardWithContext(token, "STUDENT").get("role")).isEqualTo("STUDENT");
+        // Sans contexte : priorité fixe -> le plus élevé détenu.
+        assertThat(dashboard(token).get("role")).isEqualTo("PEDAGOGICAL_MANAGER");
+    }
+
+    @Test
+    void aStudentCannotEscalateToAnAdministrationDashboardViaTheContext() {
+        String token = tokenFor(account(RoleCode.STUDENT));
+        for (String escalated : List.of("ADMIN", "SUPER_ADMIN", "SCHOOL_ADMINISTRATION",
+                "PEDAGOGICAL_MANAGER")) {
+            ResponseEntity<Map<String, Object>> r = exchange(HttpMethod.GET,
+                    "/api/v1/me/dashboard?context=" + escalated, null, token);
+            assertThat(r.getStatusCode()).as("context=" + escalated).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(r.getBody().get("code")).isEqualTo("DASHBOARD_CONTEXT_NOT_HELD");
+        }
+        // Son seul contexte légitime reste accessible.
+        assertThat(dashboardWithContext(token, "STUDENT").get("role")).isEqualTo("STUDENT");
     }
 
     @Test
@@ -147,34 +257,102 @@ class DashboardIntegrationTests {
     }
 
     @Test
-    void aPedagogicalManagerDashboardIsScopedAndDoesNotNPlusOne() {
+    void aPedagogicalManagerDashboardDoesNotGrowItsQueryCountWithTheNumberOfClasses() {
         String admin = tokenFor(account(RoleCode.ADMIN));
-        Chain chain = academicChain(admin);
-        Account teacher = account(RoleCode.TEACHER);
-        openSession(admin, teacher, chain.classA(), Instant.now().plusSeconds(3600));
-        openSession(admin, teacher, chain.classB(), Instant.now().plusSeconds(7200));
 
+        // Deux périmètres avec le MÊME nombre de séances (3) mais un nombre de
+        // classes très différent : 1 vs 15. Seul le nombre de classes varie —
+        // c'est la dimension dont on prouve qu'elle ne déclenche pas de N+1
+        // (résolution du périmètre + libellés de classe par lot, DEC-G1-010).
+        Scope small = managerScope(admin, 1, 3);
+        Scope large = managerScope(admin, 15, 3);
+
+        long qSmall = dashboardQueryCount(small);
+        long qLarge = dashboardQueryCount(large);
+        org.slf4j.LoggerFactory.getLogger(DashboardIntegrationTests.class)
+                .info("anti-N+1 dashboard manager : 1 classe -> {} requêtes ; 15 classes -> {} requêtes",
+                        qSmall, qLarge);
+
+        // Contenu fonctionnel réellement vérifié pour les deux tailles.
+        assertManagerContent(small, 1);
+        assertManagerContent(large, 15);
+
+        // +14 classes n'ajoute qu'une poignée de requêtes bornées, très loin
+        // d'un +14 (une requête de libellé par classe).
+        long growth = qLarge - qSmall;
+        assertThat(growth).as("croissance des requêtes SQL de 1 à 15 classes (qSmall=%s, qLarge=%s)",
+                        qSmall, qLarge)
+                .isLessThanOrEqualTo(3L);
+        // Garde-fou absolu.
+        assertThat(qLarge).as("requêtes SQL du dashboard manager à 15 classes").isLessThan(25L);
+    }
+
+    private record Scope(String managerToken, java.util.Set<String> classCodes) {
+    }
+
+    /**
+     * Crée une formation, une promotion, {@code classCount} classes,
+     * {@code sessionCount} séances à venir (chacune rattachée à une classe
+     * distincte, en cycle), et un responsable pédagogique affecté à la
+     * formation.
+     */
+    private Scope managerScope(String admin, int classCount, int sessionCount) {
+        String suffix = code();
+        String site = created(admin, "/api/v1/sites", Map.of("code", "SITE-" + suffix,
+                "name", "Campus", "timeZoneId", "Europe/Paris")).get("publicId").toString();
+        String program = created(admin, "/api/v1/programs", Map.of("code", "PRG-" + suffix,
+                "name", "BTS SIO", "programType", "BTS")).get("publicId").toString();
+        String level = created(admin, "/api/v1/programs/" + program + "/levels", Map.of(
+                "code", "N1", "name", "BTS 1", "sequenceNumber", 1)).get("publicId").toString();
+        String year = created(admin, "/api/v1/academic-years", Map.of("code", "AY-" + suffix,
+                "name", "2026-2027", "startDate", "2026-09-01", "endDate", "2027-08-31")).get("publicId").toString();
+        String promo = created(admin, "/api/v1/promotions", Map.of("programPublicId", program,
+                "academicYearPublicId", year, "code", "P26", "name", "Promotion 2026")).get("publicId").toString();
+        Account teacher = account(RoleCode.TEACHER);
+        java.util.Set<String> classCodes = new java.util.LinkedHashSet<>();
+        List<String> classIds = new java.util.ArrayList<>();
+        for (int i = 0; i < classCount; i++) {
+            String classCode = "K" + i + "-" + suffix;
+            classIds.add(created(admin, "/api/v1/class-groups", Map.of("promotionPublicId", promo,
+                    "programLevelPublicId", level, "sitePublicId", site, "code", classCode,
+                    "name", "Classe " + i)).get("publicId").toString());
+            classCodes.add(classCode);
+        }
+        for (int i = 0; i < sessionCount; i++) {
+            openSession(admin, teacher, classIds.get(i % classIds.size()),
+                    Instant.now().plusSeconds(3600L + i * 60L));
+        }
         Account manager = account(RoleCode.PEDAGOGICAL_MANAGER);
-        // Affecte le manager à la formation de la chaîne (périmètre pédagogique).
         assertThat(post(admin, "/api/v1/pedagogical-assignments", Map.of(
-                "programPublicId", chain.program(),
+                "programPublicId", program,
                 "userPublicId", manager.publicId(),
                 "type", "PRIMARY_MANAGER")).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return new Scope(tokenFor(manager), classCodes);
+    }
 
+    private long dashboardQueryCount(Scope scope) {
         Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         stats.clear();
-        Map<String, Object> d = dashboard(tokenFor(manager));
-        long statements = stats.getPrepareStatementCount();
+        dashboard(scope.managerToken());
+        return stats.getPrepareStatementCount();
+    }
 
+    private void assertManagerContent(Scope scope, int expectedClasses) {
+        Map<String, Object> d = dashboard(scope.managerToken());
         assertThat(d.get("role")).isEqualTo("PEDAGOGICAL_MANAGER");
         Map<String, Object> card = manager(d);
-        assertThat(((Number) card.get("classCount")).longValue()).isEqualTo(2);
+        assertThat(((Number) card.get("classCount")).longValue()).isEqualTo(expectedClasses);
         @SuppressWarnings("unchecked")
-        List<String> codes = (List<String>) card.get("classCodes");
-        assertThat(codes).contains("C1", "C2");
-        // Borne franche : résolution du périmètre + classes par lot + séances + codes,
-        // sans une requête par classe/séance.
-        assertThat(statements).as("requêtes SQL du dashboard manager").isLessThan(20L);
+        List<Map<String, Object>> sessions = (List<Map<String, Object>>) card.get("upcomingSessions");
+        // Séances périmétrées présentes avec des libellés de classe résolus
+        // (jamais « — »), tous dans le périmètre du responsable.
+        assertThat(sessions).isNotEmpty();
+        assertThat(sessions).allSatisfy(s -> {
+            @SuppressWarnings("unchecked")
+            List<String> classCodes = (List<String>) s.get("classCodes");
+            assertThat(classCodes).isNotEmpty();
+            assertThat(classCodes).allSatisfy(c -> assertThat(scope.classCodes()).contains(c));
+        });
     }
 
     @Test
@@ -225,6 +403,14 @@ class DashboardIntegrationTests {
         return r.getBody();
     }
 
+    private Map<String, Object> dashboardWithContext(String token, String context) {
+        ResponseEntity<Map<String, Object>> r = exchange(HttpMethod.GET,
+                "/api/v1/me/dashboard?context=" + context, null, token);
+        assertThat(r.getStatusCode()).as("GET /me/dashboard?context=" + context + " -> " + r.getBody())
+                .isEqualTo(HttpStatus.OK);
+        return r.getBody();
+    }
+
     private record Chain(String classA, String classB, String program) {
     }
 
@@ -257,6 +443,21 @@ class DashboardIntegrationTests {
         body.put("timeZoneId", "Europe/Paris");
         body.put("reason", "séance exceptionnelle");
         return created(admin, "/api/v1/sessions", body).get("publicId").toString();
+    }
+
+    /** Crée une substitution ACTIVE et renvoie son {@code publicId}. */
+    private String createSubstitution(String admin, String sessionId, Account substitute,
+                                      Instant validFrom, Instant validUntil) {
+        return created(admin, "/api/v1/sessions/" + sessionId + "/substitutions", Map.of(
+                "substituteTeacherPublicId", substitute.publicId(),
+                "validFrom", validFrom.toString(),
+                "validUntil", validUntil.toString(),
+                "reason", "Formateur souffrant")).get("publicId").toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> upcoming(Map<String, Object> dashboard) {
+        return (List<Map<String, Object>>) teacher(dashboard).get("upcoming");
     }
 
     private Account enrolledStudent(String admin, String classPublicId) {

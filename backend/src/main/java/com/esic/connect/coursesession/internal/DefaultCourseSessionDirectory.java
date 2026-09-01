@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,19 +38,22 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
     private final ClassGroupDirectory classGroupDirectory;
     private final UserDirectory userDirectory;
     private final CourseSessionAccessGuard accessGuard;
+    private final Clock clock;
 
     DefaultCourseSessionDirectory(CourseSessionRepository sessionRepository,
                                   AttendanceCheckpointRepository checkpointRepository,
                                   TeacherSubstitutionRepository substitutionRepository,
                                   ClassGroupDirectory classGroupDirectory,
                                   UserDirectory userDirectory,
-                                  CourseSessionAccessGuard accessGuard) {
+                                  CourseSessionAccessGuard accessGuard,
+                                  Clock clock) {
         this.sessionRepository = sessionRepository;
         this.checkpointRepository = checkpointRepository;
         this.substitutionRepository = substitutionRepository;
         this.classGroupDirectory = classGroupDirectory;
         this.userDirectory = userDirectory;
         this.accessGuard = accessGuard;
+        this.clock = clock;
     }
 
     @Override
@@ -101,10 +105,10 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
             return List.of();
         }
-        Set<Long> internalIds = classGroupPublicIds.stream()
-                .map(classGroupDirectory::findByPublicId)
-                .filter(Optional::isPresent)
-                .map(ref -> ref.get().internalId())
+        // Résolution des classes en UNE requête (anti-N+1) : jamais un
+        // findByPublicId par identifiant dans la boucle.
+        Set<Long> internalIds = classGroupDirectory.findByPublicIds(classGroupPublicIds).stream()
+                .map(ClassGroupDirectory.ClassGroupRef::internalId)
                 .collect(Collectors.toUnmodifiableSet());
         if (internalIds.isEmpty()) {
             return List.of();
@@ -165,13 +169,23 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         int bounded = Math.max(1, Math.min(limit, 10));
         List<Specification<CourseSession>> specs = new ArrayList<>();
         specs.add(CourseSessionSpecifications.operational());
-        specs.add(CourseSessionSpecifications.taughtBy(teacherId));
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
         }
         if (to != null) {
             specs.add(CourseSessionSpecifications.startsUntil(to));
         }
+        // Formateur principal OU remplaçant ACTIVE couvrant l'instant courant
+        // (mêmes règles que GET /sessions — G1-C.3). Une seule requête de
+        // substitutions ; l'OR sur une même table ne produit aucun doublon.
+        Specification<CourseSession> assignedToTeacher = CourseSessionSpecifications.taughtBy(teacherId);
+        List<Long> substituted =
+                substitutionRepository.findActiveSubstitutedSessionIds(teacherId, clock.instant());
+        if (!substituted.isEmpty()) {
+            assignedToTeacher = Specification.anyOf(assignedToTeacher,
+                    CourseSessionSpecifications.hasInternalIdIn(substituted));
+        }
+        specs.add(assignedToTeacher);
         return sessionRepository.findAll(Specification.allOf(specs),
                         org.springframework.data.domain.PageRequest.of(0, bounded,
                                 Sort.by(Sort.Direction.ASC, "startsAt")))

@@ -39,11 +39,11 @@ import java.util.UUID;
  * <strong>Lecture seule</strong>, agrégats bornés, périmètre décidé côté
  * serveur — jamais d'un paramètre client.
  *
- * <p>Rôle effectif : priorité fixe et documentée
+ * <p>Rôle effectif : le <em>contexte</em> demandé par l'appelant s'il
+ * correspond à un rôle réellement présent dans son JWT (un rôle non
+ * détenu ⇒ {@code 403}, jamais d'élévation) ; à défaut, priorité fixe
  * {@code SUPER_ADMIN > ADMIN > SCHOOL_ADMINISTRATION > PEDAGOGICAL_MANAGER
- * > TEACHER > STUDENT}. Un compte multi-rôles obtient le tableau de bord
- * de son rôle le plus élevé (le contexte de rôle du front est ergonomique
- * et n'est pas transmis).
+ * > TEACHER > STUDENT}.
  */
 @Service
 class DashboardService {
@@ -79,10 +79,9 @@ class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    Dashboard forCaller(String subject, List<String> roleCodes) {
+    Dashboard forCaller(String subject, List<String> roleCodes, String requestedContext) {
         UUID userPublicId = parseUuid(subject);
-        DashboardRole role = DashboardRole.effective(roleCodes)
-                .orElseThrow(() -> new DashboardException(DashboardException.Kind.NO_ROLE));
+        DashboardRole role = resolveRole(roleCodes, requestedContext);
         Instant now = clock.instant();
         List<String> notes = new ArrayList<>();
 
@@ -98,6 +97,31 @@ class DashboardService {
         };
     }
 
+    /**
+     * Rôle effectif du tableau de bord.
+     *
+     * <ul>
+     *   <li>{@code requestedContext} fourni : il doit correspondre à un
+     *       rôle <strong>réellement présent</strong> dans le JWT de
+     *       l'appelant — sinon {@code 403 DASHBOARD_CONTEXT_NOT_HELD}
+     *       (jamais d'élévation de privilèges) ;</li>
+     *   <li>absent : priorité fixe déterministe
+     *       ({@link DashboardRole#effective}).</li>
+     * </ul>
+     */
+    private DashboardRole resolveRole(List<String> roleCodes, String requestedContext) {
+        if (requestedContext != null && !requestedContext.isBlank()) {
+            String ctx = requestedContext.trim().toUpperCase(java.util.Locale.ROOT);
+            if (roleCodes == null || !roleCodes.contains(ctx)) {
+                throw new DashboardException(DashboardException.Kind.CONTEXT_NOT_HELD);
+            }
+            return DashboardRole.forRole(ctx)
+                    .orElseThrow(() -> new DashboardException(DashboardException.Kind.CONTEXT_NOT_HELD));
+        }
+        return DashboardRole.effective(roleCodes)
+                .orElseThrow(() -> new DashboardException(DashboardException.Kind.NO_ROLE));
+    }
+
     // ------------------------------------------------------------------
 
     private StudentCard student(UUID userPublicId, Instant now, List<String> notes) {
@@ -107,10 +131,8 @@ class DashboardService {
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
-        Map<UUID, String> codeCache = new HashMap<>();
         List<SessionLine> week = classIds.isEmpty() ? List.of()
-                : trim(courseSessionDirectory.findSessionsForClasses(classIds, now, now.plus(WEEK)))
-                        .stream().map(s -> line(s, codeCache)).toList();
+                : lines(trim(courseSessionDirectory.findSessionsForClasses(classIds, now, now.plus(WEEK))));
 
         AttendanceDashboardDirectory.StudentAttendanceDigest d = attendanceDashboard.studentDigest(userPublicId);
         return new StudentCard(week.isEmpty() ? null : week.get(0), week,
@@ -119,16 +141,15 @@ class DashboardService {
     }
 
     private TeacherCard teacher(UUID userPublicId, Instant now) {
-        Map<UUID, String> codeCache = new HashMap<>();
-        List<SessionLine> upcoming = courseSessionDirectory
-                .findUpcomingForTeacher(userPublicId, now, now.plus(WEEK), LIST_LIMIT)
-                .stream().map(s -> line(s, codeCache)).toList();
-        List<SessionLine> toOpen = courseSessionDirectory
+        List<SessionLine> upcoming = lines(courseSessionDirectory
+                .findUpcomingForTeacher(userPublicId, now, now.plus(WEEK), LIST_LIMIT));
+        List<SessionLine> toOpen = lines(courseSessionDirectory
                 .findUpcomingForTeacher(userPublicId, now.minus(Duration.ofHours(12)), now, LIST_LIMIT)
                 .stream()
-                .filter(s -> "PLANNED".equals(s.status()))
-                .map(s -> line(s, codeCache))
-                .toList();
+                // s.status() est un SessionLifecycle : comparer à l'enum, pas à
+                // la chaîne « PLANNED » (qui ne serait jamais égale).
+                .filter(s -> s.status() == SessionLifecycle.PLANNED)
+                .toList());
         return new TeacherCard(upcoming.isEmpty() ? null : upcoming.get(0), upcoming, toOpen);
     }
 
@@ -141,21 +162,26 @@ class DashboardService {
             return new ManagerCard(0, List.of(), List.of());
         }
         List<ClassGroupRef> classes = classGroupDirectory.findByInternalIds(visible.get());
-        Map<UUID, String> codeCache = new HashMap<>();
+        Map<UUID, String> known = new HashMap<>();
         Set<UUID> classPublicIds = new LinkedHashSet<>();
         List<String> classCodes = new ArrayList<>();
         for (ClassGroupRef c : classes) {
-            codeCache.put(c.publicId(), c.code());
+            known.put(c.publicId(), c.code());
             classPublicIds.add(c.publicId());
             if (classCodes.size() < LIST_LIMIT) {
                 classCodes.add(c.code());
             }
         }
+        // Les codes des classes du périmètre sont déjà connus (findByInternalIds
+        // ci-dessus) : aucune requête de libellé supplémentaire pour les séances.
         List<SessionLine> upcoming = classPublicIds.isEmpty() ? List.of()
-                : trim(courseSessionDirectory.findSessionsForClasses(classPublicIds, now, now.plus(WEEK)))
-                        .stream().map(s -> line(s, codeCache)).toList();
-        notes.add("Justificatifs en attente et alternance UNKNOWN : voir « Suivi d'assiduité » "
-                + "(agrégats périmétrés non encore exposés au tableau de bord — dette G1-F).");
+                : lines(trim(courseSessionDirectory.findSessionsForClasses(classPublicIds, now, now.plus(WEEK))),
+                        known);
+        // Cartes non exposées faute de port agrégé borné (dette G1-F, non
+        // inventée) : justificatifs en attente périmétrés, alternance
+        // UNKNOWN, planning actif, conflits récents.
+        notes.add("Justificatifs en attente périmétrés, alternance UNKNOWN, planning actif et conflits : "
+                + "non exposés au tableau de bord (dette G1-F) — voir « Suivi d'assiduité » et « Planning ».");
         return new ManagerCard(classes.size(), upcoming, classCodes);
     }
 
@@ -164,9 +190,7 @@ class DashboardService {
         LocalDate today = LocalDate.ofInstant(now, clock.getZone());
         Instant dayStart = today.atStartOfDay(clock.getZone()).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
-        Map<UUID, String> codeCache = new HashMap<>();
-        List<SessionLine> todaySessions = trim(courseSessionDirectory.findSessionsInRange(dayStart, dayEnd))
-                .stream().map(s -> line(s, codeCache)).toList();
+        List<SessionLine> todaySessions = lines(trim(courseSessionDirectory.findSessionsInRange(dayStart, dayEnd)));
         List<ImportLine> imports = studentImportDashboard.recentJobs(LIST_LIMIT).stream()
                 .map(j -> new ImportLine(j.publicId(), j.status(), j.totalRows(), j.createdAt()))
                 .toList();
@@ -180,13 +204,43 @@ class DashboardService {
         return sessions.size() <= LIST_LIMIT ? sessions : sessions.subList(0, LIST_LIMIT);
     }
 
-    private SessionLine line(SessionRef s, Map<UUID, String> codeCache) {
-        List<String> codes = new ArrayList<>();
-        for (UUID classPublicId : s.classGroupPublicIds()) {
-            codes.add(codeCache.computeIfAbsent(classPublicId, id ->
-                    classGroupDirectory.findByPublicId(id).map(ClassGroupRef::code).orElse("—")));
+    private List<SessionLine> lines(List<SessionRef> sessions) {
+        return lines(sessions, Map.of());
+    }
+
+    /**
+     * Convertit des séances en lignes de tableau de bord en résolvant les
+     * <strong>codes de classe en une seule requête</strong> (anti-N+1,
+     * DEC-G1-010) : les codes déjà connus ({@code known} — par exemple le
+     * périmètre d'un responsable pédagogique déjà chargé par lot) sont
+     * réutilisés, seuls les codes manquants sont demandés via
+     * {@link ClassGroupDirectory#findByPublicIds}.
+     */
+    private List<SessionLine> lines(List<SessionRef> sessions, Map<UUID, String> known) {
+        if (sessions.isEmpty()) {
+            return List.of();
         }
-        return new SessionLine(s.publicId(), s.title(), statusName(s.status()), s.startsAt(), s.endsAt(), codes);
+        Map<UUID, String> codes = new HashMap<>(known);
+        Set<UUID> missing = new LinkedHashSet<>();
+        for (SessionRef s : sessions) {
+            for (UUID classPublicId : s.classGroupPublicIds()) {
+                if (classPublicId != null && !codes.containsKey(classPublicId)) {
+                    missing.add(classPublicId);
+                }
+            }
+        }
+        if (!missing.isEmpty()) {
+            for (ClassGroupRef c : classGroupDirectory.findByPublicIds(missing)) {
+                codes.put(c.publicId(), c.code());
+            }
+        }
+        return sessions.stream()
+                .map(s -> new SessionLine(s.publicId(), s.title(), statusName(s.status()),
+                        s.startsAt(), s.endsAt(),
+                        s.classGroupPublicIds().stream()
+                                .map(id -> codes.getOrDefault(id, "—"))
+                                .toList()))
+                .toList();
     }
 
     private static String statusName(SessionLifecycle status) {
@@ -201,10 +255,11 @@ class DashboardService {
         }
     }
 
-    /** Rôle effectif du tableau de bord — priorité fixe. */
+    /** Rôle effectif du tableau de bord. */
     enum DashboardRole {
         ADMINISTRATION, PEDAGOGICAL_MANAGER, TEACHER, STUDENT;
 
+        /** Rôle effectif par priorité fixe (aucun contexte demandé). */
         static Optional<DashboardRole> effective(Collection<String> roleCodes) {
             if (roleCodes == null) {
                 return Optional.empty();
@@ -224,6 +279,21 @@ class DashboardService {
                 return Optional.of(STUDENT);
             }
             return Optional.empty();
+        }
+
+        /**
+         * Rôle effectif d'<strong>un</strong> code de rôle (contexte
+         * explicitement demandé, déjà vérifié comme présent dans le JWT).
+         * Les rôles d'administration partagent le même tableau de bord.
+         */
+        static Optional<DashboardRole> forRole(String roleCode) {
+            return switch (roleCode) {
+                case "SUPER_ADMIN", "ADMIN", "SCHOOL_ADMINISTRATION" -> Optional.of(ADMINISTRATION);
+                case "PEDAGOGICAL_MANAGER" -> Optional.of(PEDAGOGICAL_MANAGER);
+                case "TEACHER" -> Optional.of(TEACHER);
+                case "STUDENT" -> Optional.of(STUDENT);
+                default -> Optional.empty();
+            };
         }
     }
 }

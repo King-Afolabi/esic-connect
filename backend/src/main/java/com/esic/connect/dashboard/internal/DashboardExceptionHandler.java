@@ -21,8 +21,18 @@ class DashboardExceptionHandler {
     @ExceptionHandler(DashboardException.class)
     ResponseEntity<ApiError> handle(DashboardException ex, HttpServletRequest request) {
         HttpStatus status = HttpStatus.FORBIDDEN;
-        String code = "DASHBOARD_NO_ROLE";
-        String message = "Aucun tableau de bord n'est disponible pour votre compte.";
+        String code;
+        String message;
+        switch (ex.kind()) {
+            case CONTEXT_NOT_HELD -> {
+                code = "DASHBOARD_CONTEXT_NOT_HELD";
+                message = "Le contexte de rôle demandé n'est pas associé à votre compte.";
+            }
+            default -> {
+                code = "DASHBOARD_NO_ROLE";
+                message = "Aucun tableau de bord n'est disponible pour votre compte.";
+            }
+        }
         ApiError body = new ApiError(Instant.now(), status.value(), code, message,
                 request.getRequestURI(), UUID.randomUUID().toString(), List.of());
         return ResponseEntity.status(status).body(body);

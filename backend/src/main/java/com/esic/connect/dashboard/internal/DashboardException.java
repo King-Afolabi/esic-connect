@@ -8,7 +8,13 @@ class DashboardException extends RuntimeException {
 
     enum Kind {
         /** Aucun rôle exploitable pour construire un tableau de bord. */
-        NO_ROLE
+        NO_ROLE,
+        /**
+         * Un contexte de rôle a été demandé mais l'appelant ne le détient
+         * pas dans son JWT — jamais une élévation de privilèges, un
+         * {@code 403} franc.
+         */
+        CONTEXT_NOT_HELD
     }
 
     private final Kind kind;
