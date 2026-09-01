@@ -31,6 +31,14 @@
 
   @case ('ready') {
     @if (session(); as current) {
+      @if (actingAsSubstitute(); as sub) {
+        <p class="sessions__status" role="note">
+          Vous intervenez comme <strong>remplaçant</strong> sur cette séance
+          (remplacement de {{ sub.originalTeacher.firstName }} {{ sub.originalTeacher.lastName }},
+          du {{ formatInstantUtc(sub.validFrom) }} au {{ formatInstantUtc(sub.validUntil) }}).
+          Vos droits de gestion sont révoqués à la fin de cette période.
+        </p>
+      }
       <div class="sessions__header">
         <h1 class="sessions__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
         @if (canManageCheckpoint()) {

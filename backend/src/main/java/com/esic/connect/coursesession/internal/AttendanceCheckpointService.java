@@ -56,7 +56,11 @@ class AttendanceCheckpointService {
 
     @Transactional(readOnly = true)
     List<CheckpointResponse> list(String sessionPublicId, String callerSubject) {
-        CourseSession session = requireSession(sessionPublicId);
+        // G1-C.3 : la liste des points de contrôle d'une séance CANCELLED
+        // reste consultable (points terminaux) — seule une séance
+        // supersédée par le planning est masquée. La gestion
+        // (create/open/close/cancel) exige, elle, une séance opérationnelle.
+        CourseSession session = requireReadableSession(sessionPublicId);
         requireAccess(session, AccessLevel.READ, callerSubject);
         return checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId()).stream()
                 .map(CheckpointResponse::from)
@@ -182,14 +186,31 @@ class AttendanceCheckpointService {
         return new Ctx(session, checkpoint);
     }
 
+    /**
+     * Séance opérationnelle — pour la <strong>gestion</strong> des points
+     * de contrôle (création, ouverture, fermeture, annulation). Une séance
+     * supersédée (audit G1-B.1) ou annulée (G1-C) est traitée comme
+     * inexistante.
+     */
     private CourseSession requireSession(String sessionPublicId) {
+        CourseSession session = requireReadableSession(sessionPublicId);
+        if (!session.isOperational()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
+    }
+
+    /**
+     * Séance existante et historiquement lisible — pour la
+     * <strong>consultation</strong> des points de contrôle (G1-C.3). Une
+     * séance {@code CANCELLED} passe (ses points terminaux restent
+     * visibles) ; une séance supersédée par le planning est masquée.
+     */
+    private CourseSession requireReadableSession(String sessionPublicId) {
         CourseSession session = sessionRepository
                 .findByPublicId(parseUuid(sessionPublicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
-        // Garde centralisée : une séance supersédée (audit G1-B.1) ou
-        // annulée (G1-C) est traitée comme inexistante pour la gestion
-        // des points de contrôle.
-        if (!session.isOperational()) {
+        if (!session.isHistoricallyReadable()) {
             throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
         }
         return session;

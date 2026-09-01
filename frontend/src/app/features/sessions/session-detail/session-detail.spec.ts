@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 
 import { Role } from '../../../core/models/role';
+import { AuthService } from '../../../core/auth/auth.service';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { CheckpointView, CourseSessionResponse } from '../sessions.models';
@@ -104,6 +105,7 @@ interface DetailInternals {
   sessionCancelForm: { patchValue: (v: Record<string, unknown>) => void; reset: () => void };
   canCancel: () => boolean;
   isCancelled: () => boolean;
+  actingAsSubstitute: () => { publicId: string } | null;
   toggleSubstitutionForm: () => void;
   submitSubstitution: () => void;
   endSubstitution: (id: string) => void;
@@ -146,11 +148,14 @@ interface DetailInternals {
   correctRowId: () => string | null;
 }
 
-function setup(roles: Role[]) {
+function setup(roles: Role[], subject: string | null = null) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
   const effectiveRoles: WritableSignal<Role[]> = signal(roles);
+  const authSession: WritableSignal<{ subject: string | null } | null> = signal(
+    subject === null ? null : { subject },
+  );
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
@@ -158,6 +163,7 @@ function setup(roles: Role[]) {
       provideHttpClientTesting(),
       { provide: NotificationService, useValue: { info: vi.fn(), error: vi.fn() } },
       { provide: RoleContextService, useValue: { effectiveRoles } },
+      { provide: AuthService, useValue: { session: authSession } },
       {
         provide: ActivatedRoute,
         useValue: { snapshot: { paramMap: convertToParamMap({ publicId: 's-1' }) } },
@@ -168,7 +174,7 @@ function setup(roles: Role[]) {
   const http = TestBed.inject(HttpTestingController);
   const internals = fixture.componentInstance as unknown as DetailInternals;
   fixture.detectChanges();
-  return { fixture, http, internals, effectiveRoles };
+  return { fixture, http, internals, effectiveRoles, authSession };
 }
 
 function initialLoad(http: HttpTestingController, session = OPEN_SESSION): void {
@@ -232,7 +238,7 @@ describe('SessionDetail', () => {
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
   });
 
-  it('cancels an OPEN session with a reason and shows the cancelled state without a scary error', () => {
+  it('cancels an OPEN session with a reason and reloads the persisted CANCELLED state', () => {
     ({ fixture, http, internals } = setup(['ADMIN']));
     initialLoad(http);
     fixture.detectChanges();
@@ -252,8 +258,20 @@ describe('SessionDetail', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
 
-    // Pas de rechargement (le serveur renverrait 404) : état patché en local.
-    http.expectNone(GET_URL);
+    // G1-C.3 : rechargement depuis le back-end — l'état CANCELLED est
+    // réellement persisté (statut, motif, date). Aucun patch local.
+    http.expectOne(GET_URL).flush({
+      ...OPEN_SESSION,
+      status: 'CANCELLED',
+      cancellationReason: 'Alerte incendie',
+      cancelledAt: '2026-09-10T06:30:00Z',
+      checkpointOpen: false,
+      checkpoints: [{ ...CP_OPEN, status: 'CANCELLED', openedAt: null }],
+    });
+    // Une séance annulée n'appelle pas le tableau de présences (garde serveur).
+    http.expectNone(ATTENDANCE_URL);
+    fixture.detectChanges();
+
     expect(internals.isCancelled()).toBe(true);
     expect(text()).toContain('Annulée');
     expect(text()).toContain('Alerte incendie');
@@ -316,6 +334,55 @@ describe('SessionDetail', () => {
     fixture.detectChanges();
     expect(internals.canManageSubstitutions()).toBe(false);
     expect(text()).not.toContain('Ajouter un remplaçant');
+  });
+
+  it('shows a "you are the substitute" banner for the active substitute (G1-C.3)', () => {
+    // Le formateur connecté (sub = "me-1") est le remplaçant ACTIF.
+    ({ fixture, http, internals } = setup(['TEACHER'], 'me-1'));
+    const now = Date.now();
+    http.expectOne(GET_URL).flush({ ...OPEN_SESSION, teacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' } });
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    http.expectOne(SUBSTITUTIONS_URL).flush([
+      {
+        publicId: 'sub-1',
+        status: 'ACTIVE',
+        reason: 'Congé',
+        validFrom: new Date(now - 3_600_000).toISOString(),
+        validUntil: new Date(now + 3_600_000).toISOString(),
+        substitute: { publicId: 'me-1', firstName: 'Bea', lastName: 'Roux' },
+        originalTeacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+        createdAt: '2026-09-01T10:00:00Z',
+        endedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(internals.actingAsSubstitute()).not.toBeNull();
+    expect(text()).toContain('Vous intervenez comme');
+    expect(text()).toContain('remplacement de Alice Martin');
+  });
+
+  it('does not show the substitute banner once the period has ended', () => {
+    ({ fixture, http, internals } = setup(['TEACHER'], 'me-1'));
+    const now = Date.now();
+    http.expectOne(GET_URL).flush(OPEN_SESSION);
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    http.expectOne(SUBSTITUTIONS_URL).flush([
+      {
+        publicId: 'sub-1',
+        status: 'ACTIVE',
+        reason: 'Congé',
+        validFrom: new Date(now - 7_200_000).toISOString(),
+        validUntil: new Date(now - 3_600_000).toISOString(),
+        substitute: { publicId: 'me-1', firstName: 'Bea', lastName: 'Roux' },
+        originalTeacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+        createdAt: '2026-09-01T10:00:00Z',
+        endedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+    expect(internals.actingAsSubstitute()).toBeNull();
+    expect(text()).not.toContain('Vous intervenez comme');
   });
 
   it('hides the cancel button for a CLOSED session', () => {

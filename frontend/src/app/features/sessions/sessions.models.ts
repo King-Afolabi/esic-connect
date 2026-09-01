@@ -241,7 +241,15 @@ export interface CourseSessionResponse {
   timeZoneId: string;
   openedAt: string | null;
   closedAt: string | null;
-  /** G1-C : motif + instant d'annulation (non nuls uniquement si `status === 'CANCELLED'`). */
+  /**
+   * G1-C : motif + instant d'annulation, non nuls <strong>si et seulement
+   * si</strong> `status === 'CANCELLED'`. Depuis G1-C.3, une séance
+   * `CANCELLED` reste consultable par `GET /sessions/{publicId}` (statut,
+   * motif, date, formateur principal, points de contrôle terminaux) : le
+   * front recharge son état persisté après annulation, un rafraîchissement
+   * est stable. Seules les <em>opérations</em> (ouverture, jeton, points
+   * de contrôle) renvoient `404`.
+   */
   cancellationReason: string | null;
   cancelledAt: string | null;
   /** Compat V9 : premier point de contrôle (START). */
@@ -366,10 +374,21 @@ export interface SubstitutionResponse {
   endedAt: string | null;
 }
 
-/** `CourseSessionRequests.CreateSubstitution` (G1-C.2). */
+/**
+ * `CourseSessionRequests.CreateSubstitution` (G1-C.2 ; contrat de période
+ * durci en G1-C.3).
+ *
+ * - `validUntil > validFrom` sinon `400 SESSION_SUBSTITUTION_PERIOD_INVALID` ;
+ * - la période doit <strong>chevaucher réellement la séance</strong> et ne
+ *   pas déborder de plus de 60 min avant son début / après sa fin, sinon
+ *   `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION` ;
+ * - au plus une substitution `ACTIVE` applicable à un instant donné, sinon
+ *   `409 SESSION_SUBSTITUTION_OVERLAP`.
+ */
 export interface CreateSubstitutionRequest {
   substituteTeacherPublicId: string;
   reason: string;
+  /** `Instant` ISO-8601 — dans la fenêtre de la séance (± 60 min). */
   validFrom: string;
   validUntil: string;
 }

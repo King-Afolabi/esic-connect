@@ -63,7 +63,11 @@ class SubstitutionService {
 
     @Transactional(readOnly = true)
     List<SubstitutionResponse> list(String sessionPublicId, String callerSubject) {
-        CourseSession session = requireOperationalSession(sessionPublicId);
+        // G1-C.3 : l'historique des remplacements reste consultable pour
+        // une séance CANCELLED (lecture historique). Seule une séance
+        // supersédée par le planning est masquée. La création / la fin
+        // d'un remplacement exigent, elles, une séance opérationnelle.
+        CourseSession session = requireReadableSession(sessionPublicId);
         requireAccess(session, AccessLevel.READ, callerSubject);
         return substitutionRepository.findByCourseSessionIdOrderByValidFromAscIdAsc(session.getId()).stream()
                 .map(sub -> toResponse(sub, session))
@@ -95,6 +99,12 @@ class SubstitutionService {
         if (reason.length() > 500) {
             reason = reason.substring(0, 500);
         }
+        // G1-C.3 : la période doit CHEVAUCHER réellement la séance. Une
+        // substitution entièrement avant ou après le créneau n'accorde
+        // jamais de droit et n'a pas de sens. Le dépôt n'ayant pas de règle
+        // temporelle globale d'ouverture de séance, on impose au minimum
+        // un chevauchement + une marge bornée (préparation / clôture).
+        requirePeriodOverlapsSession(session, request.validFrom(), request.validUntil());
 
         TeacherDirectory.TeacherRef substitute = teacherDirectory
                 .findEligibleTeacher(parseUuid(request.substituteTeacherPublicId()))
@@ -148,10 +158,47 @@ class SubstitutionService {
 
     // ------------------------------------------------------------------
 
+    /**
+     * Marge tolérée de part et d'autre du créneau : une substitution peut
+     * commencer jusqu'à 60&nbsp;min avant le début de la séance et finir
+     * jusqu'à 60&nbsp;min après sa fin (préparation, clôture). Au-delà, ou
+     * sans chevauchement réel, la période est refusée (G1-C.3).
+     */
+    private static final java.time.Duration PERIOD_MARGIN = java.time.Duration.ofMinutes(60);
+
+    private static void requirePeriodOverlapsSession(CourseSession session,
+                                                     java.time.Instant validFrom,
+                                                     java.time.Instant validUntil) {
+        java.time.Instant sessionStart = session.getStartsAt();
+        java.time.Instant sessionEnd = session.getEndsAt();
+        // Chevauchement réel [validFrom, validUntil) ∩ [start, end) ≠ ∅.
+        boolean overlaps = validFrom.isBefore(sessionEnd) && validUntil.isAfter(sessionStart);
+        // Bornes : ne pas déborder la marge avant le début ni après la fin.
+        boolean withinMargins = !validFrom.isBefore(sessionStart.minus(PERIOD_MARGIN))
+                && !validUntil.isAfter(sessionEnd.plus(PERIOD_MARGIN));
+        if (!overlaps || !withinMargins) {
+            throw new CourseSessionException(CourseSessionException.Kind.SUBSTITUTION_OUTSIDE_SESSION);
+        }
+    }
+
+    /** Séance opérationnelle — pour créer / terminer un remplacement. */
     private CourseSession requireOperationalSession(String sessionPublicId) {
+        CourseSession session = requireReadableSession(sessionPublicId);
+        if (!session.isOperational()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
+    }
+
+    /**
+     * Séance existante et historiquement lisible — pour consulter la liste
+     * des remplacements (G1-C.3 ; une séance {@code CANCELLED} passe, une
+     * séance supersédée par le planning est masquée).
+     */
+    private CourseSession requireReadableSession(String sessionPublicId) {
         CourseSession session = sessionRepository.findByPublicId(parseUuid(sessionPublicId))
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
-        if (!session.isOperational()) {
+        if (!session.isHistoricallyReadable()) {
             throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
         }
         return session;

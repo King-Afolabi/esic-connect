@@ -20,6 +20,7 @@ import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
+import { AuthService } from '../../../core/auth/auth.service';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { QrDisplay } from '../shared/qr-display/qr-display';
@@ -106,6 +107,7 @@ type AttendanceState =
 export class SessionDetail {
   private readonly api = inject(SessionsApiService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
@@ -231,6 +233,29 @@ export class SessionDetail {
   protected readonly canAddSubstitution = computed(
     () => this.canManageSubstitutions() && (this.isPlanned() || this.isOpen()),
   );
+
+  /**
+   * G1-C.3 — l'utilisateur courant intervient sur cette séance en tant
+   * que remplaçant <strong>actif</strong> : une substitution {@code ACTIVE}
+   * le désigne (`substitute.publicId`) et sa période couvre l'instant
+   * présent. Purement informatif (bandeau) ; l'autorité reste le serveur.
+   */
+  protected readonly actingAsSubstitute = computed<SubstitutionResponse | null>(() => {
+    const me = this.auth.session()?.subject;
+    if (!me) {
+      return null;
+    }
+    const now = Date.now();
+    return (
+      this.substitutions().find(
+        (s) =>
+          s.status === 'ACTIVE' &&
+          s.substitute.publicId === me &&
+          Date.parse(s.validFrom) <= now &&
+          Date.parse(s.validUntil) > now,
+      ) ?? null
+    );
+  });
 
   /**
    * §4 — capacités distinctes, dérivées du contexte de rôle actif
@@ -397,24 +422,15 @@ export class SessionDetail {
     this.stopTokenRenewal();
     this.attendanceToken.set(null);
     const reason = this.sessionCancelForm.getRawValue().reason.trim();
+    // G1-C.3 : la séance annulée reste consultable côté serveur — on
+    // recharge son état réellement persisté (statut CANCELLED, motif,
+    // date) au lieu de le simuler localement. Un F5 reste stable.
     this.runLifecycle(
       () => this.api.cancelSession(this.publicId, reason),
       'Séance annulée : les points de contrôle sont clos et les jetons d’émargement invalidés.',
       () => {
-        // Le polling d'assiduité se neutralise seul (garde `isOpen()`).
         this.sessionCancelForm.reset({ reason: '' });
-        const state = this.state();
-        if (state.kind === 'ready') {
-          this.state.set({
-            kind: 'ready',
-            session: {
-              ...state.session,
-              status: 'CANCELLED',
-              cancellationReason: reason,
-              cancelledAt: new Date().toISOString(),
-            },
-          });
-        }
+        this.load();
       },
     );
   }
@@ -984,7 +1000,12 @@ export class SessionDetail {
         if (open.length && !open.some((cp) => cp.publicId === this.selectedCheckpointId())) {
           this.selectedCheckpointId.set(open[0].publicId);
         }
-        if (this.attendance().kind === 'idle') {
+        if (session.status === 'CANCELLED') {
+          // Une séance annulée n'a pas de tableau de présences côté
+          // serveur (garde « opérationnelle ») : ne pas déclencher un
+          // appel qui renverrait 404.
+          this.attendance.set({ kind: 'idle' });
+        } else if (this.attendance().kind === 'idle') {
           this.refreshAttendance();
         }
         // Si la saisie manuelle est ouverte, réaligner les candidats sur

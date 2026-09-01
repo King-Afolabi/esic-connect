@@ -21,6 +21,17 @@ final class CourseSessionSpecifications {
         return (root, query, cb) -> cb.equal(root.get("teacherUserId"), teacherUserId);
     }
 
+    /**
+     * Séances dont la clé primaire figure dans {@code internalIds} (G1-C.3) —
+     * combinée en {@code OR} avec {@link #taughtBy} pour qu'un formateur
+     * voie aussi les séances où il est remplaçant actif.
+     */
+    static Specification<CourseSession> hasInternalIdIn(java.util.Collection<Long> internalIds) {
+        return (root, query, cb) -> internalIds.isEmpty()
+                ? cb.disjunction()
+                : root.get("id").in(internalIds);
+    }
+
     static Specification<CourseSession> startsFrom(Instant from) {
         return (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("startsAt"), from);
     }

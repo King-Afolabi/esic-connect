@@ -42,8 +42,14 @@ class CourseSessionException extends RuntimeException {
         SUBSTITUTE_NOT_ELIGIBLE,
         /** Le remplaçant proposé est le formateur principal de la séance. */
         SUBSTITUTE_IS_ORIGINAL,
-        /** Période de validité invalide (fin ≤ début, ou hors bornes acceptées). */
+        /** Période de validité malformée (fin ≤ début) ou motif manquant. */
         SUBSTITUTION_PERIOD_INVALID,
+        /**
+         * Période de validité syntaxiquement correcte mais sans chevauchement
+         * réel avec la séance, ou débordant la marge tolérée avant / après
+         * le créneau (G1-C.3).
+         */
+        SUBSTITUTION_OUTSIDE_SESSION,
         /** Une autre substitution active de la séance chevauche la période demandée. */
         SUBSTITUTION_OVERLAP,
         /** Aucune substitution pour cet identifiant dans cette séance. */

@@ -239,6 +239,22 @@ class CourseSession extends BaseEntity {
         return !supersededByScheduling && status != SessionLifecycle.CANCELLED;
     }
 
+    /**
+     * Séance <strong>lisible</strong> par un rôle autorisé, y compris son
+     * historique (G1-C.3). Une séance {@code CANCELLED} reste consultable
+     * (statut, motif, date d'annulation, remplacements) : elle a été
+     * annulée <em>explicitement</em> par un utilisateur et l'événement doit
+     * être traçable côté produit. En revanche une séance seulement
+     * <em>supersédée</em> par une republication de planning
+     * ({@code superseded_by_scheduling}) n'est pas un fait produit : elle
+     * n'est visible que dans l'historique des versions du module
+     * {@code planning}, jamais par le GET métier normal (politique
+     * G1-B.1 conservée).
+     */
+    boolean isHistoricallyReadable() {
+        return !supersededByScheduling;
+    }
+
     Long getTeacherUserId() {
         return teacherUserId;
     }

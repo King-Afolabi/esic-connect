@@ -120,7 +120,13 @@ class CourseSessionExceptionHandler {
             case SUBSTITUTION_PERIOD_INVALID -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "SESSION_SUBSTITUTION_PERIOD_INVALID";
-                message = "La période du remplacement est invalide (fin postérieure au début attendue).";
+                message = "La période du remplacement est invalide (fin postérieure au début, motif obligatoire).";
+            }
+            case SUBSTITUTION_OUTSIDE_SESSION -> {
+                status = HttpStatus.UNPROCESSABLE_ENTITY;
+                code = "SESSION_SUBSTITUTION_OUTSIDE_SESSION";
+                message = "La période du remplacement doit chevaucher la séance "
+                        + "(au plus 60 minutes avant son début et après sa fin).";
             }
             case SUBSTITUTION_OVERLAP -> {
                 status = HttpStatus.CONFLICT;
