@@ -108,4 +108,47 @@ describe('AttendanceApiService', () => {
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
   });
+
+  // --- Pièces jointes (bloc G1-E) --------------------------------
+
+  it('uploadMyJustificationAttachment POSTs multipart form-data with the file part', () => {
+    const file = new File(['%PDF-1.4'], 'certificat.pdf', { type: 'application/pdf' });
+    service.uploadMyJustificationAttachment('j-1', file).subscribe();
+    const req = http.expectOne(`${BASE}/me/attendance/justifications/j-1/attachment`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body instanceof FormData).toBe(true);
+    expect((req.request.body as FormData).get('file')).toBeInstanceOf(File);
+    req.flush({});
+  });
+
+  it('getMyJustificationAttachment GETs the metadata route', () => {
+    service.getMyJustificationAttachment('j-1').subscribe();
+    const req = http.expectOne(`${BASE}/me/attendance/justifications/j-1/attachment`);
+    expect(req.request.method).toBe('GET');
+    req.flush({});
+  });
+
+  it('deleteMyJustificationAttachment DELETEs the attachment route', () => {
+    service.deleteMyJustificationAttachment('j-1').subscribe();
+    const req = http.expectOne(`${BASE}/me/attendance/justifications/j-1/attachment`);
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
+
+  it('downloadMyJustificationAttachment GETs a blob with the full response', () => {
+    service.downloadMyJustificationAttachment('j-1').subscribe();
+    const req = http.expectOne(`${BASE}/me/attendance/justifications/j-1/attachment/download`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['x']));
+  });
+
+  it('review-side attachment routes target /attendance/justifications/{id}/attachment', () => {
+    service.getJustificationAttachmentForReview('j-9').subscribe();
+    http.expectOne(`${BASE}/attendance/justifications/j-9/attachment`).flush({});
+    service.downloadJustificationAttachmentForReview('j-9').subscribe();
+    const dl = http.expectOne(`${BASE}/attendance/justifications/j-9/attachment/download`);
+    expect(dl.request.responseType).toBe('blob');
+    dl.flush(new Blob(['x']));
+  });
 });

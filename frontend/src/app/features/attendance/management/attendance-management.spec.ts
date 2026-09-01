@@ -283,6 +283,14 @@ describe('JustificationQueue', () => {
       submitReview: () => void;
     };
     internals.startReview(PENDING);
+    http.expectOne(`${JUSTIF_URL}/j-1/attachment`).flush({
+      publicId: 'att-1',
+      fileName: 'certificat.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      sha256: 'a'.repeat(64),
+      uploadedAt: '2026-09-10T09:00:00Z',
+    });
     internals.reviewForm.patchValue({ decision: 'ACCEPTED', decisionReason: '' });
     internals.submitReview();
     const review = http.expectOne(`${JUSTIF_URL}/j-1/review`);
@@ -301,6 +309,14 @@ describe('JustificationQueue', () => {
       submitReview: () => void;
     };
     internals.startReview(PENDING);
+    http.expectOne(`${JUSTIF_URL}/j-1/attachment`).flush({
+      publicId: 'att-1',
+      fileName: 'certificat.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      sha256: 'a'.repeat(64),
+      uploadedAt: '2026-09-10T09:00:00Z',
+    });
     internals.reviewForm.patchValue({ decision: 'REJECTED', decisionReason: '' });
     internals.submitReview();
     http.expectNone(`${JUSTIF_URL}/j-1/review`);
@@ -316,6 +332,14 @@ describe('JustificationQueue', () => {
       submitReview: () => void;
     };
     internals.startReview(PENDING);
+    http.expectOne(`${JUSTIF_URL}/j-1/attachment`).flush({
+      publicId: 'att-1',
+      fileName: 'certificat.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      sha256: 'a'.repeat(64),
+      uploadedAt: '2026-09-10T09:00:00Z',
+    });
     internals.reviewForm.patchValue({ decision: 'ACCEPTED', decisionReason: '' });
     effectiveRoles.set(['TEACHER']);
     fixture.detectChanges();
@@ -334,6 +358,14 @@ describe('JustificationQueue', () => {
       reviewId: () => string | null;
     };
     internals.startReview(PENDING);
+    http.expectOne(`${JUSTIF_URL}/j-1/attachment`).flush({
+      publicId: 'att-1',
+      fileName: 'certificat.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      sha256: 'a'.repeat(64),
+      uploadedAt: '2026-09-10T09:00:00Z',
+    });
     internals.reviewForm.patchValue({ decision: 'ACCEPTED', decisionReason: '' });
     internals.submitReview();
     const review = http.expectOne(`${JUSTIF_URL}/j-1/review`);

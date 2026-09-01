@@ -107,6 +107,62 @@ export interface ReviewJustificationRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Pièces jointes des justificatifs (bloc G1-E)
+// ---------------------------------------------------------------------------
+
+/**
+ * `JustificationAttachmentResponses.Meta` — métadonnées d'une pièce
+ * jointe `STORED`. Jamais de `storageKey`, de chemin ni d'identifiant
+ * SQL. Routes :
+ * - `POST   /api/v1/me/attendance/justifications/{id}/attachment`          → 201
+ * - `GET    /api/v1/me/attendance/justifications/{id}/attachment`          → Meta | 404
+ * - `GET    /api/v1/me/attendance/justifications/{id}/attachment/download` → blob
+ * - `DELETE /api/v1/me/attendance/justifications/{id}/attachment`          → 204
+ * - `GET    /api/v1/attendance/justifications/{id}/attachment[/download]`  (examinateur)
+ */
+export interface JustificationAttachmentMeta {
+  publicId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedAt: string;
+}
+
+/** Taille maximale d'une pièce jointe (CDC §43 RG-071 : 5 Mo). */
+export const JUSTIFICATION_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+/** `accept` de l'input fichier (ergonomie ; le serveur re-vérifie les magic bytes). */
+export const JUSTIFICATION_ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+const ATTACHMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const ATTACHMENT_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png']);
+
+/** Contrôle client (ergonomie) : type déclaré + extension + taille. */
+export function checkAttachmentFile(file: File): { ok: true } | { ok: false; reason: string } {
+  const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
+  if (!ATTACHMENT_EXTENSIONS.has(ext) || (file.type && !ATTACHMENT_TYPES.has(file.type))) {
+    return { ok: false, reason: 'Format non autorisé : PDF, JPEG ou PNG uniquement.' };
+  }
+  if (file.size === 0) {
+    return { ok: false, reason: 'Le fichier est vide.' };
+  }
+  if (file.size > JUSTIFICATION_ATTACHMENT_MAX_BYTES) {
+    return { ok: false, reason: 'Le fichier dépasse la taille maximale autorisée (5 Mo).' };
+  }
+  return { ok: true };
+}
+
+/** Taille lisible (`1,2 Mo`). */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} o`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1).replace('.', ',')} Ko`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
+}
+
+// ---------------------------------------------------------------------------
 // Espace apprenant « Mes présences »
 // ---------------------------------------------------------------------------
 

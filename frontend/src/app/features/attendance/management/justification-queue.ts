@@ -19,11 +19,13 @@ import { RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
-import { AttendanceApiService } from '../attendance-api.service';
+import { AttendanceApiService, triggerAttachmentDownload } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
   ATTENDANCE_MANAGE_ROLES,
+  JustificationAttachmentMeta,
   JustificationResponse,
+  formatFileSize,
   justificationCategoryLabel,
   justificationStatusLabel,
 } from '../attendance.models';
@@ -79,6 +81,15 @@ export class JustificationQueue {
   protected readonly reviewId = signal<string | null>(null);
   protected readonly submitting = signal(false);
   protected readonly formError = signal<string | null>(null);
+  protected readonly formatFileSize = formatFileSize;
+
+  // Pièce jointe du justificatif en cours d'examen (bloc G1-E).
+  protected readonly attachment = signal<JustificationAttachmentMeta | 'loading' | 'none'>('none');
+  protected readonly downloading = signal(false);
+  protected readonly attachmentMeta = computed(() => {
+    const a = this.attachment();
+    return a === 'loading' || a === 'none' ? null : a;
+  });
   protected readonly reviewForm = this.fb.nonNullable.group({
     decision: ['ACCEPTED', Validators.required],
     decisionReason: ['', Validators.maxLength(500)],
@@ -134,10 +145,38 @@ export class JustificationQueue {
     this.reviewId.set(row.publicId);
     this.reviewForm.reset({ decision: 'ACCEPTED', decisionReason: '' });
     this.formError.set(null);
+    this.loadAttachment(row.publicId);
   }
   protected cancelReview(): void {
     this.reviewId.set(null);
     this.formError.set(null);
+    this.attachment.set('none');
+  }
+
+  protected downloadAttachment(): void {
+    const id = this.reviewId();
+    if (!id || this.downloading()) {
+      return;
+    }
+    this.downloading.set(true);
+    this.api.downloadJustificationAttachmentForReview(id).subscribe({
+      next: (response) => {
+        this.downloading.set(false);
+        triggerAttachmentDownload(response, this.attachmentMeta()?.fileName ?? 'justificatif');
+      },
+      error: (error: unknown) => {
+        this.downloading.set(false);
+        this.formError.set(toAttendanceError(error).message);
+      },
+    });
+  }
+
+  private loadAttachment(justificationId: string): void {
+    this.attachment.set('loading');
+    this.api.getJustificationAttachmentForReview(justificationId).subscribe({
+      next: (meta) => this.attachment.set(meta),
+      error: () => this.attachment.set('none'),
+    });
   }
 
   protected submitReview(): void {

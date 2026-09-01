@@ -23,6 +23,8 @@ export const NOTIFICATION_TYPES = [
   'SESSION_CANCELLED',
   'SESSION_SUBSTITUTION_ADDED',
   'SESSION_SUBSTITUTION_ENDED',
+  'JUSTIFICATION_ACCEPTED',
+  'JUSTIFICATION_REJECTED',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -31,6 +33,8 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   SESSION_CANCELLED: 'Séance annulée',
   SESSION_SUBSTITUTION_ADDED: 'Remplaçant affecté',
   SESSION_SUBSTITUTION_ENDED: 'Remplacement terminé',
+  JUSTIFICATION_ACCEPTED: 'Justificatif accepté',
+  JUSTIFICATION_REJECTED: 'Justificatif refusé',
 };
 
 export function notificationTypeLabel(value: string): string {
@@ -88,6 +92,8 @@ const PLANNING_LINK_ROLES = [
   'SCHOOL_ADMINISTRATION',
   'PEDAGOGICAL_MANAGER',
 ] as const;
+/** `/my-attendance` → réservé au `STUDENT` (destinataire d'une notification de justificatif). */
+const JUSTIFICATION_LINK_ROLES = ['STUDENT'] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -120,6 +126,9 @@ export function notificationLink(
   }
   if (n.resourceType === 'PLANNING_VERSION' && has(PLANNING_LINK_ROLES)) {
     return { commands: ['/planning/versions'], label: 'Voir les versions' };
+  }
+  if (n.resourceType === 'JUSTIFICATION' && has(JUSTIFICATION_LINK_ROLES)) {
+    return { commands: ['/my-attendance'], label: 'Voir mes présences' };
   }
   return null;
 }

@@ -11,11 +11,15 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
-import { AttendanceApiService } from '../attendance-api.service';
+import { AttendanceApiService, triggerAttachmentDownload } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
+  JUSTIFICATION_ATTACHMENT_ACCEPT,
   JUSTIFICATION_CATEGORIES,
+  JustificationAttachmentMeta,
   MyAttendanceDetail as MyAttendanceDetailDto,
+  checkAttachmentFile,
+  formatFileSize,
   justificationCategoryLabel,
   justificationStatusLabel,
 } from '../attendance.models';
@@ -61,6 +65,17 @@ export class MyAttendanceDetail {
   protected readonly attendanceStatusLabel = attendanceStatusLabel;
   protected readonly correctionActionLabel = correctionActionLabel;
   protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatFileSize = formatFileSize;
+  protected readonly attachmentAccept = JUSTIFICATION_ATTACHMENT_ACCEPT;
+
+  // Pièce jointe (bloc G1-E) — 'loading' | 'none' | Meta.
+  protected readonly attachment = signal<JustificationAttachmentMeta | 'loading' | 'none'>('loading');
+  protected readonly attachmentError = signal<string | null>(null);
+  protected readonly uploading = signal(false);
+  protected readonly uploadError = signal<string | null>(null);
+  protected readonly pendingFile = signal<File | null>(null);
+  protected readonly downloading = signal(false);
+  protected readonly removing = signal(false);
 
   protected readonly state = signal<DetailState>({ kind: 'loading' });
   protected readonly editing = signal(false);
@@ -87,6 +102,10 @@ export class MyAttendanceDetail {
   protected readonly canAmend = computed(
     () => this.isStudentContext() && this.detail()?.justification?.status === 'PENDING',
   );
+  protected readonly attachmentMeta = computed(() => {
+    const a = this.attachment();
+    return a === 'loading' || a === 'none' ? null : a;
+  });
 
   constructor() {
     this.load();
@@ -158,10 +177,120 @@ export class MyAttendanceDetail {
       });
   }
 
+  // --- Pièce jointe (bloc G1-E) ------------------------------------
+
+  protected onFileSelected(event: Event): void {
+    this.uploadError.set(null);
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      this.pendingFile.set(null);
+      return;
+    }
+    const check = checkAttachmentFile(file);
+    if (!check.ok) {
+      this.pendingFile.set(null);
+      this.uploadError.set(check.reason);
+      input.value = '';
+      return;
+    }
+    this.pendingFile.set(file);
+  }
+
+  protected uploadAttachment(): void {
+    const j = this.detail()?.justification;
+    const file = this.pendingFile();
+    if (!j || !file || this.uploading() || !this.canAmend()) {
+      return;
+    }
+    this.uploading.set(true);
+    this.uploadError.set(null);
+    this.api.uploadMyJustificationAttachment(j.publicId, file).subscribe({
+      next: (meta) => {
+        this.uploading.set(false);
+        this.pendingFile.set(null);
+        if (!this.isStudentContext()) {
+          return;
+        }
+        this.attachment.set(meta);
+        this.notifications.info('Pièce jointe déposée.');
+      },
+      error: (error: unknown) => {
+        this.uploading.set(false);
+        this.uploadError.set(toAttendanceError(error).message);
+      },
+    });
+  }
+
+  protected downloadAttachment(): void {
+    const j = this.detail()?.justification;
+    if (!j || this.downloading()) {
+      return;
+    }
+    this.downloading.set(true);
+    this.api.downloadMyJustificationAttachment(j.publicId).subscribe({
+      next: (response) => {
+        this.downloading.set(false);
+        triggerAttachmentDownload(response, this.attachmentMeta()?.fileName ?? 'justificatif');
+      },
+      error: (error: unknown) => {
+        this.downloading.set(false);
+        this.attachmentError.set(toAttendanceError(error).message);
+      },
+    });
+  }
+
+  protected removeAttachment(): void {
+    const j = this.detail()?.justification;
+    if (!j || this.removing() || !this.canAmend()) {
+      return;
+    }
+    this.removing.set(true);
+    this.attachmentError.set(null);
+    this.api.deleteMyJustificationAttachment(j.publicId).subscribe({
+      next: () => {
+        this.removing.set(false);
+        if (!this.isStudentContext()) {
+          return;
+        }
+        this.attachment.set('none');
+        this.notifications.info('Pièce jointe retirée.');
+      },
+      error: (error: unknown) => {
+        this.removing.set(false);
+        this.attachmentError.set(toAttendanceError(error).message);
+      },
+    });
+  }
+
+  private loadAttachment(justificationId: string): void {
+    this.attachment.set('loading');
+    this.attachmentError.set(null);
+    this.api.getMyJustificationAttachment(justificationId).subscribe({
+      next: (meta) => this.attachment.set(meta),
+      error: (error: unknown) => {
+        const view = toAttendanceError(error);
+        if (view.notFound) {
+          this.attachment.set('none');
+          return;
+        }
+        this.attachment.set('none');
+        this.attachmentError.set(view.message);
+      },
+    });
+  }
+
   private load(): void {
     this.state.set({ kind: 'loading' });
     this.api.getMyAttendance(this.id).subscribe({
-      next: (detail) => this.state.set({ kind: 'ready', detail }),
+      next: (detail) => {
+        this.state.set({ kind: 'ready', detail });
+        if (detail.justification) {
+          this.loadAttachment(detail.justification.publicId);
+        } else {
+          this.attachment.set('none');
+        }
+      },
       error: (error: unknown) => {
         const view = toAttendanceError(error);
         if (view.notFound) {
