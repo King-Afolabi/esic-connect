@@ -32,10 +32,12 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -671,25 +673,56 @@ class CourseSessionIntegrationTests {
         String id = (String) created("/api/v1/sessions",
                 createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
 
-        Callable<HttpStatus> openCall = () -> (HttpStatus) exchange(HttpMethod.POST,
-                "/api/v1/sessions/" + id + "/open", null, admin).getStatusCode();
-        Callable<HttpStatus> cancelCall = () -> (HttpStatus) exchange(HttpMethod.POST,
-                "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "course"), admin).getStatusCode();
+        // Les deux requêtes sont armées puis relâchées ensemble pour
+        // maximiser la contention réelle sur la même version d'entité.
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch go = new CountDownLatch(1);
+        Callable<HttpStatus> openCall = () -> {
+            ready.countDown();
+            go.await();
+            return (HttpStatus) exchange(HttpMethod.POST,
+                    "/api/v1/sessions/" + id + "/open", null, admin).getStatusCode();
+        };
+        Callable<HttpStatus> cancelCall = () -> {
+            ready.countDown();
+            go.await();
+            return (HttpStatus) exchange(HttpMethod.POST,
+                    "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "course"), admin).getStatusCode();
+        };
         ExecutorService pool = Executors.newFixedThreadPool(2);
         List<HttpStatus> statuses;
         try {
-            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(openCall, cancelCall));
-            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+            Future<HttpStatus> openFuture = pool.submit(openCall);
+            Future<HttpStatus> cancelFuture = pool.submit(cancelCall);
+            ready.await();
+            go.countDown();
+            statuses = List.of(join(openFuture), join(cancelFuture));
         } finally {
             pool.shutdownNow();
         }
-        // Verrou optimiste : un gagnant (204), un perdant (409 contrôlé), jamais 5xx.
+        // Invariant produit : jamais de 5xx, jamais d'état partiel. Selon
+        // l'entrelacement réel des transactions, plusieurs issues sont
+        // toutes LÉGITIMES :
+        //   * course détectée : un gagnant 204, un perdant 409 (verrou
+        //     optimiste) ;
+        //   * exécutions sérialisées, ouverture d'abord : 204 (PLANNED ->
+        //     OPEN) puis 204 (OPEN -> CANCELLED, transition valide G1-C.1) ;
+        //   * exécutions sérialisées, annulation d'abord : 204 (PLANNED ->
+        //     CANCELLED) puis 404 (séance non opérationnelle à l'ouverture).
+        // On vérifie donc l'invariant, pas un entrelacement particulier.
         assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
-        assertThat(statuses).containsExactlyInAnyOrder(HttpStatus.NO_CONTENT, HttpStatus.CONFLICT);
-        // État final cohérent : soit OPEN (open a gagné), soit annulée (GET -> 404).
-        HttpStatus getStatus = (HttpStatus) exchange(HttpMethod.GET, "/api/v1/sessions/" + id, null, admin)
-                .getStatusCode();
-        assertThat(getStatus).isIn(HttpStatus.OK, HttpStatus.NOT_FOUND);
+        assertThat(statuses).allMatch(s -> s == HttpStatus.NO_CONTENT
+                || s == HttpStatus.CONFLICT || s == HttpStatus.NOT_FOUND);
+        assertThat(statuses).contains(HttpStatus.NO_CONTENT);
+        // État final cohérent et lisible : la séance existe toujours
+        // (GET -> 200) avec un statut terminal-ou-opérationnel unique.
+        ResponseEntity<Map<String, Object>> finalGet = exchange(HttpMethod.GET,
+                "/api/v1/sessions/" + id, null, admin);
+        assertThat(finalGet.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(finalGet.getBody().get("status")).isIn("OPEN", "CANCELLED");
+        // Au plus une annulation effective, jamais de double effet.
+        assertThat(auditActions(id).stream().filter("SESSION_CANCELLED"::equals).count())
+                .isLessThanOrEqualTo(1L);
     }
 
     @Test
@@ -996,7 +1029,14 @@ class CourseSessionIntegrationTests {
      * inchangés sans horloge figée.
      */
     private Map<String, Object> createBody(String teacherPublicId, List<String> classPublicIds, String title) {
-        Instant now = Instant.now();
+        // Bornes à la seconde entière : la colonne MySQL TIMESTAMP(6) ne
+        // conserve pas la précision sous-microseconde d'un Instant.now()
+        // (nanoseconde sous Linux, microseconde sous macOS). Sans cette
+        // troncature, la valeur renvoyée par la création (Instant en
+        // mémoire) diffère de la valeur relue en base, ce qui fait
+        // basculer les assertions de bord exact « ± 60 min » de
+        // substitutionPeriodMustReallyOverlapTheSessionWindow.
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         java.util.HashMap<String, Object> body = new java.util.HashMap<>();
         body.put("teacherPublicId", teacherPublicId);
         body.put("classPublicIds", classPublicIds);
