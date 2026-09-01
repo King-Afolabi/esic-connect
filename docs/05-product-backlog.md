@@ -1589,12 +1589,24 @@ Personas :
 > consigné).
 >
 > **Avancement (1er septembre 2026).** **G1-A**, **G1-B**, **G1-C**
-> (C.1–C.3) et **G1-D** (notifications persistantes, audience formateur)
-> sont livrés et verts (back `./mvnw clean test` → **743 tests, 0 échec**
-> — 3 fuseaux ; front `npm test` → **570 tests, 0 échec** ;
-> `lint`/`build`/`audit` verts). **G1-E, G1-F, G1-G** : non démarrés.
-> Détail par checkpoint et commande :
-> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
+> (C.1–C.3), **G1-D** (notifications persistantes, audience formateur),
+> **G1-E** (pièces jointes des justificatifs), **G1-F** (tableaux de bord
+> par rôle) et **G1-G** (recette API) sont livrés, avec les deux passes
+> correctives probatoires du 1er septembre 2026. Suites vertes : back
+> `./mvnw clean test` → **811 tests, 0 échec, 0 erreur, 0 ignoré**
+> (défaut, `TZ=UTC`, `TZ=Europe/Paris`) ; front `npm test` → **71
+> fichiers / 600 tests / 0 échec** ; `lint` / `build` / `audit` verts ;
+> `ModularityTests` vert (**14 modules**) ; Flyway **V1 → V16** validé sur
+> base fraîche à la passe précédente (aucune migration modifiée). HEAD
+> avant cette finalisation : `f4b128216d187519600633f6be25ae8a77d30ba1`.
+> Plusieurs blocs restent **`PARTIAL`** au sens produit (voir les statuts
+> finaux ci-dessous) : G1-E durcissement opérationnel, G1-F global (cartes
+> manager / administration), démonstration navigateur `NOT_IMPLEMENTED`,
+> démonstration manuelle `NOT_PERFORMED`. **Groupe 1 global :
+> `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** Détail par
+> checkpoint et commande :
+> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` ; rapport final :
+> `docs/reports/G1_FINAL_REPORT.md`.
 
 ## G1-A — Interfaces Angular des API administratives existantes
 
@@ -1678,6 +1690,7 @@ Personas :
 | Définition de fini | `GET /api/v1/me/dashboard` typé par rôle ; front cartes + listes ; suite back (par rôle, périmètre, bornes, vide, N+1) + front + axe-core |
 | Statut initial | `PARTIAL` (dashboard générique unique) |
 | Preuves attendues | endpoint + repositories de projection, `features/dashboard/**`, tests |
+| **Statut final (01/09/2026)** | **Bloc global `PARTIAL`.** Module `dashboard` + `GET /api/v1/me/dashboard` typé par rôle, lecture seule, agrégats `COUNT`/`GROUP BY`/`Pageable`, DTO sans identifiant SQL ni e-mail, périmètre RP décidé serveur, **contexte de rôle multi-rôle vérifié côté serveur** (`403 DASHBOARD_CONTEXT_NOT_HELD` si le rôle n'est pas dans le JWT — passe corrective D). **Carte `STUDENT` : `IMPLEMENTED_AND_TESTED`** (ses seules données, AC-017). **Carte `TEACHER` : `IMPLEMENTED_AND_TESTED`** (séances à venir / à ouvrir, y compris comme remplaçant `ACTIVE` — passe corrective C). **Carte `PEDAGOGICAL_MANAGER` : `PARTIAL`** (classes du périmètre + séances à venir livrées ; manquent justificatifs en attente périmétrés, alternances `UNKNOWN`, planning actif, conflits récents — pas de port agrégé borné). **Carte `ADMINISTRATION` : `PARTIAL`** (comptes / justificatifs globaux / imports / séances du jour livrés ; dernières opérations d'audit non exposées). **Coût SQL :** anti-N+1 **selon le nombre de classes** corrigé (`ClassGroupDirectory.findByPublicIds`, 1 requête ; preuve `1 classe → 14 requêtes`, `15 classes → 14`) ; coût **selon le nombre de séances affichées linéaire** (≈ 2 requêtes/séance : `1 séance → 10 requêtes`, `10 séances → 28`), borné en pratique par la fenêtre 7 j + l'affichage à 10, **non regroupé** (`DEC-G1-010`, documenté, hors périmètre). Ne pas écrire « absence totale de N+1 ». Front `/dashboard` section « Mon activité ». Détail : `G1_FINAL_REPORT.md` §3 / §7. |
 
 ## G1-E — Pièces jointes sécurisées des justificatifs
 
@@ -1693,6 +1706,7 @@ Personas :
 | Statut initial | `PARTIAL` (justificatif métier sans fichier) |
 | Preuves attendues | `JustificationAttachment*`, `V16`, tests, `docs/demo-data/*` fictifs |
 | **Statut (01/09/2026)** | **`IN_PROGRESS` — checkpoint 1 « schéma + modèle + stockage » livré et testé** (commit `feat(justification): créer le stockage sécurisé des pièces jointes`). `V16` `justification_attachment` (métadonnées seules ; `storage_key` opaque, `content_type` re-dérivé des magic bytes, une pièce active par justificatif) ; port public `attendance.JustificationFileStorage` (le métier ne dépend jamais de `java.nio.file`) + adaptateur `LocalFilesystemJustificationFileStorage` (clé dispersée, déplacement atomique, taille pendant le flux, SHA-256, anti-traversal, hors webroot) ; `JustificationFileSafetyValidator` (pur : extension + type + magic bytes, rejet ZIP/OLE2, cohérence extension↔contenu, nom assaini). **Aucun endpoint / écran** à ce checkpoint. **Antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS` — jamais « garanti sans malware »). Back **+23** tests (749→772, Flyway `V1→V16`, `ModularityTests` vert) ; front inchangé. **Restent** : service de dépôt + compensation base/fichier (DEC-G1-009), tâche `@Scheduled` de réconciliation, endpoints multipart + téléchargement (`nosniff` + `Content-Disposition: attachment`), audit / notification, upload Angular. Détail : `G1_IMPLEMENTATION_PROGRESS.md` § « G1-E ». |
+| **Statut final (01/09/2026)** | **Parcours fonctionnel : `IMPLEMENTED_AND_TESTED`** (checkpoints 2-4, commits `1835532` + `5d5f451`). Dépôt multipart propriétaire (`POST/GET/DELETE /api/v1/me/attendance/justifications/{id}/attachment`), téléchargement propriétaire **et** examinateur périmétré (`Content-Disposition: attachment` + `nosniff` + type re-dérivé ; hors périmètre → `404`), séquence base↔fichier avec compensation (`JustificationAttachmentStore`), réconciliation `@Scheduled` bornée des `PENDING_STORAGE`, notification `AFTER_COMMIT` du propriétaire à l'examen. Échec d'audit **après** un stockage réussi : **isolé** (`201` rendu, pièce durable et téléchargeable, trace non rejouée — passe corrective A ; preuve directe unité Mockito ajoutée à la 2e passe). `EF-JUS-001` / `EF-JUS-002` / `RG-071` / `RG-072` / `CDC §21.5` → `IMPLEMENTED_AND_TESTED`. **Durcissement opérationnel : `PARTIAL`** — **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; **balayage des fichiers orphelins `NOT_IMPLEMENTED`** (la réconciliation ne traite QUE les lignes `PENDING_STORAGE` ; un fichier laissé par un retrait dont la suppression best-effort a échoué n'est pas balayé — passe corrective B, test de figure de portée) ; remplacement direct d'une pièce ; **rétention `DELETED` `À_DÉFINIR`** (`R-G1-30`). Détail : `G1_FINAL_REPORT.md` §3 / §4. |
 
 ## G1-G — Recette globale, tests e2e et documentation finale
 
@@ -1707,6 +1721,7 @@ Personas :
 | Définition de fini | `docs/demo-data/planning-demo.csv` + `planning-conflicts-demo.csv` + fichiers justificatifs fictifs ; seed idempotent étendu ; `G1_FINAL_REPORT.md` ; commits `docs(demo)` puis `docs(g1)` rapport |
 | Statut initial | `PARTIAL` (recette API partielle, §11.8 du guide de démo) |
 | Preuves attendues | `frontend/e2e/**` ou script API, `docs/reports/G1_FINAL_REPORT.md` |
+| **Statut final (01/09/2026)** | **Recette API : `IMPLEMENTED_AND_TESTED`** — `PriorityPathRecetteIntegrationTests` (`@SpringBootTest`, `TestRestTemplate`) rejoue en continu référentiel → import apprenants → **activation d'un apprenant réellement importé** → import planning (simulation AC-007) → publication → **ce même apprenant** émarge → rapport + export CSV → annulation + notification → remplacement → justificatif + pièce jointe → acceptation + notification → tableaux de bord. **e2e navigateur : `NOT_IMPLEMENTED`** (Playwright non retenu, coût disproportionné — `DEC-G1-011` ; aucune tentative). **Démonstration manuelle (UI navigateur) : `NOT_PERFORMED`** — aucune interaction navigateur consignée ; la recette API vaut **preuve automatisée uniquement**. Totaux : back **811 tests, 0 échec** (défaut / `TZ=UTC` / `TZ=Europe/Paris`), front **71 fichiers / 600 tests / 0 échec**, `ModularityTests` vert (**14 modules**), Flyway **V1 → V16**. **Groupe 1 global : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** Détail : `G1_FINAL_REPORT.md`. |
 
 ---
 
