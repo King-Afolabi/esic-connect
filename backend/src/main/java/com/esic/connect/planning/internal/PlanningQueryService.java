@@ -31,15 +31,18 @@ class PlanningQueryService {
     private final PlanningImportJobRepository jobRepository;
     private final PlanningImportRowRepository rowRepository;
     private final PlanningImportRowIssueRepository rowIssueRepository;
+    private final PlanningVersionRepository versionRepository;
     private final ClassGroupDirectory classGroupDirectory;
 
     PlanningQueryService(PlanningImportJobRepository jobRepository,
                          PlanningImportRowRepository rowRepository,
                          PlanningImportRowIssueRepository rowIssueRepository,
+                         PlanningVersionRepository versionRepository,
                          ClassGroupDirectory classGroupDirectory) {
         this.jobRepository = jobRepository;
         this.rowRepository = rowRepository;
         this.rowIssueRepository = rowIssueRepository;
+        this.versionRepository = versionRepository;
         this.classGroupDirectory = classGroupDirectory;
     }
 
@@ -99,13 +102,16 @@ class PlanningQueryService {
                 .map(ClassGroupDirectory.ClassGroupRef::publicId).orElse(null);
         UUID yearPublicId = classGroupDirectory.findByInternalId(job.getClassGroupId())
                 .map(ClassGroupDirectory.ClassGroupRef::academicYearPublicId).orElse(null);
+        UUID publishedVersionPublicId = job.getPublishedVersionId() == null ? null
+                : versionRepository.findById(job.getPublishedVersionId())
+                        .map(PlanningVersion::getPublicId).orElse(null);
         return new JobResponse(
                 job.getPublicId(), job.getStatus().name(), classPublicId, yearPublicId,
                 job.getOriginalFileName(), job.getFileSizeBytes(), job.getCsvSeparator(),
                 job.getTotalRows(), job.getValidRows(), job.getWarningRows(), job.getErrorRows(),
                 job.getAddedRows(), job.getModifiedRows(), job.getUnchangedRows(), job.getRemovedEntries(),
                 job.isConfirmable(), job.getSimulatedAt(), job.getExpiresAt(), job.getPublishedAt(),
-                null, job.getFailureReason(), job.getCreatedAt());
+                publishedVersionPublicId, job.getFailureReason(), job.getCreatedAt());
     }
 
     private static RowResponse toRowResponse(PlanningImportRow row, List<PlanningImportRowIssue> issues) {

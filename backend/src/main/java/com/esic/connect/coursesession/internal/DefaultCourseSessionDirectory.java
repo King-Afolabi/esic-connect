@@ -2,6 +2,7 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory;
+import com.esic.connect.identity.UserDirectory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -33,15 +34,18 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
     private final CourseSessionRepository sessionRepository;
     private final AttendanceCheckpointRepository checkpointRepository;
     private final ClassGroupDirectory classGroupDirectory;
+    private final UserDirectory userDirectory;
     private final CourseSessionAccessGuard accessGuard;
 
     DefaultCourseSessionDirectory(CourseSessionRepository sessionRepository,
                                   AttendanceCheckpointRepository checkpointRepository,
                                   ClassGroupDirectory classGroupDirectory,
+                                  UserDirectory userDirectory,
                                   CourseSessionAccessGuard accessGuard) {
         this.sessionRepository = sessionRepository;
         this.checkpointRepository = checkpointRepository;
         this.classGroupDirectory = classGroupDirectory;
+        this.userDirectory = userDirectory;
         this.accessGuard = accessGuard;
     }
 
@@ -52,7 +56,10 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return new SessionAccess(Access.NOT_FOUND, null);
         }
         Optional<CourseSession> found = sessionRepository.findByPublicId(sessionPublicId);
-        if (found.isEmpty()) {
+        if (found.isEmpty() || !found.get().isOperational()) {
+            // Séance inexistante OU retirée par une republication de
+            // planning (DEC-G1-004 règle 4) : indistinguable d'une
+            // absence pour tout accès métier (audit G1-B.1).
             return new SessionAccess(Access.NOT_FOUND, null);
         }
         CourseSession session = found.get();
@@ -70,6 +77,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return Optional.empty();
         }
         return sessionRepository.findByPublicId(sessionPublicId)
+                .filter(CourseSession::isOperational)
                 .map(session -> toRef(session, classPublicIds(session)));
     }
 
@@ -80,6 +88,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return Optional.empty();
         }
         return sessionRepository.findByPublicId(sessionPublicId)
+                .filter(CourseSession::isOperational)
                 .flatMap(session -> toRef(session, classPublicIds(session)).checkpoint(checkpointPublicId));
     }
 
@@ -98,6 +107,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return List.of();
         }
         List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
         specs.add(CourseSessionSpecifications.hasAnyClassIn(internalIds));
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
@@ -119,6 +129,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         }
         return checkpointRepository.findByPublicId(checkpointPublicId)
                 .map(cp -> cp.getCourseSession())
+                .filter(CourseSession::isOperational)
                 .map(session -> toRef(session, classPublicIds(session)));
     }
 
@@ -126,6 +137,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
     @Transactional(readOnly = true)
     public List<SessionRef> findSessionsInRange(Instant from, Instant to) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
         }
@@ -135,6 +147,30 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
                 .stream()
                 .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExistingSessionWindow> findOperationalSessionWindows(Instant from, Instant to) {
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.endsAfter(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsBefore(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
+                .stream()
+                .map(session -> new ExistingSessionWindow(
+                        session.getPublicId(),
+                        session.getPlanningSlotPublicId(),
+                        userDirectory.findByInternalId(session.getTeacherUserId())
+                                .map(UserDirectory.UserRef::publicId).orElse(null),
+                        classPublicIds(session),
+                        session.getStartsAt(),
+                        session.getEndsAt()))
                 .toList();
     }
 

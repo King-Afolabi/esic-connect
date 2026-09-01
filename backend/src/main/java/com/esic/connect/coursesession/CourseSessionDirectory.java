@@ -78,6 +78,42 @@ public interface CourseSessionDirectory {
      */
     List<SessionRef> findSessionsInRange(Instant from, Instant to);
 
+    /**
+     * Fenêtres des séances <strong>opérationnelles</strong> (hors
+     * supersédées / annulées) dont l'intervalle {@code [startsAt, endsAt)}
+     * chevauche {@code [from, to)}. Contrat <strong>100 % UUID publics</strong> :
+     * le module {@code planning} s'en sert pour détecter un conflit
+     * formateur / classe avec des séances <strong>déjà publiées</strong>
+     * (RG-034) sans importer aucun repository ni entité de
+     * {@code coursesession}.
+     *
+     * @param from borne basse (incluse ; {@code null} = ouverte)
+     * @param to   borne haute (exclue ; {@code null} = ouverte)
+     */
+    List<ExistingSessionWindow> findOperationalSessionWindows(Instant from, Instant to);
+
+    /**
+     * Fenêtre publique minimale d'une séance existante — pour la
+     * détection de conflit inter-modules.
+     *
+     * @param sessionPublicId      identifiant public de la séance
+     * @param planningSlotPublicId identité stable du créneau de planning
+     *                             d'origine, ou {@code null} pour une
+     *                             séance exceptionnelle manuelle
+     * @param teacherPublicId      formateur principal ({@code user_account.public_id})
+     * @param classGroupPublicIds  classes rattachées
+     * @param startsAt             début (UTC)
+     * @param endsAt               fin (UTC)
+     */
+    record ExistingSessionWindow(
+            UUID sessionPublicId,
+            UUID planningSlotPublicId,
+            UUID teacherPublicId,
+            Set<UUID> classGroupPublicIds,
+            Instant startsAt,
+            Instant endsAt) {
+    }
+
     /** Niveau d'accès demandé sur une séance. */
     enum AccessLevel {
         /** Consultation (séance + présences). {@code TEACHER} : sa séance uniquement. */

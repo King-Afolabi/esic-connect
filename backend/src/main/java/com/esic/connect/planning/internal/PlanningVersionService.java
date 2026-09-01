@@ -73,8 +73,9 @@ class PlanningVersionService {
         }
         List<VersionEntryResponse> entries = entryRepository
                 .findByPlanningVersion_IdOrderByStartsAtAsc(version.getId()).stream()
-                .map(e -> new VersionEntryResponse(e.getPublicId(), e.getSlotKey(), e.getTitle(),
-                        e.getStartsAt(), e.getEndsAt(), e.getTimeZoneId(), e.getRoomCode(), e.getSessionPublicId()))
+                .map(e -> new VersionEntryResponse(e.getPublicId(), e.getSlotPublicId(), e.getSlotKey(),
+                        e.getTitle(), e.getStartsAt(), e.getEndsAt(), e.getTimeZoneId(), e.getRoomCode(),
+                        e.getSessionPublicId()))
                 .toList();
         return new VersionDetailResponse(toVersionResponse(version, schedule, classRef), entries);
     }

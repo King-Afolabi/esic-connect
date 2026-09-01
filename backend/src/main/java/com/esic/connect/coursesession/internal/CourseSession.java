@@ -58,11 +58,14 @@ class CourseSession extends BaseEntity {
     @Column(name = "exception_reason")
     private String exceptionReason;
 
-    // V13 (DEC-G1-001) : identifiant public de l'entrée de planning à
-    // l'origine de la séance. NULL ⇒ séance exceptionnelle manuelle ;
-    // non NULL ⇒ séance issue d'un planning publié (RG-016).
-    @Column(name = "planning_entry_public_id", updatable = false)
-    private java.util.UUID planningEntryPublicId;
+    // V13 (DEC-G1-001/002 ; renommée à l'audit G1-B.1) : identité STABLE
+    // du créneau de planning à l'origine de la séance — le
+    // `planning_entry.slot_public_id` déterministe, constant d'une version
+    // de planning à la suivante, JAMAIS un `planning_entry.public_id`
+    // (aléatoire, propre à chaque version). NULL ⇒ séance exceptionnelle
+    // manuelle ; non NULL ⇒ séance issue d'un planning publié (RG-016).
+    @Column(name = "planning_slot_public_id", updatable = false)
+    private java.util.UUID planningSlotPublicId;
 
     // V13 (DEC-G1-004 règle 4) : une republication a retiré le créneau
     // d'origine. La séance est alors filtrée de l'affichage.
@@ -116,15 +119,16 @@ class CourseSession extends BaseEntity {
     }
 
     /**
-     * Séance d'origine <strong>planning</strong> (V13, DEC-G1-001) :
-     * pas de motif d'exception, {@code planningEntryPublicId} renseigné.
-     * Créée par {@link DefaultPlanningSessionWriter} à la publication d'un
-     * planning.
+     * Séance d'origine <strong>planning</strong> (V13, DEC-G1-001/002) :
+     * pas de motif d'exception, {@code planningSlotPublicId} renseigné
+     * avec l'identité stable du créneau (constante d'une version de
+     * planning à la suivante). Créée par {@link DefaultPlanningSessionWriter}
+     * à la publication d'un planning.
      */
-    static CourseSession fromPlanningEntry(java.util.UUID planningEntryPublicId, Long teacherUserId,
-                                           String title, Instant startsAt, Instant endsAt, String timeZoneId) {
+    static CourseSession fromPlanningSlot(java.util.UUID planningSlotPublicId, Long teacherUserId,
+                                          String title, Instant startsAt, Instant endsAt, String timeZoneId) {
         CourseSession session = new CourseSession(teacherUserId, title, startsAt, endsAt, timeZoneId, null);
-        session.planningEntryPublicId = planningEntryPublicId;
+        session.planningSlotPublicId = planningSlotPublicId;
         return session;
     }
 
@@ -185,6 +189,19 @@ class CourseSession extends BaseEntity {
         return status == SessionLifecycle.OPEN;
     }
 
+    /**
+     * Séance <strong>opérationnelle</strong> : consultable, ouvrable,
+     * émargeable, comptée dans l'assiduité et les rapports. Exclut les
+     * séances d'origine planning retirées par une republication
+     * (DEC-G1-004 règle 4 ; garde centralisée, audit G1-B.1). L'état
+     * {@code CANCELLED} du bloc G1-C viendra s'ajouter à cette condition.
+     * Seul l'historique des versions de planning (module {@code planning})
+     * continue de référencer une séance non opérationnelle.
+     */
+    boolean isOperational() {
+        return !supersededByScheduling;
+    }
+
     Long getTeacherUserId() {
         return teacherUserId;
     }
@@ -213,8 +230,8 @@ class CourseSession extends BaseEntity {
         return exceptionReason;
     }
 
-    java.util.UUID getPlanningEntryPublicId() {
-        return planningEntryPublicId;
+    java.util.UUID getPlanningSlotPublicId() {
+        return planningSlotPublicId;
     }
 
     boolean isSupersededByScheduling() {

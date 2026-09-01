@@ -134,9 +134,17 @@ export interface PlanningVersionResponse {
   createdAt: string;
 }
 
-/** `PlanningResponses.VersionEntryResponse`. */
+/**
+ * `PlanningResponses.VersionEntryResponse`.
+ *
+ * - `publicId`     : identifiant de CETTE ligne de version (aléatoire) ;
+ * - `slotPublicId` : identité **stable** du créneau à travers les
+ *   versions (même valeur d'une version à la suivante — DEC-G1-002) ;
+ * - `sessionPublicId` : séance `course_session` liée (peut être `null`).
+ */
 export interface PlanningVersionEntryResponse {
   publicId: string;
+  slotPublicId: string;
   slotKey: string;
   title: string;
   startsAt: string;

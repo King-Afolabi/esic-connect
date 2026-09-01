@@ -128,6 +128,25 @@ describe('PlanningImportReview', () => {
     expect(s.text()).toContain('Ce planning est publié');
   });
 
+  it('treats a concurrent idempotent publish (200 + alreadyPublished) as success, not an error', () => {
+    const s = setup();
+    s.flushJob();
+    s.internals.startPublish();
+    s.fixture.detectChanges();
+    s.internals.confirmPublish();
+
+    // Course concurrente perdue côté serveur → 200 avec alreadyPublished=true
+    // (audit G1-B.1 : jamais 409/FAILED pour une course idempotente).
+    s.http
+      .expectOne(`${JOB_URL}/publish`)
+      .flush({ jobPublicId: JOB_ID, versionPublicId: 'v-1', versionNumber: 1, alreadyPublished: true });
+
+    s.flushJob({ ...SIMULATED_JOB, status: 'PUBLISHED', publishedVersionPublicId: 'v-1' });
+    expect(notifications.info).toHaveBeenCalledWith(expect.stringContaining('déjà publié'));
+    expect(notifications.error).not.toHaveBeenCalled();
+    expect(s.internals.actionError()).toBeFalsy();
+  });
+
   it('renders a 409 blocking error from publish without leaving a confirm panel dangling', () => {
     const s = setup();
     s.flushJob();

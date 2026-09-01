@@ -112,11 +112,23 @@ CREATE TABLE planning_version (
 CREATE INDEX idx_planning_version_schedule ON planning_version (planning_schedule_id, version_number);
 
 -- ---------------------------------------------------------------------------
--- planning_entry : un créneau d'UNE version publiée. `slot_key` = identité
--- stable fournie par le CSV (DEC-G1-002). `teacher_user_id` interne au
--- module. `room_code` = code fonctionnel (pas de FK, RG-035).
--- `session_public_id` = séance `course_session` créée / réutilisée à la
--- publication (lien renseigné par `PlanningSessionWriter`, DEC-G1-001).
+-- planning_entry : un créneau d'UNE version publiée.
+--
+-- IDENTITÉ (corrigée à l'audit G1-B.1, 1er sept. 2026 — DEC-G1-002) :
+--   * `public_id`      = identifiant public de CETTE ligne de version.
+--     ALÉATOIRE et unique : deux versions successives d'un même créneau
+--     portent deux `planning_entry.public_id` DIFFÉRENTS.
+--   * `slot_public_id` = identité STABLE du créneau À TRAVERS LES
+--     VERSIONS. Déterministe : `UUIDv3(planning_schedule.public_id || '|'
+--     || slot_key)`. C'est cette valeur — et jamais `public_id` — qui est
+--     transmise au port `coursesession.PlanningSessionWriter` comme
+--     `slotPublicId` et stockée dans `course_session.planning_slot_public_id`.
+--   * `slot_key`       = libellé de créneau fourni dans le CSV, unique
+--     `(planning_version_id, slot_key)` au sein d'une version.
+-- `teacher_user_id` interne au module. `room_code` = code fonctionnel
+-- (pas de FK, RG-035). `session_public_id` = séance `course_session`
+-- créée / réutilisée à la publication (lien renseigné par
+-- `PlanningSessionWriter`, DEC-G1-001).
 -- ---------------------------------------------------------------------------
 CREATE TABLE planning_entry (
     id                   BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -124,6 +136,7 @@ CREATE TABLE planning_entry (
     planning_version_id  BIGINT UNSIGNED NOT NULL,
     planning_schedule_id BIGINT UNSIGNED NOT NULL,   -- dénormalisé (requêtes par planning)
     slot_key             VARCHAR(64)     NOT NULL,
+    slot_public_id       BINARY(16)      NOT NULL,   -- identité stable du créneau inter-versions (DEC-G1-002)
     class_group_id       BIGINT UNSIGNED NOT NULL,
     teacher_user_id      BIGINT UNSIGNED NOT NULL,
     room_code            VARCHAR(50)     NULL,
@@ -148,6 +161,8 @@ CREATE TABLE planning_entry (
 CREATE INDEX idx_planning_entry_schedule ON planning_entry (planning_schedule_id);
 CREATE INDEX idx_planning_entry_window ON planning_entry (starts_at, ends_at);
 CREATE INDEX idx_planning_entry_teacher ON planning_entry (teacher_user_id);
+-- Retrouver toutes les versions historiques d'un même créneau stable.
+CREATE INDEX idx_planning_entry_slot ON planning_entry (planning_schedule_id, slot_public_id);
 
 -- ---------------------------------------------------------------------------
 -- planning_import_job : en-tête d'un import (téléversement + simulation).

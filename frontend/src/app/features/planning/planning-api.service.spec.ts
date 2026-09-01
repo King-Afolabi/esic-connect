@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { PlanningApiService } from './planning-api.service';
+import { PlanningVersionDetailResponse } from './planning.models';
 
 const IMPORTS = '/api/v1/planning-imports';
 const VERSIONS = '/api/v1/planning/versions';
@@ -74,6 +75,31 @@ describe('PlanningApiService', () => {
     const req = http.expectOne(`${VERSIONS}/v-1`);
     expect(req.request.method).toBe('GET');
     req.flush({ version: {}, entries: [] });
+  });
+
+  it('getVersion entries carry the stable slot identity and no ambiguous entryPublicId', () => {
+    let detail: PlanningVersionDetailResponse | undefined;
+    service.getVersion('v-1').subscribe((d) => (detail = d));
+    http.expectOne(`${VERSIONS}/v-1`).flush({
+      version: { publicId: 'v-1', versionNumber: 1, status: 'PUBLISHED' },
+      entries: [
+        {
+          publicId: 'entry-row-1',
+          slotPublicId: 'slot-stable-1',
+          slotKey: 'S1',
+          title: 'Cours',
+          startsAt: '2026-09-07T07:00:00Z',
+          endsAt: '2026-09-07T10:00:00Z',
+          timeZoneId: 'Europe/Paris',
+          roomCode: 'A1',
+          sessionPublicId: 'sess-1',
+        },
+      ],
+    });
+    const entry = detail!.entries[0];
+    expect(entry.slotPublicId).toBe('slot-stable-1');
+    expect(entry.publicId).not.toBe(entry.slotPublicId);
+    expect(Object.keys(entry)).not.toContain('entryPublicId');
   });
 
   it('never sends a client scope / manager parameter', () => {

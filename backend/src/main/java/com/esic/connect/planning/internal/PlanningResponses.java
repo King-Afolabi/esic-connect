@@ -91,9 +91,19 @@ final class PlanningResponses {
             Instant createdAt) {
     }
 
-    /** Une entrée (créneau) d'une version de planning. */
+    /**
+     * Une entrée (créneau) d'une version de planning.
+     *
+     * @param publicId       identifiant de CETTE ligne de version (aléatoire)
+     * @param slotPublicId   identité <strong>stable</strong> du créneau à
+     *                       travers les versions (même valeur d'une version
+     *                       à la suivante — DEC-G1-002)
+     * @param sessionPublicId séance {@code course_session} liée (peut être
+     *                        {@code null} tant que non matérialisée)
+     */
     record VersionEntryResponse(
             UUID publicId,
+            UUID slotPublicId,
             String slotKey,
             String title,
             Instant startsAt,

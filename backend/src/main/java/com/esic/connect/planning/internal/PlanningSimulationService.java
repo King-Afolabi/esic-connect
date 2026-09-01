@@ -1,5 +1,7 @@
 package com.esic.connect.planning.internal;
 
+import com.esic.connect.coursesession.CourseSessionDirectory;
+import com.esic.connect.coursesession.CourseSessionDirectory.ExistingSessionWindow;
 import com.esic.connect.identity.TeacherDirectory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,7 @@ class PlanningSimulationService {
     private final PlanningVersionRepository versionRepository;
     private final PlanningEntryRepository entryRepository;
     private final PlanningReferenceResolver referenceResolver;
+    private final CourseSessionDirectory courseSessionDirectory;
     private final PlanningProperties properties;
     private final Clock clock;
 
@@ -56,6 +59,7 @@ class PlanningSimulationService {
                               PlanningVersionRepository versionRepository,
                               PlanningEntryRepository entryRepository,
                               PlanningReferenceResolver referenceResolver,
+                              CourseSessionDirectory courseSessionDirectory,
                               PlanningProperties properties,
                               Clock clock) {
         this.jobRepository = jobRepository;
@@ -65,6 +69,7 @@ class PlanningSimulationService {
         this.versionRepository = versionRepository;
         this.entryRepository = entryRepository;
         this.referenceResolver = referenceResolver;
+        this.courseSessionDirectory = courseSessionDirectory;
         this.properties = properties;
         this.clock = clock;
     }
@@ -130,6 +135,13 @@ class PlanningSimulationService {
 
         // 2. Conflits intra-fichier (formateur / classe / salle) + hors plage horaire.
         detectConflicts(analyses);
+
+        // 2bis. Conflits avec des séances DÉJÀ publiées (RG-034 ; audit
+        // G1-B.1) — formateur et classe uniquement. La salle n'est PAS
+        // vérifiée contre les séances existantes : le module
+        // `coursesession` ne porte pas de `room_code` (limite documentée
+        // dans G1_REQUIREMENTS_TRACEABILITY.md / DEC-G1-005).
+        detectPublishedConflicts(analyses, target);
 
         // 3. Comparaison avec la version publiée courante.
         Map<String, PlanningEntry> publishedBySlotKey = loadPublishedEntries(target);
@@ -322,6 +334,81 @@ class PlanningSimulationService {
 
     private static boolean overlaps(RowAnalysis a, RowAnalysis b) {
         return a.startsAt.isBefore(b.endsAt) && b.startsAt.isBefore(a.endsAt);
+    }
+
+    /**
+     * Conflits avec des séances <strong>déjà publiées</strong> (RG-034).
+     * Passe par le port public {@link CourseSessionDirectory} — aucun
+     * repository ni entité de {@code coursesession}. Exclut :
+     * <ul>
+     *   <li>les séances supersédées / annulées (le port ne renvoie que
+     *       les séances opérationnelles) ;</li>
+     *   <li>le <strong>même créneau republié</strong> : une séance dont
+     *       le {@code planningSlotPublicId} correspond au {@code slot_key}
+     *       de la ligne pour le même planning n'est pas un conflit
+     *       contre elle-même.</li>
+     * </ul>
+     * La salle n'est pas vérifiée ici (le module {@code coursesession}
+     * n'a pas de {@code room_code} — limite documentée).
+     */
+    private void detectPublishedConflicts(List<RowAnalysis> analyses,
+                                          PlanningReferenceResolver.ResolvedTarget target) {
+        Instant windowStart = null;
+        Instant windowEnd = null;
+        for (RowAnalysis a : analyses) {
+            if (a.startsAt == null || a.endsAt == null) {
+                continue;
+            }
+            windowStart = windowStart == null || a.startsAt.isBefore(windowStart) ? a.startsAt : windowStart;
+            windowEnd = windowEnd == null || a.endsAt.isAfter(windowEnd) ? a.endsAt : windowEnd;
+        }
+        if (windowStart == null) {
+            return;
+        }
+        List<ExistingSessionWindow> existing =
+                courseSessionDirectory.findOperationalSessionWindows(windowStart, windowEnd);
+        if (existing.isEmpty()) {
+            return;
+        }
+        UUID schedulePublicId = scheduleRepository
+                .findByClassGroupIdAndAcademicYearId(target.classInternalId(), target.academicYearInternalId())
+                .map(PlanningSchedule::getPublicId)
+                .orElse(null);
+
+        for (RowAnalysis a : analyses) {
+            if (a.startsAt == null || a.endsAt == null || a.slotKey == null || a.hasError()) {
+                continue;
+            }
+            UUID selfSlot = PlanningSlotIds.stableSlotId(schedulePublicId, a.slotKey);
+            UUID rowTeacher = parseUuidOrNull(a.rawTeacher);
+            for (ExistingSessionWindow w : existing) {
+                if (!(a.startsAt.isBefore(w.endsAt()) && w.startsAt().isBefore(a.endsAt))) {
+                    continue;
+                }
+                if (selfSlot != null && selfSlot.equals(w.planningSlotPublicId())) {
+                    continue; // même créneau republié : pas un conflit contre lui-même
+                }
+                if (rowTeacher != null && rowTeacher.equals(w.teacherPublicId())) {
+                    a.addError(PlanningIssueCodes.CONFLICT_TEACHER, "teacher_public_id", null,
+                            "Le formateur a déjà une séance publiée qui chevauche ce créneau.");
+                }
+                if (w.classGroupPublicIds().contains(target.classPublicId())) {
+                    a.addError(PlanningIssueCodes.CONFLICT_CLASS, null, null,
+                            "La classe a déjà une séance publiée qui chevauche ce créneau.");
+                }
+            }
+        }
+    }
+
+    private static UUID parseUuidOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (IllegalArgumentException notAUuid) {
+            return null;
+        }
     }
 
     private Map<String, PlanningEntry> loadPublishedEntries(PlanningReferenceResolver.ResolvedTarget target) {

@@ -82,9 +82,10 @@ class CourseSessionService {
                                              Instant from, Instant to, int page, int size, String sort,
                                              String callerSubject) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
-        // Les séances planning retirées par une republication (DEC-G1-004
-        // règle 4) ne sont jamais listées.
-        specs.add(CourseSessionSpecifications.notSupersededByScheduling());
+        // Garde centralisée (audit G1-B.1) : seules les séances
+        // opérationnelles sont listées — exclut celles retirées par une
+        // republication de planning (DEC-G1-004 règle 4).
+        specs.add(CourseSessionSpecifications.operational());
         parseStatus(statusFilter).ifPresent(status -> specs.add(CourseSessionSpecifications.hasStatus(status)));
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
@@ -214,8 +215,16 @@ class CourseSessionService {
     // ------------------------------------------------------------------
 
     private CourseSession require(String publicId) {
-        return sessionRepository.findByPublicId(parseUuid(publicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
+        CourseSession session = sessionRepository
+                .findByPublicId(parseUuid(publicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
+        // Garde centralisée (audit G1-B.1) : une séance retirée par une
+        // republication de planning (DEC-G1-004 règle 4) est traitée
+        // comme inexistante pour toute consultation / gestion.
+        if (!session.isOperational()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
     }
 
     private Optional<AttendanceCheckpoint> firstCheckpoint(CourseSession session) {

@@ -15,8 +15,12 @@ interface CourseSessionRepository
 
     Optional<CourseSession> findByPublicId(UUID publicId);
 
-    /** Séance d'origine planning liée à une entrée précise (idempotence de la publication). */
-    Optional<CourseSession> findByPlanningEntryPublicId(UUID planningEntryPublicId);
+    /**
+     * Séance d'origine planning liée à un créneau stable précis
+     * (identité inter-versions — idempotence de la publication,
+     * DEC-G1-002).
+     */
+    Optional<CourseSession> findByPlanningSlotPublicId(UUID planningSlotPublicId);
 
     /**
      * Séances d'origine planning d'une classe donnée (jointure
@@ -24,7 +28,7 @@ interface CourseSessionRepository
      * retirés d'une nouvelle version.
      */
     @Query("select distinct s from CourseSession s join s.classes c "
-            + "where c.classGroupId = :classGroupId and s.planningEntryPublicId is not null "
+            + "where c.classGroupId = :classGroupId and s.planningSlotPublicId is not null "
             + "and s.status = :status and s.supersededByScheduling = false")
     List<CourseSession> findPlanningSessionsForClass(@Param("classGroupId") Long classGroupId,
                                                     @Param("status") SessionLifecycle status);

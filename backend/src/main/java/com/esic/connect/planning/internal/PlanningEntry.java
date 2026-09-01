@@ -17,9 +17,23 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Un créneau d'UNE version de planning (V12). {@code slotKey} = identité
- * stable fournie par le CSV (DEC-G1-002) : la même {@code slotKey} d'une
- * version à la suivante désigne « le même créneau ».
+ * Un créneau d'UNE version de planning (V12).
+ *
+ * <p><strong>Identité</strong> (DEC-G1-002, précisée à l'audit G1-B.1) :
+ * <ul>
+ *   <li>{@code publicId} (hérité de {@code BaseEntity}) = identifiant
+ *       public de CETTE ligne de version, <em>aléatoire</em> : deux
+ *       versions successives d'un même créneau ont deux {@code publicId}
+ *       différents ;</li>
+ *   <li>{@code slotKey} = libellé fourni dans le CSV, unique
+ *       {@code (planning_version_id, slot_key)} ;</li>
+ *   <li>{@code slotPublicId} = identité <em>stable</em> du créneau à
+ *       travers les versions, déterministe
+ *       ({@code UUIDv3(schedule.publicId || '|' || slotKey)}). C'est
+ *       cette valeur — et jamais {@code publicId} — qui est transmise au
+ *       port {@code coursesession.PlanningSessionWriter} et portée par
+ *       {@code course_session.planning_slot_public_id}.</li>
+ * </ul>
  *
  * <p>{@code teacherUserId} est une valeur technique INTERNE au module
  * (jamais exposée par le port {@code PlanningSessionWriter}, DEC-G1-001).
@@ -41,6 +55,10 @@ class PlanningEntry extends BaseEntity {
 
     @Column(name = "slot_key", nullable = false, updatable = false, length = 64)
     private String slotKey;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "slot_public_id", nullable = false, updatable = false, columnDefinition = "BINARY(16)")
+    private UUID slotPublicId;
 
     @Column(name = "class_group_id", nullable = false, updatable = false)
     private Long classGroupId;
@@ -76,11 +94,12 @@ class PlanningEntry extends BaseEntity {
     }
 
     PlanningEntry(PlanningVersion planningVersion, Long planningScheduleId, String slotKey,
-                  Long classGroupId, Long teacherUserId, String roomCode, String title,
+                  UUID slotPublicId, Long classGroupId, Long teacherUserId, String roomCode, String title,
                   Instant startsAt, Instant endsAt, String timeZoneId) {
         this.planningVersion = planningVersion;
         this.planningScheduleId = planningScheduleId;
         this.slotKey = slotKey;
+        this.slotPublicId = slotPublicId;
         this.classGroupId = classGroupId;
         this.teacherUserId = teacherUserId;
         this.roomCode = roomCode;
@@ -104,6 +123,10 @@ class PlanningEntry extends BaseEntity {
 
     String getSlotKey() {
         return slotKey;
+    }
+
+    UUID getSlotPublicId() {
+        return slotPublicId;
     }
 
     Long getClassGroupId() {

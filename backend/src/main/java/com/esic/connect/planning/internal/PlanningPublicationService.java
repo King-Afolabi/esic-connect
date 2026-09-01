@@ -9,12 +9,12 @@ import com.esic.connect.coursesession.PlanningSessionWriter.PlanningSyncResult;
 import com.esic.connect.coursesession.PlanningSessionWriter.SupersededSession;
 import com.esic.connect.coursesession.PlanningSessionWriter.SyncedSession;
 import com.esic.connect.planning.PlanningPublishedEvent;
+import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -55,6 +55,7 @@ class PlanningPublicationService {
     private final PlanningSessionWriter planningSessionWriter;
     private final PlanningChangePublisher changePublisher;
     private final ApplicationEventPublisher eventPublisher;
+    private final EntityManager entityManager;
     private final Clock clock;
 
     PlanningPublicationService(PlanningImportJobRepository jobRepository,
@@ -67,6 +68,7 @@ class PlanningPublicationService {
                                PlanningSessionWriter planningSessionWriter,
                                PlanningChangePublisher changePublisher,
                                ApplicationEventPublisher eventPublisher,
+                               EntityManager entityManager,
                                Clock clock) {
         this.jobRepository = jobRepository;
         this.rowRepository = rowRepository;
@@ -78,11 +80,28 @@ class PlanningPublicationService {
         this.planningSessionWriter = planningSessionWriter;
         this.changePublisher = changePublisher;
         this.eventPublisher = eventPublisher;
+        this.entityManager = entityManager;
         this.clock = clock;
     }
 
     /** Identifiant public de la version publiée (existante si idempotent). */
     record PublicationResult(UUID versionPublicId, int versionNumber, boolean alreadyPublished) {
+    }
+
+    /**
+     * Résultat idempotent si le job est déjà {@code PUBLISHED} — lecture
+     * dans une transaction courte et fraîche, utilisée par
+     * {@link PlanningPublicationOrchestrator} pour distinguer « course
+     * concurrente gagnée par une autre requête » (⇒ résultat idempotent)
+     * d'un échec réel (⇒ {@code FAILED}). Jamais {@code FAILED} pour une
+     * course idempotente (audit G1-B.1).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    Optional<PublicationResult> alreadyPublishedResult(UUID jobPublicId) {
+        return jobRepository.findByPublicId(jobPublicId)
+                .filter(PlanningImportJob::isPublished)
+                .flatMap(job -> versionRepository.findById(job.getPublishedVersionId()))
+                .map(v -> new PublicationResult(v.getPublicId(), v.getVersionNumber(), true));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -94,6 +113,12 @@ class PlanningPublicationService {
         }
         PlanningImportJob job = jobRepository.findByIdForUpdate(header.getId())
                 .orElseThrow(() -> new PlanningException(PlanningException.Kind.JOB_NOT_FOUND));
+        // Le verrou de ligne est acquis, mais l'instance a pu être chargée
+        // (sans verrou) par `findByPublicId` avant qu'une requête
+        // concurrente ne publie : rafraîchir pour lire l'état RÉELLEMENT
+        // committé sous le verrou (audit G1-B.1 — sinon `isPublished()`
+        // voit un instantané périmé et le perdant part en `FAILED`).
+        entityManager.refresh(job);
 
         if (job.isPublished()) {
             PlanningVersion existing = versionRepository.findById(job.getPublishedVersionId())
@@ -137,22 +162,22 @@ class PlanningPublicationService {
                 new PlanningVersion(schedule, newVersionNumber, job.getId()));
 
         List<PlannedSession> plannedSessions = new ArrayList<>();
-        Map<UUID, PlanningEntry> entryByStableId = new HashMap<>();
+        Map<UUID, PlanningEntry> entryBySlotId = new HashMap<>();
         for (PlanningImportRow row : rows) {
             if (row.getRowStatus() == PlanningRowStatus.ERROR || row.getInputSlotKey() == null
                     || row.getResolvedTeacherUserId() == null || row.getResolvedStartsAt() == null
                     || row.getResolvedEndsAt() == null) {
                 continue;
             }
-            UUID stableId = stableEntryId(schedule.getPublicId(), row.getInputSlotKey());
+            UUID slotId = PlanningSlotIds.stableSlotId(schedule.getPublicId(), row.getInputSlotKey());
             UUID teacherPublicId = UUID.fromString(row.getInputTeacherPublicId().trim());
             PlanningEntry entry = new PlanningEntry(version, schedule.getId(), row.getInputSlotKey(),
-                    job.getClassGroupId(), row.getResolvedTeacherUserId(), row.getInputRoomCode(),
+                    slotId, job.getClassGroupId(), row.getResolvedTeacherUserId(), row.getInputRoomCode(),
                     row.getInputTitle(), row.getResolvedStartsAt(), row.getResolvedEndsAt(),
                     row.getInputTimeZoneId());
             entryRepository.save(entry);
-            entryByStableId.put(stableId, entry);
-            plannedSessions.add(new PlannedSession(stableId, teacherPublicId, row.getInputRoomCode(),
+            entryBySlotId.put(slotId, entry);
+            plannedSessions.add(new PlannedSession(slotId, teacherPublicId, row.getInputRoomCode(),
                     row.getInputTitle(), row.getResolvedStartsAt(), row.getResolvedEndsAt(),
                     row.getInputTimeZoneId()));
         }
@@ -163,11 +188,11 @@ class PlanningPublicationService {
         List<UUID> added = new ArrayList<>();
         List<UUID> updated = new ArrayList<>();
         for (SyncedSession created : syncResult.created()) {
-            link(entryByStableId, created);
+            link(entryBySlotId, created);
             added.add(created.sessionPublicId());
         }
         for (SyncedSession reused : syncResult.reused()) {
-            link(entryByStableId, reused);
+            link(entryBySlotId, reused);
             updated.add(reused.sessionPublicId());
         }
         List<UUID> superseded = syncResult.superseded().stream()
@@ -189,15 +214,10 @@ class PlanningPublicationService {
         return new PublicationResult(version.getPublicId(), newVersionNumber, false);
     }
 
-    private void link(Map<UUID, PlanningEntry> entryByStableId, SyncedSession synced) {
-        PlanningEntry entry = entryByStableId.get(synced.entryPublicId());
+    private void link(Map<UUID, PlanningEntry> entryBySlotId, SyncedSession synced) {
+        PlanningEntry entry = entryBySlotId.get(synced.slotPublicId());
         if (entry != null) {
             entry.linkSession(synced.sessionPublicId());
         }
-    }
-
-    private static UUID stableEntryId(UUID schedulePublicId, String slotKey) {
-        return UUID.nameUUIDFromBytes(
-                (schedulePublicId + "|" + slotKey).getBytes(StandardCharsets.UTF_8));
     }
 }

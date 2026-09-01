@@ -190,8 +190,24 @@ class PlanningPublicationIntegrationTests {
         assertThat(getMap("/api/v1/planning-imports/" + jobId, admin).get("status")).isEqualTo("SIMULATED");
     }
 
+    /**
+     * Deux publications concurrentes du <strong>même</strong> job : issue
+     * strictement idempotente (audit G1-B.1). État final EXACT :
+     * <ul>
+     *   <li>les deux réponses sont {@code 200} (jamais {@code 409}, jamais
+     *       {@code 5xx}) ;</li>
+     *   <li>exactement une réponse porte {@code alreadyPublished=false}
+     *       (la gagnante) et l'autre {@code alreadyPublished=true} ;</li>
+     *   <li>les deux pointent la même {@code versionPublicId} ;</li>
+     *   <li>le job est {@code PUBLISHED}, {@code publishedVersionPublicId}
+     *       non nul, {@code failureReason} nul — <strong>jamais</strong>
+     *       {@code FAILED} ni {@code PLAN_PUBLICATION_FAILED} ;</li>
+     *   <li>exactement <strong>une</strong> version et <strong>une</strong>
+     *       séance ; aucune séance supersédée par erreur.</li>
+     * </ul>
+     */
     @Test
-    void concurrentPublishResolvesWithoutServerError() throws Exception {
+    void concurrentPublishOfSameJobIsStrictlyIdempotent() throws Exception {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
@@ -199,18 +215,134 @@ class PlanningPublicationIntegrationTests {
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
 
         String path = "/api/v1/planning-imports/" + jobId + "/publish";
-        Callable<HttpStatus> call = () -> (HttpStatus) exchange(HttpMethod.POST, path, admin).getStatusCode();
+        Callable<ResponseEntity<Map<String, Object>>> call = () -> exchange(HttpMethod.POST, path, admin);
         ExecutorService pool = Executors.newFixedThreadPool(2);
-        List<HttpStatus> statuses;
+        ResponseEntity<Map<String, Object>> r1;
+        ResponseEntity<Map<String, Object>> r2;
         try {
-            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(call, call));
-            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+            List<Future<ResponseEntity<Map<String, Object>>>> futures = pool.invokeAll(List.of(call, call));
+            r1 = futures.get(0).get();
+            r2 = futures.get(1).get();
         } finally {
             pool.shutdownNow();
         }
-        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
-        assertThat(statuses).allMatch(s -> s == HttpStatus.OK || s == HttpStatus.CONFLICT);
+
+        assertThat(r1.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(r2.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<Boolean> alreadyFlags = List.of(
+                (Boolean) r1.getBody().get("alreadyPublished"),
+                (Boolean) r2.getBody().get("alreadyPublished"));
+        assertThat(alreadyFlags).as("exactement une gagnante, une idempotente")
+                .containsExactlyInAnyOrder(false, true);
+        assertThat(r1.getBody().get("versionPublicId"))
+                .isEqualTo(r2.getBody().get("versionPublicId"));
+
+        Map<String, Object> job = getMap("/api/v1/planning-imports/" + jobId, admin);
+        assertThat(job.get("status")).isEqualTo("PUBLISHED");
+        assertThat(job.get("publishedVersionPublicId")).isNotNull();
+        assertThat(job.get("failureReason")).isNull();
+
+        Map<String, Object> versions = getMap(
+                "/api/v1/planning/versions?classGroupPublicId=" + classId, admin);
+        assertThat((List<?>) versions.get("content")).hasSize(1);
         assertThat(planningSessionsForClass(admin, classId)).hasSize(1);
+    }
+
+    /**
+     * Une séance retirée par une republication (DEC-G1-004 règle 4) est
+     * <strong>inactive</strong> pour tout accès métier : invisible en
+     * liste, non résolvable par identifiant, non ouvrable, sans jeton.
+     * Seul l'historique des versions de planning continue de la montrer,
+     * avec son {@code sessionPublicId} (audit G1-B.1).
+     */
+    @Test
+    void supersededSessionIsInactiveButRemainsInPlanningVersionHistory() {
+        String admin = adminToken();
+        String classId = classGroup(admin);
+        String teacher = teacherPublicId();
+
+        String v1 = HEADER
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n"
+                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ",A1\n";
+        String job1 = (String) upload("planning.csv", v1, admin, classId).getBody().get("publicId");
+        post("/api/v1/planning-imports/" + job1 + "/publish", admin);
+        String versionOneId = (String) ((Map<?, ?>) ((List<?>) getMap(
+                "/api/v1/planning/versions?classGroupPublicId=" + classId, admin).get("content")).get(0))
+                .get("publicId");
+
+        // Republication sans S2 → la séance de S2 est supersédée.
+        String v2 = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n";
+        String job2 = (String) upload("planning.csv", v2, admin, classId).getBody().get("publicId");
+        post("/api/v1/planning-imports/" + job2 + "/publish", admin);
+
+        // Identifiant de la séance supersédée : lu dans l'historique de la version 1.
+        Map<String, Object> v1Detail = getMap("/api/v1/planning/versions/" + versionOneId, admin);
+        List<?> v1Entries = (List<?>) v1Detail.get("entries");
+        String supersededSessionId = (String) v1Entries.stream()
+                .map(PlanningPublicationIntegrationTests::castMap)
+                .filter(e -> "S2".equals(e.get("slotKey")))
+                .findFirst().orElseThrow()
+                .get("sessionPublicId");
+        assertThat(supersededSessionId).as("l'historique de la version 1 garde le sessionPublicId").isNotNull();
+
+        // Inactive pour tout accès métier.
+        assertThat(exchange(HttpMethod.GET, "/api/v1/sessions/" + supersededSessionId, admin)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + supersededSessionId + "/open", admin)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + supersededSessionId + "/attendance-token", admin)
+                .getStatusCode()).isIn(HttpStatus.NOT_FOUND, HttpStatus.CONFLICT);
+        assertThat(planningSessionsForClass(admin, classId))
+                .noneMatch(s -> supersededSessionId.equals(s.get("publicId")));
+    }
+
+    /**
+     * La simulation détecte un conflit formateur / classe avec une séance
+     * <strong>déjà publiée</strong> (RG-034 ; audit G1-B.1) via le port
+     * {@code CourseSessionDirectory}. Le <strong>même créneau republié</strong>
+     * (même {@code slot_key}) n'est jamais signalé contre lui-même.
+     */
+    @Test
+    void simulationDetectsConflictWithAlreadyPublishedSessionButNotWithTheSameSlot() {
+        String admin = adminToken();
+        String classId = classGroup(admin);
+        String teacher = teacherPublicId();
+
+        String v1 = HEADER
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours lundi," + teacher + ",A1\n"
+                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours mardi," + teacher + ",A1\n";
+        String job1 = (String) upload("planning.csv", v1, admin, classId).getBody().get("publicId");
+        post("/api/v1/planning-imports/" + job1 + "/publish", admin);
+
+        // v2 : S1 inchangé (même créneau → contre lui-même : pas de conflit) ;
+        // S9 (nouveau slot) le MARDI 10:00-11:00 chevauche la séance
+        // publiée S2 (même formateur, même classe) mais PAS S1 (lundi) →
+        // seul S9 doit être en conflit "déjà publié".
+        String v2 = HEADER
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours lundi," + teacher + ",A1\n"
+                + "S9,2026-09-08,10:00,11:00,Europe/Paris,Atelier mardi," + teacher + ",A1\n";
+        String job2 = (String) upload("planning.csv", v2, admin, classId).getBody().get("publicId");
+
+        Map<String, Object> job2Body = getMap("/api/v1/planning-imports/" + job2, admin);
+        assertThat(job2Body.get("confirmable")).isEqualTo(false);
+
+        List<?> rows = (List<?>) getMap("/api/v1/planning-imports/" + job2 + "/rows", admin).get("content");
+        Map<String, Object> s9 = rows.stream().map(PlanningPublicationIntegrationTests::castMap)
+                .filter(r -> "S9".equals(r.get("slotKey"))).findFirst().orElseThrow();
+        Map<String, Object> s1 = rows.stream().map(PlanningPublicationIntegrationTests::castMap)
+                .filter(r -> "S1".equals(r.get("slotKey"))).findFirst().orElseThrow();
+
+        List<String> s9Codes = ((List<?>) s9.get("issues")).stream()
+                .map(i -> (String) castMap(i).get("errorCode")).toList();
+        assertThat(s9.get("rowStatus")).isEqualTo("ERROR");
+        assertThat(s9Codes).contains("PLAN_CONFLICT_TEACHER", "PLAN_CONFLICT_CLASS");
+
+        // S1 = même créneau republié → PAS de conflit contre lui-même.
+        List<String> s1Codes = ((List<?>) s1.get("issues")).stream()
+                .map(i -> (String) castMap(i).get("errorCode")).toList();
+        assertThat(s1Codes).doesNotContain("PLAN_CONFLICT_TEACHER", "PLAN_CONFLICT_CLASS");
+        assertThat(s1.get("rowStatus")).isNotEqualTo("ERROR");
     }
 
     @Test
@@ -228,14 +360,6 @@ class PlanningPublicationIntegrationTests {
     }
 
     // ------------------------------------------------------------------
-
-    private static HttpStatus join(Future<HttpStatus> future) {
-        try {
-            return future.get();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
 
     private List<Map<String, Object>> planningSessionsForClass(String token, String classId) {
         // Filtre serveur par classe : robuste quel que soit l'état global

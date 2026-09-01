@@ -60,26 +60,26 @@ class DefaultPlanningSessionWriter implements PlanningSessionWriter {
 
         List<SyncedSession> created = new ArrayList<>();
         List<SyncedSession> reused = new ArrayList<>();
-        Set<UUID> incomingEntryIds = new HashSet<>();
+        Set<UUID> incomingSlotIds = new HashSet<>();
 
         for (PlannedSession entry : command.entries()) {
-            incomingEntryIds.add(entry.entryPublicId());
+            incomingSlotIds.add(entry.slotPublicId());
             if (entry.title() == null || entry.title().isBlank()
                     || entry.startsAt() == null || entry.endsAt() == null
                     || !entry.endsAt().isAfter(entry.startsAt())
                     || entry.timeZoneId() == null || entry.timeZoneId().isBlank()) {
                 throw new PlanningSessionSyncException(
-                        PlanningSessionSyncException.Kind.INVALID_ENTRY, entry.entryPublicId());
+                        PlanningSessionSyncException.Kind.INVALID_ENTRY, entry.slotPublicId());
             }
             TeacherDirectory.TeacherRef teacher = teacherDirectory
                     .findEligibleTeacher(entry.teacherPublicId())
                     .orElseThrow(() -> new PlanningSessionSyncException(
-                            PlanningSessionSyncException.Kind.TEACHER_NOT_ELIGIBLE, entry.entryPublicId()));
+                            PlanningSessionSyncException.Kind.TEACHER_NOT_ELIGIBLE, entry.slotPublicId()));
 
             Optional<CourseSession> existing = sessionRepository
-                    .findByPlanningEntryPublicId(entry.entryPublicId());
+                    .findByPlanningSlotPublicId(entry.slotPublicId());
             if (existing.isEmpty()) {
-                CourseSession session = CourseSession.fromPlanningEntry(entry.entryPublicId(),
+                CourseSession session = CourseSession.fromPlanningSlot(entry.slotPublicId(),
                         teacher.internalId(), entry.title().trim(), entry.startsAt(), entry.endsAt(),
                         entry.timeZoneId());
                 session.markCreatedBy(actorId);
@@ -87,8 +87,8 @@ class DefaultPlanningSessionWriter implements PlanningSessionWriter {
                 CourseSession saved = sessionRepository.save(session);
                 checkpointRepository.save(new AttendanceCheckpoint(saved));
                 changePublisher.publish(saved.getPublicId(), CourseSessionChangeAction.CREATED, actorId,
-                        "planningEntry=" + entry.entryPublicId());
-                created.add(new SyncedSession(entry.entryPublicId(), saved.getPublicId()));
+                        "planningSlot=" + entry.slotPublicId());
+                created.add(new SyncedSession(entry.slotPublicId(), saved.getPublicId()));
             } else {
                 CourseSession session = existing.get();
                 if (session.isPlanned() && !session.isSupersededByScheduling()
@@ -96,18 +96,18 @@ class DefaultPlanningSessionWriter implements PlanningSessionWriter {
                     session.applyPlanningUpdate(teacher.internalId(), entry.title().trim(),
                             entry.startsAt(), entry.endsAt(), entry.timeZoneId(), actorId);
                 }
-                reused.add(new SyncedSession(entry.entryPublicId(), session.getPublicId()));
+                reused.add(new SyncedSession(entry.slotPublicId(), session.getPublicId()));
             }
         }
 
-        // Supersession des séances planning PLANNED dont l'entrée a disparu.
+        // Supersession des séances planning PLANNED dont le créneau stable a disparu.
         List<SupersededSession> superseded = new ArrayList<>();
         for (CourseSession candidate : sessionRepository.findPlanningSessionsForClass(
                 classRef.internalId(), SessionLifecycle.PLANNED)) {
-            UUID previousEntry = candidate.getPlanningEntryPublicId();
-            if (previousEntry != null && !incomingEntryIds.contains(previousEntry)) {
+            UUID previousSlot = candidate.getPlanningSlotPublicId();
+            if (previousSlot != null && !incomingSlotIds.contains(previousSlot)) {
                 candidate.markSupersededByScheduling(actorId);
-                superseded.add(new SupersededSession(candidate.getPublicId(), previousEntry));
+                superseded.add(new SupersededSession(candidate.getPublicId(), previousSlot));
             }
         }
 

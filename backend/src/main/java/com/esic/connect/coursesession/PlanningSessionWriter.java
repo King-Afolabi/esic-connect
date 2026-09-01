@@ -17,25 +17,35 @@ import java.util.UUID;
  *   <li>aucune clé SQL interne en entrée — seulement des {@link UUID}
  *       publics ; {@code coursesession} les résout en interne
  *       ({@code TeacherDirectory}, {@code ClassGroupDirectory}) ;</li>
- *   <li><strong>idempotent par {@code entryPublicId}</strong> : réappeler
+ *   <li><strong>idempotent par {@code slotPublicId}</strong> : réappeler
  *       {@link #sync} avec les mêmes entrées ne recrée rien (unicité
- *       {@code course_session.planning_entry_public_id}) ;</li>
+ *       {@code course_session.planning_slot_public_id}) ;</li>
  *   <li>ne renvoie ni entité JPA, ni repository, ni type de
  *       {@code coursesession.internal}.</li>
  * </ul>
  *
+ * <p><strong>Identité d'un créneau</strong> (DEC-G1-002, précisée à
+ * l'audit G1-B.1). {@code slotPublicId} est l'identité <em>stable</em> du
+ * créneau — la même valeur d'une version de planning à la suivante tant
+ * que le {@code slot_key} et le planning ne changent pas. Ce n'est
+ * <strong>pas</strong> le {@code planning_entry.public_id} (aléatoire,
+ * propre à chaque ligne de version) : c'est le
+ * {@code planning_entry.slot_public_id} déterministe. Le module
+ * {@code planning} le calcule et le passe ici ; {@code coursesession} le
+ * stocke tel quel dans {@code course_session.planning_slot_public_id}.
+ *
  * <p>Devenir des séances (DEC-G1-004) :
  * <ul>
- *   <li>{@code entryPublicId} inconnu ⇒ <strong>création</strong> d'une
+ *   <li>{@code slotPublicId} inconnu ⇒ <strong>création</strong> d'une
  *       séance {@code PLANNED} d'origine planning
- *       ({@code planning_entry_public_id} renseigné, {@code exception_reason}
+ *       ({@code planning_slot_public_id} renseigné, {@code exception_reason}
  *       nul) ;</li>
- *   <li>{@code entryPublicId} déjà lié à une séance {@code PLANNED} ⇒
+ *   <li>{@code slotPublicId} déjà lié à une séance {@code PLANNED} ⇒
  *       <strong>réutilisation</strong> (mise à jour des propriétés
  *       modifiables) ;</li>
- *   <li>{@code entryPublicId} lié à une séance {@code OPEN} / {@code CLOSED}
+ *   <li>{@code slotPublicId} lié à une séance {@code OPEN} / {@code CLOSED}
  *       ⇒ <strong>jamais</strong> réécrite (l'émargement fait foi) ;</li>
- *   <li>séance {@code PLANNED} d'origine planning dont l'{@code entryPublicId}
+ *   <li>séance {@code PLANNED} d'origine planning dont le {@code slotPublicId}
  *       n'est plus présent dans {@code entries} ⇒
  *       <strong>supersédée</strong> ({@code superseded_by_scheduling = true}).</li>
  * </ul>
@@ -72,8 +82,11 @@ public interface PlanningSessionWriter {
     /**
      * Une entrée de planning à matérialiser en séance.
      *
-     * @param entryPublicId identifiant public stable de la
-     *                      {@code planning_entry} (identité inter-versions)
+     * @param slotPublicId  identité <strong>stable</strong> du créneau
+     *                      (identité inter-versions — le
+     *                      {@code planning_entry.slot_public_id}
+     *                      déterministe, jamais un
+     *                      {@code planning_entry.public_id})
      * @param teacherPublicId identifiant public du compte formateur
      *                        ({@code user_account.public_id}) — jamais une
      *                        clé SQL
@@ -86,7 +99,7 @@ public interface PlanningSessionWriter {
      * @param timeZoneId    fuseau IANA de saisie (affichage)
      */
     record PlannedSession(
-            UUID entryPublicId,
+            UUID slotPublicId,
             UUID teacherPublicId,
             String roomCode,
             String title,
@@ -109,22 +122,22 @@ public interface PlanningSessionWriter {
     }
 
     /**
-     * @param entryPublicId   entrée de planning traitée
+     * @param slotPublicId    créneau de planning traité (identité stable)
      * @param sessionPublicId séance {@code course_session} correspondante
      */
-    record SyncedSession(UUID entryPublicId, UUID sessionPublicId) {
+    record SyncedSession(UUID slotPublicId, UUID sessionPublicId) {
     }
 
     /**
-     * @param sessionPublicId   séance supersédée
-     * @param previousEntryPublicId entrée de planning qui la liait avant
+     * @param sessionPublicId      séance supersédée
+     * @param previousSlotPublicId créneau de planning qui la liait avant
      */
-    record SupersededSession(UUID sessionPublicId, UUID previousEntryPublicId) {
+    record SupersededSession(UUID sessionPublicId, UUID previousSlotPublicId) {
     }
 
     /**
      * Erreur de synchronisation levée par {@link #sync}. Non sensible :
-     * porte seulement une catégorie et l'identifiant public d'entrée
+     * porte seulement une catégorie et l'identité stable du créneau
      * fautif. Fait rollback la transaction de publication.
      */
     final class PlanningSessionSyncException extends RuntimeException {
@@ -140,20 +153,20 @@ public interface PlanningSessionWriter {
         }
 
         private final transient Kind kind;
-        private final transient UUID entryPublicId;
+        private final transient UUID slotPublicId;
 
-        public PlanningSessionSyncException(Kind kind, UUID entryPublicId) {
+        public PlanningSessionSyncException(Kind kind, UUID slotPublicId) {
             super(kind.name());
             this.kind = kind;
-            this.entryPublicId = entryPublicId;
+            this.slotPublicId = slotPublicId;
         }
 
         public Kind kind() {
             return kind;
         }
 
-        public UUID entryPublicId() {
-            return entryPublicId;
+        public UUID slotPublicId() {
+            return slotPublicId;
         }
     }
 }
