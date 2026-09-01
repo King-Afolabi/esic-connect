@@ -93,6 +93,41 @@ public interface CourseSessionDirectory {
     List<ExistingSessionWindow> findOperationalSessionWindows(Instant from, Instant to);
 
     /**
+     * Destinataires « métier » d'un changement de séance (G1-D) : le
+     * formateur principal et les remplaçants {@code ACTIVE} de la séance,
+     * en identifiants publics. Contrat <strong>100 % UUID publics</strong> :
+     * le module {@code notification} s'en sert pour cibler ses
+     * destinataires sans importer aucune entité ni repository de
+     * {@code coursesession}. Renvoie {@link Optional#empty()} si la séance
+     * n'existe pas (une séance {@code CANCELLED} ou supersédée est
+     * <strong>renvoyée</strong> : on notifie justement de son annulation).
+     */
+    Optional<SessionNotificationInfo> findSessionNotificationInfo(UUID sessionPublicId);
+
+    /**
+     * Identifiants publics des <strong>formateurs principaux</strong> des
+     * séances {@code sessionPublicIds} (G1-D) — pour notifier les
+     * formateurs concernés par une publication de planning. Les séances
+     * inconnues sont ignorées.
+     */
+    Set<UUID> findPrincipalTeacherPublicIds(java.util.Collection<UUID> sessionPublicIds);
+
+    /**
+     * Cibles de notification d'une séance.
+     *
+     * @param sessionPublicId              identifiant public de la séance
+     * @param title                        libellé libre de la séance ({@code null} possible)
+     * @param principalTeacherPublicId     formateur principal ({@code user_account.public_id})
+     * @param substituteTeacherPublicIds   remplaçants {@code ACTIVE} ({@code user_account.public_id})
+     */
+    record SessionNotificationInfo(
+            UUID sessionPublicId,
+            String title,
+            UUID principalTeacherPublicId,
+            Set<UUID> substituteTeacherPublicIds) {
+    }
+
+    /**
      * Fenêtre publique minimale d'une séance existante — pour la
      * détection de conflit inter-modules.
      *

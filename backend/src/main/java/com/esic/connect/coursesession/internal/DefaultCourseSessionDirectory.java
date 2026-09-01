@@ -33,17 +33,20 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
 
     private final CourseSessionRepository sessionRepository;
     private final AttendanceCheckpointRepository checkpointRepository;
+    private final TeacherSubstitutionRepository substitutionRepository;
     private final ClassGroupDirectory classGroupDirectory;
     private final UserDirectory userDirectory;
     private final CourseSessionAccessGuard accessGuard;
 
     DefaultCourseSessionDirectory(CourseSessionRepository sessionRepository,
                                   AttendanceCheckpointRepository checkpointRepository,
+                                  TeacherSubstitutionRepository substitutionRepository,
                                   ClassGroupDirectory classGroupDirectory,
                                   UserDirectory userDirectory,
                                   CourseSessionAccessGuard accessGuard) {
         this.sessionRepository = sessionRepository;
         this.checkpointRepository = checkpointRepository;
+        this.substitutionRepository = substitutionRepository;
         this.classGroupDirectory = classGroupDirectory;
         this.userDirectory = userDirectory;
         this.accessGuard = accessGuard;
@@ -172,6 +175,43 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                         session.getStartsAt(),
                         session.getEndsAt()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SessionNotificationInfo> findSessionNotificationInfo(UUID sessionPublicId) {
+        if (sessionPublicId == null) {
+            return Optional.empty();
+        }
+        return sessionRepository.findByPublicId(sessionPublicId).map(session -> {
+            UUID principal = userDirectory.findByInternalId(session.getTeacherUserId())
+                    .map(UserDirectory.UserRef::publicId).orElse(null);
+            Set<UUID> substitutes = substitutionRepository
+                    .findByCourseSessionIdAndStatus(session.getId(), TeacherSubstitutionStatus.ACTIVE).stream()
+                    .map(sub -> userDirectory.findByInternalId(sub.getSubstituteTeacherUserId())
+                            .map(UserDirectory.UserRef::publicId).orElse(null))
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toUnmodifiableSet());
+            return new SessionNotificationInfo(session.getPublicId(), session.getTitle(), principal, substitutes);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> findPrincipalTeacherPublicIds(java.util.Collection<UUID> sessionPublicIds) {
+        if (sessionPublicIds == null || sessionPublicIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> distinct = sessionPublicIds.stream()
+                .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+        if (distinct.isEmpty()) {
+            return Set.of();
+        }
+        return sessionRepository.findByPublicIdIn(distinct).stream()
+                .map(session -> userDirectory.findByInternalId(session.getTeacherUserId())
+                        .map(UserDirectory.UserRef::publicId).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private SessionRef toRef(CourseSession session, Set<UUID> classPublicIds) {

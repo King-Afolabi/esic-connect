@@ -35,7 +35,8 @@ class CourseSessionChangePublisher {
 
     void publish(UUID sessionPublicId, CourseSessionChangeAction action, Long actorId, String detail) {
         eventPublisher.publishEvent(new CourseSessionChangeEvent(
-                CourseSessionResourceType.COURSE_SESSION, sessionPublicId, actorId, action, detail));
+                UUID.randomUUID(), CourseSessionResourceType.COURSE_SESSION,
+                sessionPublicId, actorId, action, detail));
     }
 
     void publishCheckpoint(UUID sessionPublicId, UUID checkpointPublicId,

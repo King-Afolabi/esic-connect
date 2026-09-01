@@ -17,6 +17,9 @@ interface CourseSessionRepository
 
     Optional<CourseSession> findByPublicId(UUID publicId);
 
+    /** Chargement groupé (évite le N+1 des cibles de notification G1-D). */
+    List<CourseSession> findByPublicIdIn(java.util.Collection<UUID> publicIds);
+
     /**
      * Verrou de ligne sur la séance — sérialise les opérations
      * concurrentes qui dépendent d'un invariant « au plus un … par
