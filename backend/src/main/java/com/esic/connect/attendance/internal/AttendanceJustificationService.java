@@ -12,6 +12,8 @@ import com.esic.connect.attendance.internal.JustificationAttachmentResponses.Met
 import com.esic.connect.enrollment.EnrollmentDirectory;
 import com.esic.connect.identity.CurrentUserResolver;
 import com.esic.connect.identity.UserDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -38,6 +40,8 @@ import java.util.UUID;
  */
 @Service
 class AttendanceJustificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(AttendanceJustificationService.class);
 
     private final CourseSessionDirectory courseSessionDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
@@ -258,17 +262,32 @@ class AttendanceJustificationService {
      * Dépôt d'une pièce jointe par le <strong>propriétaire</strong> du
      * justificatif, tant qu'il est {@code PENDING}. Non transactionnel :
      * la séquence base/fichier avec compensation est portée par
-     * {@link JustificationAttachmentStore}. L'audit
-     * {@code JUSTIFICATION_ATTACHMENT_STORED} est publié <em>après</em> le
-     * succès (donc après le commit {@code STORED}).
+     * {@link JustificationAttachmentStore}.
+     *
+     * <p>Quand {@link JustificationAttachmentStore#store} revient, la pièce
+     * est <strong>durablement stockée</strong> (fichier écrit + ligne
+     * {@code STORED} committée). La trace d'audit
+     * {@code JUSTIFICATION_ATTACHMENT_STORED} est publiée <em>ensuite</em>,
+     * hors transaction. Son échec (listener d'audit synchrone en
+     * {@code REQUIRES_NEW}, comme les autres du projet — cf. G1-C.3) ne
+     * doit <strong>pas</strong> être remonté à l'appelant comme un échec du
+     * dépôt : la pièce est valide et consultable, un rollback n'a plus de
+     * sens. L'échec est journalisé (observabilité) ; l'absence de trace est
+     * une dette d'audit assumée, non un faux négatif d'API.
      */
     Meta uploadOwnAttachment(String justificationPublicId, String fileName, String declaredType,
                              byte[] content, String studentSubject) {
         Long studentId = requireCaller(studentSubject);
         AttendanceJustification j = requireOwnedPending(justificationPublicId, studentId);
         Meta meta = attachmentStore.store(j.getId(), studentId, fileName, declaredType, content);
-        changePublisher.publishJustification(j.getPublicId(), studentId,
-                AttendanceChangeAction.JUSTIFICATION_ATTACHMENT_STORED, null);
+        try {
+            changePublisher.publishJustification(j.getPublicId(), studentId,
+                    AttendanceChangeAction.JUSTIFICATION_ATTACHMENT_STORED, null);
+        } catch (RuntimeException auditFailure) {
+            log.warn("Pièce jointe de justificatif durablement stockée mais trace d'audit "
+                    + "JUSTIFICATION_ATTACHMENT_STORED non écrite (cause={}). La pièce reste valide "
+                    + "et téléchargeable ; dette d'audit assumée.", auditFailure.getClass().getSimpleName());
+        }
         return meta;
     }
 

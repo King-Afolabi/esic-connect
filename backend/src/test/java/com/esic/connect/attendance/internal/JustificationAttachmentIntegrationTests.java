@@ -76,9 +76,47 @@ class JustificationAttachmentIntegrationTests {
     static class FlakyStorageConfig {
 
         static volatile boolean failStore = false;
+        /**
+         * Simule la défaillance de la trace d'audit <em>après</em> que la
+         * pièce est durablement stockée : un {@link org.springframework.context.event.EventListener}
+         * synchrone sur {@code AttendanceChangeEvent} — exactement comme le
+         * listener d'audit de production — qui lève quand il est armé. Aucun
+         * bean de production n'est modifié.
+         */
+        static volatile boolean failAuditAfterStore = false;
+        /**
+         * Simule l'échec silencieux (best effort) de la suppression du
+         * fichier lors d'un retrait : la ligne passe {@code DELETED} mais le
+         * fichier reste sur le disque (« orphelin à métadonnée périmée »).
+         */
+        static volatile boolean skipDelete = false;
 
         static void reset() {
             failStore = false;
+            failAuditAfterStore = false;
+            skipDelete = false;
+        }
+
+        @Bean
+        AttachmentAuditFaultListener attachmentAuditFaultListener() {
+            return new AttachmentAuditFaultListener();
+        }
+
+        static class AttachmentAuditFaultListener {
+            // Priorité maximale : s'exécute AVANT le listener d'audit de
+            // production, qui ne tourne donc pas quand la faute est armée —
+            // l'absence de trace est déterministe, pas dépendante de l'ordre.
+            @org.springframework.core.annotation.Order(
+                    org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
+            @org.springframework.context.event.EventListener
+            void onChange(com.esic.connect.attendance.AttendanceChangeEvent event) {
+                if (failAuditAfterStore
+                        && event.action() == com.esic.connect.attendance.AttendanceChangeAction
+                                .JUSTIFICATION_ATTACHMENT_STORED) {
+                    throw new org.springframework.dao.DataAccessResourceFailureException(
+                            "panne simulée d'écriture d'audit après stockage");
+                }
+            }
         }
 
         @Bean
@@ -108,6 +146,9 @@ class JustificationAttachmentIntegrationTests {
 
                 @Override
                 public void delete(String storageKey) {
+                    if (skipDelete) {
+                        return;
+                    }
                     real.delete(storageKey);
                 }
             };
@@ -342,6 +383,45 @@ class JustificationAttachmentIntegrationTests {
     }
 
     @Test
+    void anAuditFailureAfterTheAttachmentIsStoredStillReturns201AndKeepsThePiece() {
+        Ctx c = pendingJustification();
+        FlakyStorageConfig.failAuditAfterStore = true;
+
+        // 1. Le dépôt réussit malgré l'échec de la trace d'audit : la pièce
+        //    est déjà durablement stockée (fichier + ligne STORED committés),
+        //    un rollback n'a plus de sens, l'API ne doit pas annoncer d'échec.
+        ResponseEntity<Map<String, Object>> r = multipart(c.studentToken,
+                "/api/v1/me/attendance/justifications/" + c.justificationId + "/attachment",
+                "c.pdf", MediaType.APPLICATION_PDF_VALUE, PDF);
+        assertThat(r.getStatusCode()).as("dépôt malgré audit KO -> " + r.getBody())
+                .isEqualTo(HttpStatus.CREATED);
+
+        // 2. La ligne est bien STORED et unique.
+        assertThat(statusOf(r.getBody().get("publicId").toString())).isEqualTo("STORED");
+        assertThat(activeRowCount(c.justificationId)).isEqualTo(1);
+
+        // 3. La pièce est réellement téléchargeable.
+        ResponseEntity<byte[]> dl = download(c.studentToken,
+                "/api/v1/me/attendance/justifications/" + c.justificationId + "/attachment/download");
+        assertThat(dl.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(dl.getBody()).isEqualTo(PDF);
+
+        // 4. Dette d'audit assumée : la trace ATTACHMENT_STORED est absente
+        //    (échec isolé, non rejoué) — mais ce n'est pas un faux négatif d'API.
+        assertThat(auditActionsFor(c.justificationId))
+                .doesNotContain("ATTENDANCE_JUSTIFICATION_ATTACHMENT_STORED");
+
+        // 5. Audit rétabli : un dépôt ultérieur (après retrait) est de nouveau tracé.
+        FlakyStorageConfig.failAuditAfterStore = false;
+        rest.exchange(RequestEntity.method(HttpMethod.DELETE, URI.create(
+                        "/api/v1/me/attendance/justifications/" + c.justificationId + "/attachment"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + c.studentToken).build(), Void.class);
+        uploadOk(c.studentToken, c.justificationId, "c2.pdf", MediaType.APPLICATION_PDF_VALUE, PDF);
+        assertThat(auditActionsFor(c.justificationId))
+                .contains("ATTENDANCE_JUSTIFICATION_ATTACHMENT_STORED");
+    }
+
+    @Test
     void reconciliationPromotesAnAgedPendingRowWhoseFileIsValid() {
         Ctx c = pendingJustification();
         Map<String, Object> meta = uploadOk(c.studentToken, c.justificationId, "c.pdf",
@@ -370,6 +450,33 @@ class JustificationAttachmentIntegrationTests {
         assertThat(multipart(c.studentToken,
                 "/api/v1/me/attendance/justifications/" + c.justificationId + "/attachment",
                 "c2.pdf", MediaType.APPLICATION_PDF_VALUE, PDF).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void reconciliationDoesNotSweepAFileOrphanedByADeletedRow() {
+        // Portée assumée (dette G1-E) : la réconciliation ne traite QUE les
+        // lignes PENDING_STORAGE. Un fichier laissé derrière par un retrait
+        // dont la suppression best effort a échoué (ligne DELETED, fichier
+        // présent) n'est PAS balayé — pas de scan actif du répertoire.
+        Ctx c = pendingJustification();
+        Map<String, Object> meta = uploadOk(c.studentToken, c.justificationId, "c.pdf",
+                MediaType.APPLICATION_PDF_VALUE, PDF);
+        String key = storageKeyOf(meta.get("publicId").toString());
+        assertThat(fileExists(key)).isTrue();
+
+        FlakyStorageConfig.skipDelete = true;
+        ResponseEntity<Void> del = rest.exchange(RequestEntity.method(HttpMethod.DELETE, URI.create(
+                        "/api/v1/me/attendance/justifications/" + c.justificationId + "/attachment"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + c.studentToken).build(), Void.class);
+        assertThat(del.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(statusOf(meta.get("publicId").toString())).isEqualTo("DELETED");
+        assertThat(fileExists(key)).as("le fichier orphelin subsiste après un retrait sans suppression").isTrue();
+
+        reconciliation.reconcile();
+
+        // La réconciliation ne balaie pas cet orphelin : ligne DELETED, fichier toujours là.
+        assertThat(statusOf(meta.get("publicId").toString())).isEqualTo("DELETED");
+        assertThat(fileExists(key)).as("la réconciliation ne balaie pas un orphelin à ligne DELETED").isTrue();
     }
 
     @Test
@@ -502,6 +609,20 @@ class JustificationAttachmentIntegrationTests {
     private String storageKeyOf(String attachmentPublicId) {
         return jdbc.queryForObject("select storage_key from justification_attachment where public_id = UUID_TO_BIN(?)",
                 String.class, attachmentPublicId);
+    }
+
+    private boolean fileExists(String storageKey) {
+        try (InputStream in = storage.open(storageKey)) {
+            in.readAllBytes();
+            return true;
+        } catch (JustificationFileStorageException notFound) {
+            if (notFound.kind() == JustificationFileStorageException.Kind.NOT_FOUND) {
+                return false;
+            }
+            throw notFound;
+        } catch (java.io.IOException io) {
+            throw new IllegalStateException(io);
+        }
     }
 
     private void backdateToPending(String attachmentPublicId) {
