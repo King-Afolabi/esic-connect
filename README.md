@@ -34,10 +34,12 @@ Autres briques livrées : authentification JWT, administration des comptes
 et des rôles, invitation / activation par email (Mailpit), référentiels
 organisationnel et académique, périmètre pédagogique, inscriptions
 historisées, rythmes d'alternance, justificatif métier (sans fichier),
-piste d'audit, **centre de notifications métier persistantes** (G1-D —
-planning publié / séance annulée / remplaçant → notifications
-after-commit pour les formateurs ; `/api/v1/me/notifications` + cloche +
-centre Angular).
+piste d'audit, **centre de notifications métier persistantes** (G1-D /
+G1-D.1 — planning publié / séance annulée / remplaçant affecté / remplacement
+terminé → notifications after-commit pour les formateurs, idempotentes,
+isolées par destinataire ; `/api/v1/me/notifications` + cloche + centre
+Angular. Livraison « au mieux » après commit, sans reprise ;
+`EF-NOTIF-002` / `RG-033` = `PARTIAL`).
 
 ## Périmètre non livré (décision de finalisation — assumée)
 
@@ -73,10 +75,13 @@ implémentés** et ne doivent jamais être présentés comme livrés :
   jointe, import Excel `.xlsx` / multifeuille.
 - Service IA (FastAPI, mapping de colonnes, score d'anomalie).
 - IoT / MQTT / Raspberry Pi (broker Mosquitto démarré, **aucun code**).
-- Notifications : le centre in-app persistant est livré (G1-D) pour
-  l'audience **formateur** ; notifications aux **apprenants** et
-  **responsables pédagogiques**, préférences par type, email métier et
-  push PWA — non livrés.
+- Notifications : le centre in-app persistant est livré (G1-D / G1-D.1)
+  pour l'audience **formateur** (principal + remplaçants `ACTIVE` +
+  remplaçant tout juste terminé) ; notifications aux **apprenants** et
+  **responsables pédagogiques** (dette G1-D-AUDIENCE), **garantie de
+  livraison / reprise** (best effort après commit — dette G1-D-OUTBOX),
+  préférences par type, email métier, push PWA, purge / rétention
+  (`À_DÉFINIR`) — non livrés. `EF-NOTIF-002` / `RG-033` = `PARTIAL`.
 - PWA installable / offline.
 - Mot de passe oublié, `/auth/logout` + révocation de session (JWT
   stateless assumé).

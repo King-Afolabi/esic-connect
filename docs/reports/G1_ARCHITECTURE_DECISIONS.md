@@ -631,6 +631,63 @@ volume borné (purge à prévoir, `docs/07`).
 - **`ARCHIVED`** reste une valeur d'énumération réservée : aucune action
   d'archivage exposée en G1-D.
 
+### Révision à l'audit G1-D.1 (1er septembre 2026)
+
+- **Contrat d'événement enrichi pour cibler un utilisateur non
+  retrouvable après commit.** `CourseSessionChangeEvent` gagne un champ
+  additif `Set<UUID> affectedUserPublicIds` (jamais `null`, copie
+  immuable). Pour `SUBSTITUTION_ADDED` / `SUBSTITUTION_ENDED`, il porte
+  l'UUID **public** du remplaçant concerné — le remplaçant qui vient de
+  terminer n'étant plus `ACTIVE`, `findSessionNotificationInfo` ne le
+  retrouverait pas. Aucune clé SQL, aucune entité JPA, aucun motif
+  nominatif ; `audit` et `attendance` ignorent le champ. `end` renseigne
+  aussi le `detail` d'audit `substitute=<uuid public>` (symétrie avec
+  `ADDED`).
+- **Garantie de livraison — position honnête.** Le modèle reste
+  **« au mieux » après commit** (option 2, pas d'outbox). Sont
+  **garantis** : aucune notification sans commit métier, aucun rollback
+  métier sur échec de notification, absence de duplication
+  (`dedup_key`), **isolation par destinataire** (l'échec d'un
+  destinataire n'interrompt plus les suivants). Ne sont **pas**
+  garantis : la reprise après crash JVM entre le commit métier et
+  l'écriture, la relivraison automatique. Statut : persistance /
+  consultation / idempotence / isolation `IMPLEMENTED_AND_TESTED` ;
+  livraison + reprise `PARTIAL`. Les documents (CDC §18.3 / §23.3 /
+  §32.3) n'exigent **pas** de reprise garantie (file + DLQ = architecture
+  cible « pouvant rester non implémentée ») ⇒ pas de changement de
+  socle ; **dette G1-D-OUTBOX** (`notification_outbox` transactionnelle +
+  worker `@Scheduled` idempotent + backoff) tracée avec critères de
+  résolution dans `docs/05` §9bis et `docs/06` R-G1-29.
+- **Frontière transactionnelle par ligne — bug corrigé.**
+  `NotificationRowWriter` ne rattrape **plus** l'exception de
+  persistance dans sa transaction `REQUIRES_NEW` (elle serait devenue
+  `rollback-only`, provoquant une `UnexpectedRollbackException` qui
+  interrompait la boucle). L'exception remonte ; `NotificationWriter`
+  (non transactionnel, `AFTER_COMMIT`) décide **par destinataire** :
+  doublon `dedup_key` ⇒ succès idempotent ; autre erreur ⇒ journalisée
+  sans PII, destinataire suivant traité.
+- **Audience G1-D = formateurs, reclassée `PARTIAL`.** Aucun document ne
+  numérote l'audience ; une séance annulée / modifiée concerne aussi les
+  **apprenants** de la classe (CDC §13.9, §23.2). `EF-NOTIF-002` /
+  `RG-033` repassent `PARTIAL`. Étendre exige les ports publics
+  `enrollment.findActiveStudentUserPublicIdsForClasses(classes, date)` et
+  `academic.findActiveManagerUserPublicIdsForClasses(classes, date)`
+  (UUID publics, inscriptions / affectations actives à la date, comptes
+  archivés exclus par `identity`, pas de repository internal importé dans
+  `notification`) — **dette G1-D-AUDIENCE**.
+- **Rétention & préférences — non inventées.** Aucune durée de
+  conservation documentaire pour les notifications ⇒ **aucune purge
+  ajoutée**, risque `R-G1-30`, `docs/07` §14 = `À_DÉFINIR`, conformité
+  RGPD non revendiquée sur ce point. `notification_preference` non créé
+  (non exigé).
+- **Liens front — liste blanche par rôle.** Le centre de notifications
+  ne propose un lien que si le `resourceType` est dans une liste blanche
+  **et** que le rôle réel de l'appelant couvre la garde de la route
+  cible (`SESSION_LINK_ROLES` / `PLANNING_LINK_ROLES`, repris à
+  l'identique de `app.routes.ts`). Aucun `targetPath` serveur, aucune
+  URL ni paramètre libre ; le corps reste lisible sans lien ; le
+  back-end reste l'autorité.
+
 ---
 
 ## DEC-G1-008 — Stockage des pièces jointes

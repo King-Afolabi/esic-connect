@@ -216,7 +216,10 @@ Fichier d'exemple fourni : `docs/demo-data/apprenants-demo.csv` (voir
 - WebAuthn / passkeys, MFA TOTP, anti-bot ;
 - réclamations / messagerie, départ anticipé, justificatif **avec pièce
   jointe**, import Excel / multifeuille ;
-- notifications in-app / push, centre de notifications ;
+- notifications **push PWA** et **email métier**, préférences de
+  notification (le **centre de notifications in-app** `/notifications`
+  est livré depuis G1-D pour l'audience **formateur** — planning publié /
+  séance annulée / remplaçant ; livraison « au mieux » après commit) ;
 - service IA (mapping de colonnes, score d'anomalie) ;
 - IoT / MQTT / Raspberry Pi ;
 - PWA installable / hors ligne ;

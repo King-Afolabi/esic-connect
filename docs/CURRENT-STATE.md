@@ -186,7 +186,7 @@ enregistrée dans le dépôt.
 | Retards (EF-ATT-005) | seuil unique `PT10M` → `LATE` | paliers 15 / 30 min, validation manuelle automatique après 30 min |
 | Alternance ↔ assiduité | contexte résolu, consommé par le reporting | pas de module `planning` : les « demi-journées attendues » reposent sur des séances exceptionnelles saisies à la main |
 | Justificatif (EF-JUS-001/002) | métadonnée métier + cycle d'examen | aucune pièce jointe (docs/02 §21) |
-| Notifications (EF-NOTIF-001/002) | email d'activation **+ centre in-app persistant** (G1-D) : planning publié / séance annulée / remplaçant → notifications after-commit pour les **formateurs** ; API `/api/v1/me/notifications` + cloche + centre Angular | notifications aux **apprenants / responsables pédagogiques** (nouveaux ports requis), email métier, push PWA, préférences par type, file persistante / DLQ, purge |
+| Notifications (EF-NOTIF-001 `IMPLEMENTED_AND_TESTED` ; EF-NOTIF-002 / RG-033 `PARTIAL`) | email d'activation **+ centre in-app persistant** (G1-D + G1-D.1) : planning publié / séance annulée / remplaçant affecté / **remplacement terminé** → notifications after-commit pour les **formateurs** (principal + remplaçants `ACTIVE` + remplaçant tout juste terminé) ; idempotence `dedup_key` ; isolation par destinataire ; API `/api/v1/me/notifications` + cloche + centre Angular (liens en liste blanche par rôle) | notifications aux **apprenants / responsables pédagogiques** (dette G1-D-AUDIENCE), garantie de livraison / reprise (best effort après commit — dette G1-D-OUTBOX), email métier, push PWA, préférences par type, file persistante / DLQ, purge / rétention (`À_DÉFINIR`) |
 | Rapports « officiels » (docs/02 §24.5) | calcul demi-journées + export CSV | mise en page (logo ESIC, PDF, identifiant de document), export Excel |
 | OpenAPI | `/v3/api-docs` + `/swagger-ui` au runtime | pas d'`openapi.json` versionné (voir F3) |
 | Redis | jetons d'émargement uniquement | cache de planning, rate-limiting, droits calculés |
@@ -405,11 +405,53 @@ index `(recipient, status, created_at)`).
 
 Suites : back **735 → 743/0** (3 fuseaux ; Flyway `V1→V15` rejoué sur
 `esic_test` vierge), front **559 → 570/0**, `lint` / `build`
-(484,81 kB) / `audit` verts. `EF-NOTIF-001` → `IMPLEMENTED_AND_TESTED` ;
-`EF-NOTIF-002` / `RG-033` → `IMPLEMENTED_AND_TESTED` (audience formateur ;
-apprenants / RP prolongement documenté). Détail :
+(484,81 kB) / `audit` verts. Détail :
 [`G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md)
 § « G1-D ».
+
+### Audit correctif G1-D.1 (1er septembre 2026)
+
+`IMPLEMENTED_FULL_SUITE_GREEN`. Voir
+[`G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md)
+§ « Audit G1-D.1 » et
+[`G1_REQUIREMENTS_TRACEABILITY.md`](reports/G1_REQUIREMENTS_TRACEABILITY.md)
+§5ter.
+
+- **`SESSION_SUBSTITUTION_ENDED` notifie le remplaçant tout juste
+  terminé** : `CourseSessionChangeEvent` porte un champ additif
+  `affectedUserPublicIds` (UUID publics, jamais de clé SQL / entité JPA) ;
+  `SubstitutionService` y place l'UUID public du remplaçant concerné
+  (`ADDED` et `ENDED`) ; `NotificationListener` l'ajoute aux
+  destinataires. Tests : principal + remplaçant terminé notifiés
+  exactement une fois ; deux remplacements successifs → chacun ne reçoit
+  que sa propre fin ; fin concurrente → `{204, 409}`, jamais `5xx`, une
+  seule notification.
+- **Frontière transactionnelle par ligne durcie** : `NotificationRowWriter`
+  ne rattrape plus l'exception de persistance dans sa transaction
+  `REQUIRES_NEW` (elle devenait `rollback-only` → `UnexpectedRollbackException`
+  qui interrompait les destinataires suivants) ; `NotificationWriter`
+  décide **par destinataire** (doublon `dedup_key` ⇒ succès idempotent ;
+  autre erreur ⇒ journalisée sans PII, suivant traité). Test : échec
+  d'un destinataire ⇒ les autres notifiés ; échec **complet** du writer
+  après commit ⇒ annulation `204`, séance `CANCELLED` persistée, 0
+  notification.
+- **Liens du centre de notifications en liste blanche par rôle** :
+  `notificationLink(n, roles)` — lien `/sessions/:id` seulement si le
+  rôle couvre `CourseSessionWeb.READ_ROLES`, `/planning/versions` seulement
+  si `PlanningWeb.MANAGE_ROLES` ; sinon **aucun lien**, corps toujours
+  lisible. Aucun `targetPath` serveur, aucune URL libre.
+- **Compteur de la cloche** : aucun sondage hors session authentifiée
+  (compteur remis à 0), garde « un seul sondage à la fois ».
+- **Reclassement honnête** : `EF-NOTIF-001` → `IMPLEMENTED_AND_TESTED` ;
+  **`EF-NOTIF-002` / `RG-033` → `PARTIAL`** (audience **formateur
+  uniquement** ; livraison « au mieux » après commit **sans reprise**).
+  Dettes : **G1-D-OUTBOX** (outbox transactionnelle), **G1-D-AUDIENCE**
+  (apprenants / RP), rétention `À_DÉFINIR` (`R-G1-30`, `docs/07` §14).
+  Préférences : non exigées, non ajoutées.
+
+Suites : back **743 → 749/0** (`Notification*` +6, 3 fuseaux ; Flyway
+`V1→V15` rejoué sur `esic_test` vierge), front **570 → 574/0**, `lint` /
+`build` (484,81 kB) / `audit` verts.
 
 Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
 finalisation F2) **reste d'actualité** tant que les blocs G1-E à G1-G

@@ -514,6 +514,7 @@ limitation de conservation.
 | Jetons d’invitation (`account_invitation`) | **NON** | TTL métier vérifié à l’usage, mais **aucune purge** des lignes `PENDING` échues (dette connue — cf. `docs/CURRENT-STATE.md`). |
 | Piste d’audit (`audit_event`) | **NON** | append-only, **aucune** rétention / archivage / anonymisation outillé. |
 | Présences, corrections, justificatifs | **NON** | aucune purge ni anonymisation ; conservation de fait illimitée en base. |
+| **Notifications persistantes (`notification`, G1-D)** | **NON — rétention `À_DÉFINIR`** | aucune durée de conservation documentaire (MDD §23.1 décrit la table, pas de durée). **Aucune purge n’est implémentée** : l’inventer serait arbitraire. La table croît sans borne tant qu’une politique n’est pas validée (direction / DPO). Risque `R-G1-30` (`docs/06`), dette **G1-D-RETENTION** (`docs/05` §9bis). Corps déjà **neutre** (aucun jeton / PII / IP / chemin / motif nominatif). Conformité RGPD **non revendiquée** sur ce point. |
 | Comptes archivés | **NON** | statut `ARCHIVED` (pas de connexion), historique conservé ; **pas** de séparation en archivage intermédiaire ni d’anonymisation. |
 | Logs techniques du serveur | **NON géré ici** | dépend de la configuration d’exploitation (rotation logback / plateforme). |
 

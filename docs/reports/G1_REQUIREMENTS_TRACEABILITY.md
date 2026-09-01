@@ -51,7 +51,7 @@
 | G1-A | Interfaces Angular des API existantes | EF-ROOM-001, EF-ACA-001..005, EF-USER-001..003, EF-AUTH-004 | DEC-G1-A1 | `PARTIAL` (API livrées, écrans absents ou lecture seule) | **`IMPLEMENTED_AND_TESTED`** pour `EF-ROOM-001` (écrans `organization`) ; `EF-ACA-001..005` / `EF-USER-001` / `EF-AUTH-004` = **dette G1-A** (API prêtes, pas d'écran d'écriture ; plan §3.1) |
 | G1-B | Module `planning` complet | EF-PLAN-001, EF-PLAN-002, EF-PLAN-003, EF-PLAN-004, EF-PLAN-005, EF-PLAN-007, EF-SES-001, RG-016, RG-030..RG-035, AC-007, AC-008 | DEC-G1-001..006, DEC-G1-012 | `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) | **`IMPLEMENTED_AND_TESTED`** — module `planning`, V12/V13, simulation (T1), publication atomique + versionnement, port `PlanningSessionWriter`, écrans `/planning/**`. `EF-PLAN-003` (correction ligne à ligne) = **`PARTIAL`** (annulation + réimport, DEC-G1-003) ; `EF-PLAN-006` = `HORS_PÉRIMÈTRE_ASSUMÉ` ; `DEC-G1-006` (alternance) post-G1 |
 | G1-C | Cycle de vie avancé des séances | EF-SES-004, EF-SES-005, CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 | DEC-G1-004, DEC-G1-005 | `NOT_IMPLEMENTED` (séances exceptionnelles `PLANNED→OPEN→CLOSED` seulement) | `NOT_STARTED` |
-| G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) | **`IMPLEMENTED_AND_TESTED`** — module `notification` étendu (`V15`), listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant, idempotence `dedup_key`, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular. Audience **formateur** ; apprenants / RP = prolongement documenté. Voir §5bis. |
+| G1-D | Notifications métier persistantes | EF-NOTIF-001, EF-NOTIF-002, RG-033 | DEC-G1-007 | `PARTIAL` (email d'activation seul) | **EF-NOTIF-001 `IMPLEMENTED_AND_TESTED`** ; **EF-NOTIF-002 / RG-033 `PARTIAL`** (audit G1-D.1) — module `notification` étendu (`V15`), listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant (**+ fin de remplacement**, G1-D.1), idempotence `dedup_key`, isolation par destinataire, 4 endpoints `/api/v1/me/notifications`, cloche + centre Angular (liens en liste blanche par rôle). Audience **formateur uniquement** ; apprenants / RP = dette G1-D-AUDIENCE ; livraison **best effort** sans reprise = dette G1-D-OUTBOX. Voir §5bis + §5ter. |
 | G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010 | `PARTIAL` (dashboard générique unique) | `NOT_STARTED` |
 | G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | `NOT_STARTED` |
 | G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | `PARTIAL` — jeux de données `planning-demo.csv` / `planning-conflicts-demo.csv` ajoutés ; docs `CURRENT-STATE` / README / ce fichier mis à jour ; recette e2e complète + `docs/11` restent à faire |
@@ -213,6 +213,37 @@ requis » — non numériquement exigé. G1-D livre l'audience **formateur**
 événements G1-B / G1-C. Étendre aux apprenants et RP demande de nouveaux
 ports `enrollment` / `academic` : tracé comme prolongement de G1-D dans
 `G1_IMPLEMENTATION_PROGRESS.md`.
+
+### 5ter. Reclassement après audit G1-D.1 (1er septembre 2026)
+
+L'audit G1-D.1 revient sur l'optimisme du §5bis pour `EF-NOTIF-002` et
+`RG-033`. Constat vérifié : **aucun document ne numérote l'audience**
+de ces événements — CDC §14, §23, §44 listent des **événements**, jamais
+des **rôles destinataires**. La colonne « Démo » du §5 (« Publier un
+planning ⇒ notification apprenant ») est une **aspiration d'ergonomie**,
+pas une exigence. Or CDC §13.9 (« notifier les apprenants lorsque
+nécessaire ») et §23.2 (annulation = notification prioritaire) montrent
+qu'une séance annulée / modifiée **concerne les apprenants** : ne
+notifier que les formateurs est donc un **manque assumé**, pas un choix
+neutre.
+
+| ID | Statut G1-D (§5bis) | Statut G1-D.1 | Justification |
+|---|---|---|---|
+| EF-NOTIF-001 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | centre in-app complet et testé ; inchangé |
+| EF-NOTIF-002 | `IMPLEMENTED_AND_TESTED` (audience formateur) | **`PARTIAL`** | événements planning publié / annulation / remplacement **+ fin de remplacement** (G1-D.1) livrés et testés pour l'audience **formateur** (principal + remplaçants `ACTIVE` + remplaçant tout juste terminé via `CourseSessionChangeEvent.affectedUserPublicIds`) ; **audience apprenants / RP manquante** (dette G1-D-AUDIENCE) ; livraison **best effort** après commit, **sans reprise** (dette G1-D-OUTBOX) |
+| RG-033 | `IMPLEMENTED_AND_TESTED` (audience formateur) | **`PARTIAL`** | « une modification publiée génère une notification » : satisfaite pour les **formateurs** des séances impactées, pas pour les **apprenants** de la classe |
+| AC-017 (isolation destinataire) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `listUnreadCountReadAndReadAllAreScopedToTheCaller` ; `404` (pas `403`) sur une notif d'autrui ; inchangé |
+| Préférences de notification | non tracé | **`NOT_IMPLEMENTED`** (non exigé) | DEC-G1-007 : `notification_preference` conditionnée à une exigence réelle d'opt-in / par type / par canal — **non établie** |
+| Rétention / purge des notifications | non tracé | **`À_DÉFINIR`** | aucune durée documentaire (MDD §23.1 ne fixe rien) ; risque `R-G1-30` (`docs/06`), `docs/07` §14 |
+| Garantie de livraison / reprise | implicite | **`PARTIAL`** | `AFTER_COMMIT` en mémoire, pas d'outbox : perte possible sur crash JVM entre commit et écriture ; idempotence garantit l'absence de doublon si une reprise est ajoutée (dette G1-D-OUTBOX) |
+
+**Ce qui reste `IMPLEMENTED_AND_TESTED` en G1-D.1** : persistance des
+notifications, **absence de duplication** (`dedup_key` UNIQUE + tests de
+rejeu / concurrence), **livraison après commit** (rollback ⇒ 0
+notification), **isolation par destinataire** (AC-017), **échec d'un
+destinataire n'empêche pas les autres** (G1-D.1), **liens front en liste
+blanche par rôle** (G1-D.1), **compteur non sondé hors session
+authentifiée** (G1-D.1).
 
 ---
 

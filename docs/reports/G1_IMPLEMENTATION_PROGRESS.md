@@ -1191,33 +1191,265 @@ la nouvelle entrée de navigation « Notifications » (toujours visible).
 - Pas de **push PWA** ni d'**email métier** (canal in-app uniquement).
 - `SESSION_SUBSTITUTION_ENDED` : le remplaçant tout juste terminé n'est
   pas notifié de sa propre fin (il n'est plus `ACTIVE` au moment de la
-  livraison).
+  livraison). **→ corrigé au checkpoint G1-D.1.**
 - Pas de tâche de réconciliation qui rejouerait un événement perdu si la
   JVM meurt entre le commit métier et l'écriture de la notification
   (accepté, DEC-G1-007 ; idempotence garantit l'absence de doublon si
   une telle tâche est ajoutée).
 - Pas de purge planifiée des notifications anciennes (dette, `docs/07`).
 
+## Audit G1-D.1 — 1er septembre 2026
+
+Checkpoint correctif approfondi du bloc **G1-D** avant G1-E. Commits :
+`fix(notification): fiabiliser les destinataires et l'idempotence`
+(+ `docs(g1): préciser les garanties et limites des notifications`).
+
+### 1. `SESSION_SUBSTITUTION_ENDED` — le remplaçant terminé est notifié
+
+**Défaut.** `SubstitutionService.end` passait `ENDED` puis publiait
+l'événement ; le module `notification` résolvait les destinataires via
+`CourseSessionDirectory.findSessionNotificationInfo`, qui ne renvoie que
+les remplaçants **`ACTIVE`**. Le remplaçant qui venait de terminer
+n'était donc jamais notifié de sa propre fin.
+
+**Correction (contrat public enrichi, sans clé SQL ni entité JPA).**
+`CourseSessionChangeEvent` gagne un champ additif
+`Set<UUID> affectedUserPublicIds` (constructeur canonique : jamais
+`null`, copie immuable). Pour `SUBSTITUTION_ADDED` **et**
+`SUBSTITUTION_ENDED`, `SubstitutionService` y place l'UUID **public** du
+remplaçant concerné (résolu via `UserDirectory` avant la publication,
+tant qu'il est encore accessible). `NotificationListener` ajoute
+`event.affectedUserPublicIds()` à l'ensemble des destinataires (en plus
+du principal + des remplaçants `ACTIVE`). Effet nul pour `CANCELLED`
+(ensemble vide). Le `detail` d'audit de `SUBSTITUTION_ENDED` porte
+désormais `substitute=<uuid public>` (symétrie avec `ADDED` ; aucun nom).
+`audit` et `attendance` ignorent le nouveau champ (aucune régression).
+
+**Tests ajoutés** (`NotificationIntegrationTests`, +3) :
+- `endingASubstitutionNotifiesThePrincipalAndTheJustEndedSubstitute` :
+  principal **et** remplaçant terminé reçoivent **exactement une**
+  `SESSION_SUBSTITUTION_ENDED` ; aucun autre formateur ; aucun id SQL ;
+- `acrossSuccessiveSubstitutionsOnlyTheConcernedSubstituteIsNotifiedOfItsOwnEnd` :
+  deux remplacements successifs ; chaque remplaçant ne reçoit **que** la
+  fin qui le concerne ; le principal en reçoit deux ;
+- `concurrentEndOfTheSameSubstitutionProducesNoDuplicateNotificationAndNo5xx` :
+  deux `end` concurrents → `{204, 409}`, **jamais `5xx`** (verrou
+  optimiste `@Version` de `TeacherSubstitution` → `409`), **une seule**
+  notification `ENDED` pour le remplaçant.
+
+### 2. Matrice des destinataires (vérifiée dans les documents)
+
+| Événement | Principal | Remplaçant | Apprenants | RP | Admin | Source de l'audience |
+|---|---|---|---|---|---|---|
+| `PlanningPublishedEvent` | **oui** (des séances créées/màj) | — | non | non | non | `RG-033` cite « génère une notification » sans destinataire ; l'événement identifie directement les **formateurs** des séances |
+| `SESSION_CANCELLED` | **oui** | **oui** (`ACTIVE`) | non | non | non | CDC §23.2 liste « annulation » comme notification prioritaire, sans rôle ; l'événement identifie le formateur principal + remplaçants |
+| `SESSION_SUBSTITUTION_ADDED` | **oui** | **oui** (le nouveau) | non | non | non | CAD §14.1 « remplacement d'un formateur », sans rôle |
+| `SESSION_SUBSTITUTION_ENDED` | **oui** | **oui** (celui qui vient de terminer — G1-D.1) | non | non | non | idem |
+
+**Aucun document ne numérote l'audience** (apprenants / RP / admin) de
+ces événements : CDC §14, §23 et §44 (`EF-NOTIF-002`, `SHOULD`) listent
+des **événements**, jamais des **destinataires** par rôle. La colonne
+« démonstration » de la traçabilité (« Publier un planning ⇒ notification
+apprenant ») est une **aspiration d'ergonomie**, pas une exigence
+numérotée. Or une séance annulée / modifiée **concerne manifestement les
+apprenants de la classe** (CDC §13.9 « notifier les apprenants lorsque
+nécessaire », §23.2). L'audience **apprenants / responsables
+pédagogiques** est donc un **manque assumé**, non un choix neutre :
+`EF-NOTIF-002` et `RG-033` repassent en **`PARTIAL`** (cf. §12 et
+`G1_REQUIREMENTS_TRACEABILITY.md` §5ter). Livrer cette audience exige de
+nouveaux ports publics `enrollment.findActiveStudentUserPublicIdsForClasses`
+et `academic.findActiveManagerUserPublicIdsForClasses` (UUID publics,
+inscriptions actives à la date, comptes archivés exclus par `identity`) —
+tracé comme dette **G1-D-AUDIENCE** (`docs/05` §9bis, `docs/06` R-G1-28).
+
+Tests de déduplication de destinataires déjà couverts :
+`writingTheSameEventTwiceCreatesExactlyOneNotification` (rejeu ⇒ 1
+ligne), `anArchivedRecipientIsNeverNotified` (compte archivé exclu),
+`aDuplicateOnOneRecipientDoesNotBlockAFreshRecipient`. Une personne
+présente deux fois dans l'ensemble (`Set<UUID>`) est dédupliquée par
+construction ; le pré-contrôle `existsByDedupKey` + la contrainte
+`uq_notification_dedup` garantissent « au plus une par (destinataire,
+événement) ».
+
+### 3. Garantie de livraison — **« au mieux » après commit**, assumée
+
+Le modèle reste celui de **DEC-G1-007 option 2** (pas d'outbox) :
+
+| Propriété | Garantie | Preuve |
+|---|---|---|
+| Aucune notification avant / sans commit métier | **oui** | `aRolledBackPlanningPublishedEventProducesNoNotification` |
+| Un échec de notification ne rollbacke pas le métier | **oui** | `aTotalWriterFailureAfterCommitDoesNotBreakTheBusinessOperation` (annulation → `204`, séance `CANCELLED` persistée, 0 notification) |
+| Pas de duplication (rejeu du listener, course) | **oui** | `dedup_key` UNIQUE + `writingTheSameEventTwiceCreatesExactlyOneNotification` + concurrence `end` |
+| Échec d'un destinataire n'empêche pas les autres | **oui** (G1-D.1) | `whenOneRecipientWriteFailsTheOtherRecipientsAreStillNotified` |
+| Reprise après crash JVM entre commit et écriture | **non** | limite documentée ; dette **G1-D-OUTBOX** |
+| Relivraison automatique après panne | **non** | idem |
+
+→ statut honnête : **persistance / consultation / idempotence /
+isolation par destinataire = `IMPLEMENTED_AND_TESTED`** ;
+**garantie de livraison + reprise = `PARTIAL`**.
+
+**Option retenue : B (best effort documenté).** Les documents
+n'exigent **pas** de garantie de reprise : CDC §18.3 / §23.3 / §32.3
+décrivent file dédiée + DLQ comme **architecture cible** explicitement
+« pouvant rester non implémentée ». Une outbox transactionnelle
+(`notification_outbox` + worker `@Scheduled` + backoff) est tracée comme
+dette **G1-D-OUTBOX** (`docs/05` §9bis, `docs/06` R-G1-29, `docs/07`) avec
+critères de résolution. Aucune pseudo-outbox non atomique n'est créée.
+
+### 4. Frontière transactionnelle par destinataire (idempotence)
+
+**Défaut.** `NotificationRowWriter` (`REQUIRES_NEW`) rattrapait
+`DataIntegrityViolationException` **dans** sa propre transaction : celle-ci
+devenait `rollback-only`, et le commit du proxy levait alors une
+`UnexpectedRollbackException` qui **remontait dans la boucle**
+`NotificationWriter` et **interrompait les destinataires suivants**.
+
+**Correction.** `NotificationRowWriter.write` ne rattrape plus rien :
+l'exception de persistance est **laissée remonter**, la transaction
+`REQUIRES_NEW` de la ligne rollbacke proprement et l'exception d'origine
+est propagée (jamais `UnexpectedRollbackException`, rien n'étant avalé).
+`NotificationWriter` (bean **non transactionnel**, appelé en
+`AFTER_COMMIT`) décide **par destinataire** dans `deliverOne` :
+`DataIntegrityViolationException` / `UnexpectedRollbackException` (course
+sur `dedup_key`) ⇒ **succès idempotent** ; toute autre `RuntimeException`
+⇒ **journalisée sans PII** (`type` + nom de classe de la cause) et
+destinataire suivant traité. Le pré-contrôle `existsByDedupKey` est
+conservé (évite la course dans le cas nominal).
+
+### 5. Liens du centre de notifications — liste blanche par rôle
+
+**Défaut.** `notification-list.html` affichait `/sessions/{id}` pour tout
+`COURSE_SESSION` et `/planning/versions` pour tout `PLANNING_VERSION`,
+**sans tenir compte du rôle** : un `TEACHER` recevant une notification
+`PLANNING_PUBLISHED` voyait un lien « Voir les versions » menant à un
+`403` silencieux (garde `PLANNING_MANAGE_ROLES`).
+
+**Correction.** `notificationLink(n, roles)`
+(`notifications.models.ts`) : **liste blanche stricte** par
+`resourceType` + vérification de capacité de rôle, reprise **à
+l'identique** des gardes de route (`SESSION_LINK_ROLES` =
+`CourseSessionWeb.READ_ROLES` ; `PLANNING_LINK_ROLES` =
+`PlanningWeb.MANAGE_ROLES`), `resourcePublicId` validé UUID. `null` ⇒
+**aucun lien**, la notification **reste lisible** (titre + corps + date).
+Aucune URL externe, aucun chemin ni paramètre libre venant du back-end
+(pas de `targetPath` serveur). Le back-end reste l'autorité ; une
+navigation qui aboutirait quand même à `403` / `404` est rendue par les
+états `error` existants de `session-detail` / `planning-versions`.
+
+**Tests front** (`notification-list.spec.ts`, +3) : lien séance visible
+pour `TEACHER` / lien planning **masqué** ; lien planning visible pour
+`PEDAGOGICAL_MANAGER` ; corps rendu **sans lien** quand aucun lien sûr
+n'est calculable.
+
+### 6. Compteur / sondage de la cloche
+
+**Corrections** (`notifications-badge.service.ts`) :
+- **aucun appel réseau** si `AuthService.isAuthenticated()` est faux
+  (session expirée / déconnexion) → compteur remis à **0** ;
+- **un seul sondage à la fois** (garde `inFlight`) : un `NavigationEnd`
+  concomitant de l'intervalle 60 s ne double pas la requête ;
+- `reset()` explicite (déconnexion / changement de compte) ;
+- un échec transitoire n'écrase toujours pas la dernière valeur connue.
+
+La cloche (`notification-bell`) reste `takeUntilDestroyed` (arrêt à la
+destruction de l'`app-shell`) ; sur `logout` l'`app-shell` est démonté
+(route `/login` hors zone authentifiée) puis reconstruit à la connexion
+suivante → cloche fraîche, pas de fuite du compteur d'un compte à
+l'autre. Tests : `notification-bell.spec.ts` +1
+(`does not poll and stays at zero when the session is not authenticated`).
+
+### 7. Rétention des notifications — `PARTIAL`, non inventée
+
+Aucun document ne fixe de durée de conservation des notifications
+(MDD §23.1 décrit la table, pas de durée ; `docs/07` ne cite pas les
+notifications). **Aucune purge n'est ajoutée** : l'inventer serait
+arbitraire. Risque documentaire **R-G1-30** (`docs/06`) : la table
+`notification` croît sans borne tant qu'une politique n'est pas validée ;
+`docs/07` §14 mentionne désormais la rétention notifications comme
+`À_DÉFINIR`. Conformité RGPD **non revendiquée** sur ce point.
+
+### 8. Préférences de notification — non exigées, non ajoutées
+
+DEC-G1-007 (révision G1-D) conditionne `notification_preference` à une
+exigence réelle d'opt-in / opt-out / préférence par type / par canal —
+**non établie** dans les documents. Le canal in-app est le seul et
+n'est pas désactivable. Aucune table ajoutée ; « aucun choix
+utilisateur de canal en G1-D » documenté.
+
+### 9. Exigences reclassées (détail : `G1_REQUIREMENTS_TRACEABILITY.md` §5ter)
+
+| ID | Avant G1-D.1 | Après G1-D.1 | Justification |
+|---|---|---|---|
+| EF-NOTIF-001 | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | centre in-app complet ; inchangé |
+| EF-NOTIF-002 | `IMPLEMENTED_AND_TESTED` (audience formateur) | **`PARTIAL`** | événements planning publié / annulation / remplacement (+ fin, G1-D.1) livrés et testés pour l'audience **formateur** ; audience **apprenants / RP** manquante ; livraison **best effort** sans reprise |
+| RG-033 | `IMPLEMENTED_AND_TESTED` (audience formateur) | **`PARTIAL`** | « une modification publiée génère une notification » : livrée pour les **formateurs** des séances impactées ; pas pour les apprenants de la classe |
+| AC-017 (isolation) | `IMPLEMENTED_AND_TESTED` | **`IMPLEMENTED_AND_TESTED`** | `listUnreadCountReadAndReadAllAreScopedToTheCaller`, `404` (pas `403`) sur notif d'autrui ; inchangé |
+| Préférences | — | **`NOT_IMPLEMENTED`** (non exigé) | DEC-G1-007 |
+| Rétention notifications | — | **`À_DÉFINIR`** | aucune durée documentaire ; R-G1-30 |
+| Reprise / garantie de livraison | implicite | **`PARTIAL`** | best effort après commit ; dette G1-D-OUTBOX |
+
+### 10. Validation G1-D.1
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw test -Dtest='Notification*,CourseSession*,Planning*,Audit*,ModularityTests'` (base `esic_test` recréée vierge → Flyway `V1→V15`) | **78 tests, 0 échec — BUILD SUCCESS**, `Successfully validated 15 migrations`, `ddl-auto=validate` OK, `ModularityTests` vert |
+| `./mvnw clean test` (défaut `Europe/Paris`) | **749 tests, 0 échec, 0 erreur — BUILD SUCCESS** (743 → 749) |
+| `TZ=UTC ./mvnw clean test` | **749 / 0 — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **749 / 0 — BUILD SUCCESS** |
+| `npm run lint` | « All files pass linting » |
+| `npm test -- --watch=false` | **68 fichiers / 574 tests / 0 échec** (570 → 574) |
+| `npm run build` | initial **484,81 kB** brut — 0 alerte de budget |
+| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| `git diff --check` | propre |
+
+Aucune migration nouvelle (schéma en **V15**). Aucun `@Disabled` /
+`@Ignore` / `it.skip` / `describe.skip` / `xit` / `.only(` ajouté ; aucun
+test supprimé ; aucune assertion affaiblie ; `.env` inchangé.
+Commits : `fix(notification): fiabiliser les destinataires et
+l'idempotence` (`e43b0c8`) + `docs(g1): préciser les garanties et limites
+des notifications`.
+
+### Limites restantes après G1-D.1
+
+- Audience **apprenants / responsables pédagogiques** non livrée
+  (dette **G1-D-AUDIENCE**).
+- **Pas d'outbox** : perte possible d'un événement si la JVM meurt
+  entre le commit métier et l'écriture de la notification (dette
+  **G1-D-OUTBOX**).
+- Pas de **purge** / politique de rétention (R-G1-30).
+- Pas de **préférences**, pas de **push PWA** ni d'**email métier**.
+- Pas de test e2e navigateur (specs de composant + IT `@SpringBootTest`).
+
 ## État de reprise autonome
 
 - **Branche** : `feature/master-level-product-expansion`.
-- **HEAD attendu** : `feat(frontend): ajouter le centre de notifications`
-  (chaîne G1-C.3 : `fix(coursesession): consolider l'historique…` →
-  `docs(g1): corriger les garanties transactionnelles et Flyway` ;
-  chaîne G1-D : `feat(notification): créer le modèle de notifications` →
-  `feat(notification): ajouter la boîte de notifications persistantes` →
-  `feat(frontend): ajouter le centre de notifications`).
+- **HEAD attendu** : chaîne G1-D.1 :
+  `fix(notification): fiabiliser les destinataires et l'idempotence`
+  (`e43b0c8`) → `docs(g1): préciser les garanties et limites des
+  notifications`. Au-dessus de G1-D
+  (`feat(frontend): ajouter le centre de notifications`).
 - **Working tree** : propre après commit.
-- **Bloc courant** : **G1-D terminé** (notifications persistantes,
-  audience formateur). Bloc suivant : **G1-E** — pièces jointes des
-  justificatifs (migration `V16`, port `attendance.JustificationFileStorage`,
-  DEC-G1-008 / DEC-G1-009). **Ne pas démarrer G1-E** sans nouvelle
-  instruction.
+- **Bloc courant** : **G1-D.1 terminé et consolidé** (destinataire
+  `SUBSTITUTION_ENDED` corrigé, idempotence par destinataire durcie,
+  liens front en liste blanche, compteur sûr, traçabilité honnête :
+  `EF-NOTIF-002` / `RG-033` → `PARTIAL`). Bloc suivant : **G1-E** —
+  pièces jointes des justificatifs (migration `V16`, port
+  `attendance.JustificationFileStorage`, DEC-G1-008 / DEC-G1-009).
 - **Fichiers non terminés** : aucun.
-- **Tests verts** : back **743/0** (3 fuseaux) ; front **570/0** ;
+- **Tests verts** : back **749/0** (3 fuseaux) ; front **574/0** ;
   `ModularityTests` vert.
 - **Tests rouges** : aucun.
 - **Migrations** : schéma en **V15**. V16 libre pour G1-E.
+- **Décisions tranchées (G1-D.1)** : audience notifications **formateur
+  uniquement** assumée `PARTIAL` (pas d'audience inventée ; dette
+  G1-D-AUDIENCE) ; livraison **« au mieux » après commit** sans reprise
+  (dette G1-D-OUTBOX ; pas d'outbox en G1) ; `CourseSessionChangeEvent`
+  porte `Set<UUID> affectedUserPublicIds` (additif, UUID publics) ;
+  `NotificationRowWriter` laisse remonter l'exception, `NotificationWriter`
+  décide par destinataire ; liens front en **liste blanche par rôle**
+  (pas de `targetPath` serveur) ; compteur non sondé hors session
+  authentifiée ; **pas de purge inventée** (rétention `À_DÉFINIR`,
+  R-G1-30) ; **pas de `notification_preference`** (non exigé).
 - **Décisions tranchées (G1-D)** : listeners `AFTER_COMMIT` + writer
   `REQUIRES_NEW` **par ligne** ; idempotence par `dedup_key` (SHA-256,
   `eventId` / `versionPublicId` comme clé d'occurrence) ; destinataires

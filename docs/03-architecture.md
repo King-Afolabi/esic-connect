@@ -670,12 +670,25 @@ et `coursesession.CourseSessionChangeEvent` (`CANCELLED` /
 `REQUIRES_NEW` **par ligne** (`NotificationWriter` → `NotificationRowWriter`),
 API `/api/v1/me/notifications` (liste paginée, `unread-count`, `read`,
 `read-all`), front cloche + centre. **Destinataires dérivés serveur =
-formateurs** (principal + remplaçants `ACTIVE`). Restent **non
-implémentés** : notifications aux **apprenants / responsables
-pédagogiques** (nouveaux ports `enrollment` / `academic` requis),
-**préférences** par type, **email métier**, **push PWA**, **file
-persistante / DLQ** et **purge** (dettes documentées dans
-`docs/CURRENT-STATE.md` et `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`).
+formateurs** (principal + remplaçants `ACTIVE` + remplaçant tout juste
+terminé via `CourseSessionChangeEvent.affectedUserPublicIds`, G1-D.1).
+
+**Garantie de livraison (audit G1-D.1).** Le modèle est **« au mieux »
+après commit** : aucune notification sans commit métier, aucun rollback
+métier sur échec de notification, aucune duplication (`dedup_key`
+UNIQUE), **isolation par destinataire** (l'échec d'un destinataire
+n'interrompt pas les suivants) — mais **pas de reprise** après crash JVM
+entre le commit et l'écriture (dette **G1-D-OUTBOX** :
+`notification_outbox` transactionnelle + worker `@Scheduled` idempotent).
+`EF-NOTIF-002` / `RG-033` = `PARTIAL`.
+
+Restent **non implémentés** : notifications aux **apprenants /
+responsables pédagogiques** (nouveaux ports `enrollment` / `academic`
+requis — dette **G1-D-AUDIENCE**), **préférences** par type (non
+exigées), **email métier**, **push PWA**, **file persistante / DLQ** et
+**purge / rétention** (`À_DÉFINIR`, `R-G1-30`) — dettes documentées dans
+`docs/CURRENT-STATE.md`, `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`
+(§ « Audit G1-D.1 ») et `docs/05-product-backlog.md` §9bis.
 
 ## 7.12 `reporting`
 
