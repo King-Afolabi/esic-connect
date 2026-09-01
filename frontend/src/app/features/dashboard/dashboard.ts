@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -77,13 +77,28 @@ export class Dashboard {
     ),
   );
 
+  /**
+   * Contexte transmis au serveur : uniquement quand un choix existe (compte
+   * multi-rôles). Un compte mono-rôle n'a qu'un tableau de bord possible —
+   * inutile de le préciser.
+   */
+  private readonly requestedContext = computed(() =>
+    this.roleContext.hasChoice() ? this.roleContext.active() : null,
+  );
+
   constructor() {
-    this.loadDashboard();
+    // Recharge le tableau de bord au démarrage et à chaque changement de
+    // contexte de rôle actif (EF-AUTH-003) : le serveur renvoie la carte du
+    // rôle demandé, après l'avoir vérifié contre le JWT (403 si non détenu).
+    effect(() => {
+      const context = this.requestedContext();
+      this.loadDashboard(context);
+    });
   }
 
-  protected loadDashboard(): void {
+  protected loadDashboard(context = this.requestedContext()): void {
     this.dashState.set({ kind: 'loading' });
-    this.dashboardApi.getDashboard().subscribe({
+    this.dashboardApi.getDashboard(context).subscribe({
       next: (data) => this.dashState.set({ kind: 'ready', data }),
       error: (error: unknown) => {
         const status =

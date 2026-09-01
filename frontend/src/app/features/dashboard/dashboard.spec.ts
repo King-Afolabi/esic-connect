@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { RoleContextService } from '../../core/auth/role-context.service';
 import { Role } from '../../core/models/role';
 import { Session } from '../../core/models/session';
 import { Dashboard } from './dashboard';
@@ -91,9 +92,40 @@ describe('Dashboard', () => {
   it('reports the active usage context when the account carries several roles', () => {
     roles.set(['PEDAGOGICAL_MANAGER', 'TEACHER']);
     fixture.detectChanges();
+    // Le changement de contexte recharge le tableau de bord avec ?context=.
+    http
+      .expectOne((r) => r.url === DASH_URL && r.params.get('context') === 'PEDAGOGICAL_MANAGER')
+      .flush(EMPTY_ADMIN_DASH);
+    fixture.detectChanges();
     expect(text()).toContain('Contexte actif');
     expect(text()).toContain('Gestion pédagogique');
     expect(text()).toContain('vos autorisations restent inchangées');
+  });
+
+  it('sends ?context for a multi-role account and switches it when the context changes', () => {
+    roles.set(['PEDAGOGICAL_MANAGER', 'TEACHER']);
+    fixture.detectChanges();
+    // Contexte par défaut = rôle le plus prioritaire détenu.
+    http
+      .expectOne((r) => r.url === DASH_URL && r.params.get('context') === 'PEDAGOGICAL_MANAGER')
+      .flush({ ...EMPTY_ADMIN_DASH, role: 'PEDAGOGICAL_MANAGER' });
+    fixture.detectChanges();
+
+    // L'utilisateur bascule vers son contexte formateur.
+    TestBed.inject(RoleContextService).select('TEACHER');
+    fixture.detectChanges();
+    http
+      .expectOne((r) => r.url === DASH_URL && r.params.get('context') === 'TEACHER')
+      .flush({ ...EMPTY_ADMIN_DASH, role: 'TEACHER', teacher: null, administration: null });
+    fixture.detectChanges();
+    expect(text()).toContain('Mes séances de formateur');
+  });
+
+  it('never sends a context a mono-role account does not hold', () => {
+    // beforeEach: roles = ['ADMIN'] (mono-rôle) → aucun paramètre context.
+    (fixture.componentInstance as unknown as { loadDashboard: () => void }).loadDashboard();
+    http.expectOne((r) => r.url === DASH_URL && !r.params.has('context')).flush(EMPTY_ADMIN_DASH);
+    fixture.detectChanges();
   });
 
   it('shows the empty state when the account carries no role', () => {

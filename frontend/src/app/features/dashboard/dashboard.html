@@ -42,8 +42,9 @@
           </ul>
           @if (hasContextChoice()) {
             <p class="dashboard__context">
-              Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il n'agit que
-              sur l'affichage et la navigation ; vos autorisations restent inchangées.
+              Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il choisit le rôle
+              affiché (navigation et « Mon activité », vérifié côté serveur) ; vos
+              autorisations restent inchangées.
             </p>
           }
         } @else {
