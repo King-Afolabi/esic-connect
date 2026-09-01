@@ -33,9 +33,13 @@ Audit vérifiable et matrices d'exigences :
 Autres briques livrées : authentification JWT, administration des comptes
 et des rôles, invitation / activation par email (Mailpit), référentiels
 organisationnel et académique, périmètre pédagogique, inscriptions
-historisées, rythmes d'alternance, justificatif métier (métadonnées ;
-**socle de stockage sécurisé des pièces jointes** livré — G1-E cp1),
-piste d'audit, **centre de notifications métier persistantes** (G1-D /
+historisées, rythmes d'alternance, **import → publication versionnée du
+planning** (module `planning`, G1-B), **justificatif avec pièce jointe**
+(G1-E — dépôt / téléchargement sécurisés, réconciliation ; antivirus et
+balayage des orphelins non implémentés), **tableaux de bord par rôle**
+(module `dashboard`, G1-F ; contexte de rôle multi-rôle vérifié côté
+serveur), piste d'audit, **centre de notifications métier persistantes**
+(G1-D /
 G1-D.1 — planning publié / séance annulée / remplaçant affecté / remplacement
 terminé → notifications after-commit pour les formateurs, idempotentes,
 isolées par destinataire ; `/api/v1/me/notifications` + cloche + centre
@@ -74,11 +78,14 @@ implémentés** et ne doivent jamais être présentés comme livrés :
 - WebAuthn / passkeys, MFA TOTP, anti-bot (Turnstile).
 - Réclamations / messagerie, départ anticipé, import Excel `.xlsx` /
   multifeuille.
-- Justificatif **avec pièce jointe** : le socle est livré (G1-E cp1 —
-  `V16`, port `JustificationFileStorage`, validateur magic-bytes,
-  stockage hors base / hors webroot) ; le dépôt via l'API (compensation
-  base/fichier), le téléchargement sécurisé et l'écran d'upload sont les
-  checkpoints G1-E suivants ; **antivirus non implémenté**.
+- Justificatif **avec pièce jointe** : **livré (G1-E)** — dépôt multipart
+  propriétaire, compensation base/fichier, réconciliation des
+  `PENDING_STORAGE`, téléchargement `Content-Disposition: attachment` +
+  `nosniff` (propriétaire + examinateur périmétré). **Non livré** :
+  antivirus (`NOT_IMPLEMENTED`), balayage des fichiers orphelins
+  (`NOT_IMPLEMENTED` — la réconciliation ne traite que les
+  `PENDING_STORAGE`), remplacement direct d'une pièce, rétention `DELETED`
+  (`À_DÉFINIR`).
 - Service IA (FastAPI, mapping de colonnes, score d'anomalie).
 - IoT / MQTT / Raspberry Pi (broker Mosquitto démarré, **aucun code**).
 - Notifications : le centre in-app persistant est livré (G1-D / G1-D.1)
@@ -101,11 +108,11 @@ Liste complète et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md`
 ## Architecture réelle
 
 - **Back-end** : Java 21, Spring Boot 3.5, Maven, **Spring Modulith 1.4**.
-  Monolithe modulaire — 12 modules :
+  Monolithe modulaire — **14 modules** :
   `identity`, `organization`, `academic`, `enrollment`, `alternation`,
-  `coursesession`, `attendance`, `studentimport`, `notification`,
-  `audit`, `bootstrap`, `shared`. Frontières vérifiées par
-  `ModularityTests`.
+  `planning`, `coursesession`, `attendance`, `studentimport`,
+  `notification`, `dashboard`, `audit`, `bootstrap`, `shared`. Frontières
+  vérifiées par `ModularityTests`.
 - **Base** : MySQL 8, schéma géré **uniquement** par Flyway (`V1` → `V16`,
   schéma en version 16), `ddl-auto: validate`.
 - **Cache / données temporaires** : Redis 7 — consommé **uniquement**
@@ -117,8 +124,9 @@ Liste complète et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md`
   `@EnableMethodSecurity` + `@PreAuthorize` sur toutes les routes non
   publiques, contrôle de périmètre côté serveur.
 
-Modules `planning`, `claim`, `reporting`, `ai`, `iot` décrits dans
-`docs/03-architecture.md` §7 = **architecture cible non implémentée**.
+Modules `claim`, `reporting`, `ai`, `iot` décrits dans
+`docs/03-architecture.md` §7 = **architecture cible non implémentée**
+(`planning` et `dashboard` sont désormais réels — G1-B, G1-F).
 
 Architecture cible cloud (AWS) : documentée, **non déployée**
 (`docs/03-architecture.md` §37).

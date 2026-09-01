@@ -1719,6 +1719,10 @@ documentée) : `SUPER_ADMIN` / `ADMIN` / `SCHOOL_ADMINISTRATION` →
 est **ergonomique** et **n'est pas transmis** ; un compte multi-rôles
 obtient le tableau de bord de son rôle le plus élevé (documenté ;
 `aMultiRoleUserGetsTheHighestPriorityDashboard`).
+> **Révisé par la passe corrective G1-E/F/G (§ ci-dessous)** : le contexte
+> **est** désormais transmis (`?context=`) et **vérifié** contre le JWT
+> (`403 DASHBOARD_CONTEXT_NOT_HELD` sinon). Test renommé
+> `aMultiRoleUserGetsTheHighestPriorityDashboardWithoutAContext`.
 
 **Nouveaux ports publics** (tous 100 % UUID publics / agrégats bornés) :
 `identity.AccountStatsDirectory` (1 requête `GROUP BY status`),
@@ -1883,7 +1887,7 @@ Aucune migration G1-G (schéma en **V16**). `.env` inchangé. Aucun
 | Front (`npm test`) | 574 | **596 / 0** |
 | `npm run build` | 484,81 kB | **484,52 kB** (0 alerte de budget) |
 | `npm audit --audit-level=high` | 0 vuln. | **0 vuln.** |
-| `ModularityTests` | vert | **vert** (13 modules — ajout de `dashboard`) |
+| `ModularityTests` | vert | **vert** (**14 modules** — `planning` réel depuis G1-B **+** `dashboard` en G1-F ; la mention « 13 » ci-dessous et §« Totaux » est erronée d'une unité, corrigée par la passe corrective G1-E/F/G) |
 
 ## Documentation secondaire à reporter après G1
 
@@ -1893,8 +1897,136 @@ Aucune migration G1-G (schéma en **V16**). `.env` inchangé. Aucun
 > **Chiffres de référence de fin de session : back `./mvnw clean test`
 > 800 / 0 (3 fuseaux, Flyway `V1→V16`), front `npm test` 596 / 0,
 > `npm run build` 484,52 kB (0 alerte de budget), `npm audit
-> --audit-level=high` 0 vulnérabilité, `ModularityTests` vert (13
-> modules).**
+> --audit-level=high` 0 vulnérabilité, `ModularityTests` vert (**14
+> modules** — voir correction ci-dessus).**
+
+## Passe corrective probatoire G1-E / G1-F / G1-G (1er septembre 2026)
+
+> Branche `feature/master-level-product-expansion`, parent `55f999a`.
+> Vérification par le code + les tests des réserves restantes, correction
+> des défauts confirmés, renforcement des preuves, réalignement
+> documentaire. **Aucune migration ajoutée** (schéma en **V16**), aucun
+> `push` / PR / fusion / `--amend`. Rapport détaillé :
+> [`G1_FINAL_REPORT.md`](G1_FINAL_REPORT.md).
+
+### Anomalies confirmées et corrigées
+
+- **A — échec d'audit après stockage d'une pièce jointe.**
+  `AttendanceJustificationService.uploadOwnAttachment` publie la trace
+  `JUSTIFICATION_ATTACHMENT_STORED` **hors transaction, après** le commit
+  `STORED`. Le listener d'audit synchrone (`REQUIRES_NEW`) qui échoue
+  faisait remonter un `5xx` alors que la pièce est déjà durable ⇒ **faux
+  négatif d'API**. Correctif : `try/catch (RuntimeException)` autour de
+  la publication, échec **journalisé** (WARN sans PII), réponse `201`,
+  pièce valide et téléchargeable. L'absence de trace est une **dette
+  d'audit assumée** (non rejouée), cohérente avec les 8 autres listeners
+  synchrones (G1-C.3). Test :
+  `JustificationAttachmentIntegrationTests#anAuditFailureAfterThe
+  AttachmentIsStoredStillReturns201AndKeepsThePiece` (faute d'audit
+  injectée par un `@EventListener` de test à priorité maximale — le
+  listener de production ne s'exécute pas quand la faute est armée, donc
+  l'absence de trace est **déterministe**).
+- **C — tableau de bord formateur sans les remplacements actifs.**
+  `CourseSessionDirectory.findUpcomingForTeacher` ne renvoyait que le
+  formateur **principal**. Correctif : `Clock` injecté dans
+  `DefaultCourseSessionDirectory` ; `taughtBy(id) OR internalId IN
+  findActiveSubstitutedSessionIds(id, now)` en **une** requête, sans
+  doublon (mêmes règles que `GET /sessions` — G1-C.3). Bonus : le filtre
+  « à ouvrir » comparait `"PLANNED".equals(SessionLifecycle)` (toujours
+  faux) ⇒ carte toujours vide ; corrigé en `== SessionLifecycle.PLANNED`.
+  Tests : `DashboardIntegrationTests` (remplaçant actif visible ;
+  remplacement terminé exclu ; principal + remplaçant = 1 seule ligne).
+- **D — divergence UI ↔ serveur sur le contexte de rôle.**
+  `GET /api/v1/me/dashboard?context=<rôle>` : le serveur **vérifie** le
+  rôle contre le claim `roles` du JWT (`403 DASHBOARD_CONTEXT_NOT_HELD`
+  sinon, jamais d'élévation) ; absent ⇒ priorité fixe. Front : transmet
+  le contexte actif **uniquement s'il y a un choix réel** (≥ 2 rôles) et
+  recharge à son changement. Tests back (mono / multi sans contexte /
+  multi avec chaque contexte détenu / rôle non détenu → `403` /
+  `STUDENT`+`ADMIN` → `403`) + front (`dashboard.spec.ts`,
+  `dashboard-api.service.spec.ts`).
+- **F — N+1 réel dans `findSessionsForClasses`.** Résolution des classes
+  par `findByPublicId` **dans un `.map()`** (1 requête / classe), masquée
+  par un test à plafond `< 20` sur 2 classes. Correctif : port de lot
+  `ClassGroupDirectory.findByPublicIds(Collection<UUID>)` (1 requête) +
+  méthode `DashboardService.lines(...)` qui résout tous les libellés en
+  une requête et réutilise les codes déjà connus du périmètre. Preuve :
+  `DashboardIntegrationTests#aPedagogicalManagerDashboardDoesNotGrow
+  ItsQueryCountWithTheNumberOfClasses` — fixture 1 classe vs 15 classes
+  (séances constantes) ; assertion `qLarge − qSmall ≤ 3` + contenu
+  fonctionnel vérifié aux deux tailles.
+  `ClassGroupDirectoryTests#findByPublicIdsResolvesABatchInOneCall…`.
+- **G — recette non continue + qualification e2e trompeuse.**
+  `PriorityPathRecetteIntegrationTests` créait un apprenant parallèle ;
+  l'apprenant importé n'était jamais utilisé. Correctif : **activation
+  d'un apprenant réellement importé** via `POST
+  /account-invitations/activate` (jeton capté par un mailer de test),
+  puis **ce même apprenant** (déjà inscrit par l'import) émarge + dépose
+  le justificatif + la pièce. Dates relatives à l'horloge. Javadoc et
+  docs : « recette d'intégration API Spring », **pas** un e2e navigateur.
+
+### Réserves infirmées (aucune correction de code)
+
+- « audit après commit » de G1-E : **exacte** pour le chemin d'upload
+  (méthode non transactionnelle, trace après `store()`), seul l'isolement
+  de l'échec manquait (réserve A).
+- Réconciliation : les cas `PENDING_STORAGE` + fichier / sans fichier
+  sont **déjà couverts** (tests existants). Le cas `STORED` + fichier
+  absent n'est pas reproductible dans la séquence.
+
+### Réserves classées explicitement (non implémentées)
+
+- **B — balayage des fichiers orphelins** (ligne `DELETED` + fichier
+  subsistant après échec best-effort de suppression ; ou fichier sans
+  ligne) : **`NOT_IMPLEMENTED`**. Un scan de répertoire *sûr*
+  (symlinks / traversée / TOCTOU / refus de supprimer sur supposition)
+  est disproportionné pour cette passe. Test de figure de la portée :
+  `reconciliationDoesNotSweepAFileOrphanedByADeletedRow`. Stratégie
+  future : job dédié borné, journalisation puis quarantaine avant purge.
+- **E — cartes manager périmétrées** (justificatifs en attente,
+  alternance `UNKNOWN`, planning actif, conflits) + carte administration
+  « audit récent » : **`PARTIAL`**. Aucun port agrégé borné existant ;
+  la jointure justificatif → inscription → classe traverse 3 modules
+  sans port. `note` honnête renvoyée par le serveur.
+- **G — e2e navigateur** : **`NOT_IMPLEMENTED`**. Étude de faisabilité :
+  pas de `playwright` / `puppeteer` / `cypress` dans `package.json`, rien
+  dans `node_modules`, pas de cache navigateur, pas de script `e2e` ;
+  installation = téléchargement de navigateurs non fiable hors session
+  interactive + backend + dev-server + base. `DEC-G1-011`. Repli : la
+  recette API. Démonstration manuelle : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`.
+
+### Décompte des modules
+
+**14** modules Spring Modulith (14 `package-info.java`) : `identity`,
+`organization`, `academic`, `enrollment`, `alternation`, `planning`,
+`coursesession`, `attendance`, `studentimport`, `notification`,
+`dashboard`, `audit`, `bootstrap`, `shared`. `ModularityTests` vert.
+
+### Livrable (9) — `G1_FINAL_REPORT.md`
+
+Le rapport final, annoncé par l'étape (9) de `G1_IMPLEMENTATION_PLAN.md`
+et référencé par l'en-tête de ce document, était **annoncé et absent**.
+Il est **créé** par cette passe :
+[`G1_FINAL_REPORT.md`](G1_FINAL_REPORT.md), avec les données vérifiées
+ci-dessous.
+
+### Résultats de vérification
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw clean test` (défaut, JDK 21) | **`Tests run: 809, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** |
+| `TZ=UTC ./mvnw clean test` | **`Tests run: 809, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **`Tests run: 809, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS** |
+| `ModularityTests` | **vert** (14 modules) |
+| Flyway `V1 → V16` base `esic_test` fraîche, `ddl-auto=validate` | **`Successfully applied 16 migrations … now at version v16`** puis `ddl-auto=validate` OK — BUILD SUCCESS (69 tests ciblés, 0 échec) |
+| `npm test -- --watch=false` | **71 fichiers / 600 tests / 0 échec** (Vitest ; +4 : `dashboard-api.service.spec.ts` +2, `dashboard.spec.ts` +2 dont 1 modifié) |
+| `npm run lint` | « All files pass linting » |
+| `npm run build` | initial **484,52 kB** brut / 122,07 kB transféré — 0 alerte de budget |
+| `npm audit --audit-level=high` | **0 vulnérabilité** |
+
+Aucun `@Disabled` / `@Ignore` / `it.skip` / `.only(` ajouté ; aucun test
+supprimé ; aucune assertion affaiblie ; `.env` inchangé ; `git diff
+--check` propre.
 
 | Fichier cible | Section | Statut / faits à reporter | À retirer (obsolète) | Chiffres | Démo |
 |---|---|---|---|---|---|

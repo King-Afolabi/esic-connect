@@ -877,6 +877,37 @@ réconciliation configurable.
   justificatif est examiné une seule fois — machine à états ; pas besoin
   d'un `eventId` d'occurrence).
 
+### Révision à la passe corrective G1-E/F/G (1er septembre 2026)
+
+- **Échec de la trace d'audit après un stockage réussi — isolé.**
+  `AttendanceJustificationService.uploadOwnAttachment` n'est pas
+  transactionnelle : quand `JustificationAttachmentStore.store()` revient,
+  la pièce est **durable** (fichier + ligne `STORED` committés). La trace
+  d'audit `JUSTIFICATION_ATTACHMENT_STORED` est publiée **ensuite**, hors
+  transaction. Son listener synchrone (`REQUIRES_NEW`) qui échouait
+  faisait remonter un `5xx` ⇒ **faux négatif d'API**. Décision : la
+  publication est encadrée d'un `try/catch (RuntimeException)` — l'échec
+  est **journalisé** (WARN sans PII), l'API répond `201`. L'absence de
+  trace est une **dette d'audit assumée** (le listener **n'est pas
+  rejoué**), cohérente avec les 8 autres listeners d'audit synchrones du
+  projet (cf. audit G1-C.3). Une reprise durable (outbox d'audit) reste à
+  planifier globalement. Test : faute d'audit injectée par un
+  `@EventListener` de test **à priorité maximale** (le listener de
+  production ne s'exécute pas quand la faute est armée ⇒ absence de trace
+  **déterministe**), aucun bean de production modifié.
+
+- **Balayage des fichiers orphelins — `NOT_IMPLEMENTED` (explicite).**
+  La réconciliation ne traite **que** les lignes `PENDING_STORAGE`. Un
+  fichier laissé par un retrait dont la suppression *best effort* a échoué
+  (ligne `DELETED`, fichier subsistant), ou un fichier sans aucune ligne,
+  ne sont **pas** balayés. Un scan de répertoire *sûr* (protection liens
+  symboliques + traversée + TOCTOU, refus de supprimer sur supposition
+  fragile, détection / journalisation avant toute suppression) est jugé
+  **disproportionné** pour une passe corrective. Test de figure de la
+  portée : `reconciliationDoesNotSweepAFileOrphanedByADeletedRow`.
+  Stratégie future : job dédié borné, journalisation d'abord, quarantaine
+  avant purge, jamais de suppression sur heuristique.
+
 ---
 
 ## DEC-G1-010 — Agrégats des tableaux de bord
@@ -953,6 +984,42 @@ absence de N+1 (au moins un endpoint), `401/403`.
   (les agrégats sont des requêtes bornées ; le test anti-N+1 passe sans).
 - **Pas de cache Redis** (inchangé — décision d'origine confirmée).
 
+### Révision à la passe corrective G1-E/F/G (1er septembre 2026)
+
+- **`DEC-G1-F` révisé — le contexte de rôle EST transmis et vérifié.**
+  L'ancienne règle « le contexte du front n'est pas transmis » créait une
+  **divergence silencieuse** : un compte RP+formateur sélectionnant
+  « formateur » voyait quand même le tableau de bord RP. Nouvelle
+  politique : `GET /api/v1/me/dashboard?context=<rôle>` — le rôle doit
+  figurer dans le claim `roles` du JWT (`403 DASHBOARD_CONTEXT_NOT_HELD`
+  sinon — **jamais** d'élévation, le rôle est déjà détenu) ; `context`
+  absent ⇒ priorité fixe déterministe inchangée. Le front ne transmet le
+  contexte que s'il existe un choix réel (≥ 2 rôles) et **recharge** le
+  tableau de bord à son changement. Tests back + front.
+- **N+1 réel corrigé (le compteur `< 20` masquait un défaut).**
+  `DefaultCourseSessionDirectory.findSessionsForClasses` résolvait les
+  classes par `classGroupDirectory.findByPublicId(...)` **dans un
+  `.map()`** — 1 requête par classe du périmètre. Nouveau port de lot
+  `academic.ClassGroupDirectory#findByPublicIds(Collection<UUID>)`
+  (1 requête) ; `DashboardService.lines(...)` résout tous les libellés de
+  classe en une requête et **réutilise** les codes déjà connus du
+  périmètre. Preuve renforcée : test comparatif **1 classe vs 15
+  classes** (séances constantes) — assertion `qLarge − qSmall ≤ 3`,
+  contenu fonctionnel vérifié aux deux tailles. Coût per-séance restant
+  (`checkpoints` + `session_class` par séance) : borné (≤ 10 séances
+  affichées), identique entre fixtures, documenté.
+- **Carte `TEACHER` — remplaçants actifs inclus.**
+  `CourseSessionDirectory#findUpcomingForTeacher` renvoie désormais aussi
+  les séances où l'utilisateur est **remplaçant `ACTIVE` couvrant
+  l'instant courant** (`findActiveSubstitutedSessionIds`, mêmes règles
+  que `GET /sessions` — G1-C.3), en une requête, sans doublon. Le filtre
+  « à ouvrir » comparait `"PLANNED".equals(SessionLifecycle)` (toujours
+  faux) ⇒ corrigé (`== SessionLifecycle.PLANNED`).
+- **Statut de bloc.** G1-F n'est plus qualifié
+  `IMPLEMENTED_FULL_SUITE_GREEN` : `IMPLEMENTED_AND_TESTED` **par carte**,
+  les 4 cartes manager périmétrées + « audit récent » administration
+  restent `PARTIAL` (pas de port agrégé borné).
+
 ---
 
 ## DEC-G1-011 — Stratégie de tests e2e
@@ -1027,6 +1094,31 @@ consignée ⇒ le grand lot G1 est
 `scripts/prepare-attachment-demo.sh` (nouveau) génère des fichiers de
 pièce jointe fictifs (PDF / PNG / JPEG valides) sous `build/demo-data/`
 (non versionné, idempotent) pour une future démonstration manuelle.
+
+### Révision à la passe corrective G1-E/F/G (1er septembre 2026)
+
+- **Étude de faisabilité e2e navigateur — reconfirmée, statut précisé.**
+  `frontend/package.json` : **aucune** dépendance `@playwright/test` /
+  `playwright` / `puppeteer` / `cypress` ; `node_modules` : rien ;
+  `~/.cache/ms-playwright` : absent ; aucun script `e2e`. Une adoption
+  impose le téléchargement de navigateurs (~300-500 Mo) non fiable hors
+  session interactive, **plus** un backend + un dev-server + la base pour
+  chaque parcours. Critère « risque / coût disproportionné » rempli. Le
+  e2e navigateur passe de `PARTIAL` à **`NOT_IMPLEMENTED`** (formulation
+  honnête : rien n'est livré côté navigateur), le **repli API reste**
+  `IMPLEMENTED_AND_TESTED`.
+- **Repli API rendu continu.** `PriorityPathRecetteIntegrationTests`
+  créait un apprenant parallèle (`account(RoleCode.STUDENT)`) et
+  n'utilisait jamais l'apprenant importé ⇒ chaîne annoncée « bout en
+  bout » en réalité **discontinue**. Correctif : la recette **active un
+  apprenant réellement importé** via l'API publique
+  `POST /account-invitations/activate` (jeton capté par un `InvitationMailer`
+  de test), puis **ce même apprenant** — déjà inscrit par l'import —
+  émarge, dépose le justificatif et sa pièce jointe. Les actions métier
+  passent toutes par l'API ; le SQL direct ne sert qu'aux invariants.
+  Dates construites **relativement à l'horloge** (aucune ne périme).
+  Nature qualifiée sans ambiguïté : « recette d'intégration API Spring »,
+  **pas** un e2e navigateur.
 
 ---
 

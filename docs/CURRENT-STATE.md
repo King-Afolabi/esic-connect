@@ -18,8 +18,18 @@
 ## Dernière mise à jour
 
 ```text
-31 août 2026 — checkpoint de finalisation F2 (vérité documentaire)
+1er septembre 2026 — passe corrective probatoire G1-E / G1-F / G1-G
+(branche feature/master-level-product-expansion)
 ```
+
+> Cette passe corrige des réserves des blocs G1-E/F/G : isolation de
+> l'échec d'audit après stockage d'une pièce jointe (CHANTIER A),
+> portée réelle de la réconciliation des orphelins (B), remplaçants
+> actifs dans le tableau de bord formateur (C), contexte de rôle
+> multi-rôle vérifié côté serveur (D), anti-N+1 réellement prouvé (F),
+> recette API rendue continue (G) et statuts documentaires réalignés.
+> Détail : `docs/reports/G1_FINAL_REPORT.md` et
+> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` § « Passe corrective G1-E/F/G ».
 
 ## Commit stable de référence
 
@@ -32,7 +42,12 @@ Toutes les tranches décrites ci-dessous sont **fusionnées sur `main`**.
 Le dépôt n'a aucune branche « en cours » de référence : le lot de
 finalisation se fait sur `chore/project-finalization-f2-f6`.
 
-## Modules Spring Modulith réels (12)
+## Modules Spring Modulith réels (14)
+
+> 12 modules à la finalisation F2 **+ `planning` (G1-B) + `dashboard`
+> (G1-F)** = **14** (14 `package-info.java` sous
+> `com.esic.connect.*` ; `ModularityTests` vert). La mention « 13 modules »
+> de `G1_IMPLEMENTATION_PROGRESS.md` (fin G1-G) est erronée d'une unité.
 
 `backend/src/main/java/com/esic/connect/` :
 
@@ -43,10 +58,12 @@ finalisation se fait sur `chore/project-finalization-f2-f6`.
 | `academic` | année scolaire, formation, niveau, promotion, classe, affectation pédagogique + contrôle de périmètre | V5, V6 |
 | `enrollment` | profil apprenant, inscription, changement de classe historisé | V7 |
 | `alternation` | modèles de rythme, affectation historisée à une classe, exceptions individuelles, résolution `SCHOOL`/`COMPANY`/`UNKNOWN` | V8 |
+| `planning` | import CSV de planning → simulation (0 séance, AC-007) → publication atomique versionnée (N/N+1, `SUPERSEDED`, AC-008) → séances `course_session` via le port `coursesession.PlanningSessionWriter` ; conflits formateur / classe / salle intra-fichier (G1-B) | V12, V13 |
 | `coursesession` | séance (création manuelle **ou** issue d'un planning publié — G1-B), cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C), points de contrôle multiples, remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
-| `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction / annulation, justificatif métier (sans fichier) **+ stockage sécurisé des pièces jointes** (G1-E cp1 : port `JustificationFileStorage`, adaptateur local, validateur magic-bytes ; contenu hors base / hors webroot), rapports + export CSV | V9, V10, V16 |
+| `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction / annulation, justificatif métier **+ pièces jointes** (G1-E : port `JustificationFileStorage`, adaptateur local, validateur magic-bytes, dépôt/téléchargement `nosniff`, séquence base↔fichier avec compensation, réconciliation `@Scheduled` des `PENDING_STORAGE`, notification propriétaire), rapports + export CSV | V9, V10, V16 |
 | `studentimport` | import CSV contrôlé des apprenants (lecture sécurisée, simulation, confirmation transactionnelle, purge) | V11 |
-| `notification` | email d'activation via SMTP local (Mailpit) **+ centre de notifications métier persistantes** (G1-D) : table `notification`, listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant, idempotence `dedup_key`, API `/api/v1/me/notifications` | V15 |
+| `notification` | email d'activation via SMTP local (Mailpit) **+ centre de notifications métier persistantes** (G1-D) : table `notification`, listeners `AFTER_COMMIT` sur planning publié / séance annulée / remplaçant / justificatif examiné, idempotence `dedup_key`, API `/api/v1/me/notifications` | V15 |
+| `dashboard` | tableau de bord par rôle `GET /api/v1/me/dashboard` (lecture seule, agrégats bornés) ; rôle effectif = **contexte demandé s'il est dans le JWT** sinon priorité fixe (G1-F + passe corrective D) ; carte formateur incluant les **remplaçants actifs** (passe corrective C) | — |
 | `audit` | piste d'audit `audit_event` alimentée par les événements métier | V1 |
 | `bootstrap` | amorçage `demo` (comptes fictifs, profil `demo` uniquement) | — |
 | `shared` | types transverses, `BaseEntity`, `ApiError`, `GlobalExceptionHandler`, `ClockConfig` | — |
@@ -55,9 +72,11 @@ finalisation se fait sur `chore/project-finalization-f2-f6`.
 vers un package `.internal` d'un autre module, aucun cycle.
 
 Modules décrits dans `docs/03-architecture.md` §7 comme **architecture
-cible non implémentée** : `planning`, `room` (remplacé par
-`organization`), `justification` (fusionné dans `attendance`, sans
-fichier), `claim`, `reporting` (fusionné dans `attendance`), `ai`, `iot`.
+cible non implémentée** : `room` (remplacé par `organization`),
+`justification` (fusionné dans `attendance`, pièces jointes incluses
+depuis G1-E), `claim`, `reporting` (fusionné dans `attendance`), `ai`,
+`iot`. (`planning` et `dashboard` sont désormais **implémentés** — G1-B,
+G1-F.)
 
 ## Migrations Flyway réelles
 
@@ -139,9 +158,10 @@ enregistrée dans le dépôt.
   `/my-attendance` (`STUDENT`).
 
 ### Assiduité / reporting
-- Justificatif **métier sans pièce jointe** : dépôt / modification tant
-  que `PENDING` / examen ; `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE` ;
-  `TEACHER` exclu de l'examen.
+- Justificatif : dépôt / modification tant que `PENDING` / examen ;
+  `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE` ; `TEACHER` exclu de l'examen.
+  **Pièce jointe livrée** (G1-E — voir « Fonctionnalités partielles » pour
+  les limites : antivirus et balayage d'orphelins `NOT_IMPLEMENTED`).
 - Espace apprenant `/me/attendance*` : absences **dérivées** d'un point
   de contrôle fermé, jamais persistées ; aucun accès croisé (AC-017).
 - Calcul de demi-journées : contexte d'alternance `COMPANY` exclu du
@@ -185,9 +205,10 @@ enregistrée dans le dépôt.
 |---|---|---|
 | Points de contrôle (EF-ATT-003) | N points de contrôle par séance | les 4 types nommés (`MORNING_ARRIVAL`…) et le calcul journée/demi-journée strict du cahier ne sont pas modélisés tels quels |
 | Retards (EF-ATT-005) | seuil unique `PT10M` → `LATE` | paliers 15 / 30 min, validation manuelle automatique après 30 min |
-| Alternance ↔ assiduité | contexte résolu, consommé par le reporting | pas de module `planning` : les « demi-journées attendues » reposent sur des séances exceptionnelles saisies à la main |
-| Justificatif (EF-JUS-001/002) | métadonnée métier + cycle d'examen ; **stockage sécurisé des pièces jointes** livré et testé (G1-E cp1 : `V16`, port + adaptateur local + validateur magic-bytes) | dépôt d'une pièce via l'API (service + compensation base/fichier), tâche de réconciliation, endpoints multipart + téléchargement (`nosniff`), audit / notification, écran d'upload — checkpoints G1-E suivants ; antivirus `NOT_IMPLEMENTED` |
+| Alternance ↔ assiduité | contexte résolu, consommé par le reporting ; module `planning` livré (G1-B) : les séances peuvent venir d'un planning publié | pas d'avertissement d'alternance sur un créneau jour-entreprise à la publication (DEC-G1-006) ; le calcul « demi-journées attendues » ne croise pas encore le rythme d'alternance de façon systématique |
+| Justificatif avec pièce jointe (EF-JUS-001/002) → **`IMPLEMENTED_AND_TESTED`** | dépôt multipart propriétaire, validation extension+MIME+magic-bytes, `V16` métadonnées, contenu hors base / hors webroot, séquence base↔fichier avec compensation, réconciliation `@Scheduled` des `PENDING_STORAGE`, téléchargement `Content-Disposition: attachment`+`nosniff` (propriétaire + examinateur périmétré), notification propriétaire à l'examen. **Échec d'audit après un stockage réussi : isolé** (201 rendu, pièce durable, trace non rejouée — passe corrective A) | **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; **balayage des fichiers orphelins `NOT_IMPLEMENTED`** — la réconciliation ne traite QUE les lignes `PENDING_STORAGE`, un fichier laissé par un retrait dont la suppression best-effort a échoué (ligne `DELETED`) n'est pas balayé (passe corrective B) ; remplacement direct d'une pièce (retrait puis redépôt) ; rétention `DELETED` `À_DÉFINIR` (`R-G1-30`) |
 | Notifications (EF-NOTIF-001 `IMPLEMENTED_AND_TESTED` ; EF-NOTIF-002 / RG-033 `PARTIAL`) | email d'activation **+ centre in-app persistant** (G1-D + G1-D.1) : planning publié / séance annulée / remplaçant affecté / **remplacement terminé** → notifications after-commit pour les **formateurs** (principal + remplaçants `ACTIVE` + remplaçant tout juste terminé) ; idempotence `dedup_key` ; isolation par destinataire ; API `/api/v1/me/notifications` + cloche + centre Angular (liens en liste blanche par rôle) | notifications aux **apprenants / responsables pédagogiques** (dette G1-D-AUDIENCE), garantie de livraison / reprise (best effort après commit — dette G1-D-OUTBOX), email métier, push PWA, préférences par type, file persistante / DLQ, purge / rétention (`À_DÉFINIR`) |
+| Tableau de bord par rôle (G1-F, CDC §25) | `GET /api/v1/me/dashboard` typé par rôle, périmètre serveur ; carte formateur **avec remplaçants actifs** (C) ; anti-N+1 **prouvé** (1 vs 15 classes — F) ; contexte de rôle multi-rôle **vérifié côté serveur** (403 si non détenu — D) | cartes manager **`PARTIAL`** : justificatifs en attente périmétrés, alternance `UNKNOWN`, planning actif, conflits récents (pas de port agrégé borné — dette G1-F) ; carte administration : dernières opérations d'audit non exposées ; pas de cache Redis |
 | Rapports « officiels » (docs/02 §24.5) | calcul demi-journées + export CSV | mise en page (logo ESIC, PDF, identifiant de document), export Excel |
 | OpenAPI | `/v3/api-docs` + `/swagger-ui` au runtime | pas d'`openapi.json` versionné (voir F3) |
 | Redis | jetons d'émargement uniquement | cache de planning, rate-limiting, droits calculés |
@@ -456,8 +477,8 @@ Suites : back **743 → 749/0** (`Notification*` +6, 3 fuseaux ; Flyway
 
 ### Bloc G1-E — pièces jointes des justificatifs : checkpoint 1 (1er septembre 2026)
 
-`IN_PROGRESS` — checkpoint « schéma + modèle + stockage »
-(`IMPLEMENTED_TARGETED_TESTS_GREEN`). Détail :
+Checkpoint « schéma + modèle + stockage » (socle ; **complété par les
+checkpoints 2-4 ci-dessous**). Détail :
 [`G1_IMPLEMENTATION_PROGRESS.md`](reports/G1_IMPLEMENTATION_PROGRESS.md)
 § « G1-E ».
 
@@ -486,16 +507,79 @@ Suites : back **743 → 749/0** (`Notification*` +6, 3 fuseaux ; Flyway
   réconciliation, endpoints multipart + téléchargement (`nosniff` +
   `Content-Disposition: attachment`), audit / notifications, upload
   Angular.
-- Tests ajoutés : back **+23** (`JustificationFileSafetyValidatorTests`
-  13, `LocalFilesystemJustificationFileStorageTests` 8,
-  `JustificationAttachmentSchemaIntegrationTests` 2). Suites : back
-  **749 → 772/0** (Flyway `V1→V16` rejoué sur `esic_test` vierge,
-  `ModularityTests` vert) ; front **inchangé** (574/0). `.env` non
-  modifié.
+- Checkpoint 1 : back **749 → 772/0** (Flyway `V1→V16` sur `esic_test`
+  vierge, `ModularityTests` vert).
 
-Le reste de la liste ci-dessous (`HORS_PÉRIMÈTRE_ASSUMÉ` de la
-finalisation F2) **reste d'actualité** tant que les blocs G1-E à G1-G
-ne sont pas complètement livrés.
+### Bloc G1-E — pièces jointes des justificatifs : livraison complète (checkpoints 2-4, 1er septembre 2026)
+
+`IMPLEMENTED_AND_TESTED`. Commits `1835532` + `5d5f451`.
+Dépôt multipart propriétaire (`POST/GET/DELETE
+/api/v1/me/attendance/justifications/{id}/attachment`), téléchargement
+propriétaire **et** examinateur périmétré (`Content-Disposition:
+attachment` + `nosniff` + type re-dérivé ; hors périmètre → `404`),
+séquence base↔fichier avec compensation (`JustificationAttachmentStore`),
+réconciliation `@Scheduled` bornée des `PENDING_STORAGE`, notification
+`AFTER_COMMIT` du propriétaire à l'examen. `EF-JUS-001` /
+`RG-071` / `CDC §21.5` → `IMPLEMENTED_AND_TESTED` (antivirus excepté).
+
+### Bloc G1-F — tableaux de bord par rôle (1er septembre 2026)
+
+`IMPLEMENTED_AND_TESTED` par carte (jamais un `IMPLEMENTED_FULL_SUITE_GREEN`
+global). Nouveau module `dashboard` ; `GET /api/v1/me/dashboard` typé par
+rôle, lecture seule, agrégats `COUNT`/`GROUP BY`/`Pageable`, DTO sans
+identifiant SQL ni e-mail, périmètre RP décidé serveur
+(`AcademicScopeDirectory`), `STUDENT` = ses seules données (AC-017).
+Cartes `PARTIAL` documentées (manager : justificatifs périmétrés,
+alternance `UNKNOWN`, planning actif, conflits ; administration : audit
+récent). Front `/dashboard` section « Mon activité ».
+
+### Bloc G1-G — recette API du parcours prioritaire (1er septembre 2026)
+
+`IMPLEMENTED_AND_TESTED` (recette **API**, pas navigateur) ;
+`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` (aucune manipulation manuelle
+consignée). `PriorityPathRecetteIntegrationTests` (`@SpringBootTest`,
+`TestRestTemplate`) rejoue référentiel → import apprenants → **activation
+d'un apprenant réellement importé** → import planning (AC-007) →
+publication → émargement de **ce même apprenant** → rapport + export CSV →
+annulation + notification → remplacement → justificatif + pièce jointe →
+acceptation + notification → tableaux de bord. e2e **navigateur** :
+`NOT_IMPLEMENTED` (Playwright absent, aucun navigateur, coût
+disproportionné — `DEC-G1-011`).
+
+### Passe corrective probatoire G1-E / G1-F / G1-G (1er septembre 2026)
+
+Branche `feature/master-level-product-expansion`. Voir
+[`G1_FINAL_REPORT.md`](reports/G1_FINAL_REPORT.md) et
+`G1_IMPLEMENTATION_PROGRESS.md` § « Passe corrective G1-E/F/G ».
+
+- **A** — `AttendanceJustificationService.uploadOwnAttachment` : l'échec
+  de la trace d'audit **après** un stockage réussi (fichier + ligne
+  `STORED` committés) est **isolé** → l'API répond `201`, la pièce reste
+  durable et téléchargeable, l'échec est journalisé (dette d'audit
+  assumée, non rejouée). Test d'intégration avec faute d'audit injectée.
+- **B** — la réconciliation ne traite **que** les lignes
+  `PENDING_STORAGE` ; balayage des fichiers orphelins (ligne `DELETED`,
+  fichier subsistant) = **`NOT_IMPLEMENTED`** (scan de répertoire sûr
+  jugé disproportionné : liens symboliques / traversée / TOCTOU /
+  propriété de fichier incertaine). Test de figure de la portée.
+- **C** — `CourseSessionDirectory.findUpcomingForTeacher` inclut
+  désormais les séances où l'utilisateur est **remplaçant `ACTIVE`
+  couvrant l'instant courant** (mêmes règles que `GET /sessions`,
+  G1-C.3), en une requête, sans doublon. Corrige aussi le filtre « à
+  ouvrir » (`SessionLifecycle.PLANNED` au lieu d'une comparaison de
+  chaîne toujours fausse).
+- **D** — `GET /api/v1/me/dashboard?context=<rôle>` : le contexte demandé
+  est **vérifié contre les autorités du JWT** — rôle non détenu →
+  `403 DASHBOARD_CONTEXT_NOT_HELD`, jamais d'élévation ; absent →
+  priorité fixe déterministe. Le front (compte multi-rôles) transmet le
+  contexte actif et recharge à son changement.
+- **F** — N+1 réel corrigé : `findSessionsForClasses` résolvait les
+  classes par `findByPublicId` **dans une boucle**. Nouveau port de lot
+  `ClassGroupDirectory.findByPublicIds` (1 requête) + résolution groupée
+  des libellés dans `DashboardService`. Preuve : test comparatif
+  **1 classe vs 15 classes** — le nombre de requêtes ne croît pas avec
+  le nombre de classes.
+- **H** — statuts et décompte de modules réalignés (14 modules).
 
 ## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)
 
@@ -517,8 +601,9 @@ des `docs/01` et `docs/02`.
 - Scan caméra mobile (code court uniquement).
 - WebAuthn / passkeys, MFA TOTP, Cloudflare Turnstile / anti-bot.
 - Réclamations / messagerie (EF-CLAIM-001/002), départ anticipé,
-  justificatif avec pièce jointe, import Excel `.xlsx` / multifeuille,
-  groupes temporaires.
+  import Excel `.xlsx` / multifeuille, groupes temporaires.
+  (~~justificatif avec pièce jointe~~ → **livré (G1-E)**, hors antivirus
+  et balayage d'orphelins — `NOT_IMPLEMENTED`.)
 - Service IA (FastAPI, mapping de colonnes, score d'anomalie),
   IoT / MQTT / Raspberry Pi (broker Mosquitto démarré, aucun code).
 - PWA installable / offline / push.
@@ -601,6 +686,27 @@ chiffres à jour dans `docs/reports/PROJECT_FINALIZATION_REPORT.md`.
   `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` ;
 - back-end `./mvnw clean test` re-vérifié après F6 (total dans
   `docs/reports/PROJECT_FINALIZATION_REPORT.md`).
+
+**Passe corrective probatoire G1-E / G1-F / G1-G (1er septembre 2026)** —
+OpenJDK 21.0.12, MySQL 8, Redis 7, Node 24.13 :
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw clean test` (défaut) | **809 tests, 0 échec, 0 erreur, 0 ignoré — BUILD SUCCESS** (800 → 809 : A +1, B +1, C +3, D +3, F `ClassGroupDirectoryTests` +1 ; le test N+1 comparatif remplace l'ancien) |
+| `TZ=UTC ./mvnw clean test` | **809 / 0 — BUILD SUCCESS** |
+| `TZ=Europe/Paris ./mvnw clean test` | **809 / 0 — BUILD SUCCESS** |
+| `ModularityTests` | **vert** (14 modules) |
+| Flyway `V1 → V16` sur `esic_test` recréée vierge + `ddl-auto=validate` | **`Successfully applied 16 migrations … v16`** puis validation OK — BUILD SUCCESS |
+| `cd frontend && npm test -- --watch=false` | **71 fichiers / 600 tests / 0 échec** (596 → 600 : `dashboard-api.service.spec.ts` +2, `dashboard.spec.ts` +2 dont 1 modifié) |
+| `npm run lint` | « All files pass linting » |
+| `npm run build` | initial **484,52 kB** — 0 alerte de budget |
+| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| Anti-N+1 dashboard manager (compteur Hibernate) | 1 classe → **14** requêtes ; 15 classes → **14** (croissance **0** ; avant correctif : 14 → 28) |
+
+Aucun `@Disabled` / `@Ignore` / `it.skip` / `.only(` ajouté ; aucun test
+supprimé ; aucune assertion affaiblie ; `.env` inchangé ; aucune
+migration Flyway ajoutée (schéma en **V16**). Détail :
+[`docs/reports/G1_FINAL_REPORT.md`](reports/G1_FINAL_REPORT.md).
 
 ## Infrastructure
 

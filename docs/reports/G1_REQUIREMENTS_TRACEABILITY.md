@@ -268,6 +268,11 @@ une donnée réelle et arrêtée dans **DEC-G1-010**.
 
 ### 6bis. Statut après livraison G1-F (1er septembre 2026)
 
+> **Mis à jour par la passe corrective G1-E/F/G — voir §8ter.** La limite
+> « remplaçant non inclus » (CDC §25.3) est **levée** ; DEC-G1-010 gagne
+> une preuve anti-N+1 renforcée (1 vs 15 classes) + un N+1 réel corrigé ;
+> le bloc n'est plus qualifié `IMPLEMENTED_FULL_SUITE_GREEN` (par carte).
+
 Module `dashboard` livré. Commits `feat(dashboard): exposer les agrégats
 périmétrés par rôle` + `feat(frontend): ajouter les tableaux de bord par
 rôle`. Détail + matrice rôle × carte :
@@ -353,6 +358,23 @@ le **technique** (`PENDING_STORAGE` orphelins), pas le métier.
 | AC-017 | `IMPLEMENTED_AND_TESTED` | couvert par `DashboardIntegrationTests` (dashboard `STUDENT` = ses données) + `Attendance*` / `Justification*` (accès croisé → `404`). |
 | DEC-G1-011 (e2e) | **`PARTIAL`** — e2e **navigateur non livré** | **Playwright n'est pas ajouté** : dépendance lourde + téléchargement de navigateur non fiable dans l'environnement (critère « risque / coût disproportionné » de `DEC-G1-011`). **Repli livré** : `PriorityPathRecetteIntegrationTests` (`@SpringBootTest`, appels HTTP réels de bout en bout). Le e2e **navigateur** reste `PARTIAL`. Aucune démonstration **manuelle** n'a été exécutée ⇒ le grand lot G1 est `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`, jamais `DEMONSTRATED`. |
 | CDC §46 (agrégation) | **`IMPLEMENTED_AND_TESTED`** | totaux finaux consignés dans `G1_IMPLEMENTATION_PROGRESS.md` § « G1-G ». |
+
+### 8ter. Reclassement après la passe corrective G1-E / G1-F / G1-G (1er septembre 2026)
+
+Voir `G1_IMPLEMENTATION_PROGRESS.md` § « Passe corrective G1-E/F/G » et
+`G1_FINAL_REPORT.md`.
+
+| Élément | Avant | Après | Justification vérifiée |
+|---|---|---|---|
+| G1-E — échec d'audit après stockage | (non tracé — faux négatif d'API) | **`IMPLEMENTED_AND_TESTED`** (isolé) | `uploadOwnAttachment` isole l'échec de la trace après le commit `STORED` : `201`, pièce durable, échec journalisé. Dette : trace **non rejouée** (assumée, cohérente avec les 8 listeners d'audit synchrones). Test `anAuditFailureAfterTheAttachmentIsStoredStillReturns201AndKeepsThePiece`. |
+| G1-E — balayage des fichiers orphelins | (hedge « limite assumée ») | **`NOT_IMPLEMENTED`** (explicite) | La réconciliation ne traite QUE les `PENDING_STORAGE`. Scan de répertoire sûr disproportionné. Test de figure de la portée `reconciliationDoesNotSweepAFileOrphanedByADeletedRow`. |
+| CDC §25.3 (dashboard formateur) | `IMPLEMENTED_AND_TESTED` **avec limite** « remplaçant non inclus » | **`IMPLEMENTED_AND_TESTED`** (limite levée) | `findUpcomingForTeacher` inclut les séances où l'utilisateur est remplaçant `ACTIVE` couvrant l'instant courant, en 1 requête, sans doublon. Corrige aussi le filtre « à ouvrir » (`== SessionLifecycle.PLANNED`). |
+| EF-AUTH-003 ↔ dashboard (contexte de rôle) | contexte **ergonomique**, non transmis (divergence UI ↔ serveur) | **`IMPLEMENTED_AND_TESTED`** — politique explicite | `?context=<rôle>` vérifié contre les autorités du JWT (`403 DASHBOARD_CONTEXT_NOT_HELD` sinon — jamais d'élévation) ; absent ⇒ priorité fixe. Front transmet + recharge. Tests back + front. |
+| DEC-G1-010 (dashboard sans N+1) | `IMPLEMENTED_AND_TESTED` (test à plafond `< 20` sur 2 classes) | **`IMPLEMENTED_AND_TESTED`** — preuve renforcée + N+1 réel corrigé | `findSessionsForClasses` résolvait les classes par `findByPublicId` en boucle. Port de lot `ClassGroupDirectory.findByPublicIds` + résolution groupée. Preuve : 1 vs 15 classes, `qLarge − qSmall ≤ 3`. |
+| G1-F — statut de bloc | `IMPLEMENTED_FULL_SUITE_GREEN` (global) | **`IMPLEMENTED_AND_TESTED` par carte** ; 4 cartes manager + « audit récent » administration = **`PARTIAL`** | Aucun port agrégé borné pour ces cartes ; `note` honnête renvoyée. `IMPLEMENTED_FULL_SUITE_GREEN` n'est pas un synonyme de complétude produit. |
+| CDC §47.2 (recette) — continuité | « un apprenant actif inscrit émarge » (compte parallèle) | **`IMPLEMENTED_AND_TESTED`** — chaîne **continue** | L'apprenant qui émarge et dépose le justificatif est celui **importé** puis **activé** via l'API publique (`/account-invitations/activate`). Dates relatives à l'horloge. |
+| DEC-G1-011 (e2e) | **`PARTIAL`** | **`NOT_IMPLEMENTED`** (navigateur) ; recette **API** `IMPLEMENTED_AND_TESTED` | Étude de faisabilité : pas de Playwright/puppeteer/cypress, pas de navigateur, pas de script `e2e`. Repli API renforcé. Démonstration manuelle : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`. |
+| Décompte de modules | « 13 modules » (fin G1-G) | **14 modules** | 14 `package-info.java` ; `planning` (G1-B) + `dashboard` (G1-F) tous deux réels. |
 
 ---
 
