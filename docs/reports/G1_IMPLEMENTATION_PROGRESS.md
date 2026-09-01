@@ -1420,6 +1420,49 @@ des notifications`.
 - Pas de **préférences**, pas de **push PWA** ni d'**email métier**.
 - Pas de test e2e navigateur (specs de composant + IT `@SpringBootTest`).
 
+### Correctif résiduel G1-D.1 — classification des erreurs d'idempotence (1er septembre 2026)
+
+Commit `fix(notification): préciser la classification des erreurs
+d'idempotence` (`31ffc70`).
+
+**Problème.** `NotificationWriter.deliverOne` classait en « succès
+idempotent » **toute** `DataIntegrityViolationException` **et** toute
+`UnexpectedRollbackException`. Or une `DataIntegrityViolationException`
+générique ne prouve pas que `uq_notification_dedup` est la contrainte
+violée (ce pourrait être `uq_notification_public_id`,
+`fk_notification_recipient`, un `CHECK`) ; une
+`UnexpectedRollbackException` nue ne prouve **aucune** collision.
+
+**Correction.** Nouvelle classe `NotificationErrorClassifier`
+(`notification.internal`, même idiome que
+`attendance.internal.AttendanceRecordPersister#isDuplicateAttendanceViolation` :
+parcours borné de la chaîne de causes +
+`org.hibernate.exception.ConstraintViolationException#getConstraintName()`
++ message MySQL « Duplicate entry … for key '…uq_notification_dedup' »).
+`deliverOne` : un seul `catch (RuntimeException)` →
+`isDedupKeyCollision()` vrai ⇒ `DEBUG` « course uq_notification_dedup »
+(succès idempotent) ; sinon ⇒ `WARN` « vraie erreur » (nom de classe de
+la cause racine seulement, aucune donnée personnelle), destinataire
+suivant traité, aucune exception propagée vers le métier committé.
+
+**Tests** (`NotificationDeliveryResilienceIntegrationTests`, 3 → 6 ;
+`ListAppender` Logback sur le logger de `NotificationWriter`, aucun bean
+de production modifié) :
+- `aGenuineDedupKeyCollisionIsAnIdempotentSuccessAndDoesNotBlockTheNextRecipient`
+  (message nommant `uq_notification_dedup` → `DEBUG`, pas de `WARN`,
+  second destinataire notifié) ;
+- `anotherIntegrityViolationIsARealErrorNotADuplicateAndTheNextRecipientIsStillNotified`
+  (`uq_notification_public_id` → `WARN`, jamais `DEBUG` dedup, second
+  destinataire notifié) ;
+- `aBareUnexpectedRollbackIsARealErrorNotADuplicateAndTheNextRecipientIsStillNotified`
+  (`UnexpectedRollbackException` nue → `WARN`, jamais dedup).
+
+**Validation.** `./mvnw test -Dtest='Notification*'` → **17 / 0 — BUILD
+SUCCESS** ; `git diff --check` propre. G1-D conserve ses limites
+documentées (best effort après commit, pas d'outbox, audience formateur,
+rétention `À_DÉFINIR`, pas de préférences) — `EF-NOTIF-002` / `RG-033`
+restent `PARTIAL`.
+
 ## G1-E — 1er septembre 2026
 
 Pièces jointes des justificatifs d'absence (EF-JUS-001, EF-JUS-002,
