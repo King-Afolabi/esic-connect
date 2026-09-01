@@ -1,0 +1,18 @@
+<a
+  mat-icon-button
+  routerLink="/notifications"
+  [attr.aria-label]="
+    unread() > 0
+      ? unread() + ' notification(s) non lue(s) — ouvrir le centre de notifications'
+      : 'Ouvrir le centre de notifications'
+  "
+>
+  <mat-icon
+    aria-hidden="true"
+    [matBadge]="badgeText()"
+    [matBadgeHidden]="unread() === 0"
+    matBadgeColor="warn"
+    matBadgeSize="small"
+    >notifications</mat-icon
+  >
+</a>

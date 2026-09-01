@@ -16,6 +16,8 @@ public enum AttendanceChangeAction {
     JUSTIFICATION_UPDATED,
     /** Justificatif examiné (accepté / refusé) par un gestionnaire. */
     JUSTIFICATION_REVIEWED,
+    /** Pièce jointe d'un justificatif stockée (contenu déplacé, statut {@code STORED}). */
+    JUSTIFICATION_ATTACHMENT_STORED,
     /** Export CSV d'un rapport d'assiduité généré. */
     REPORT_EXPORTED
 }

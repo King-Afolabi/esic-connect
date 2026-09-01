@@ -438,7 +438,7 @@ class AttendanceIntegrationTests {
     void candidateEligibilityDependsOnTheSessionDateNotJustCurrentActiveState() {
         String admin = adminToken();
         // Séance au 2026-09-10 (fixture par défaut). L'apprenant de base a
-        // une inscription ouverte débutant aujourd'hui -> valable ce jour.
+        // une inscription ouverte débutant le 2026-08-01 -> valable ce jour.
         Fixture fx = openSessionWithEnrolledStudents(admin, 1);
         String validEnrollment = fx.enrollments().get(0);
         String cp = firstCheckpoint(admin, fx.sessionId());
@@ -975,8 +975,12 @@ class AttendanceIntegrationTests {
         for (int i = 0; i < studentCount; i++) {
             Account student = accountWithRoles(RoleCode.STUDENT);
             String profile = createProfile(admin, student.publicId());
+            // startDate explicite antérieure à toutes les dates de séance des
+            // fixtures (la plus ancienne = 2026-08-01) : la couverture de
+            // l'inscription à la date de la séance ne doit jamais dépendre de
+            // la date d'exécution des tests (défaut = LocalDate.now).
             String enrollment = (String) created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
-                    "classGroupPublicId", chain.classA()), admin).get("publicId");
+                    "classGroupPublicId", chain.classA(), "startDate", "2026-08-01"), admin).get("publicId");
             students.add(student);
             enrollments.add(enrollment);
         }

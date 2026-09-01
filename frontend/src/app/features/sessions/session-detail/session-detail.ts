@@ -20,6 +20,7 @@ import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
+import { AuthService } from '../../../core/auth/auth.service';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { QrDisplay } from '../shared/qr-display/qr-display';
@@ -32,10 +33,14 @@ import {
   CheckpointAttendance,
   CheckpointView,
   CourseSessionResponse,
+  CreateSubstitutionRequest,
   SESSION_ATTENDANCE_MANAGE_ROLES,
+  SESSION_CREATE_ROLES,
   SESSION_MANAGE_ROLES,
   SESSION_READ_ROLES,
   SessionAttendanceResponse,
+  SubstitutionResponse,
+  TeacherOptionResponse,
   attendanceCandidateLabel,
   attendanceSourceLabel,
   attendanceStatusLabel,
@@ -102,6 +107,7 @@ type AttendanceState =
 export class SessionDetail {
   private readonly api = inject(SessionsApiService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
@@ -124,7 +130,7 @@ export class SessionDetail {
 
   protected readonly state = signal<DetailState>({ kind: 'loading' });
   protected readonly attendance = signal<AttendanceState>({ kind: 'idle' });
-  protected readonly pendingAction = signal<'open' | 'close' | null>(null);
+  protected readonly pendingAction = signal<'open' | 'close' | 'cancel' | null>(null);
   protected readonly submitting = signal(false);
   protected readonly actionError = signal<string | null>(null);
 
@@ -162,6 +168,10 @@ export class SessionDetail {
   protected readonly checkpointCancelForm = this.fb.nonNullable.group({
     reason: ['', [Validators.required, Validators.maxLength(500)]],
   });
+  /** G1-C — motif obligatoire d'annulation de la séance. */
+  protected readonly sessionCancelForm = this.fb.nonNullable.group({
+    reason: ['', [Validators.required, Validators.maxLength(500)]],
+  });
   /** Motif d'annulation d'une **présence** — jamais partagé (§4). */
   protected readonly attendanceCancelForm = this.fb.nonNullable.group({
     reason: ['', [Validators.required, Validators.maxLength(500)]],
@@ -179,6 +189,20 @@ export class SessionDetail {
     reason: ['', [Validators.required, Validators.maxLength(500)]],
   });
 
+  // --- Remplacements de formateur (G1-C.2) -------------------------
+  protected readonly substitutions = signal<SubstitutionResponse[]>([]);
+  protected readonly substitutionsState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  protected readonly substitutionError = signal<string | null>(null);
+  protected readonly eligibleTeachers = signal<TeacherOptionResponse[]>([]);
+  protected readonly showSubstitutionForm = signal(false);
+  protected readonly substitutionBusy = signal(false);
+  protected readonly substitutionForm = this.fb.nonNullable.group({
+    substituteTeacherPublicId: ['', [Validators.required]],
+    validFrom: ['', [Validators.required]],
+    validUntil: ['', [Validators.required]],
+    reason: ['', [Validators.required, Validators.maxLength(500)]],
+  });
+
   private renewHandle: ReturnType<typeof setTimeout> | null = null;
   private pollSubscribed = false;
 
@@ -193,6 +217,45 @@ export class SessionDetail {
   protected readonly isOpen = computed(() => this.session()?.status === 'OPEN');
   protected readonly isPlanned = computed(() => this.session()?.status === 'PLANNED');
   protected readonly isClosed = computed(() => this.session()?.status === 'CLOSED');
+  protected readonly isCancelled = computed(() => this.session()?.status === 'CANCELLED');
+  /** G1-C — annulable : séance PLANNED ou OPEN + droit de gestion. */
+  protected readonly canCancel = computed(
+    () => this.canManageCheckpoint() && (this.isPlanned() || this.isOpen()),
+  );
+  /**
+   * G1-C.2 — gestion des remplacements : réservée aux rôles de gestion
+   * pédagogique (`SESSION_CREATE_ROLES`, TEACHER exclu — « ne valide pas
+   * lui-même son remplacement »). La liste reste visible à tout lecteur.
+   */
+  protected readonly canManageSubstitutions = computed(() =>
+    holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_CREATE_ROLES),
+  );
+  protected readonly canAddSubstitution = computed(
+    () => this.canManageSubstitutions() && (this.isPlanned() || this.isOpen()),
+  );
+
+  /**
+   * G1-C.3 — l'utilisateur courant intervient sur cette séance en tant
+   * que remplaçant <strong>actif</strong> : une substitution {@code ACTIVE}
+   * le désigne (`substitute.publicId`) et sa période couvre l'instant
+   * présent. Purement informatif (bandeau) ; l'autorité reste le serveur.
+   */
+  protected readonly actingAsSubstitute = computed<SubstitutionResponse | null>(() => {
+    const me = this.auth.session()?.subject;
+    if (!me) {
+      return null;
+    }
+    const now = Date.now();
+    return (
+      this.substitutions().find(
+        (s) =>
+          s.status === 'ACTIVE' &&
+          s.substitute.publicId === me &&
+          Date.parse(s.validFrom) <= now &&
+          Date.parse(s.validUntil) > now,
+      ) ?? null
+    );
+  });
 
   /**
    * §4 — capacités distinctes, dérivées du contexte de rôle actif
@@ -270,6 +333,14 @@ export class SessionDetail {
         this.pendingAction.set(null);
         this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
         this.checkpointCancelForm.reset({ reason: '' });
+        this.sessionCancelForm.reset({ reason: '' });
+        this.showSubstitutionForm.set(false);
+        this.substitutionForm.reset({
+          substituteTeacherPublicId: '',
+          validFrom: '',
+          validUntil: '',
+          reason: '',
+        });
       }
     });
     // §4/§5 — perte du droit de **gestion des présences** : ferme la
@@ -319,9 +390,18 @@ export class SessionDetail {
     this.actionError.set(null);
     this.pendingAction.set('close');
   }
+  protected startCancel(): void {
+    if (!this.canCancel()) {
+      return;
+    }
+    this.actionError.set(null);
+    this.sessionCancelForm.reset({ reason: '' });
+    this.pendingAction.set('cancel');
+  }
   protected cancelAction(): void {
     this.pendingAction.set(null);
     this.actionError.set(null);
+    this.sessionCancelForm.reset({ reason: '' });
   }
   protected confirmOpen(): void {
     this.runLifecycle(() => this.api.openSession(this.publicId), 'Séance ouverte.');
@@ -333,6 +413,121 @@ export class SessionDetail {
       () => this.api.closeSession(this.publicId),
       'Séance clôturée : les jetons d’émargement sont invalidés.',
     );
+  }
+  protected confirmCancel(): void {
+    if (this.sessionCancelForm.invalid) {
+      this.sessionCancelForm.markAllAsTouched();
+      return;
+    }
+    this.stopTokenRenewal();
+    this.attendanceToken.set(null);
+    const reason = this.sessionCancelForm.getRawValue().reason.trim();
+    // G1-C.3 : la séance annulée reste consultable côté serveur — on
+    // recharge son état réellement persisté (statut CANCELLED, motif,
+    // date) au lieu de le simuler localement. Un F5 reste stable.
+    this.runLifecycle(
+      () => this.api.cancelSession(this.publicId, reason),
+      'Séance annulée : les points de contrôle sont clos et les jetons d’émargement invalidés.',
+      () => {
+        this.sessionCancelForm.reset({ reason: '' });
+        this.load();
+      },
+    );
+  }
+
+  // --- Remplacements de formateur (G1-C.2) ---------------------
+
+  protected toggleSubstitutionForm(): void {
+    if (!this.showSubstitutionForm() && !this.canAddSubstitution()) {
+      return;
+    }
+    this.substitutionError.set(null);
+    this.showSubstitutionForm.update((v) => !v);
+    if (this.showSubstitutionForm() && this.eligibleTeachers().length === 0) {
+      this.api
+        .listEligibleTeachers()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({ next: (list) => this.eligibleTeachers.set(list), error: () => undefined });
+    }
+  }
+
+  protected submitSubstitution(): void {
+    if (this.substitutionForm.invalid || this.substitutionBusy()) {
+      this.substitutionForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.substitutionForm.getRawValue();
+    const body: CreateSubstitutionRequest = {
+      substituteTeacherPublicId: raw.substituteTeacherPublicId,
+      reason: raw.reason.trim(),
+      validFrom: new Date(raw.validFrom).toISOString(),
+      validUntil: new Date(raw.validUntil).toISOString(),
+    };
+    this.substitutionBusy.set(true);
+    this.substitutionError.set(null);
+    this.api
+      .addSubstitution(this.publicId, body)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.substitutionBusy.set(false);
+          if (!this.canManageSubstitutions()) {
+            return;
+          }
+          this.notifications.info('Remplaçant affecté.');
+          this.showSubstitutionForm.set(false);
+          this.substitutionForm.reset({
+            substituteTeacherPublicId: '',
+            validFrom: '',
+            validUntil: '',
+            reason: '',
+          });
+          this.loadSubstitutions();
+        },
+        error: (error: unknown) => {
+          this.substitutionBusy.set(false);
+          this.substitutionError.set(toSessionError(error).message);
+        },
+      });
+  }
+
+  protected endSubstitution(substitutionId: string): void {
+    if (this.substitutionBusy() || !this.canManageSubstitutions()) {
+      return;
+    }
+    this.substitutionBusy.set(true);
+    this.substitutionError.set(null);
+    this.api
+      .endSubstitution(this.publicId, substitutionId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.substitutionBusy.set(false);
+          this.notifications.info('Remplacement terminé.');
+          this.loadSubstitutions();
+        },
+        error: (error: unknown) => {
+          this.substitutionBusy.set(false);
+          this.substitutionError.set(toSessionError(error).message);
+        },
+      });
+  }
+
+  private loadSubstitutions(): void {
+    if (!this.canReadAttendance()) {
+      return;
+    }
+    this.substitutionsState.set('loading');
+    this.api
+      .listSubstitutions(this.publicId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          this.substitutions.set(list);
+          this.substitutionsState.set('ready');
+        },
+        error: () => this.substitutionsState.set('error'),
+      });
   }
 
   // --- Points de contrôle --------------------------------------
@@ -702,7 +897,19 @@ export class SessionDetail {
 
   // ------------------------------------------------------------------
 
-  private runLifecycle(call: () => Observable<void>, successMessage: string): void {
+  /**
+   * @param onSuccessOverride si fourni, remplace le rechargement par
+   *        défaut (`load()` + `refreshAttendance()`). Utilisé par
+   *        l'annulation : une séance annulée renvoie `404` sur
+   *        `GET /sessions/{id}` (garde « opérationnelle » côté serveur),
+   *        on patche donc l'état local en `CANCELLED` plutôt que de
+   *        recharger.
+   */
+  private runLifecycle(
+    call: () => Observable<void>,
+    successMessage: string,
+    onSuccessOverride?: () => void,
+  ): void {
     if (this.submitting()) {
       return;
     }
@@ -717,6 +924,10 @@ export class SessionDetail {
           return;
         }
         this.notifications.info(successMessage);
+        if (onSuccessOverride) {
+          onSuccessOverride();
+          return;
+        }
         this.load();
         this.refreshAttendance();
       },
@@ -789,7 +1000,12 @@ export class SessionDetail {
         if (open.length && !open.some((cp) => cp.publicId === this.selectedCheckpointId())) {
           this.selectedCheckpointId.set(open[0].publicId);
         }
-        if (this.attendance().kind === 'idle') {
+        if (session.status === 'CANCELLED') {
+          // Une séance annulée n'a pas de tableau de présences côté
+          // serveur (garde « opérationnelle ») : ne pas déclencher un
+          // appel qui renverrait 404.
+          this.attendance.set({ kind: 'idle' });
+        } else if (this.attendance().kind === 'idle') {
           this.refreshAttendance();
         }
         // Si la saisie manuelle est ouverte, réaligner les candidats sur
@@ -797,6 +1013,7 @@ export class SessionDetail {
         if (this.showManualForm() && this.canManageAttendance()) {
           this.loadCandidates();
         }
+        this.loadSubstitutions();
         this.maybeStartPolling();
       },
       error: (error: unknown) => {

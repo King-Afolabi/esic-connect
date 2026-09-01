@@ -43,6 +43,40 @@ const ALTERNATION_PATTERN_WRITE_ROLES = [
 ] as const;
 
 /**
+ * Référentiel organisationnel (`com.esic.connect.organization`) : lecture
+ * ouverte à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` /
+ * `PEDAGOGICAL_MANAGER` (`SiteController.READ_ROLES`) ; écriture des sites
+ * / bâtiments / salles restreinte à `ADMIN` / `SUPER_ADMIN`
+ * (`SiteController.WRITE_ROLES`). Les plages réseau — lecture comprise —
+ * sont réservées à `SUPER_ADMIN` côté serveur (`SiteNetworkRangeController`,
+ * `@PreAuthorize` de classe) ; leur panneau n'apparaît dans la fiche d'un
+ * site que pour ce contexte. Spring Security reste l'autorité : un `403`
+ * est rendu « accès refusé ».
+ */
+const ORGANIZATION_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+const ORGANIZATION_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN'] as const;
+
+/**
+ * Import, versionnement et publication d'un planning
+ * (`com.esic.connect.planning`). Périmètre repris **à l'identique** de
+ * `PlanningWeb.MANAGE_ROLES` ; un `PEDAGOGICAL_MANAGER` est en plus
+ * filtré par périmètre pédagogique côté serveur
+ * (`AcademicScopeDirectory`) et ne voit que ses propres jobs. Spring
+ * Security reste l'autorité : un `403` est rendu « accès refusé ».
+ */
+const PLANNING_MANAGE_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
+/**
  * Séances : lecture ouverte à
  * `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` / `PEDAGOGICAL_MANAGER` / `TEACHER`
  * (`CourseSessionWeb.READ_ROLES`) ; un `TEACHER` ne voit que ses séances
@@ -110,6 +144,17 @@ export const routes: Routes = [
         title: `Tableau de bord — ${APP_NAME}`,
         loadComponent: () =>
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+      },
+      {
+        // Centre de notifications de l'appelant (G1-D). Aucune garde de
+        // rôle : `NotificationController` porte `@PreAuthorize("isAuthenticated()")`
+        // et l'isolation par destinataire est faite côté serveur.
+        path: 'notifications',
+        title: `Notifications — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/notifications/notification-list/notification-list').then(
+            (m) => m.NotificationList,
+          ),
       },
       {
         // Administration des comptes utilisateurs et de leurs rôles, en
@@ -258,6 +303,89 @@ export const routes: Routes = [
             title: `Classe — ${APP_NAME}`,
             data: { resource: 'class-groups' },
             loadComponent: academicDetail,
+          },
+        ],
+      },
+      {
+        // Référentiel organisationnel (`com.esic.connect.organization`) :
+        // sites (liste → fiche → création / modification) puis bâtiments,
+        // salles et plages réseau gérés depuis la fiche d'un site.
+        // Périmètre de lecture aligné sur `SiteController.READ_ROLES` ;
+        // les formulaires de site sont en plus gardés par
+        // `ORGANIZATION_WRITE_ROLES` (`SiteController.WRITE_ROLES`).
+        // Spring Security reste l'autorité (un `403` est rendu « accès
+        // refusé ») ; un `PEDAGOGICAL_MANAGER` garde une lecture seule.
+        path: 'organization',
+        canActivate: [roleGuard([...ORGANIZATION_READ_ROLES])],
+        canActivateChild: [roleGuard([...ORGANIZATION_READ_ROLES])],
+        title: `Organisation — ${APP_NAME}`,
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'sites' },
+          {
+            path: 'sites',
+            loadComponent: () =>
+              import('./features/organization/site-list/site-list').then((m) => m.SiteList),
+          },
+          {
+            path: 'sites/new',
+            canActivate: [roleGuard([...ORGANIZATION_WRITE_ROLES])],
+            data: { mode: 'create' },
+            title: `Nouveau site — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/organization/site-form/site-form').then((m) => m.SiteForm),
+          },
+          {
+            path: 'sites/:publicId',
+            title: `Site — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/organization/site-detail/site-detail').then((m) => m.SiteDetail),
+          },
+          {
+            path: 'sites/:publicId/edit',
+            canActivate: [roleGuard([...ORGANIZATION_WRITE_ROLES])],
+            data: { mode: 'edit' },
+            title: `Modifier un site — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/organization/site-form/site-form').then((m) => m.SiteForm),
+          },
+        ],
+      },
+      {
+        // Import CSV, simulation, versionnement et publication d'un
+        // planning de classe (`com.esic.connect.planning`, EF-PLAN-001..007,
+        // EF-SES-001) : `/planning/import` (upload + choix de la classe),
+        // `/planning/import/:jobId` (revue des lignes + anomalies +
+        // publication), `/planning/versions` (versions publiées + détail).
+        // Périmètre aligné sur `PlanningWeb.MANAGE_ROLES` ; Spring Security
+        // reste l'autorité (un `403` est rendu « accès refusé »).
+        path: 'planning',
+        canActivate: [roleGuard([...PLANNING_MANAGE_ROLES])],
+        canActivateChild: [roleGuard([...PLANNING_MANAGE_ROLES])],
+        title: `Planning — ${APP_NAME}`,
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'import' },
+          {
+            path: 'import',
+            loadComponent: () =>
+              import('./features/planning/planning-import/planning-import').then(
+                (m) => m.PlanningImport,
+              ),
+          },
+          {
+            path: 'import/:jobId',
+            title: `Revue d'un import de planning — ${APP_NAME}`,
+            loadComponent: () =>
+              import(
+                './features/planning/planning-import-review/planning-import-review'
+              ).then((m) => m.PlanningImportReview),
+          },
+          {
+            path: 'versions',
+            title: `Versions de planning — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/planning/planning-versions/planning-versions').then(
+                (m) => m.PlanningVersions,
+              ),
           },
         ],
       },

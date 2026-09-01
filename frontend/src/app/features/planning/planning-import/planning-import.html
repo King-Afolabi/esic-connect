@@ -1,0 +1,68 @@
+<nav class="plan__tabs" aria-label="Planning">
+  <a routerLink="/planning/import" routerLinkActive="plan__tab--active">Importer un planning</a>
+  <a routerLink="/planning/versions" routerLinkActive="plan__tab--active">Versions publiées</a>
+</nav>
+
+<h1 class="plan__title">Importer un planning</h1>
+<p class="plan__intro">
+  Le fichier CSV est transmis tel quel : le navigateur ne le lit pas. Le
+  serveur lance une <strong>simulation</strong> — aucune séance n'est
+  créée avant la publication.
+</p>
+
+@if (classesState().kind === 'loading') {
+  <mat-progress-bar mode="indeterminate" aria-label="Chargement des classes"></mat-progress-bar>
+}
+@if (classesState().kind === 'error') {
+  <div class="plan__panel" role="alert">
+    <p>{{ classesError() }}</p>
+    <button mat-stroked-button type="button" (click)="loadClasses()">Réessayer</button>
+  </div>
+}
+
+@if (classesState().kind === 'ready') {
+  <form class="plan__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <mat-form-field appearance="outline">
+      <mat-label>Classe</mat-label>
+      <mat-select formControlName="classGroupPublicId">
+        @for (klass of classes(); track klass.publicId) {
+          <mat-option [value]="klass.publicId">{{ klass.code }} — {{ klass.name }}</mat-option>
+        }
+      </mat-select>
+      @if (form.controls.classGroupPublicId.touched && form.controls.classGroupPublicId.invalid) {
+        <mat-error>Sélectionnez une classe.</mat-error>
+      }
+      @if (classes().length === 0) {
+        <mat-hint>Aucune classe active dans votre périmètre.</mat-hint>
+      }
+    </mat-form-field>
+
+    <div class="plan__form-actions">
+      <label>
+        <span class="plan__sr-only">Fichier CSV du planning</span>
+        <input
+          class="plan__file-input"
+          type="file"
+          [accept]="acceptedExtension"
+          (change)="onFileSelected($event)"
+        />
+      </label>
+    </div>
+    @if (selectedFile(); as file) {
+      <p class="plan__status">Fichier sélectionné : {{ file.name }}</p>
+    }
+    @if (fileError()) {
+      <p class="plan__form-error" role="alert">{{ fileError() }}</p>
+    }
+    @if (submitError()) {
+      <p class="plan__form-error" role="alert">{{ submitError() }}</p>
+    }
+
+    <div class="plan__form-actions">
+      <button mat-flat-button type="submit" [disabled]="submitting()">
+        <mat-icon aria-hidden="true">play_arrow</mat-icon>
+        Lancer la simulation
+      </button>
+    </div>
+  </form>
+}

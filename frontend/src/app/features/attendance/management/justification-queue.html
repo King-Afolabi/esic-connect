@@ -72,6 +72,24 @@
                 <form class="att__reveal" [formGroup]="reviewForm" (ngSubmit)="submitReview()"
                       role="group" aria-label="Examiner le justificatif">
                   <p class="att__meta">{{ r.comment }}</p>
+                  @switch (attachment()) {
+                    @case ('loading') {
+                      <p class="att__meta" role="status">Chargement de la pièce jointe…</p>
+                    }
+                    @case ('none') {
+                      <p class="att__meta">Aucune pièce jointe.</p>
+                    }
+                    @default {
+                      @if (attachmentMeta(); as att) {
+                        <p class="att__meta">
+                          Pièce jointe : {{ att.fileName }} ({{ att.contentType }},
+                          {{ formatFileSize(att.sizeBytes) }})
+                        </p>
+                        <button mat-stroked-button type="button" (click)="downloadAttachment()"
+                                [disabled]="downloading()">Télécharger la pièce jointe</button>
+                      }
+                    }
+                  }
                   <mat-form-field appearance="outline">
                     <mat-label>Décision</mat-label>
                     <mat-select formControlName="decision">

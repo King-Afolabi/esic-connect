@@ -32,4 +32,28 @@ final class CourseSessionRequests {
             @NotBlank @Size(max = 500) String reason,
             @Size(max = 191) String title) {
     }
+
+    /**
+     * Annulation d'une séance (G1-C ; EF-SES-004). {@code reason} : motif
+     * obligatoire et borné — la validation fine (vide après trim) est
+     * refaite côté service.
+     */
+    record Cancel(
+            @NotBlank @Size(max = 500) String reason) {
+    }
+
+    /**
+     * Affectation d'un remplaçant sur une séance (G1-C.2 ; EF-SES-005).
+     *
+     * <p>{@code substituteTeacherPublicId} : compte {@code TEACHER} actif,
+     * différent du formateur principal ; {@code reason} : motif
+     * obligatoire et borné ; {@code validFrom} / {@code validUntil} :
+     * période de validité (fin strictement postérieure au début).
+     */
+    record CreateSubstitution(
+            @NotBlank String substituteTeacherPublicId,
+            @NotBlank @Size(max = 500) String reason,
+            @NotNull Instant validFrom,
+            @NotNull Instant validUntil) {
+    }
 }

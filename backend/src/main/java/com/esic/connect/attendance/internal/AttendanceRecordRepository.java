@@ -25,4 +25,9 @@ interface AttendanceRecordRepository extends JpaRepository<AttendanceRecord, Lon
             Collection<Long> attendanceCheckpointIds, Collection<Long> enrollmentIds);
 
     List<AttendanceRecord> findByAttendanceCheckpointIdIn(Collection<Long> attendanceCheckpointIds);
+
+    /** Décompte borné des présences d'un apprenant par statut (bloc G1-F). {@code [status, count]}. */
+    @org.springframework.data.jpa.repository.Query(
+            "select r.status, count(r) from AttendanceRecord r where r.studentUserId = :userId group by r.status")
+    List<Object[]> countByStatusForStudent(@org.springframework.data.repository.query.Param("userId") Long userId);
 }

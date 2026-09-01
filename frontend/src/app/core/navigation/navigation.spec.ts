@@ -27,6 +27,30 @@ describe('NAV_ITEMS', () => {
     ]);
   });
 
+  it('exposes /organization as a real screen gated on SiteController.READ_ROLES', () => {
+    const organization = NAV_ITEMS.find((i) => i.path === '/organization');
+    expect(organization).toBeDefined();
+    expect(organization?.placeholder).toBeUndefined();
+    expect(organization?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+    ]);
+  });
+
+  it('exposes /planning as a real screen gated on PlanningWeb.MANAGE_ROLES', () => {
+    const planning = NAV_ITEMS.find((i) => i.path === '/planning');
+    expect(planning).toBeDefined();
+    expect(planning?.placeholder).toBeUndefined();
+    expect(planning?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+    ]);
+  });
+
   it('exposes /alternation as a real screen gated on AlternationWeb read roles', () => {
     const alternation = NAV_ITEMS.find((i) => i.path === '/alternation');
     expect(alternation).toBeDefined();
@@ -58,11 +82,18 @@ describe('NAV_ITEMS', () => {
     expect(attendance?.placeholder).toBeUndefined();
     expect(attendance?.roles).toEqual(['STUDENT']);
   });
+
+  it('exposes /notifications as a real screen visible to any authenticated user (G1-D)', () => {
+    const notifications = NAV_ITEMS.find((i) => i.path === '/notifications');
+    expect(notifications).toBeDefined();
+    expect(notifications?.placeholder).toBeUndefined();
+    expect(notifications?.roles).toBeUndefined();
+  });
 });
 
 describe('visibleNavItems', () => {
-  it('exposes only the dashboard when no role is held', () => {
-    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard']);
+  it('exposes the always-visible items (dashboard, notifications) when no role is held', () => {
+    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard', '/notifications']);
   });
 
   it('shows /administration for the roles that back UserAccountController READ_ROLES, and hides it otherwise', () => {
@@ -106,6 +137,24 @@ describe('visibleNavItems', () => {
     }
     for (const role of ['TEACHER', 'STUDENT'] as const) {
       expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/alternation');
+    }
+  });
+
+  it('shows /organization for the SiteController read roles, and hides it otherwise', () => {
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/organization');
+    }
+    for (const role of ['TEACHER', 'STUDENT'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/organization');
+    }
+  });
+
+  it('shows /planning for PlanningWeb.MANAGE_ROLES, and hides it otherwise', () => {
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/planning');
+    }
+    for (const role of ['TEACHER', 'STUDENT'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/planning');
     }
   });
 

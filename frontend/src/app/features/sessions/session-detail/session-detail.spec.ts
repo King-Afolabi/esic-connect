@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 
 import { Role } from '../../../core/models/role';
+import { AuthService } from '../../../core/auth/auth.service';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { CheckpointView, CourseSessionResponse } from '../sessions.models';
@@ -12,6 +13,7 @@ import { SessionDetail } from './session-detail';
 
 const GET_URL = '/api/v1/sessions/s-1';
 const ATTENDANCE_URL = '/api/v1/sessions/s-1/attendance';
+const SUBSTITUTIONS_URL = '/api/v1/sessions/s-1/substitutions';
 const CANDIDATES_URL = '/api/v1/sessions/s-1/attendance/candidates';
 const EXPORT_URL = '/api/v1/sessions/s-1/attendance/export';
 const TOKEN_URL = '/api/v1/sessions/s-1/checkpoints/cp-1/attendance-token';
@@ -50,6 +52,8 @@ const OPEN_SESSION: CourseSessionResponse = {
   timeZoneId: 'Europe/Paris',
   openedAt: '2026-09-10T05:55:00Z',
   closedAt: null,
+  cancellationReason: null,
+  cancelledAt: null,
   checkpointPublicId: 'cp-1',
   checkpointOpen: true,
   checkpoints: [CP_OPEN],
@@ -95,6 +99,21 @@ interface DetailInternals {
   confirmOpen: () => void;
   startClose: () => void;
   confirmClose: () => void;
+  startCancel: () => void;
+  confirmCancel: () => void;
+  cancelAction: () => void;
+  sessionCancelForm: { patchValue: (v: Record<string, unknown>) => void; reset: () => void };
+  canCancel: () => boolean;
+  isCancelled: () => boolean;
+  actingAsSubstitute: () => { publicId: string } | null;
+  toggleSubstitutionForm: () => void;
+  submitSubstitution: () => void;
+  endSubstitution: (id: string) => void;
+  substitutionForm: { patchValue: (v: Record<string, unknown>) => void };
+  substitutions: () => { publicId: string; status: string }[];
+  canManageSubstitutions: () => boolean;
+  canAddSubstitution: () => boolean;
+  substitutionError: () => string | null;
   refreshToken: () => void;
   refreshAttendance: () => void;
   toggleCheckpointForm: () => void;
@@ -122,18 +141,21 @@ interface DetailInternals {
   canManageCheckpoint: () => boolean;
   canManageAttendance: () => boolean;
   canReadAttendance: () => boolean;
-  pendingAction: () => 'open' | 'close' | null;
+  pendingAction: () => 'open' | 'close' | 'cancel' | null;
   startCorrect: (id: string) => void;
   submitCorrect: () => void;
   correctForm: { patchValue: (v: Record<string, unknown>) => void };
   correctRowId: () => string | null;
 }
 
-function setup(roles: Role[]) {
+function setup(roles: Role[], subject: string | null = null) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
   const effectiveRoles: WritableSignal<Role[]> = signal(roles);
+  const authSession: WritableSignal<{ subject: string | null } | null> = signal(
+    subject === null ? null : { subject },
+  );
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
@@ -141,6 +163,7 @@ function setup(roles: Role[]) {
       provideHttpClientTesting(),
       { provide: NotificationService, useValue: { info: vi.fn(), error: vi.fn() } },
       { provide: RoleContextService, useValue: { effectiveRoles } },
+      { provide: AuthService, useValue: { session: authSession } },
       {
         provide: ActivatedRoute,
         useValue: { snapshot: { paramMap: convertToParamMap({ publicId: 's-1' }) } },
@@ -151,12 +174,13 @@ function setup(roles: Role[]) {
   const http = TestBed.inject(HttpTestingController);
   const internals = fixture.componentInstance as unknown as DetailInternals;
   fixture.detectChanges();
-  return { fixture, http, internals, effectiveRoles };
+  return { fixture, http, internals, effectiveRoles, authSession };
 }
 
 function initialLoad(http: HttpTestingController, session = OPEN_SESSION): void {
   http.expectOne(GET_URL).flush(session);
   http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+  http.match(SUBSTITUTIONS_URL).forEach((req) => req.flush([]));
 }
 
 describe('SessionDetail', () => {
@@ -171,6 +195,11 @@ describe('SessionDetail', () => {
     http.match(ATTENDANCE_URL).forEach((req) => {
       if (!req.cancelled) {
         req.flush(EMPTY_ATTENDANCE);
+      }
+    });
+    http.match(SUBSTITUTIONS_URL).forEach((req) => {
+      if (!req.cancelled) {
+        req.flush([]);
       }
     });
     http.verify();
@@ -207,6 +236,177 @@ describe('SessionDetail', () => {
     });
     http.expectOne(GET_URL).flush(OPEN_SESSION);
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+  });
+
+  it('cancels an OPEN session with a reason and reloads the persisted CANCELLED state', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+    expect(text()).toContain('Annuler la séance');
+    expect(internals.canCancel()).toBe(true);
+
+    internals.startCancel();
+    fixture.detectChanges();
+    // Motif obligatoire : sans motif, aucune requête.
+    internals.confirmCancel();
+    http.expectNone((r) => r.url.endsWith('/cancel'));
+
+    internals.sessionCancelForm.patchValue({ reason: 'Alerte incendie' });
+    internals.confirmCancel();
+    const req = http.expectOne((r) => r.url.endsWith('/cancel') && r.method === 'POST');
+    expect(req.request.body).toEqual({ reason: 'Alerte incendie' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    // G1-C.3 : rechargement depuis le back-end — l'état CANCELLED est
+    // réellement persisté (statut, motif, date). Aucun patch local.
+    http.expectOne(GET_URL).flush({
+      ...OPEN_SESSION,
+      status: 'CANCELLED',
+      cancellationReason: 'Alerte incendie',
+      cancelledAt: '2026-09-10T06:30:00Z',
+      checkpointOpen: false,
+      checkpoints: [{ ...CP_OPEN, status: 'CANCELLED', openedAt: null }],
+    });
+    // Une séance annulée n'appelle pas le tableau de présences (garde serveur).
+    http.expectNone(ATTENDANCE_URL);
+    fixture.detectChanges();
+
+    expect(internals.isCancelled()).toBe(true);
+    expect(text()).toContain('Annulée');
+    expect(text()).toContain('Alerte incendie');
+    expect(text()).toContain("aucune absence n'est comptée");
+  });
+
+  it('lists substitutions, adds one for a manager, and ends it', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    http.expectOne(GET_URL).flush(OPEN_SESSION);
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    http.expectOne(SUBSTITUTIONS_URL).flush([
+      {
+        publicId: 'sub-1',
+        status: 'ACTIVE',
+        reason: 'Congé',
+        validFrom: '2026-09-10T05:00:00Z',
+        validUntil: '2026-09-10T12:00:00Z',
+        substitute: { publicId: 'sub-t', firstName: 'Bea', lastName: 'Roux' },
+        originalTeacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+        createdAt: '2026-09-01T10:00:00Z',
+        endedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+    expect(text()).toContain('Bea Roux');
+    expect(text()).toContain('remplace Alice Martin');
+    expect(internals.canManageSubstitutions()).toBe(true);
+
+    // Ajout.
+    internals.toggleSubstitutionForm();
+    http
+      .expectOne('/api/v1/sessions/teachers')
+      .flush([{ publicId: 'sub-t', firstName: 'Bea', lastName: 'Roux' }]);
+    internals.substitutionForm.patchValue({
+      substituteTeacherPublicId: 'sub-t',
+      validFrom: '2026-09-10T09:00',
+      validUntil: '2026-09-10T12:00',
+      reason: 'Congé',
+    });
+    internals.submitSubstitution();
+    const add = http.expectOne((r) => r.url === SUBSTITUTIONS_URL && r.method === 'POST');
+    expect((add.request.body as { substituteTeacherPublicId: string }).substituteTeacherPublicId).toBe(
+      'sub-t',
+    );
+    add.flush({}, { status: 201, statusText: 'Created' });
+    http.expectOne(SUBSTITUTIONS_URL).flush([]);
+
+    // Fin d'un remplacement.
+    internals.endSubstitution('sub-1');
+    http.expectOne((r) => r.url === `${SUBSTITUTIONS_URL}/sub-1/end` && r.method === 'POST').flush(null, {
+      status: 204,
+      statusText: 'No Content',
+    });
+    http.expectOne(SUBSTITUTIONS_URL).flush([]);
+  });
+
+  it('hides the substitution add button for a non-manager (TEACHER)', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    initialLoad(http);
+    fixture.detectChanges();
+    expect(internals.canManageSubstitutions()).toBe(false);
+    expect(text()).not.toContain('Ajouter un remplaçant');
+  });
+
+  it('shows a "you are the substitute" banner for the active substitute (G1-C.3)', () => {
+    // Le formateur connecté (sub = "me-1") est le remplaçant ACTIF.
+    ({ fixture, http, internals } = setup(['TEACHER'], 'me-1'));
+    const now = Date.now();
+    http.expectOne(GET_URL).flush({ ...OPEN_SESSION, teacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' } });
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    http.expectOne(SUBSTITUTIONS_URL).flush([
+      {
+        publicId: 'sub-1',
+        status: 'ACTIVE',
+        reason: 'Congé',
+        validFrom: new Date(now - 3_600_000).toISOString(),
+        validUntil: new Date(now + 3_600_000).toISOString(),
+        substitute: { publicId: 'me-1', firstName: 'Bea', lastName: 'Roux' },
+        originalTeacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+        createdAt: '2026-09-01T10:00:00Z',
+        endedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(internals.actingAsSubstitute()).not.toBeNull();
+    expect(text()).toContain('Vous intervenez comme');
+    expect(text()).toContain('remplacement de Alice Martin');
+  });
+
+  it('does not show the substitute banner once the period has ended', () => {
+    ({ fixture, http, internals } = setup(['TEACHER'], 'me-1'));
+    const now = Date.now();
+    http.expectOne(GET_URL).flush(OPEN_SESSION);
+    http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+    http.expectOne(SUBSTITUTIONS_URL).flush([
+      {
+        publicId: 'sub-1',
+        status: 'ACTIVE',
+        reason: 'Congé',
+        validFrom: new Date(now - 7_200_000).toISOString(),
+        validUntil: new Date(now - 3_600_000).toISOString(),
+        substitute: { publicId: 'me-1', firstName: 'Bea', lastName: 'Roux' },
+        originalTeacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+        createdAt: '2026-09-01T10:00:00Z',
+        endedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+    expect(internals.actingAsSubstitute()).toBeNull();
+    expect(text()).not.toContain('Vous intervenez comme');
+  });
+
+  it('hides the cancel button for a CLOSED session', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http, { ...OPEN_SESSION, status: 'CLOSED', closedAt: '2026-09-10T07:00:00Z' });
+    fixture.detectChanges();
+    expect(internals.canCancel()).toBe(false);
+    expect(text()).not.toContain('Annuler la séance');
+  });
+
+  it('surfaces a 409 from cancel inline and keeps the session usable', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http);
+    fixture.detectChanges();
+    internals.startCancel();
+    internals.sessionCancelForm.patchValue({ reason: 'test' });
+    internals.confirmCancel();
+    http.expectOne((r) => r.url.endsWith('/cancel')).flush(
+      { status: 409, code: 'SESSION_INVALID_STATE', message: "L'état de la séance a changé entre-temps.", path: '', correlationId: null, details: [] },
+      { status: 409, statusText: 'Conflict' },
+    );
+    fixture.detectChanges();
+    expect(internals.isCancelled()).toBe(false);
+    expect(text()).toContain('changé entre-temps');
   });
 
   it('issues a checkpoint token, shows the short code and a <qrcode>, never the token as text', () => {

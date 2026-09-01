@@ -15,7 +15,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -128,9 +128,17 @@ class AttendanceService {
             throw new AttendanceException(AttendanceException.Kind.OPERATION_FORBIDDEN);
         }
 
-        LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+        // Couverture de l'inscription évaluée à la <em>date civile de la
+        // séance</em> (startsAt projeté dans son fuseau IANA persisté), et
+        // non à « aujourd'hui » : un émargement porte sur le jour de la
+        // séance, qui peut différer de la date courante — et, dans la
+        // fenêtre où la date locale diffère de la date UTC, « aujourd'hui en
+        // UTC » écartait à tort une inscription qui vient d'être créée pour
+        // le jour local. Même convention que AttendanceManagementService et
+        // AttendanceReportService.
+        LocalDate sessionDate = sessionLocalDate(session);
         List<EnrollmentDirectory.EnrollmentRef> matching = enrollmentDirectory
-                .findActiveEnrollmentsForUserOn(callerPublicId, today).stream()
+                .findActiveEnrollmentsForUserOn(callerPublicId, sessionDate).stream()
                 .filter(enrollment -> session.classGroupPublicIds().contains(enrollment.classGroupPublicId()))
                 .toList();
         if (matching.isEmpty()) {
@@ -302,6 +310,28 @@ class AttendanceService {
             return Optional.of(UUID.fromString(value.trim()));
         } catch (IllegalArgumentException notAUuid) {
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Date civile <em>de la séance</em> : {@code startsAt} projeté dans le
+     * fuseau IANA persisté de la séance. Un fuseau persisté invalide est un
+     * état interne corrompu (validé à l'écriture par
+     * {@code CourseSessionService}) : erreur interne contrôlée plutôt qu'un
+     * repli silencieux sur UTC qui décalerait la date. Même convention que
+     * {@code AttendanceManagementService.sessionLocalDate} et
+     * {@code AttendanceReportService.persistedZone} — la valeur invalide
+     * n'est jamais exposée.
+     */
+    private static LocalDate sessionLocalDate(CourseSessionDirectory.SessionRef session) {
+        return session.startsAt().atZone(persistedZone(session.timeZoneId())).toLocalDate();
+    }
+
+    private static ZoneId persistedZone(String id) {
+        try {
+            return ZoneId.of(id);
+        } catch (RuntimeException invalid) {
+            throw new IllegalStateException("Fuseau horaire persisté invalide pour une séance");
         }
     }
 }

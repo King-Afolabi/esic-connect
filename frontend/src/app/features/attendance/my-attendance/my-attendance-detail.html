@@ -84,6 +84,57 @@
               @if (formError()) { <p class="att__inline-error" role="alert">{{ formError() }}</p> }
             </form>
           }
+          <section class="att__section" aria-label="Pièce jointe">
+            <h3 class="att__subtitle">Pièce jointe</h3>
+            <p class="att__meta">Formats acceptés : PDF, JPEG, PNG — 5 Mo maximum.</p>
+            @switch (attachment()) {
+              @case ('loading') {
+                <p class="att__status" role="status">Chargement de la pièce jointe…</p>
+              }
+              @case ('none') {
+                <p class="att__status" role="status">Aucune pièce jointe.</p>
+              }
+              @default {
+                @if (attachmentMeta(); as att) {
+                  <dl class="att__facts">
+                    <div><dt>Fichier</dt><dd>{{ att.fileName }}</dd></div>
+                    <div><dt>Type</dt><dd>{{ att.contentType }}</dd></div>
+                    <div><dt>Taille</dt><dd>{{ formatFileSize(att.sizeBytes) }}</dd></div>
+                    <div><dt>Déposée le</dt><dd>{{ formatInstantUtc(att.uploadedAt) }}</dd></div>
+                  </dl>
+                  <div class="att__filter-actions">
+                    <button mat-stroked-button type="button" (click)="downloadAttachment()"
+                            [disabled]="downloading()">Télécharger</button>
+                    @if (canAmend()) {
+                      <button mat-button type="button" (click)="removeAttachment()"
+                              [disabled]="removing()">Retirer</button>
+                    }
+                  </div>
+                }
+              }
+            }
+            @if (attachmentError()) {
+              <p class="att__inline-error" role="alert">{{ attachmentError() }}</p>
+            }
+            @if (canAmend() && attachment() === 'none') {
+              <div class="att__reveal" role="group" aria-label="Déposer une pièce jointe">
+                <label class="att__file-label">
+                  <span>Choisir un fichier</span>
+                  <input type="file" [accept]="attachmentAccept" (change)="onFileSelected($event)" />
+                </label>
+                @if (pendingFile(); as f) {
+                  <p class="att__meta">{{ f.name }} — {{ formatFileSize(f.size) }}</p>
+                }
+                <div class="att__filter-actions">
+                  <button mat-flat-button type="button" (click)="uploadAttachment()"
+                          [disabled]="uploading() || !pendingFile()">Déposer</button>
+                </div>
+                @if (uploadError()) {
+                  <p class="att__inline-error" role="alert">{{ uploadError() }}</p>
+                }
+              </div>
+            }
+          </section>
         } @else {
           <p class="att__status" role="status">Aucun justificatif pour cette présence.</p>
         }

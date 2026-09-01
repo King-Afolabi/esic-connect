@@ -56,7 +56,11 @@ class AttendanceCheckpointService {
 
     @Transactional(readOnly = true)
     List<CheckpointResponse> list(String sessionPublicId, String callerSubject) {
-        CourseSession session = requireSession(sessionPublicId);
+        // G1-C.3 : la liste des points de contrôle d'une séance CANCELLED
+        // reste consultable (points terminaux) — seule une séance
+        // supersédée par le planning est masquée. La gestion
+        // (create/open/close/cancel) exige, elle, une séance opérationnelle.
+        CourseSession session = requireReadableSession(sessionPublicId);
         requireAccess(session, AccessLevel.READ, callerSubject);
         return checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId()).stream()
                 .map(CheckpointResponse::from)
@@ -182,10 +186,34 @@ class AttendanceCheckpointService {
         return new Ctx(session, checkpoint);
     }
 
+    /**
+     * Séance opérationnelle — pour la <strong>gestion</strong> des points
+     * de contrôle (création, ouverture, fermeture, annulation). Une séance
+     * supersédée (audit G1-B.1) ou annulée (G1-C) est traitée comme
+     * inexistante.
+     */
     private CourseSession requireSession(String sessionPublicId) {
-        return sessionRepository
+        CourseSession session = requireReadableSession(sessionPublicId);
+        if (!session.isOperational()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
+    }
+
+    /**
+     * Séance existante et historiquement lisible — pour la
+     * <strong>consultation</strong> des points de contrôle (G1-C.3). Une
+     * séance {@code CANCELLED} passe (ses points terminaux restent
+     * visibles) ; une séance supersédée par le planning est masquée.
+     */
+    private CourseSession requireReadableSession(String sessionPublicId) {
+        CourseSession session = sessionRepository
                 .findByPublicId(parseUuid(sessionPublicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
+        if (!session.isHistoricallyReadable()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
     }
 
     private void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {
@@ -195,7 +223,7 @@ class AttendanceCheckpointService {
                 .filter(Optional::isPresent)
                 .map(ref -> ref.get().publicId())
                 .collect(Collectors.toUnmodifiableSet());
-        if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, callerSubject)) {
+        if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, callerSubject)) {
             throw new CourseSessionException(accessGuard.isPedagogicalManagerScoped()
                     ? CourseSessionException.Kind.SCOPE_FORBIDDEN
                     : CourseSessionException.Kind.OPERATION_FORBIDDEN);

@@ -71,6 +71,29 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
+    // Écran livré : référentiel organisationnel (sites → fiche →
+    // création / modification, puis bâtiments, salles et plages réseau
+    // depuis la fiche d'un site). Périmètre aligné sur
+    // `SiteController.READ_ROLES` ; l'écriture des sites est restreinte
+    // plus finement par la route, et les plages réseau restent
+    // `SUPER_ADMIN` côté serveur.
+    label: 'Organisation',
+    path: '/organization',
+    icon: 'apartment',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré : import CSV, simulation, revue et publication d'un
+    // planning de classe, puis consultation des versions publiées
+    // (`com.esic.connect.planning`). Périmètre aligné sur
+    // `PlanningWeb.MANAGE_ROLES` ; un `PEDAGOGICAL_MANAGER` reste limité à
+    // son périmètre côté serveur.
+    label: 'Planning',
+    path: '/planning',
+    icon: 'calendar_month',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
     // Écran livré : gestion et consultation de l'alternance (modèles de
     // rythme, affectations aux classes, exceptions individuelles,
     // résolution de contexte). Périmètre aligné sur
@@ -116,6 +139,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/attendance-management',
     icon: 'insights',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (G1-D) : centre de notifications de l'appelant —
+    // liste paginée, filtre lu / non lu, marquage lu / tout lu.
+    // `@PreAuthorize("isAuthenticated()")` : visible par tout rôle.
+    label: 'Notifications',
+    path: '/notifications',
+    icon: 'notifications',
   },
 ];
 

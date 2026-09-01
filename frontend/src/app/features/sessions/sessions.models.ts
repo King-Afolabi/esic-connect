@@ -42,14 +42,15 @@ export type SortDirection = 'asc' | 'desc';
 // Énumérations (valeurs exactes du back-end)
 // ---------------------------------------------------------------------------
 
-/** `SessionLifecycle`. */
-export const SESSION_STATUSES = ['PLANNED', 'OPEN', 'CLOSED'] as const;
+/** `SessionLifecycle` — `CANCELLED` ajouté au bloc G1-C. */
+export const SESSION_STATUSES = ['PLANNED', 'OPEN', 'CLOSED', 'CANCELLED'] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 export const SESSION_STATUS_LABELS: Record<SessionStatus, string> = {
   PLANNED: 'Planifiée',
   OPEN: 'Ouverte',
   CLOSED: 'Clôturée',
+  CANCELLED: 'Annulée',
 };
 
 export function sessionStatusLabel(status: string): string {
@@ -240,6 +241,17 @@ export interface CourseSessionResponse {
   timeZoneId: string;
   openedAt: string | null;
   closedAt: string | null;
+  /**
+   * G1-C : motif + instant d'annulation, non nuls <strong>si et seulement
+   * si</strong> `status === 'CANCELLED'`. Depuis G1-C.3, une séance
+   * `CANCELLED` reste consultable par `GET /sessions/{publicId}` (statut,
+   * motif, date, formateur principal, points de contrôle terminaux) : le
+   * front recharge son état persisté après annulation, un rafraîchissement
+   * est stable. Seules les <em>opérations</em> (ouverture, jeton, points
+   * de contrôle) renvoient `404`.
+   */
+  cancellationReason: string | null;
+  cancelledAt: string | null;
   /** Compat V9 : premier point de contrôle (START). */
   checkpointPublicId: string | null;
   checkpointOpen: boolean;
@@ -334,6 +346,51 @@ export interface CreateSessionRequest {
   timeZoneId: string;
   reason: string;
   title?: string | null;
+}
+
+/** `CourseSessionRequests.Cancel` (G1-C) — motif obligatoire, borné à 500. */
+export interface CancelSessionRequest {
+  reason: string;
+}
+
+/** `TeacherSubstitutionStatus` (G1-C.2). */
+export type SubstitutionStatus = 'ACTIVE' | 'ENDED';
+
+/**
+ * `SubstitutionResponse` (G1-C.2) — le formateur principal
+ * (`originalTeacher`) et le remplaçant (`substitute`) côte à côte :
+ * l'affectation principale n'est jamais écrasée.
+ */
+export interface SubstitutionResponse {
+  publicId: string;
+  status: SubstitutionStatus;
+  reason: string;
+  /** `Instant` ISO-8601. */
+  validFrom: string;
+  validUntil: string;
+  substitute: SessionTeacherView;
+  originalTeacher: SessionTeacherView;
+  createdAt: string;
+  endedAt: string | null;
+}
+
+/**
+ * `CourseSessionRequests.CreateSubstitution` (G1-C.2 ; contrat de période
+ * durci en G1-C.3).
+ *
+ * - `validUntil > validFrom` sinon `400 SESSION_SUBSTITUTION_PERIOD_INVALID` ;
+ * - la période doit <strong>chevaucher réellement la séance</strong> et ne
+ *   pas déborder de plus de 60 min avant son début / après sa fin, sinon
+ *   `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION` ;
+ * - au plus une substitution `ACTIVE` applicable à un instant donné, sinon
+ *   `409 SESSION_SUBSTITUTION_OVERLAP`.
+ */
+export interface CreateSubstitutionRequest {
+  substituteTeacherPublicId: string;
+  reason: string;
+  /** `Instant` ISO-8601 — dans la fenêtre de la séance (± 60 min). */
+  validFrom: string;
+  validUntil: string;
 }
 
 /** `AttendanceRequests.Validate` — exactement l'un des deux champs. */

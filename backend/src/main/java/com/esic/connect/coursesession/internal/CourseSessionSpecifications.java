@@ -21,12 +21,55 @@ final class CourseSessionSpecifications {
         return (root, query, cb) -> cb.equal(root.get("teacherUserId"), teacherUserId);
     }
 
+    /**
+     * Séances dont la clé primaire figure dans {@code internalIds} (G1-C.3) —
+     * combinée en {@code OR} avec {@link #taughtBy} pour qu'un formateur
+     * voie aussi les séances où il est remplaçant actif.
+     */
+    static Specification<CourseSession> hasInternalIdIn(java.util.Collection<Long> internalIds) {
+        return (root, query, cb) -> internalIds.isEmpty()
+                ? cb.disjunction()
+                : root.get("id").in(internalIds);
+    }
+
     static Specification<CourseSession> startsFrom(Instant from) {
         return (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("startsAt"), from);
     }
 
     static Specification<CourseSession> startsUntil(Instant to) {
         return (root, query, cb) -> cb.lessThanOrEqualTo(root.get("startsAt"), to);
+    }
+
+    /** Séances dont le début est strictement avant {@code to} (chevauchement d'intervalle). */
+    static Specification<CourseSession> startsBefore(Instant to) {
+        return (root, query, cb) -> cb.lessThan(root.get("startsAt"), to);
+    }
+
+    /** Séances dont la fin est strictement après {@code from} (chevauchement d'intervalle). */
+    static Specification<CourseSession> endsAfter(Instant from) {
+        return (root, query, cb) -> cb.greaterThan(root.get("endsAt"), from);
+    }
+
+    /**
+     * Exclut les séances d'origine planning retirées par une republication
+     * ({@code superseded_by_scheduling = true} — DEC-G1-004 règle 4) : elles
+     * ne sont plus affichées dans les listes de séances.
+     */
+    static Specification<CourseSession> notSupersededByScheduling() {
+        return (root, query, cb) -> cb.isFalse(root.get("supersededByScheduling"));
+    }
+
+    /**
+     * Séances <strong>opérationnelles</strong> uniquement (garde
+     * centralisée, audit G1-B.1) : exclut les séances retirées par une
+     * republication de planning (audit G1-B.1) <strong>et</strong> les
+     * séances {@code CANCELLED} (G1-C). Miroir de
+     * {@link CourseSession#isOperational()}.
+     */
+    static Specification<CourseSession> operational() {
+        return (root, query, cb) -> cb.and(
+                cb.isFalse(root.get("supersededByScheduling")),
+                cb.notEqual(root.get("status"), SessionLifecycle.CANCELLED));
     }
 
     /**

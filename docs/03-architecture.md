@@ -424,7 +424,7 @@ coursesession  → planning, academic, identity, room, shared
 attendance     → coursesession, enrollment, identity, shared
 justification  → attendance, identity, shared
 claim          → identity, attendance, coursesession, shared
-notification   → identity, shared
+notification   → identity, coursesession, planning, shared   (G1-D : consomme leurs événements publics)
 reporting      → academic, enrollment, attendance, shared
 audit          → identity, shared
 ai             → planning, shared
@@ -458,10 +458,10 @@ iot            → attendance, coursesession, shared
 > | `academic` | §7.2 (+ affectations pédagogiques et `AcademicScopeGuard`) | V5, V6 |
 > | `enrollment` | §7.3 | V7 |
 > | `alternation` | §7.4 | V8 |
-> | `coursesession` | §7.7 — **séances exceptionnelles manuelles uniquement** (pas de création depuis un planning) | V9, V10 |
-> | `attendance` | §7.8 (+ le justificatif métier **sans fichier** de §7.9 et une partie du reporting de §7.12) | V9, V10 |
+> | `coursesession` | §7.7 — séances manuelles **et** issues d'un planning publié (G1-B) ; cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C) ; remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
+> | `attendance` | §7.8 (+ le justificatif métier de §7.9 — **socle des pièces jointes** livré en G1-E cp1 : port `JustificationFileStorage`, contenu hors base / hors webroot ; et une partie du reporting de §7.12) | V9, V10, V16 |
 > | `studentimport` | **nouveau** — import CSV contrôlé des apprenants (non prévu explicitement en §7 ; parcours d'import de §7.3) | V11 |
-> | `notification` | §7.11 — email d'activation seulement, envoi asynchrone après commit, **pas de file persistante** | — |
+> | `notification` | §7.11 — email d'activation **+ centre de notifications internes persistantes** (G1-D : table `notification`, listeners `AFTER_COMMIT`, API `/api/v1/me/notifications`) ; **pas de file persistante / DLQ, pas de push, audience formateur uniquement** | V15 |
 > | `audit` | §7.13 | V1 |
 > | `bootstrap` | **nouveau** — amorçage `demo` (comptes fictifs, profil `demo` uniquement) | — |
 > | `shared` | §7.16 | — |
@@ -660,6 +660,35 @@ Responsabilités :
 - préférences ;
 - files de traitement ;
 - nouvelles tentatives.
+
+**État réel (bloc G1-D, 1er septembre 2026).** Le module est
+**implémenté** pour les notifications internes persistantes : table
+`notification` (`V15`, `dedup_key` UNIQUE), listeners
+`@TransactionalEventListener(AFTER_COMMIT)` sur `planning.PlanningPublishedEvent`
+et `coursesession.CourseSessionChangeEvent` (`CANCELLED` /
+`SUBSTITUTION_ADDED` / `SUBSTITUTION_ENDED`), écriture idempotente
+`REQUIRES_NEW` **par ligne** (`NotificationWriter` → `NotificationRowWriter`),
+API `/api/v1/me/notifications` (liste paginée, `unread-count`, `read`,
+`read-all`), front cloche + centre. **Destinataires dérivés serveur =
+formateurs** (principal + remplaçants `ACTIVE` + remplaçant tout juste
+terminé via `CourseSessionChangeEvent.affectedUserPublicIds`, G1-D.1).
+
+**Garantie de livraison (audit G1-D.1).** Le modèle est **« au mieux »
+après commit** : aucune notification sans commit métier, aucun rollback
+métier sur échec de notification, aucune duplication (`dedup_key`
+UNIQUE), **isolation par destinataire** (l'échec d'un destinataire
+n'interrompt pas les suivants) — mais **pas de reprise** après crash JVM
+entre le commit et l'écriture (dette **G1-D-OUTBOX** :
+`notification_outbox` transactionnelle + worker `@Scheduled` idempotent).
+`EF-NOTIF-002` / `RG-033` = `PARTIAL`.
+
+Restent **non implémentés** : notifications aux **apprenants /
+responsables pédagogiques** (nouveaux ports `enrollment` / `academic`
+requis — dette **G1-D-AUDIENCE**), **préférences** par type (non
+exigées), **email métier**, **push PWA**, **file persistante / DLQ** et
+**purge / rétention** (`À_DÉFINIR`, `R-G1-30`) — dettes documentées dans
+`docs/CURRENT-STATE.md`, `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`
+(§ « Audit G1-D.1 ») et `docs/05-product-backlog.md` §9bis.
 
 ## 7.12 `reporting`
 

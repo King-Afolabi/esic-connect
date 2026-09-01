@@ -2,6 +2,7 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory;
+import com.esic.connect.identity.UserDirectory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -9,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,17 +34,26 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
 
     private final CourseSessionRepository sessionRepository;
     private final AttendanceCheckpointRepository checkpointRepository;
+    private final TeacherSubstitutionRepository substitutionRepository;
     private final ClassGroupDirectory classGroupDirectory;
+    private final UserDirectory userDirectory;
     private final CourseSessionAccessGuard accessGuard;
+    private final Clock clock;
 
     DefaultCourseSessionDirectory(CourseSessionRepository sessionRepository,
                                   AttendanceCheckpointRepository checkpointRepository,
+                                  TeacherSubstitutionRepository substitutionRepository,
                                   ClassGroupDirectory classGroupDirectory,
-                                  CourseSessionAccessGuard accessGuard) {
+                                  UserDirectory userDirectory,
+                                  CourseSessionAccessGuard accessGuard,
+                                  Clock clock) {
         this.sessionRepository = sessionRepository;
         this.checkpointRepository = checkpointRepository;
+        this.substitutionRepository = substitutionRepository;
         this.classGroupDirectory = classGroupDirectory;
+        this.userDirectory = userDirectory;
         this.accessGuard = accessGuard;
+        this.clock = clock;
     }
 
     @Override
@@ -52,12 +63,15 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return new SessionAccess(Access.NOT_FOUND, null);
         }
         Optional<CourseSession> found = sessionRepository.findByPublicId(sessionPublicId);
-        if (found.isEmpty()) {
+        if (found.isEmpty() || !found.get().isOperational()) {
+            // Séance inexistante OU retirée par une republication de
+            // planning (DEC-G1-004 règle 4) : indistinguable d'une
+            // absence pour tout accès métier (audit G1-B.1).
             return new SessionAccess(Access.NOT_FOUND, null);
         }
         CourseSession session = found.get();
         Set<UUID> classPublicIds = classPublicIds(session);
-        if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, currentSubject())) {
+        if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, currentSubject())) {
             return new SessionAccess(Access.FORBIDDEN, null);
         }
         return new SessionAccess(Access.GRANTED, toRef(session, classPublicIds));
@@ -70,6 +84,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return Optional.empty();
         }
         return sessionRepository.findByPublicId(sessionPublicId)
+                .filter(CourseSession::isOperational)
                 .map(session -> toRef(session, classPublicIds(session)));
     }
 
@@ -80,6 +95,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
             return Optional.empty();
         }
         return sessionRepository.findByPublicId(sessionPublicId)
+                .filter(CourseSession::isOperational)
                 .flatMap(session -> toRef(session, classPublicIds(session)).checkpoint(checkpointPublicId));
     }
 
@@ -89,15 +105,16 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
             return List.of();
         }
-        Set<Long> internalIds = classGroupPublicIds.stream()
-                .map(classGroupDirectory::findByPublicId)
-                .filter(Optional::isPresent)
-                .map(ref -> ref.get().internalId())
+        // Résolution des classes en UNE requête (anti-N+1) : jamais un
+        // findByPublicId par identifiant dans la boucle.
+        Set<Long> internalIds = classGroupDirectory.findByPublicIds(classGroupPublicIds).stream()
+                .map(ClassGroupDirectory.ClassGroupRef::internalId)
                 .collect(Collectors.toUnmodifiableSet());
         if (internalIds.isEmpty()) {
             return List.of();
         }
         List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
         specs.add(CourseSessionSpecifications.hasAnyClassIn(internalIds));
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
@@ -119,6 +136,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         }
         return checkpointRepository.findByPublicId(checkpointPublicId)
                 .map(cp -> cp.getCourseSession())
+                .filter(CourseSession::isOperational)
                 .map(session -> toRef(session, classPublicIds(session)));
     }
 
@@ -126,6 +144,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
     @Transactional(readOnly = true)
     public List<SessionRef> findSessionsInRange(Instant from, Instant to) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
         }
@@ -136,6 +155,104 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                 .stream()
                 .map(session -> toRef(session, classPublicIds(session)))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findUpcomingForTeacher(UUID teacherPublicId, Instant from, Instant to, int limit) {
+        Long teacherId = userDirectory.findByPublicId(teacherPublicId)
+                .map(UserDirectory.UserRef::internalId)
+                .orElse(null);
+        if (teacherId == null) {
+            return List.of();
+        }
+        int bounded = Math.max(1, Math.min(limit, 10));
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        // Formateur principal OU remplaçant ACTIVE couvrant l'instant courant
+        // (mêmes règles que GET /sessions — G1-C.3). Une seule requête de
+        // substitutions ; l'OR sur une même table ne produit aucun doublon.
+        Specification<CourseSession> assignedToTeacher = CourseSessionSpecifications.taughtBy(teacherId);
+        List<Long> substituted =
+                substitutionRepository.findActiveSubstitutedSessionIds(teacherId, clock.instant());
+        if (!substituted.isEmpty()) {
+            assignedToTeacher = Specification.anyOf(assignedToTeacher,
+                    CourseSessionSpecifications.hasInternalIdIn(substituted));
+        }
+        specs.add(assignedToTeacher);
+        return sessionRepository.findAll(Specification.allOf(specs),
+                        org.springframework.data.domain.PageRequest.of(0, bounded,
+                                Sort.by(Sort.Direction.ASC, "startsAt")))
+                .stream()
+                .map(session -> toRef(session, classPublicIds(session)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExistingSessionWindow> findOperationalSessionWindows(Instant from, Instant to) {
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.operational());
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.endsAfter(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsBefore(to));
+        }
+        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
+                .stream()
+                .map(session -> new ExistingSessionWindow(
+                        session.getPublicId(),
+                        session.getPlanningSlotPublicId(),
+                        userDirectory.findByInternalId(session.getTeacherUserId())
+                                .map(UserDirectory.UserRef::publicId).orElse(null),
+                        classPublicIds(session),
+                        session.getStartsAt(),
+                        session.getEndsAt()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SessionNotificationInfo> findSessionNotificationInfo(UUID sessionPublicId) {
+        if (sessionPublicId == null) {
+            return Optional.empty();
+        }
+        return sessionRepository.findByPublicId(sessionPublicId).map(session -> {
+            UUID principal = userDirectory.findByInternalId(session.getTeacherUserId())
+                    .map(UserDirectory.UserRef::publicId).orElse(null);
+            Set<UUID> substitutes = substitutionRepository
+                    .findByCourseSessionIdAndStatus(session.getId(), TeacherSubstitutionStatus.ACTIVE).stream()
+                    .map(sub -> userDirectory.findByInternalId(sub.getSubstituteTeacherUserId())
+                            .map(UserDirectory.UserRef::publicId).orElse(null))
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toUnmodifiableSet());
+            return new SessionNotificationInfo(session.getPublicId(), session.getTitle(), principal, substitutes);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> findPrincipalTeacherPublicIds(java.util.Collection<UUID> sessionPublicIds) {
+        if (sessionPublicIds == null || sessionPublicIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> distinct = sessionPublicIds.stream()
+                .filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+        if (distinct.isEmpty()) {
+            return Set.of();
+        }
+        return sessionRepository.findByPublicIdIn(distinct).stream()
+                .map(session -> userDirectory.findByInternalId(session.getTeacherUserId())
+                        .map(UserDirectory.UserRef::publicId).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private SessionRef toRef(CourseSession session, Set<UUID> classPublicIds) {

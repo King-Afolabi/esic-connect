@@ -16,6 +16,13 @@ interface ClassGroupRepository extends JpaRepository<ClassGroup, Long>,
     Optional<ClassGroup> findByPublicId(UUID publicId);
 
     /**
+     * Résout un lot de classes par identifiants publics en une requête
+     * (bloc G1-F : résolution des codes de classe d'un tableau de bord
+     * sans une requête par ligne). Les identifiants inconnus sont ignorés.
+     */
+    List<ClassGroup> findByPublicIdIn(Collection<UUID> publicIds);
+
+    /**
      * Classes portant ce code (sans tenir compte de la casse) — le code
      * n'est unique que dans une promotion, l'import doit donc désambiguïser
      * par formation puis par année ({@code resolveForImport}).

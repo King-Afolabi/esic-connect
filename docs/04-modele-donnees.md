@@ -1661,6 +1661,24 @@ Aucune suppression en cascade depuis la classe.
 > colonne générée). La table matérialisée `daily_attendance_summary`
 > (§19.5) n'est pas créée : le calcul des demi-journées est fait à la
 > volée. Détails et écarts : `docs/reports/ATTENDANCE_MANAGEMENT_DESIGN.md`.
+>
+> **V16** (bloc G1-E) ajoute **`justification_attachment`** : la
+> **pièce jointe** d'un justificatif — **métadonnées uniquement**
+> (`original_file_name` assaini, `storage_key` opaque unique jamais
+> dérivée du nom client, `content_type` re-dérivé des magic bytes ∈
+> {`application/pdf`, `image/jpeg`, `image/png`}, `size_bytes`, `sha256`,
+> `status` ∈ {`PENDING_STORAGE`, `STORED`, `DELETED`}). Le **contenu**
+> n'est **jamais** en base : il est stocké hors webroot par le port
+> `com.esic.connect.attendance.JustificationFileStorage` (adaptateur
+> local `LocalFilesystemJustificationFileStorage` : clé dispersée
+> `aa/bb/<uuid>`, écriture temporaire + déplacement atomique, taille
+> appliquée pendant le flux, SHA-256 calculé pendant l'écriture,
+> anti-traversal). Un seul fichier actif (non `DELETED`) par justificatif
+> via la colonne générée `active_attachment_key`. FK `RESTRICT` vers
+> `attendance_justification` et `user_account`. Séquence base ↔ fichier
+> avec compensation (DEC-G1-009) — voir `docs/reports/G1_ARCHITECTURE_DECISIONS.md`.
+> Endpoints de dépôt / téléchargement et écran d'upload : checkpoints
+> G1-E suivants.
 
 ## 19.1 Table `attendance_checkpoint`
 

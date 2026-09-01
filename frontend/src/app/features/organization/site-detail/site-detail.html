@@ -1,0 +1,373 @@
+<nav class="org__tabs" aria-label="Référentiel organisationnel">
+  <a routerLink="/organization/sites" routerLinkActive="org__tab--active">Sites</a>
+</nav>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement du site"></mat-progress-bar>
+    <p class="org__status" role="status">Chargement du site…</p>
+  }
+  @case ('not-found') {
+    <div class="org__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucun site ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/organization/sites">Retour à la liste</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="org__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter ce site.</p>
+      <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+    </div>
+  }
+  @case ('error') {
+    <div class="org__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    <h1 class="org__title">Site {{ site()!.code }}</h1>
+
+    <mat-card class="org__card" appearance="outlined">
+      <mat-card-content>
+        <dl class="org__facts">
+          @for (fact of facts(); track fact.label) {
+            <div>
+              <dt>{{ fact.label }}</dt>
+              <dd>{{ fact.value }}</dd>
+            </div>
+          }
+        </dl>
+      </mat-card-content>
+    </mat-card>
+
+    @if (canWrite()) {
+      <div class="org__actions-row">
+        @if (!isArchived()) {
+          <a mat-stroked-button [routerLink]="['/organization/sites', site()!.publicId, 'edit']">
+            <mat-icon aria-hidden="true">edit</mat-icon>
+            Modifier
+          </a>
+          <button mat-stroked-button type="button" (click)="startSiteAction('archive')">
+            Archiver le site
+          </button>
+        } @else {
+          <button mat-stroked-button type="button" (click)="startSiteAction('restore')">
+            Restaurer le site
+          </button>
+        }
+      </div>
+
+      @if (pendingSite(); as action) {
+        <div class="org__confirm" role="group" [attr.aria-label]="action.kind === 'archive' ? 'Archiver le site' : 'Restaurer le site'">
+          @if (action.kind === 'archive') {
+            <p>Le site sera archivé. Les bâtiments et salles actifs doivent être archivés au préalable.</p>
+            <mat-form-field appearance="outline" class="org__confirm-field">
+              <mat-label>Motif</mat-label>
+              <input
+                matInput
+                [formControl]="siteReasonForm.controls.reason"
+                [maxlength]="reasonMaxLength"
+                autocomplete="off"
+              />
+              @if (siteReasonForm.controls.reason.touched && siteReasonForm.controls.reason.invalid) {
+                <mat-error>Le motif est obligatoire ({{ reasonMaxLength }} caractères maximum).</mat-error>
+              }
+            </mat-form-field>
+          } @else {
+            <p>Le site sera de nouveau actif.</p>
+          }
+          @if (actionError()) {
+            <p class="org__form-error" role="alert">{{ actionError() }}</p>
+          }
+          <div class="org__form-actions">
+            <button mat-flat-button type="button" (click)="confirmSiteAction()" [disabled]="submitting()">
+              {{ action.kind === 'archive' ? 'Archiver' : 'Restaurer' }}
+            </button>
+            <button mat-button type="button" (click)="cancelSiteAction()">Annuler</button>
+          </div>
+        </div>
+      }
+    }
+
+    <!-- Buildings --------------------------------------------------- -->
+    <h2 class="org__section-title">Bâtiments</h2>
+
+    @if (canWrite()) {
+      <form class="org__form" [formGroup]="buildingForm" (ngSubmit)="submitBuilding()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Code du bâtiment</mat-label>
+          <input matInput formControlName="code" maxlength="50" required autocomplete="off" />
+          @if (buildingForm.controls.code.touched && buildingForm.controls.code.hasError('required')) {
+            <mat-error>Le code est obligatoire.</mat-error>
+          }
+          @if (buildingForm.controls.code.touched && buildingForm.controls.code.hasError('pattern')) {
+            <mat-error>Lettres, chiffres, point, tiret et tiret bas uniquement.</mat-error>
+          }
+          @if (buildingForm.controls.code.hasError('server')) {
+            <mat-error>{{ buildingForm.controls.code.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Nom du bâtiment</mat-label>
+          <input matInput formControlName="name" maxlength="150" required autocomplete="off" />
+          @if (buildingForm.controls.name.touched && buildingForm.controls.name.invalid) {
+            <mat-error>Le nom est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+        <div class="org__form-actions">
+          <button mat-flat-button type="submit" [disabled]="buildingSubmitting()">Ajouter le bâtiment</button>
+        </div>
+        @if (buildingFormError()) {
+          <p class="org__form-error" role="alert">{{ buildingFormError() }}</p>
+        }
+      </form>
+    }
+
+    @switch (buildings().kind) {
+      @case ('loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des bâtiments"></mat-progress-bar>
+      }
+      @case ('error') {
+        <div class="org__panel" role="alert">
+          <p>{{ buildings().kind === 'error' ? $any(buildings()).message : '' }}</p>
+          <button mat-stroked-button type="button" (click)="loadBuildings()">Réessayer</button>
+        </div>
+      }
+      @case ('ready') {
+        @if ($any(buildings()).items.length === 0) {
+          <p class="org__status" role="status">Aucun bâtiment pour ce site.</p>
+        } @else {
+          <div class="org__table-wrapper">
+            <table mat-table [dataSource]="$any(buildings()).items" class="org__table">
+              <ng-container matColumnDef="code">
+                <th mat-header-cell *matHeaderCellDef>Code</th>
+                <td mat-cell *matCellDef="let row">{{ row.code }}</td>
+              </ng-container>
+              <ng-container matColumnDef="name">
+                <th mat-header-cell *matHeaderCellDef>Nom</th>
+                <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Statut</th>
+                <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef><span class="org__sr-only">Actions</span></th>
+                <td mat-cell *matCellDef="let row">
+                  @if (canWrite()) {
+                    @if (row.status === 'ACTIVE') {
+                      <button mat-button type="button" (click)="archiveBuilding(row)"
+                        [attr.aria-label]="'Archiver le bâtiment ' + row.code">Archiver</button>
+                    } @else {
+                      <button mat-button type="button" (click)="restoreBuilding(row)"
+                        [attr.aria-label]="'Restaurer le bâtiment ' + row.code">Restaurer</button>
+                    }
+                  }
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="buildingColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: buildingColumns"></tr>
+            </table>
+          </div>
+        }
+      }
+    }
+
+    <!-- Rooms ---------------------------------------------------- -->
+    <h2 class="org__section-title">Salles</h2>
+
+    @if (canWrite()) {
+      <form class="org__form" [formGroup]="roomForm" (ngSubmit)="submitRoom()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Code de la salle</mat-label>
+          <input matInput formControlName="code" maxlength="50" required autocomplete="off" />
+          @if (roomForm.controls.code.touched && roomForm.controls.code.hasError('required')) {
+            <mat-error>Le code est obligatoire.</mat-error>
+          }
+          @if (roomForm.controls.code.touched && roomForm.controls.code.hasError('pattern')) {
+            <mat-error>Lettres, chiffres, point, tiret et tiret bas uniquement.</mat-error>
+          }
+          @if (roomForm.controls.code.hasError('server')) {
+            <mat-error>{{ roomForm.controls.code.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Nom de la salle</mat-label>
+          <input matInput formControlName="name" maxlength="150" required autocomplete="off" />
+          @if (roomForm.controls.name.touched && roomForm.controls.name.invalid) {
+            <mat-error>Le nom est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Bâtiment (facultatif)</mat-label>
+          <mat-select formControlName="buildingPublicId">
+            <mat-option [value]="''">Aucun</mat-option>
+            @for (building of activeBuildings(); track building.publicId) {
+              <mat-option [value]="building.publicId">{{ building.code }} — {{ building.name }}</mat-option>
+            }
+          </mat-select>
+          @if (roomForm.controls.buildingPublicId.hasError('server')) {
+            <mat-error>{{ roomForm.controls.buildingPublicId.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Capacité (facultatif)</mat-label>
+          <input matInput type="number" min="1" formControlName="capacity" autocomplete="off" />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Étage (facultatif)</mat-label>
+          <input matInput formControlName="floorLabel" maxlength="50" autocomplete="off" />
+        </mat-form-field>
+        <div class="org__form-actions">
+          <button mat-flat-button type="submit" [disabled]="roomSubmitting()">Ajouter la salle</button>
+        </div>
+        @if (roomFormError()) {
+          <p class="org__form-error" role="alert">{{ roomFormError() }}</p>
+        }
+      </form>
+    }
+
+    @switch (rooms().kind) {
+      @case ('loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des salles"></mat-progress-bar>
+      }
+      @case ('error') {
+        <div class="org__panel" role="alert">
+          <p>{{ rooms().kind === 'error' ? $any(rooms()).message : '' }}</p>
+          <button mat-stroked-button type="button" (click)="loadRooms()">Réessayer</button>
+        </div>
+      }
+      @case ('ready') {
+        @if ($any(rooms()).items.length === 0) {
+          <p class="org__status" role="status">Aucune salle pour ce site.</p>
+        } @else {
+          <div class="org__table-wrapper">
+            <table mat-table [dataSource]="$any(rooms()).items" class="org__table">
+              <ng-container matColumnDef="code">
+                <th mat-header-cell *matHeaderCellDef>Code</th>
+                <td mat-cell *matCellDef="let row">{{ row.code }}</td>
+              </ng-container>
+              <ng-container matColumnDef="name">
+                <th mat-header-cell *matHeaderCellDef>Nom</th>
+                <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+              </ng-container>
+              <ng-container matColumnDef="building">
+                <th mat-header-cell *matHeaderCellDef>Bâtiment</th>
+                <td mat-cell *matCellDef="let row">{{ buildingName(row.buildingPublicId) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="capacity">
+                <th mat-header-cell *matHeaderCellDef>Capacité</th>
+                <td mat-cell *matCellDef="let row">{{ row.capacity === null ? '—' : row.capacity }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Statut</th>
+                <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef><span class="org__sr-only">Actions</span></th>
+                <td mat-cell *matCellDef="let row">
+                  @if (canWrite()) {
+                    @if (row.status === 'ACTIVE') {
+                      <button mat-button type="button" (click)="archiveRoom(row)"
+                        [attr.aria-label]="'Archiver la salle ' + row.code">Archiver</button>
+                    } @else {
+                      <button mat-button type="button" (click)="restoreRoom(row)"
+                        [attr.aria-label]="'Restaurer la salle ' + row.code">Restaurer</button>
+                    }
+                  }
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="roomColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: roomColumns"></tr>
+            </table>
+          </div>
+        }
+      }
+    }
+
+    <!-- Network ranges (SUPER_ADMIN) ------------------------------- -->
+    @if (canManageNetwork()) {
+      <h2 class="org__section-title">Plages réseau autorisées</h2>
+      <p class="org__intro">
+        Réservé à la supervision technique. Aucune adresse IP d'utilisateur
+        n'est stockée ni affichée.
+      </p>
+
+      <form class="org__form" [formGroup]="rangeForm" (ngSubmit)="submitRange()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Notation CIDR</mat-label>
+          <input matInput formControlName="cidr" maxlength="50" required autocomplete="off" />
+          <mat-hint>IPv4 ou IPv6, ex. 10.0.0.0/24.</mat-hint>
+          @if (rangeForm.controls.cidr.touched && rangeForm.controls.cidr.hasError('required')) {
+            <mat-error>La notation CIDR est obligatoire.</mat-error>
+          }
+          @if (rangeForm.controls.cidr.hasError('server')) {
+            <mat-error>{{ rangeForm.controls.cidr.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Libellé</mat-label>
+          <input matInput formControlName="label" maxlength="100" required autocomplete="off" />
+          @if (rangeForm.controls.label.touched && rangeForm.controls.label.invalid) {
+            <mat-error>Le libellé est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+        <div class="org__form-actions">
+          <button mat-flat-button type="submit" [disabled]="rangeSubmitting()">Ajouter la plage</button>
+        </div>
+        @if (rangeFormError()) {
+          <p class="org__form-error" role="alert">{{ rangeFormError() }}</p>
+        }
+      </form>
+
+      @switch (ranges().kind) {
+        @case ('loading') {
+          <mat-progress-bar mode="indeterminate" aria-label="Chargement des plages réseau"></mat-progress-bar>
+        }
+        @case ('error') {
+          <div class="org__panel" role="alert">
+            <p>{{ ranges().kind === 'error' ? $any(ranges()).message : '' }}</p>
+            <button mat-stroked-button type="button" (click)="loadRanges()">Réessayer</button>
+          </div>
+        }
+        @case ('ready') {
+          @if ($any(ranges()).items.length === 0) {
+            <p class="org__status" role="status">Aucune plage réseau pour ce site.</p>
+          } @else {
+            <div class="org__table-wrapper">
+              <table mat-table [dataSource]="$any(ranges()).items" class="org__table">
+                <ng-container matColumnDef="cidr">
+                  <th mat-header-cell *matHeaderCellDef>CIDR</th>
+                  <td mat-cell *matCellDef="let row">{{ row.cidr }}</td>
+                </ng-container>
+                <ng-container matColumnDef="label">
+                  <th mat-header-cell *matHeaderCellDef>Libellé</th>
+                  <td mat-cell *matCellDef="let row">{{ row.label }}</td>
+                </ng-container>
+                <ng-container matColumnDef="active">
+                  <th mat-header-cell *matHeaderCellDef>État</th>
+                  <td mat-cell *matCellDef="let row">{{ row.active ? 'Active' : 'Inactive' }}</td>
+                </ng-container>
+                <ng-container matColumnDef="actions">
+                  <th mat-header-cell *matHeaderCellDef><span class="org__sr-only">Actions</span></th>
+                  <td mat-cell *matCellDef="let row">
+                    <button mat-button type="button" (click)="toggleRange(row)"
+                      [attr.aria-label]="(row.active ? 'Désactiver' : 'Activer') + ' la plage ' + row.cidr">
+                      {{ row.active ? 'Désactiver' : 'Activer' }}
+                    </button>
+                  </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="rangeColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: rangeColumns"></tr>
+              </table>
+            </div>
+          }
+        }
+      }
+    }
+  }
+}

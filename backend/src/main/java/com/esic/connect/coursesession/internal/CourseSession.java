@@ -53,8 +53,34 @@ class CourseSession extends BaseEntity {
     @Column(name = "time_zone_id", nullable = false)
     private String timeZoneId;
 
-    @Column(name = "exception_reason", nullable = false)
+    // Nullable depuis V13 : une séance d'origine planning n'a pas de motif
+    // d'exception (une séance manuelle en garde un — contrôle applicatif).
+    @Column(name = "exception_reason")
     private String exceptionReason;
+
+    // V13 (DEC-G1-001/002 ; renommée à l'audit G1-B.1) : identité STABLE
+    // du créneau de planning à l'origine de la séance — le
+    // `planning_entry.slot_public_id` déterministe, constant d'une version
+    // de planning à la suivante, JAMAIS un `planning_entry.public_id`
+    // (aléatoire, propre à chaque version). NULL ⇒ séance exceptionnelle
+    // manuelle ; non NULL ⇒ séance issue d'un planning publié (RG-016).
+    @Column(name = "planning_slot_public_id", updatable = false)
+    private java.util.UUID planningSlotPublicId;
+
+    // V13 (DEC-G1-004 règle 4) : une republication a retiré le créneau
+    // d'origine. La séance est alors filtrée de l'affichage.
+    @Column(name = "superseded_by_scheduling", nullable = false)
+    private boolean supersededByScheduling;
+
+    // V14 (G1-C) : annulation avec motif d'une séance PLANNED / OPEN.
+    @Column(name = "cancellation_reason")
+    private String cancellationReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancelled_by_id")
+    private Long cancelledById;
 
     @Column(name = "opened_at")
     private Instant openedAt;
@@ -102,8 +128,48 @@ class CourseSession extends BaseEntity {
         this.status = SessionLifecycle.PLANNED;
     }
 
+    /**
+     * Séance d'origine <strong>planning</strong> (V13, DEC-G1-001/002) :
+     * pas de motif d'exception, {@code planningSlotPublicId} renseigné
+     * avec l'identité stable du créneau (constante d'une version de
+     * planning à la suivante). Créée par {@link DefaultPlanningSessionWriter}
+     * à la publication d'un planning.
+     */
+    static CourseSession fromPlanningSlot(java.util.UUID planningSlotPublicId, Long teacherUserId,
+                                          String title, Instant startsAt, Instant endsAt, String timeZoneId) {
+        CourseSession session = new CourseSession(teacherUserId, title, startsAt, endsAt, timeZoneId, null);
+        session.planningSlotPublicId = planningSlotPublicId;
+        return session;
+    }
+
     void markCreatedBy(Long actorId) {
         this.createdById = actorId;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Met à jour les propriétés modifiables d'une séance d'origine
+     * planning encore {@code PLANNED} (DEC-G1-004 règle 5). Ne touche ni
+     * au statut, ni au lien d'origine.
+     */
+    void applyPlanningUpdate(Long teacherUserId, String title, Instant startsAt, Instant endsAt,
+                             String timeZoneId, Long actorId) {
+        this.teacherUserId = teacherUserId;
+        this.title = title;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+        this.timeZoneId = timeZoneId;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Marque une séance planning {@code PLANNED} comme retirée par une
+     * republication (DEC-G1-004 règle 4). Aucune suppression physique ;
+     * le statut reste {@code PLANNED} tant que l'état {@code CANCELLED}
+     * n'existe pas (G1-C).
+     */
+    void markSupersededByScheduling(Long actorId) {
+        this.supersededByScheduling = true;
         this.updatedById = actorId;
     }
 
@@ -125,12 +191,68 @@ class CourseSession extends BaseEntity {
         this.updatedById = actorId;
     }
 
+    /**
+     * Annule une séance {@code PLANNED} ou {@code OPEN} avec un motif
+     * obligatoire (G1-C). Transition terminale ; {@code opened_at} est
+     * conservé si la séance était {@code OPEN}. La purge des jetons Redis
+     * et l'annulation des points de contrôle sont pilotées par le
+     * service.
+     */
+    void cancel(String reason, Instant at, Long actorId) {
+        this.status = SessionLifecycle.CANCELLED;
+        this.cancellationReason = reason;
+        this.cancelledAt = at;
+        this.cancelledById = actorId;
+        this.updatedById = actorId;
+    }
+
     boolean isPlanned() {
         return status == SessionLifecycle.PLANNED;
     }
 
     boolean isOpen() {
         return status == SessionLifecycle.OPEN;
+    }
+
+    boolean isCancelled() {
+        return status == SessionLifecycle.CANCELLED;
+    }
+
+    /** Séance {@code PLANNED} ou {@code OPEN} : annulable (G1-C). */
+    boolean isCancellable() {
+        return status == SessionLifecycle.PLANNED || status == SessionLifecycle.OPEN;
+    }
+
+    /**
+     * Séance <strong>opérationnelle</strong> : consultable, ouvrable,
+     * émargeable, comptée dans l'assiduité et les rapports. Exclut :
+     * <ul>
+     *   <li>les séances d'origine planning retirées par une republication
+     *       ({@code superseded_by_scheduling} — DEC-G1-004 règle 4 ;
+     *       garde centralisée, audit G1-B.1) ;</li>
+     *   <li>les séances {@code CANCELLED} (G1-C).</li>
+     * </ul>
+     * Seul l'historique des versions de planning (module {@code planning})
+     * continue de référencer une séance non opérationnelle.
+     */
+    boolean isOperational() {
+        return !supersededByScheduling && status != SessionLifecycle.CANCELLED;
+    }
+
+    /**
+     * Séance <strong>lisible</strong> par un rôle autorisé, y compris son
+     * historique (G1-C.3). Une séance {@code CANCELLED} reste consultable
+     * (statut, motif, date d'annulation, remplacements) : elle a été
+     * annulée <em>explicitement</em> par un utilisateur et l'événement doit
+     * être traçable côté produit. En revanche une séance seulement
+     * <em>supersédée</em> par une republication de planning
+     * ({@code superseded_by_scheduling}) n'est pas un fait produit : elle
+     * n'est visible que dans l'historique des versions du module
+     * {@code planning}, jamais par le GET métier normal (politique
+     * G1-B.1 conservée).
+     */
+    boolean isHistoricallyReadable() {
+        return !supersededByScheduling;
     }
 
     Long getTeacherUserId() {
@@ -159,6 +281,22 @@ class CourseSession extends BaseEntity {
 
     String getExceptionReason() {
         return exceptionReason;
+    }
+
+    java.util.UUID getPlanningSlotPublicId() {
+        return planningSlotPublicId;
+    }
+
+    boolean isSupersededByScheduling() {
+        return supersededByScheduling;
+    }
+
+    String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    Instant getCancelledAt() {
+        return cancelledAt;
     }
 
     Instant getOpenedAt() {

@@ -1,0 +1,91 @@
+<header class="notif__header">
+  <h1 class="notif__title">Notifications</h1>
+  <div class="notif__actions">
+    <mat-button-toggle-group
+      [value]="filter()"
+      (change)="setFilter($event.value)"
+      aria-label="Filtrer les notifications"
+    >
+      <mat-button-toggle value="ALL">Toutes</mat-button-toggle>
+      <mat-button-toggle value="UNREAD">Non lues</mat-button-toggle>
+    </mat-button-toggle-group>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="markAllRead()"
+      [disabled]="busy() || !hasUnread()"
+    >
+      <mat-icon aria-hidden="true">done_all</mat-icon>
+      Tout marquer comme lu
+    </button>
+  </div>
+</header>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement des notifications"></mat-progress-bar>
+    <p class="notif__status" role="status">Chargement des notifications…</p>
+  }
+  @case ('error') {
+    <div class="notif__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (items().length === 0) {
+      <div class="notif__panel" role="status">
+        <mat-icon aria-hidden="true">notifications_none</mat-icon>
+        <p>Aucune notification{{ filter() === 'UNREAD' ? ' non lue' : '' }}.</p>
+      </div>
+    } @else {
+      <ul class="notif__list">
+        @for (n of items(); track n.publicId) {
+          <li class="notif__item" [class.notif__item--unread]="n.status === 'UNREAD'">
+            <div class="notif__item-main">
+              <span class="notif__chip">{{ typeLabel(n.type) }}</span>
+              <span class="notif__item-title">{{ n.title }}</span>
+              <p class="notif__item-body">{{ n.body }}</p>
+              <p class="notif__meta">
+                {{ formatInstantUtc(n.createdAt) }}
+                @if (n.status !== 'UNREAD') { · lu }
+                @if (linkFor(n); as link) {
+                  · <a [routerLink]="link.commands">{{ link.label }}</a>
+                }
+              </p>
+            </div>
+            @if (n.status === 'UNREAD') {
+              <button
+                mat-button
+                type="button"
+                (click)="markRead(n)"
+                [disabled]="busy()"
+                [attr.aria-label]="'Marquer « ' + n.title + ' » comme lue'"
+              >
+                Marquer comme lu
+              </button>
+            }
+          </li>
+        }
+      </ul>
+
+      @if (totalPages() > 1) {
+        <nav class="notif__pager" aria-label="Pagination des notifications">
+          <button mat-button type="button" (click)="goToPage(-1)" [disabled]="busy() || page() === 0">
+            Précédentes
+          </button>
+          <span>Page {{ page() + 1 }} / {{ totalPages() }}</span>
+          <button
+            mat-button
+            type="button"
+            (click)="goToPage(1)"
+            [disabled]="busy() || page() + 1 >= totalPages()"
+          >
+            Suivantes
+          </button>
+        </nav>
+      }
+    }
+  }
+}

@@ -1,0 +1,134 @@
+<nav class="plan__tabs" aria-label="Planning">
+  <a routerLink="/planning/import" routerLinkActive="plan__tab--active">Importer un planning</a>
+  <a routerLink="/planning/versions" routerLinkActive="plan__tab--active">Versions publiées</a>
+</nav>
+
+<h1 class="plan__title">Versions publiées</h1>
+<p class="plan__intro">
+  Chaque publication fige une version. Les versions ne sont jamais
+  supprimées : la version en cours est « Publiée », les précédentes
+  « Supersédées ».
+</p>
+
+@if (classesState().kind === 'loading') {
+  <mat-progress-bar mode="indeterminate" aria-label="Chargement des classes"></mat-progress-bar>
+}
+@if (classesState().kind === 'error') {
+  <div class="plan__panel" role="alert">
+    <p>{{ classesError() }}</p>
+    <button mat-stroked-button type="button" (click)="loadClasses()">Réessayer</button>
+  </div>
+}
+
+@if (classesState().kind === 'ready') {
+  <form class="plan__form" [formGroup]="form" novalidate>
+    <mat-form-field appearance="outline">
+      <mat-label>Classe</mat-label>
+      <mat-select formControlName="classGroupPublicId">
+        <mat-option [value]="''">Choisir…</mat-option>
+        @for (klass of classes(); track klass.publicId) {
+          <mat-option [value]="klass.publicId">{{ klass.code }} — {{ klass.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </form>
+
+  @switch (versionsState().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement des versions"></mat-progress-bar>
+    }
+    @case ('forbidden') {
+      <div class="plan__panel" role="alert">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p>Cette classe n'est pas dans votre périmètre.</p>
+      </div>
+    }
+    @case ('empty') {
+      <p class="plan__status" role="status">Aucune version publiée pour cette classe.</p>
+    }
+    @case ('error') {
+      <div class="plan__panel" role="alert">
+        <p>{{ versionsErrorMessage() }}</p>
+        <button mat-stroked-button type="button" (click)="retryVersions()">Réessayer</button>
+      </div>
+    }
+    @case ('ready') {
+      <div class="plan__table-wrapper">
+        <table mat-table [dataSource]="versions()" class="plan__table">
+          <ng-container matColumnDef="versionNumber">
+            <th mat-header-cell *matHeaderCellDef>Version</th>
+            <td mat-cell *matCellDef="let v">{{ v.versionNumber }}</td>
+          </ng-container>
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Statut</th>
+            <td mat-cell *matCellDef="let v">{{ v.status }}</td>
+          </ng-container>
+          <ng-container matColumnDef="entryCount">
+            <th mat-header-cell *matHeaderCellDef>Créneaux</th>
+            <td mat-cell *matCellDef="let v">{{ v.entryCount }}</td>
+          </ng-container>
+          <ng-container matColumnDef="changeSummary">
+            <th mat-header-cell *matHeaderCellDef>Changements</th>
+            <td mat-cell *matCellDef="let v">{{ v.changeSummary || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="publishedAt">
+            <th mat-header-cell *matHeaderCellDef>Publiée le</th>
+            <td mat-cell *matCellDef="let v">{{ formatInstant(v.publishedAt) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef><span class="plan__sr-only">Actions</span></th>
+            <td mat-cell *matCellDef="let v">
+              <button mat-button type="button" (click)="toggleDetail(v)"
+                [attr.aria-expanded]="openVersionId() === v.publicId"
+                [attr.aria-label]="(openVersionId() === v.publicId ? 'Masquer' : 'Afficher') + ' les créneaux de la version ' + v.versionNumber">
+                {{ openVersionId() === v.publicId ? 'Masquer' : 'Créneaux' }}
+              </button>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="versionColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: versionColumns"></tr>
+        </table>
+      </div>
+
+      @switch (detailState().kind) {
+        @case ('loading') {
+          <mat-progress-bar mode="indeterminate" aria-label="Chargement des créneaux"></mat-progress-bar>
+        }
+        @case ('error') {
+          <div class="plan__panel" role="alert"><p>{{ detailErrorMessage() }}</p></div>
+        }
+        @case ('ready') {
+          <h2 class="plan__section-title">Créneaux de la version sélectionnée</h2>
+          @if (detailEntries().length === 0) {
+            <p class="plan__status" role="status">Cette version ne contient aucun créneau.</p>
+          } @else {
+            <div class="plan__table-wrapper">
+              <table mat-table [dataSource]="detailEntries()" class="plan__table">
+                <ng-container matColumnDef="slotKey">
+                  <th mat-header-cell *matHeaderCellDef>Créneau</th>
+                  <td mat-cell *matCellDef="let e">{{ e.slotKey }}</td>
+                </ng-container>
+                <ng-container matColumnDef="title">
+                  <th mat-header-cell *matHeaderCellDef>Intitulé</th>
+                  <td mat-cell *matCellDef="let e">{{ e.title }}</td>
+                </ng-container>
+                <ng-container matColumnDef="window">
+                  <th mat-header-cell *matHeaderCellDef>Créneau horaire</th>
+                  <td mat-cell *matCellDef="let e">
+                    {{ formatInstant(e.startsAt) }} → {{ formatInstant(e.endsAt) }} ({{ e.timeZoneId }})
+                  </td>
+                </ng-container>
+                <ng-container matColumnDef="room">
+                  <th mat-header-cell *matHeaderCellDef>Salle</th>
+                  <td mat-cell *matCellDef="let e">{{ e.roomCode || '—' }}</td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="entryColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: entryColumns"></tr>
+              </table>
+            </div>
+          }
+        }
+      }
+    }
+  }
+}

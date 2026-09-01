@@ -14,10 +14,12 @@ import {
   CourseSessionResponse,
   CreateCheckpointRequest,
   CreateSessionRequest,
+  CreateSubstitutionRequest,
   ManualAttendanceRequest,
   PageResponse,
   SessionAttendanceResponse,
   SessionListQuery,
+  SubstitutionResponse,
   TeacherOptionResponse,
   ValidateAttendanceRequest,
 } from './sessions.models';
@@ -82,6 +84,44 @@ export class SessionsApiService {
   /** `POST /api/v1/sessions/{publicId}/close` → 204. */
   closeSession(publicId: string): Observable<void> {
     return this.http.post<void>(`${this.base}/sessions/${encodeURIComponent(publicId)}/close`, {});
+  }
+
+  /** `POST /api/v1/sessions/{publicId}/cancel` → 204 (G1-C — motif obligatoire). */
+  cancelSession(publicId: string, reason: string): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}/cancel`,
+      { reason },
+    );
+  }
+
+  // --- Remplacements de formateur (G1-C.2) --------------------------
+
+  /** `GET /api/v1/sessions/{publicId}/substitutions`. */
+  listSubstitutions(publicId: string): Observable<SubstitutionResponse[]> {
+    return this.http.get<SubstitutionResponse[]>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}/substitutions`,
+    );
+  }
+
+  /** `POST /api/v1/sessions/{publicId}/substitutions` → 201. */
+  addSubstitution(
+    publicId: string,
+    body: CreateSubstitutionRequest,
+  ): Observable<SubstitutionResponse> {
+    return this.http.post<SubstitutionResponse>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}/substitutions`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/sessions/{publicId}/substitutions/{substitutionId}/end` → 204. */
+  endSubstitution(publicId: string, substitutionId: string): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}/substitutions/${encodeURIComponent(
+        substitutionId,
+      )}/end`,
+      {},
+    );
   }
 
   // --- Points de contrôle (V10) --------------------------------------

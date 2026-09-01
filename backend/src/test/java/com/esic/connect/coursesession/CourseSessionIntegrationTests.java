@@ -32,10 +32,12 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -63,6 +65,39 @@ class CourseSessionIntegrationTests {
         InvitationMailer noopInvitationMailer() {
             return (toEmail, firstName, rawToken, expiresAt) -> {
             };
+        }
+    }
+
+    /**
+     * Injection de faute (G1-C.3, §7B / §8) : un {@link org.springframework.context.event.EventListener}
+     * <strong>synchrone</strong> (donc exécuté <em>dans</em> la transaction
+     * métier, avant le commit) qui lève, quand il est armé, une
+     * {@link org.springframework.dao.OptimisticLockingFailureException} —
+     * déjà mappée par le {@code CourseSessionExceptionHandler} de
+     * <em>production</em> vers un {@code 409 SESSION_INVALID_STATE}
+     * contrôlé (jamais un {@code 500} non maîtrisé). Aucun bean de
+     * production n'est modifié.
+     */
+    @TestConfiguration
+    static class RollbackFaultConfig {
+        static final java.util.concurrent.atomic.AtomicReference<CourseSessionChangeAction> ARMED =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        static class FaultListener {
+            @org.springframework.context.event.EventListener
+            public void onChange(CourseSessionChangeEvent event) {
+                CourseSessionChangeAction target = ARMED.get();
+                if (target != null && target == event.action()) {
+                    ARMED.set(null); // one-shot
+                    throw new org.springframework.dao.OptimisticLockingFailureException(
+                            "injected fault before commit (test)");
+                }
+            }
+        }
+
+        @Bean
+        FaultListener rollbackFaultListener() {
+            return new FaultListener();
         }
     }
 
@@ -135,6 +170,559 @@ class CourseSessionIntegrationTests {
         // Fermer deux fois / rouvrir après CLOSED -> 409
         assertConflict(HttpMethod.POST, "/api/v1/sessions/" + id + "/close", admin, "SESSION_INVALID_STATE");
         assertConflict(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", admin, "SESSION_INVALID_STATE");
+    }
+
+    // ------------------------------------------------------------------
+    // G1-C — annulation
+    // ------------------------------------------------------------------
+
+    @Test
+    void cancellingAPlannedSessionKeepsItReadableButBlocksOperationsAndIsAudited() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), "À annuler"), admin).get("publicId");
+
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "Formateur indisponible"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        // G1-C.3 — la séance CANCELLED reste consultable par son UUID
+        // public (GET direct + rechargement) : statut, motif, date
+        // d'annulation, formateur principal, points de contrôle terminaux,
+        // aucun identifiant SQL.
+        Map<String, Object> read = getMap("/api/v1/sessions/" + id, admin);
+        assertThat(read.get("status")).isEqualTo("CANCELLED");
+        assertThat(read.get("cancellationReason")).isEqualTo("Formateur indisponible");
+        assertThat(read.get("cancelledAt")).isNotNull();
+        assertThat(read.get("closedAt")).isNull();
+        assertThat(((Map<?, ?>) read.get("teacher")).get("publicId")).isEqualTo(teacher.publicId());
+        assertThat(read).doesNotContainKeys("id", "teacherUserId", "cancelledById");
+        // Un « rafraîchissement » (nouvelle requête) donne le même état persisté.
+        assertThat(getMap("/api/v1/sessions/" + id, admin).get("status")).isEqualTo("CANCELLED");
+        // Points de contrôle terminaux consultables.
+        assertThat(list("/api/v1/sessions/" + id + "/checkpoints", admin))
+                .extracting(cp -> cp.get("status")).containsOnly("CANCELLED");
+
+        // Inactive pour toute OPÉRATION métier : open / jeton -> 404 ; absente de la liste par défaut.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/attendance-token", null, admin)
+                .getStatusCode()).isIn(HttpStatus.NOT_FOUND, HttpStatus.CONFLICT);
+        List<?> sessionList = (List<?>) getMap(
+                "/api/v1/sessions?classGroup=" + chain.classA() + "&size=100", admin).get("content");
+        assertThat(sessionList).noneMatch(s -> id.equals(((Map<?, ?>) s).get("publicId")));
+
+        // Double annulation -> 409 (transitions strictes, cohérent avec open/close).
+        ResponseEntity<Map<String, Object>> again = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "encore"), admin);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(again.getBody().get("code")).isEqualTo("SESSION_INVALID_STATE");
+        // Exactement une ligne d'audit SESSION_CANCELLED (after-commit, pas de doublon).
+        assertThat(auditActions(id)).contains("SESSION_CREATED");
+        assertThat(auditActions(id).stream().filter("SESSION_CANCELLED"::equals).count()).isEqualTo(1L);
+    }
+
+    @Test
+    void aCancelledSessionGetIsStillGuardedByRoleAndScope() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        Account otherTeacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "x"), admin);
+
+        // 401 sans jeton.
+        assertThat(exchange(HttpMethod.GET, "/api/v1/sessions/" + id, null, null).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        // 403 : STUDENT n'a aucun accès à ces routes.
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + id, null, tokenFor(RoleCode.STUDENT)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        // 403 : un formateur étranger à la séance annulée ne la lit pas.
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + id, null, tokenFor(otherTeacher)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        // Le formateur principal, lui, lit toujours sa séance annulée.
+        assertThat(getMap("/api/v1/sessions/" + id, tokenFor(teacher)).get("status")).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void cancellingAnOpenSessionIsAllowedAndClosedSessionIsNot() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String open = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + open + "/open", null, admin);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + open + "/cancel",
+                Map.of("reason", "Alerte bâtiment"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        String closed = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + closed + "/open", null, admin);
+        status(HttpMethod.POST, "/api/v1/sessions/" + closed + "/close", null, admin);
+        ResponseEntity<Map<String, Object>> onClosed = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + closed + "/cancel", Map.of("reason", "trop tard"), admin);
+        assertThat(onClosed.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(onClosed.getBody().get("code")).isEqualTo("SESSION_INVALID_STATE");
+    }
+
+    @Test
+    void cancellationRequiresAReasonAndTheRightRole() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Motif vide -> 400.
+        ResponseEntity<Map<String, Object>> blank = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "   "), admin);
+        assertThat(blank.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // STUDENT -> 403 ; SCHOOL_ADMINISTRATION -> 403 (gestion exclue).
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "x"), tokenFor(RoleCode.STUDENT)).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "x"), tokenFor(RoleCode.SCHOOL_ADMINISTRATION)).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
+    // G1-C.2 — remplacements de formateur
+    // ------------------------------------------------------------------
+
+    @Test
+    void substitutionKeepsThePrincipalGrantsTheSubstituteAndIsAudited() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        Account other = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), "Cours"), admin).get("publicId");
+
+        Map<String, Object> body = subBody(substitute.publicId(), -3600, 3600);
+        Map<String, Object> sub = created("/api/v1/sessions/" + id + "/substitutions", body, admin);
+        assertThat(sub.get("status")).isEqualTo("ACTIVE");
+        assertThat(((Map<?, ?>) sub.get("substitute")).get("publicId")).isEqualTo(substitute.publicId());
+        assertThat(((Map<?, ?>) sub.get("originalTeacher")).get("publicId")).isEqualTo(principal.publicId());
+        assertThat(sub).doesNotContainKeys("id", "courseSessionId", "substituteTeacherUserId");
+
+        // Le formateur principal est intact : GET séance montre toujours principal.
+        assertThat(((Map<?, ?>) getMap("/api/v1/sessions/" + id, admin).get("teacher")).get("publicId"))
+                .isEqualTo(principal.publicId());
+
+        // Le remplaçant ACTIF (période couvrant maintenant) peut ouvrir la séance ;
+        // le principal aussi ; un autre formateur non.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(other)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        // Liste + audit.
+        List<Map<String, Object>> list = list("/api/v1/sessions/" + id + "/substitutions", admin);
+        assertThat(list).hasSize(1);
+        assertThat(auditActions(id)).contains("SESSION_SUBSTITUTION_ADDED");
+    }
+
+    @Test
+    void substitutionRejectsIneligibleSameAsPrincipalOverlapAndBadPeriod() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Compte inconnu -> 409 NOT_ELIGIBLE.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(UUID.randomUUID().toString(), -3600, 3600), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTE_NOT_ELIGIBLE");
+        // Remplaçant = principal -> 409 IS_ORIGINAL.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(principal.publicId(), -3600, 3600), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTE_IS_ORIGINAL");
+        // Période inversée -> 400.
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), 3600, -3600), admin).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // Chevauchement : 1re OK, 2e qui chevauche -> 409, 3e non chevauchante -> OK.
+        created("/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), 0, 7200), admin);
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), 3600, 10800), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_OVERLAP");
+        created("/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), 7200, 14400), admin);
+    }
+
+    @Test
+    void endingASubstitutionRevokesTheSubstituteAndIsIdempotencySafe() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        String subId = (String) created("/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), admin).get("publicId");
+
+        // Le remplaçant peut ouvrir tant que la substitution est ACTIVE.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        assertThat(status(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/substitutions/" + subId + "/end", null, admin))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        // Double fin -> 409.
+        assertThat(exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/substitutions/" + subId + "/end", null, admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_ALREADY_ENDED");
+        // La substitution terminée retire le droit : le remplaçant ne peut plus fermer.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/close", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(auditActions(id)).contains("SESSION_SUBSTITUTION_ENDED");
+    }
+
+    @Test
+    void anExpiredSubstitutionGrantsNoRight() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        // Période entièrement dans le passé.
+        created("/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), -7200, -3600), admin);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, tokenFor(substitute)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void substitutionRolesAreEnforcedAndCancelledSessionIsNotSubstitutable() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // TEACHER (principal) -> 403 (CREATE_ROLES exclut TEACHER : « ne valide pas lui-même »).
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), tokenFor(principal)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        // STUDENT -> 403.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), tokenFor(RoleCode.STUDENT)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        // Séance annulée -> plus substituable (404, garde « opérationnelle »).
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "x"), admin);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), admin))
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void concurrentOverlappingSubstitutionCreatesResolveToOneWithoutServerError() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        Callable<HttpStatus> call = () -> (HttpStatus) exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + id + "/substitutions", subBody(substitute.publicId(), 0, 7200), admin)
+                .getStatusCode();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<HttpStatus> statuses;
+        try {
+            List<Future<HttpStatus>> futures = pool.invokeAll(List.of(call, call));
+            statuses = List.of(join(futures.get(0)), join(futures.get(1)));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        // Au plus une substitution ACTIVE : exactement une création réussie.
+        long active = list("/api/v1/sessions/" + id + "/substitutions", admin).stream()
+                .filter(s -> "ACTIVE".equals(s.get("status"))).count();
+        assertThat(active).isEqualTo(1);
+    }
+
+    private Map<String, Object> subBody(String substitutePublicId, long fromOffsetSec, long untilOffsetSec) {
+        Instant base = Instant.now();
+        return subBodyAbs(substitutePublicId, base.plusSeconds(fromOffsetSec), base.plusSeconds(untilOffsetSec));
+    }
+
+    /** Corps de remplacement avec une période absolue (bornes maîtrisées, G1-C.3). */
+    private Map<String, Object> subBodyAbs(String substitutePublicId, Instant from, Instant until) {
+        java.util.HashMap<String, Object> body = new java.util.HashMap<>();
+        body.put("substituteTeacherPublicId", substitutePublicId);
+        body.put("reason", "Formateur principal indisponible");
+        body.put("validFrom", from.toString());
+        body.put("validUntil", until.toString());
+        return body;
+    }
+
+    // ------------------------------------------------------------------
+    // G1-C.3 — visibilité du remplaçant actif, période vs séance, audit
+    // ------------------------------------------------------------------
+
+    @Test
+    void anActiveSubstituteSeesTheSessionInGetAndListAndCanManageItButNotOthers() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String covered = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), "Couverte"), admin).get("publicId");
+        // Une autre séance du même formateur principal, SANS remplacement.
+        String uncovered = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), "Non couverte"), admin).get("publicId");
+
+        // Remplacement ACTIF couvrant maintenant.
+        created("/api/v1/sessions/" + covered + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), admin);
+
+        String subToken = tokenFor(substitute);
+        // GET : le remplaçant lit la séance couverte, pas l'autre.
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + covered, null, subToken))
+                .isEqualTo(HttpStatus.OK);
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + uncovered, null, subToken))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        // LISTE : la séance couverte y figure, l'autre non (sans requête par séance).
+        List<?> content = (List<?>) getMap("/api/v1/sessions?size=100", subToken).get("content");
+        assertThat(content).anyMatch(s -> covered.equals(((Map<?, ?>) s).get("publicId")));
+        assertThat(content).noneMatch(s -> uncovered.equals(((Map<?, ?>) s).get("publicId")));
+
+        // GESTION : le remplaçant actif ouvre / gère / ferme la séance couverte.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + covered + "/open", null, subToken))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(rawStatus(HttpMethod.GET, "/api/v1/sessions/" + covered + "/checkpoints", null, subToken))
+                .isEqualTo(HttpStatus.OK);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + covered + "/close", null, subToken))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        // Il ne gère pas l'autre séance.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + uncovered + "/open", null, subToken))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void futureAndEndedSubstitutesGetNoRightAndSchoolAdministrationGetsNoExtraRight() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account futureSub = accountWithRoles(RoleCode.TEACHER);
+        Account endedSub = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Remplacement futur (ne couvre pas encore maintenant) — bien séparé de l'autre.
+        created("/api/v1/sessions/" + id + "/substitutions",
+                subBody(futureSub.publicId(), 3 * 3600, 5 * 3600), admin);
+        // Remplacement bientôt terminé (couvre maintenant, sans chevaucher le futur).
+        String endedId = (String) created("/api/v1/sessions/" + id + "/substitutions",
+                subBody(endedSub.publicId(), -3600, 1800), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions/" + endedId + "/end", null, admin);
+
+        // Remplaçant futur : ni liste, ni GET, ni gestion.
+        String futureToken = tokenFor(futureSub);
+        assertThat(((List<?>) getMap("/api/v1/sessions?size=100", futureToken).get("content"))).isEmpty();
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + id, null, futureToken))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, futureToken))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        // Remplaçant terminé : aucun droit.
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + id, null, tokenFor(endedSub)))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        // SCHOOL_ADMINISTRATION : lecture (rôle global) mais jamais de gestion — inchangé.
+        String schoolAdmin = tokenFor(RoleCode.SCHOOL_ADMINISTRATION);
+        assertThat(status(HttpMethod.GET, "/api/v1/sessions/" + id, null, schoolAdmin))
+                .isEqualTo(HttpStatus.OK);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, schoolAdmin))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void substitutionPeriodMustReallyOverlapTheSessionWindow() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        Map<String, Object> session = created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin);
+        String id = (String) session.get("publicId");
+        String path = "/api/v1/sessions/" + id + "/substitutions";
+        // Bornes RÉELLES de la séance (jamais « maintenant »).
+        Instant start = Instant.parse((String) session.get("startsAt"));
+        Instant end = Instant.parse((String) session.get("endsAt"));
+        java.time.Duration margin = java.time.Duration.ofMinutes(60);
+
+        // Période entièrement AVANT la séance -> 422 OUTSIDE_SESSION.
+        assertThat(exchange(HttpMethod.POST, path,
+                subBodyAbs(substitute.publicId(), start.minus(margin).minusSeconds(7200),
+                        start.minus(margin).minusSeconds(3600)), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_OUTSIDE_SESSION");
+        // Période entièrement APRÈS la séance -> 422 OUTSIDE_SESSION.
+        assertThat(exchange(HttpMethod.POST, path,
+                subBodyAbs(substitute.publicId(), end.plus(margin).plusSeconds(3600),
+                        end.plus(margin).plusSeconds(7200)), admin).getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_OUTSIDE_SESSION");
+        // Débordement de la marge de 60 min avant le début -> 422.
+        assertThat(exchange(HttpMethod.POST, path,
+                subBodyAbs(substitute.publicId(), start.minus(margin).minusSeconds(1), start), admin)
+                .getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_OUTSIDE_SESSION");
+        // Débordement de la marge de 60 min après la fin -> 422.
+        assertThat(exchange(HttpMethod.POST, path,
+                subBodyAbs(substitute.publicId(), end, end.plus(margin).plusSeconds(1)), admin)
+                .getBody().get("code"))
+                .isEqualTo("SESSION_SUBSTITUTION_OUTSIDE_SESSION");
+        // validUntil == validFrom -> 400 PERIOD_INVALID (malformée, contrôlée avant l'overlap).
+        assertThat(exchange(HttpMethod.POST, path,
+                subBodyAbs(substitute.publicId(), start, start), admin).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        // Bornes exactes : start - 60 min pile .. end + 60 min pile -> accepté (chevauche réellement).
+        assertThat(status(HttpMethod.POST, path,
+                subBodyAbs(substitute.publicId(), start.minus(margin), end.plus(margin)), admin))
+                .isEqualTo(HttpStatus.CREATED);
+        // Une seconde période valide qui chevauche l'ACTIVE existante
+        // (invariant « au plus une ACTIVE applicable ») -> 409 contrôlé, jamais 5xx.
+        Account other = accountWithRoles(RoleCode.TEACHER);
+        ResponseEntity<Map<String, Object>> overlap = exchange(HttpMethod.POST, path,
+                subBodyAbs(other.publicId(), start.plusSeconds(600), start.plusSeconds(4200)), admin);
+        assertThat(overlap.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(overlap.getBody().get("code")).isEqualTo("SESSION_SUBSTITUTION_OVERLAP");
+    }
+
+    @Test
+    void substitutionAuditWritesExactlyOneRowPerSuccessfulChange() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account principal = accountWithRoles(RoleCode.TEACHER);
+        Account substitute = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(principal.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        String subId = (String) created("/api/v1/sessions/" + id + "/substitutions",
+                subBody(substitute.publicId(), -3600, 3600), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/substitutions/" + subId + "/end", null, admin);
+
+        assertThat(auditActions(id).stream().filter("SESSION_SUBSTITUTION_ADDED"::equals).count()).isEqualTo(1L);
+        assertThat(auditActions(id).stream().filter("SESSION_SUBSTITUTION_ENDED"::equals).count()).isEqualTo(1L);
+    }
+
+    @Test
+    void aRollbackDuringCancelLeavesNoStateChangeNoAuditAndNoAfterCommitEffect() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+        status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin);
+        // Un jeton d'émargement existe avant la tentative d'annulation.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/attendance-token", null, admin))
+                .isIn(HttpStatus.OK, HttpStatus.CREATED);
+        long cancelledBefore = auditActions(id).stream().filter("SESSION_CANCELLED"::equals).count();
+
+        try {
+            RollbackFaultConfig.ARMED.set(CourseSessionChangeAction.CANCELLED);
+            ResponseEntity<Map<String, Object>> failed = exchange(HttpMethod.POST,
+                    "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "sera annulé par un rollback"), admin);
+            // Erreur CONTRÔLÉE (mappée par le handler de production), jamais un 5xx.
+            assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(failed.getStatusCode().is5xxServerError()).isFalse();
+            assertThat(failed.getBody().get("code")).isEqualTo("SESSION_INVALID_STATE");
+        } finally {
+            RollbackFaultConfig.ARMED.set(null);
+        }
+
+        // 1. Transaction métier rollbackée : la séance est toujours OPEN.
+        Map<String, Object> read = getMap("/api/v1/sessions/" + id, admin);
+        assertThat(read.get("status")).isEqualTo("OPEN");
+        assertThat(read.get("cancellationReason")).isNull();
+        assertThat(read.get("cancelledAt")).isNull();
+        // 2. Le point de contrôle START n'a pas été annulé (rollback).
+        assertThat(list("/api/v1/sessions/" + id + "/checkpoints", admin))
+                .noneMatch(cp -> "CANCELLED".equals(cp.get("status")));
+        // 3. Aucune ligne d'audit SESSION_CANCELLED : le listener AFTER_COMMIT
+        //    n'a jamais été atteint.
+        assertThat(auditActions(id).stream().filter("SESSION_CANCELLED"::equals).count())
+                .isEqualTo(cancelledBefore);
+        // 4. Effet Redis après commit non exécuté : la séance reste
+        //    pleinement utilisable (émission d'un nouveau jeton OK), et
+        //    l'annulation réussit maintenant que la faute est désarmée.
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/attendance-token", null, admin))
+                .isIn(HttpStatus.OK, HttpStatus.CREATED);
+        assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/cancel",
+                Map.of("reason", "annulation réelle"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(getMap("/api/v1/sessions/" + id, admin).get("status")).isEqualTo("CANCELLED");
+        assertThat(auditActions(id).stream().filter("SESSION_CANCELLED"::equals).count()).isEqualTo(1L);
+    }
+
+    @Test
+    void concurrentOpenAndCancelResolveToOneTerminalStateWithoutServerError() throws Exception {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        String id = (String) created("/api/v1/sessions",
+                createBody(teacher.publicId(), List.of(chain.classA()), null), admin).get("publicId");
+
+        // Les deux requêtes sont armées puis relâchées ensemble pour
+        // maximiser la contention réelle sur la même version d'entité.
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch go = new CountDownLatch(1);
+        Callable<HttpStatus> openCall = () -> {
+            ready.countDown();
+            go.await();
+            return (HttpStatus) exchange(HttpMethod.POST,
+                    "/api/v1/sessions/" + id + "/open", null, admin).getStatusCode();
+        };
+        Callable<HttpStatus> cancelCall = () -> {
+            ready.countDown();
+            go.await();
+            return (HttpStatus) exchange(HttpMethod.POST,
+                    "/api/v1/sessions/" + id + "/cancel", Map.of("reason", "course"), admin).getStatusCode();
+        };
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<HttpStatus> statuses;
+        try {
+            Future<HttpStatus> openFuture = pool.submit(openCall);
+            Future<HttpStatus> cancelFuture = pool.submit(cancelCall);
+            ready.await();
+            go.countDown();
+            statuses = List.of(join(openFuture), join(cancelFuture));
+        } finally {
+            pool.shutdownNow();
+        }
+        // Invariant produit : jamais de 5xx, jamais d'état partiel. Selon
+        // l'entrelacement réel des transactions, plusieurs issues sont
+        // toutes LÉGITIMES :
+        //   * course détectée : un gagnant 204, un perdant 409 (verrou
+        //     optimiste) ;
+        //   * exécutions sérialisées, ouverture d'abord : 204 (PLANNED ->
+        //     OPEN) puis 204 (OPEN -> CANCELLED, transition valide G1-C.1) ;
+        //   * exécutions sérialisées, annulation d'abord : 204 (PLANNED ->
+        //     CANCELLED) puis 404 (séance non opérationnelle à l'ouverture).
+        // On vérifie donc l'invariant, pas un entrelacement particulier.
+        assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+        assertThat(statuses).allMatch(s -> s == HttpStatus.NO_CONTENT
+                || s == HttpStatus.CONFLICT || s == HttpStatus.NOT_FOUND);
+        assertThat(statuses).contains(HttpStatus.NO_CONTENT);
+        // État final cohérent et lisible : la séance existe toujours
+        // (GET -> 200) avec un statut terminal-ou-opérationnel unique.
+        ResponseEntity<Map<String, Object>> finalGet = exchange(HttpMethod.GET,
+                "/api/v1/sessions/" + id, null, admin);
+        assertThat(finalGet.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(finalGet.getBody().get("status")).isIn("OPEN", "CANCELLED");
+        // Au plus une annulation effective, jamais de double effet.
+        assertThat(auditActions(id).stream().filter("SESSION_CANCELLED"::equals).count())
+                .isLessThanOrEqualTo(1L);
     }
 
     @Test
@@ -431,12 +1019,29 @@ class CourseSessionIntegrationTests {
     // Utilitaires
     // ------------------------------------------------------------------
 
+    /**
+     * Fenêtre de séance <strong>relative à « maintenant »</strong> (large :
+     * {@code now - 3h} → {@code now + 6h}). Depuis G1-C.3, la période d'un
+     * remplacement doit réellement chevaucher la séance : les décalages de
+     * {@link #subBody} (exprimés en secondes autour de {@code Instant.now()})
+     * tombent alors dans le créneau, ce qui garde les scénarios de
+     * remplacement (actif / expiré / chevauchement) sémantiquement
+     * inchangés sans horloge figée.
+     */
     private Map<String, Object> createBody(String teacherPublicId, List<String> classPublicIds, String title) {
+        // Bornes à la seconde entière : la colonne MySQL TIMESTAMP(6) ne
+        // conserve pas la précision sous-microseconde d'un Instant.now()
+        // (nanoseconde sous Linux, microseconde sous macOS). Sans cette
+        // troncature, la valeur renvoyée par la création (Instant en
+        // mémoire) diffère de la valeur relue en base, ce qui fait
+        // basculer les assertions de bord exact « ± 60 min » de
+        // substitutionPeriodMustReallyOverlapTheSessionWindow.
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         java.util.HashMap<String, Object> body = new java.util.HashMap<>();
         body.put("teacherPublicId", teacherPublicId);
         body.put("classPublicIds", classPublicIds);
-        body.put("startsAt", "2026-09-10T08:00:00Z");
-        body.put("endsAt", "2026-09-10T12:00:00Z");
+        body.put("startsAt", now.minusSeconds(3 * 3600).toString());
+        body.put("endsAt", now.plusSeconds(6 * 3600).toString());
         body.put("timeZoneId", "Europe/Paris");
         body.put("reason", "séance exceptionnelle");
         if (title != null) {

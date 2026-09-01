@@ -7,6 +7,7 @@ import { PageResponse } from '../sessions/sessions.models';
 import {
   AmendJustificationRequest,
   ClassReportRow,
+  JustificationAttachmentMeta,
   JustificationResponse,
   MyAttendanceDetail,
   MyAttendanceQuery,
@@ -81,6 +82,58 @@ export class AttendanceApiService {
   getMyJustification(justificationId: string): Observable<JustificationResponse> {
     return this.http.get<JustificationResponse>(
       `${this.base}/me/attendance/justifications/${encodeURIComponent(justificationId)}`,
+    );
+  }
+
+  // --- Pièces jointes des justificatifs (bloc G1-E) --------------
+
+  /** `GET /api/v1/me/attendance/justifications/{id}/attachment` (404 si aucune pièce STORED). */
+  getMyJustificationAttachment(justificationId: string): Observable<JustificationAttachmentMeta> {
+    return this.http.get<JustificationAttachmentMeta>(
+      `${this.base}/me/attendance/justifications/${encodeURIComponent(justificationId)}/attachment`,
+    );
+  }
+
+  /** `POST /api/v1/me/attendance/justifications/{id}/attachment` (multipart) → 201. */
+  uploadMyJustificationAttachment(
+    justificationId: string,
+    file: File,
+  ): Observable<JustificationAttachmentMeta> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http.post<JustificationAttachmentMeta>(
+      `${this.base}/me/attendance/justifications/${encodeURIComponent(justificationId)}/attachment`,
+      form,
+    );
+  }
+
+  /** `DELETE /api/v1/me/attendance/justifications/{id}/attachment` → 204. */
+  deleteMyJustificationAttachment(justificationId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base}/me/attendance/justifications/${encodeURIComponent(justificationId)}/attachment`,
+    );
+  }
+
+  /** `GET /api/v1/me/attendance/justifications/{id}/attachment/download` — blob. */
+  downloadMyJustificationAttachment(justificationId: string): Observable<HttpResponseBlob> {
+    return this.http.get(
+      `${this.base}/me/attendance/justifications/${encodeURIComponent(justificationId)}/attachment/download`,
+      { responseType: 'blob', observe: 'response' },
+    );
+  }
+
+  /** `GET /api/v1/attendance/justifications/{id}/attachment` (examinateur ; 404 si aucune). */
+  getJustificationAttachmentForReview(justificationId: string): Observable<JustificationAttachmentMeta> {
+    return this.http.get<JustificationAttachmentMeta>(
+      `${this.base}/attendance/justifications/${encodeURIComponent(justificationId)}/attachment`,
+    );
+  }
+
+  /** `GET /api/v1/attendance/justifications/{id}/attachment/download` (examinateur) — blob. */
+  downloadJustificationAttachmentForReview(justificationId: string): Observable<HttpResponseBlob> {
+    return this.http.get(
+      `${this.base}/attendance/justifications/${encodeURIComponent(justificationId)}/attachment/download`,
+      { responseType: 'blob', observe: 'response' },
     );
   }
 
@@ -195,4 +248,14 @@ export function triggerCsvDownload(response: HttpResponseBlob, fallbackName: str
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Déclenche le téléchargement d'une pièce jointe (bloc G1-E). Le serveur
+ * force déjà `Content-Disposition: attachment` ; côté navigateur on crée
+ * une `object URL`, on clique un lien, puis on révoque immédiatement
+ * l'URL (aucun blob conservé).
+ */
+export function triggerAttachmentDownload(response: HttpResponseBlob, fallbackName: string): void {
+  triggerCsvDownload(response, fallbackName);
 }

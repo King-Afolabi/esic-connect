@@ -28,6 +28,8 @@ record CourseSessionResponse(
         String timeZoneId,
         Instant openedAt,
         Instant closedAt,
+        String cancellationReason,
+        Instant cancelledAt,
         UUID checkpointPublicId,
         boolean checkpointOpen,
         List<CheckpointView> checkpoints,

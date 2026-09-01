@@ -33,6 +33,24 @@ public interface ClassGroupDirectory {
     Optional<ClassGroupRef> findByInternalId(long classGroupInternalId);
 
     /**
+     * Résout un <strong>lot</strong> de classes par identifiants internes
+     * en <strong>une</strong> requête (bloc G1-F : périmètre du
+     * responsable pédagogique sans N+1). Les identifiants inconnus sont
+     * ignorés ; l'ordre du résultat n'est pas garanti.
+     */
+    java.util.List<ClassGroupRef> findByInternalIds(java.util.Collection<Long> classGroupInternalIds);
+
+    /**
+     * Résout un <strong>lot</strong> de classes par identifiants publics en
+     * <strong>une</strong> requête (bloc G1-F : le module {@code dashboard}
+     * s'en sert pour libeller les codes de classe des séances affichées
+     * sans une requête {@code findByPublicId} par ligne). Les identifiants
+     * inconnus ou {@code null} sont ignorés ; l'ordre du résultat n'est pas
+     * garanti.
+     */
+    java.util.List<ClassGroupRef> findByPublicIds(java.util.Collection<UUID> classGroupPublicIds);
+
+    /**
      * Résout une classe pour l'import CSV des apprenants à partir de ses
      * <em>codes fonctionnels</em> (rapport §4.3, §5.2). Vérifie
      * successivement l'existence de la formation, de l'année scolaire, de

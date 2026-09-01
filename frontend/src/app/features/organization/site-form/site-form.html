@@ -1,0 +1,111 @@
+<nav class="org__tabs" aria-label="Référentiel organisationnel">
+  <a routerLink="/organization/sites" routerLinkActive="org__tab--active">Sites</a>
+</nav>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement du site"></mat-progress-bar>
+    <p class="org__status" role="status">Chargement du site…</p>
+  }
+  @case ('not-found') {
+    <div class="org__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucun site ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/organization/sites">Retour à la liste</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="org__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à modifier ce site.</p>
+      <a mat-stroked-button routerLink="/organization/sites">Retour à la liste</a>
+    </div>
+  }
+  @case ('load-error') {
+    <div class="org__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ loadErrorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retryLoad()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    <h1 class="org__title">{{ mode === 'edit' ? 'Modifier le site' : 'Nouveau site' }}</h1>
+
+    <form class="org__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <mat-form-field appearance="outline">
+        <mat-label>Code</mat-label>
+        <input matInput formControlName="code" maxlength="50" required autocomplete="off" />
+        <mat-hint>Immuable après création.</mat-hint>
+        @if (form.controls.code.touched && form.controls.code.hasError('required')) {
+          <mat-error>Le code est obligatoire.</mat-error>
+        }
+        @if (form.controls.code.touched && form.controls.code.hasError('pattern')) {
+          <mat-error>Lettres, chiffres, point, tiret et tiret bas uniquement.</mat-error>
+        }
+        @if (form.controls.code.hasError('server')) {
+          <mat-error>{{ form.controls.code.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Nom</mat-label>
+        <input matInput formControlName="name" maxlength="150" required autocomplete="off" />
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <mat-error>Le nom est obligatoire (150 caractères maximum).</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Fuseau horaire (IANA)</mat-label>
+        <input matInput formControlName="timeZoneId" maxlength="64" required autocomplete="off" />
+        <mat-hint>Exemple : Europe/Paris.</mat-hint>
+        @if (form.controls.timeZoneId.touched && form.controls.timeZoneId.hasError('required')) {
+          <mat-error>Le fuseau horaire est obligatoire.</mat-error>
+        }
+        @if (form.controls.timeZoneId.hasError('server')) {
+          <mat-error>{{ form.controls.timeZoneId.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Adresse (ligne 1)</mat-label>
+        <input matInput formControlName="addressLine1" maxlength="255" autocomplete="off" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Adresse (ligne 2)</mat-label>
+        <input matInput formControlName="addressLine2" maxlength="255" autocomplete="off" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Code postal</mat-label>
+        <input matInput formControlName="postalCode" maxlength="20" autocomplete="off" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Ville</mat-label>
+        <input matInput formControlName="city" maxlength="100" autocomplete="off" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Code pays (ISO 3166-1 alpha-2)</mat-label>
+        <input matInput formControlName="countryCode" maxlength="2" autocomplete="off" />
+        <mat-hint>Exemple : FR.</mat-hint>
+        @if (form.controls.countryCode.hasError('server')) {
+          <mat-error>{{ form.controls.countryCode.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      @if (submitError()) {
+        <p class="org__form-error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="org__form-actions">
+        <button mat-flat-button type="submit" [disabled]="submitting()">
+          {{ mode === 'edit' ? 'Enregistrer' : 'Créer le site' }}
+        </button>
+        <a mat-button routerLink="/organization/sites">Annuler</a>
+      </div>
+    </form>
+  }
+}

@@ -1,51 +1,47 @@
 package com.esic.connect.audit.internal;
 
 import com.esic.connect.coursesession.CourseSessionChangeEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Trace les changements du module {@code coursesession} (création,
- * ouverture, fermeture d'une séance) dans {@code audit_event} — cahier
- * §30.1 (« ouverture et clôture de séance »). Aucune dépendance vers les
- * classes internes de {@code coursesession} (docs/03 §6.6, vérifié par
- * Spring Modulith).
+ * ouverture, fermeture, <strong>annulation</strong> d'une séance,
+ * <strong>ajout / fin d'un remplacement</strong>) dans
+ * {@code audit_event} — cahier §30.1 (« ouverture et clôture de séance »,
+ * « remplacement »). Aucune dépendance vers les classes internes de
+ * {@code coursesession} (docs/03 §6.6, vérifié par Spring Modulith).
  *
- * <p>Transaction dédiée ({@code REQUIRES_NEW}) : un incident d'écriture de
- * l'audit ne compromet pas la transaction métier appelante. Aucun jeton
- * ni donnée personnelle : identifiant public de la séance, action et
- * complément non sensible.
+ * <p><strong>Garantie transactionnelle (durcie au checkpoint G1-C.3).</strong>
+ * Ce listener est désormais un
+ * {@link TransactionalEventListener}{@code (phase = AFTER_COMMIT)} : il
+ * n'est invoqué qu'<em>après</em> le commit réussi de la transaction
+ * métier qui a publié l'événement. Si cette transaction <em>rollback</em>,
+ * la phase {@code AFTER_COMMIT} n'est jamais atteinte — <strong>aucune
+ * ligne d'audit de succès n'est écrite</strong> (défaut corrigé : le motif
+ * legacy {@code @EventListener} + {@code REQUIRES_NEW} committait l'audit
+ * même quand la transaction métier rollbackait ensuite). L'écriture
+ * effective est déléguée à {@link CourseSessionAuditWriter} (bean
+ * distinct, {@code REQUIRES_NEW}) pour que le proxy Spring ouvre bien une
+ * transaction neuve après commit.
  *
- * <p><strong>Dette transactionnelle connue (non résolue dans cette PR).</strong>
- * Comme les autres listeners d'audit du projet, celui-ci est un
- * {@link EventListener} synchrone en {@code REQUIRES_NEW} : la migration
- * globale vers {@code @TransactionalEventListener(AFTER_COMMIT)} /
- * {@code @ApplicationModuleListener} reste à planifier pour tous les
- * modules.
+ * <p>Ne migre <strong>pas</strong> les autres listeners d'audit du projet
+ * (dette connue, documentée dans
+ * {@code docs/reports/G1_ARCHITECTURE_DECISIONS.md} §Contexte) : seuls les
+ * listeners portant des événements du bloc G1-C sont corrigés ici.
  */
 @Component
 public class CourseSessionAuditListener {
 
-    private final AuditEventRepository auditEventRepository;
+    private final CourseSessionAuditWriter writer;
 
-    public CourseSessionAuditListener(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public CourseSessionAuditListener(CourseSessionAuditWriter writer) {
+        this.writer = writer;
     }
 
-    @EventListener
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCourseSessionChange(CourseSessionChangeEvent event) {
-        String action = "SESSION_" + event.action().name();
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), event.actorUserId(), action,
-                "COURSE_SESSION", event.resourceType().name(), "SUCCESS");
-        auditEvent.setResourcePublicId(event.resourcePublicId());
-        if (event.detail() != null) {
-            auditEvent.setReason(event.detail());
-        }
-        auditEventRepository.save(auditEvent);
+        writer.write(event);
     }
 }

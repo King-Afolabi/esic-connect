@@ -45,6 +45,7 @@ class CourseSessionService {
 
     private final CourseSessionRepository sessionRepository;
     private final AttendanceCheckpointRepository checkpointRepository;
+    private final TeacherSubstitutionRepository substitutionRepository;
     private final TeacherDirectory teacherDirectory;
     private final UserDirectory userDirectory;
     private final ClassGroupDirectory classGroupDirectory;
@@ -55,6 +56,7 @@ class CourseSessionService {
 
     CourseSessionService(CourseSessionRepository sessionRepository,
                          AttendanceCheckpointRepository checkpointRepository,
+                         TeacherSubstitutionRepository substitutionRepository,
                          TeacherDirectory teacherDirectory,
                          UserDirectory userDirectory,
                          ClassGroupDirectory classGroupDirectory,
@@ -64,6 +66,7 @@ class CourseSessionService {
                          Clock clock) {
         this.sessionRepository = sessionRepository;
         this.checkpointRepository = checkpointRepository;
+        this.substitutionRepository = substitutionRepository;
         this.teacherDirectory = teacherDirectory;
         this.userDirectory = userDirectory;
         this.classGroupDirectory = classGroupDirectory;
@@ -82,6 +85,10 @@ class CourseSessionService {
                                              Instant from, Instant to, int page, int size, String sort,
                                              String callerSubject) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
+        // Garde centralisée (audit G1-B.1) : seules les séances
+        // opérationnelles sont listées — exclut celles retirées par une
+        // republication de planning (DEC-G1-004 règle 4).
+        specs.add(CourseSessionSpecifications.operational());
         parseStatus(statusFilter).ifPresent(status -> specs.add(CourseSessionSpecifications.hasStatus(status)));
         if (from != null) {
             specs.add(CourseSessionSpecifications.startsFrom(from));
@@ -106,7 +113,11 @@ class CourseSessionService {
 
     @Transactional(readOnly = true)
     CourseSessionResponse get(String publicId, String callerSubject) {
-        CourseSession session = require(publicId);
+        // G1-C.3 : lecture = « existe et historiquement lisible ». Une
+        // séance CANCELLED reste consultable (statut / motif / date
+        // d'annulation) ; seule une séance supersédée par le planning
+        // (G1-B.1) est masquée du GET métier.
+        CourseSession session = requireExistingReadableSession(publicId);
         requireAccess(session, AccessLevel.READ, callerSubject);
         return toResponse(session);
     }
@@ -164,7 +175,7 @@ class CourseSessionService {
 
     @Transactional
     void open(String publicId, String callerSubject) {
-        CourseSession session = require(publicId);
+        CourseSession session = requireOperationalSession(publicId);
         requireAccess(session, AccessLevel.MANAGE, callerSubject);
         if (!session.isPlanned()) {
             throw new CourseSessionException(CourseSessionException.Kind.INVALID_STATE);
@@ -186,7 +197,7 @@ class CourseSessionService {
 
     @Transactional
     void close(String publicId, String callerSubject) {
-        CourseSession session = require(publicId);
+        CourseSession session = requireOperationalSession(publicId);
         requireAccess(session, AccessLevel.MANAGE, callerSubject);
         if (!session.isOpen()) {
             throw new CourseSessionException(CourseSessionException.Kind.INVALID_STATE);
@@ -206,13 +217,92 @@ class CourseSessionService {
         changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.CLOSED, actorId, null);
     }
 
+    /**
+     * Annule une séance {@code PLANNED} ou {@code OPEN} avec un motif
+     * obligatoire (G1-C ; EF-SES-004, CDC §15.4). Terminal : pas de
+     * réouverture. Purge des jetons Redis (via l'événement
+     * {@code CANCELLED}), annulation des points de contrôle non
+     * terminaux, aucune présence ni absence dérivée. Une séance
+     * {@code CLOSED} ou déjà {@code CANCELLED} → {@code 409}
+     * ({@code SESSION_INVALID_STATE}) — cohérent avec {@link #open} /
+     * {@link #close} (transitions strictes, pas d'idempotence).
+     */
+    @Transactional
+    void cancel(String publicId, String reason, String callerSubject) {
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new CourseSessionException(CourseSessionException.Kind.CANCEL_REASON_REQUIRED);
+        }
+        if (trimmed.length() > 500) {
+            trimmed = trimmed.substring(0, 500);
+        }
+        // Lookup SANS le filtre « opérationnel » : une séance supersédée
+        // reste annulable (elle passe alors doublement inactive) ; une
+        // séance déjà CANCELLED est détectée ci-dessous pour renvoyer un
+        // 409 explicite plutôt qu'un 404.
+        CourseSession session = requireSessionRaw(publicId);
+        requireAccess(session, AccessLevel.MANAGE, callerSubject);
+        if (!session.isCancellable()) {
+            throw new CourseSessionException(CourseSessionException.Kind.INVALID_STATE);
+        }
+        Instant now = clock.instant();
+        Long actorId = changePublisher.actorId(callerSubject);
+        session.cancel(trimmed, now, actorId);
+        checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId())
+                .forEach(cp -> {
+                    if (cp.isPlanned() || cp.isOpen()) {
+                        cp.cancel("Séance annulée", actorId);
+                    }
+                });
+        // Détail non sensible : le motif (potentiellement nominatif) n'entre
+        // jamais dans l'événement / l'audit — il reste sur l'entité, visible
+        // aux seuls rôles autorisés via GET /sessions/{id}.
+        changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.CANCELLED, actorId, null);
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 
-    private CourseSession require(String publicId) {
-        return sessionRepository.findByPublicId(parseUuid(publicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
+    /**
+     * Séance existante par {@code public_id}, sans aucun filtre d'état
+     * (une séance {@code CANCELLED} ou supersédée est renvoyée). Réservé
+     * aux flux qui doivent distinguer « inexistante » de « pas dans le bon
+     * état » (annulation → {@code 409} sur double annulation).
+     */
+    private CourseSession requireSessionRaw(String publicId) {
+        return sessionRepository
+                .findByPublicId(parseUuid(publicId, CourseSessionException.Kind.SESSION_NOT_FOUND))
                 .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND));
+    }
+
+    /**
+     * Séance <strong>lisible</strong> (existe + {@code isHistoricallyReadable}) :
+     * pour {@link #get}, {@code GET /sessions/{id}/substitutions}, l'historique.
+     * Une séance {@code CANCELLED} passe ; une séance supersédée par le
+     * planning (G1-B.1) est traitée comme inexistante hors de l'historique
+     * des versions du module {@code planning}.
+     */
+    private CourseSession requireExistingReadableSession(String publicId) {
+        CourseSession session = requireSessionRaw(publicId);
+        if (!session.isHistoricallyReadable()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
+    }
+
+    /**
+     * Séance <strong>opérationnelle</strong> (existe + {@code isOperational}) :
+     * pour toute opération métier normale (ouverture, fermeture, jeton,
+     * points de contrôle). Une séance {@code CANCELLED} ou supersédée est
+     * traitée comme inexistante (garde centralisée, audit G1-B.1 + G1-C).
+     */
+    private CourseSession requireOperationalSession(String publicId) {
+        CourseSession session = requireSessionRaw(publicId);
+        if (!session.isOperational()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SESSION_NOT_FOUND);
+        }
+        return session;
     }
 
     private Optional<AttendanceCheckpoint> firstCheckpoint(CourseSession session) {
@@ -221,7 +311,7 @@ class CourseSessionService {
 
     private void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {
         Set<UUID> classPublicIds = classPublicIds(session);
-        if (!accessGuard.isAllowed(session.getTeacherUserId(), classPublicIds, level, callerSubject)) {
+        if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, callerSubject)) {
             throw new CourseSessionException(accessGuard.isPedagogicalManagerScoped()
                     ? CourseSessionException.Kind.SCOPE_FORBIDDEN
                     : CourseSessionException.Kind.OPERATION_FORBIDDEN);
@@ -245,7 +335,7 @@ class CourseSessionService {
         }
         if (accessGuard.isTeacherOnly()) {
             return accessGuard.callerInternalId(callerSubject)
-                    .map(CourseSessionSpecifications::taughtBy);
+                    .map(this::teacherVisibilitySpec);
         }
         if (accessGuard.isPedagogicalManagerScoped()) {
             Set<Long> visible = academicScope.visibleClassGroupIds().orElse(Set.of());
@@ -255,6 +345,22 @@ class CourseSessionService {
             return Optional.of(CourseSessionSpecifications.hasAnyClassIn(visible));
         }
         return Optional.empty();
+    }
+
+    /**
+     * Périmètre de liste d'un formateur (G1-C.3) : ses propres séances
+     * <strong>ou</strong> les séances où il est remplaçant {@code ACTIVE}
+     * couvrant l'instant courant. Une seule requête de substitutions,
+     * jamais une par séance.
+     */
+    private Specification<CourseSession> teacherVisibilitySpec(Long teacherInternalId) {
+        Specification<CourseSession> own = CourseSessionSpecifications.taughtBy(teacherInternalId);
+        List<Long> substituted = substitutionRepository
+                .findActiveSubstitutedSessionIds(teacherInternalId, clock.instant());
+        if (substituted.isEmpty()) {
+            return own;
+        }
+        return Specification.anyOf(own, CourseSessionSpecifications.hasInternalIdIn(substituted));
     }
 
     private Optional<Long> resolveTeacherFilter(String teacherPublicId) {
@@ -318,6 +424,7 @@ class CourseSessionService {
         return new CourseSessionResponse(session.getPublicId(), session.getStatus(), session.getTitle(),
                 session.getExceptionReason(), teacherView, classViews, session.getStartsAt(), session.getEndsAt(),
                 session.getTimeZoneId(), session.getOpenedAt(), session.getClosedAt(),
+                session.getCancellationReason(), session.getCancelledAt(),
                 checkpointPublicId, checkpointOpen, checkpointViews,
                 session.getCreatedAt(), session.getUpdatedAt());
     }

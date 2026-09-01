@@ -1,0 +1,30 @@
+@use '../organization.shared';
+
+.org__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.org__tabs a {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+  text-decoration: none;
+  padding: 0.25rem 0.25rem 0.5rem;
+  border-bottom: 2px solid transparent;
+}
+
+.org__tab--active {
+  color: var(--mat-sys-primary);
+  border-bottom-color: var(--mat-sys-primary);
+}
+
+.org__form-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-medium);
+}

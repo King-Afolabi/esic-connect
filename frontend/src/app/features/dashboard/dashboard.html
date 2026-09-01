@@ -42,8 +42,9 @@
           </ul>
           @if (hasContextChoice()) {
             <p class="dashboard__context">
-              Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il n'agit que
-              sur l'affichage et la navigation ; vos autorisations restent inchangées.
+              Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il choisit le rôle
+              affiché (navigation et « Mon activité », vérifié côté serveur) ; vos
+              autorisations restent inchangées.
             </p>
           }
         } @else {
@@ -76,6 +77,203 @@
       </mat-card-content>
     </mat-card>
   </div>
+
+  <section class="dashboard__role" aria-label="Tableau de bord par rôle">
+    <h2 class="dashboard__subtitle">Mon activité</h2>
+    @switch (dashState().kind) {
+      @case ('loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+        <p class="dashboard__empty" role="status">Chargement…</p>
+      }
+      @case ('forbidden') {
+        <p class="dashboard__empty" role="status">
+          Aucun tableau de bord n'est disponible pour votre compte.
+        </p>
+      }
+      @case ('error') {
+        <div role="alert" class="dashboard__empty">
+          <p>Le tableau de bord n'a pas pu être chargé.</p>
+          <button mat-stroked-button type="button" (click)="loadDashboard()">Réessayer</button>
+        </div>
+      }
+      @case ('ready') {
+        @if (dash(); as d) {
+          @if (d.student; as s) {
+            <div class="dashboard__grid">
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Assiduité</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  <dl class="dashboard__facts">
+                    <div><dt>Présences</dt><dd>{{ s.present }}</dd></div>
+                    <div><dt>Retards</dt><dd>{{ s.late }}</dd></div>
+                    <div><dt>Absences</dt><dd>{{ s.absent }}</dd></div>
+                    <div><dt>Absences excusées</dt><dd>{{ s.excused }}</dd></div>
+                    <div><dt>Justificatifs en attente</dt><dd>{{ s.pendingJustifications }}</dd></div>
+                    <div><dt>Justificatifs refusés</dt><dd>{{ s.rejectedJustifications }}</dd></div>
+                  </dl>
+                </mat-card-content>
+              </mat-card>
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Mes prochains cours</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (s.weekSessions.length) {
+                    <ul class="dashboard__list">
+                      @for (line of s.weekSessions; track line.sessionPublicId) {
+                        <li>{{ line.title || 'Séance' }} — {{ shortInstant(line.startsAt) }}
+                          <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span></li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucun cours dans les 7 prochains jours.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+            </div>
+          }
+
+          @if (d.teacher; as t) {
+            <div class="dashboard__grid">
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Séances à venir</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (t.upcoming.length) {
+                    <ul class="dashboard__list">
+                      @for (line of t.upcoming; track line.sessionPublicId) {
+                        <li>
+                          @if (canLinkSessions()) {
+                            <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
+                          } @else {
+                            {{ line.title || 'Séance' }}
+                          }
+                          — {{ shortInstant(line.startsAt) }}
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucune séance à venir.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>À ouvrir</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (t.toOpen.length) {
+                    <ul class="dashboard__list">
+                      @for (line of t.toOpen; track line.sessionPublicId) {
+                        <li>
+                          @if (canLinkSessions()) {
+                            <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
+                          } @else {
+                            {{ line.title || 'Séance' }}
+                          }
+                          — {{ shortInstant(line.startsAt) }}
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucune séance commencée non ouverte.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+            </div>
+          }
+
+          @if (d.manager; as m) {
+            <div class="dashboard__grid">
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Mon périmètre</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  <dl class="dashboard__facts">
+                    <div><dt>Classes</dt><dd>{{ m.classCount }}</dd></div>
+                    <div><dt>Codes</dt><dd>{{ m.classCodes.join(', ') || '—' }}</dd></div>
+                  </dl>
+                </mat-card-content>
+              </mat-card>
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Séances à venir</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (m.upcomingSessions.length) {
+                    <ul class="dashboard__list">
+                      @for (line of m.upcomingSessions; track line.sessionPublicId) {
+                        <li>
+                          @if (canLinkSessions()) {
+                            <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
+                          } @else {
+                            {{ line.title || 'Séance' }}
+                          }
+                          — {{ shortInstant(line.startsAt) }}
+                          <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span>
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucune séance à venir dans le périmètre.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+            </div>
+          }
+
+          @if (d.administration; as a) {
+            <div class="dashboard__grid">
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Comptes</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  <dl class="dashboard__facts">
+                    <div><dt>Actifs</dt><dd>{{ a.activeAccounts }}</dd></div>
+                    <div><dt>Suspendus</dt><dd>{{ a.suspendedAccounts }}</dd></div>
+                    <div><dt>En attente d'activation</dt><dd>{{ a.pendingActivation }}</dd></div>
+                    <div><dt>Archivés</dt><dd>{{ a.archivedAccounts }}</dd></div>
+                    <div><dt>Justificatifs en attente</dt><dd>{{ a.pendingJustifications }}</dd></div>
+                  </dl>
+                </mat-card-content>
+              </mat-card>
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Imports récents</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (a.recentImports.length) {
+                    <ul class="dashboard__list">
+                      @for (imp of a.recentImports; track imp.publicId) {
+                        <li>{{ imp.status }} — {{ imp.totalRows }} lignes
+                          <span class="dashboard__meta">{{ shortInstant(imp.createdAt) }}</span></li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucun import récent.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Séances du jour</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (a.todaySessions.length) {
+                    <ul class="dashboard__list">
+                      @for (line of a.todaySessions; track line.sessionPublicId) {
+                        <li>
+                          @if (canLinkSessions()) {
+                            <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
+                          } @else {
+                            {{ line.title || 'Séance' }}
+                          }
+                          — {{ shortInstant(line.startsAt) }}
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucune séance aujourd'hui.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+            </div>
+          }
+
+          @for (note of d.notes; track note) {
+            <p class="dashboard__meta">{{ note }}</p>
+          }
+        }
+      }
+    }
+  </section>
 } @else {
   <p class="dashboard__empty" role="status">Session introuvable. Redirection vers la connexion…</p>
 }

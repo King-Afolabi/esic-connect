@@ -31,6 +31,14 @@
 
   @case ('ready') {
     @if (session(); as current) {
+      @if (actingAsSubstitute(); as sub) {
+        <p class="sessions__status" role="note">
+          Vous intervenez comme <strong>remplaçant</strong> sur cette séance
+          (remplacement de {{ sub.originalTeacher.firstName }} {{ sub.originalTeacher.lastName }},
+          du {{ formatInstantUtc(sub.validFrom) }} au {{ formatInstantUtc(sub.validUntil) }}).
+          Vos droits de gestion sont révoqués à la fin de cette période.
+        </p>
+      }
       <div class="sessions__header">
         <h1 class="sessions__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
         @if (canManageCheckpoint()) {
@@ -40,6 +48,11 @@
             }
             @if (isOpen()) {
               <button mat-stroked-button type="button" (click)="startClose()">Fermer la séance</button>
+            }
+            @if (canCancel()) {
+              <button mat-stroked-button type="button" color="warn" (click)="startCancel()">
+                Annuler la séance
+              </button>
             }
           </div>
         }
@@ -57,6 +70,10 @@
             <div><dt>Fuseau de saisie</dt><dd>{{ current.timeZoneId }}</dd></div>
             <div><dt>Ouverte le</dt><dd>{{ formatInstantUtc(current.openedAt) }}</dd></div>
             <div><dt>Clôturée le</dt><dd>{{ formatInstantUtc(current.closedAt) }}</dd></div>
+            @if (isCancelled()) {
+              <div><dt>Annulée le</dt><dd>{{ formatInstantUtc(current.cancelledAt) }}</dd></div>
+              <div><dt>Motif d'annulation</dt><dd>{{ current.cancellationReason || '—' }}</dd></div>
+            }
           </dl>
         </mat-card-content>
       </mat-card>
@@ -82,9 +99,131 @@
           @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
         </div>
       }
+      @if (pendingAction() === 'cancel') {
+        <form
+          class="sessions__reveal"
+          role="group"
+          aria-label="Confirmer l'annulation"
+          [formGroup]="sessionCancelForm"
+          (ngSubmit)="confirmCancel()"
+        >
+          <p>L'annulation est définitive : les points de contrôle sont clos, les jetons d'émargement
+            deviennent invalides et aucune absence n'est dérivée pour cette séance.</p>
+          <mat-form-field appearance="outline">
+            <mat-label>Motif de l'annulation</mat-label>
+            <input matInput formControlName="reason" maxlength="500" required />
+          </mat-form-field>
+          <div class="sessions__form-actions">
+            <button
+              mat-flat-button
+              color="warn"
+              type="submit"
+              [disabled]="submitting() || sessionCancelForm.invalid"
+            >
+              Confirmer l'annulation
+            </button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+              Revenir
+            </button>
+          </div>
+          @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
+        </form>
+      }
       @if (isClosed()) {
         <p class="sessions__status" role="note">Séance clôturée : l'émargement est fermé.</p>
       }
+      @if (isCancelled()) {
+        <p class="sessions__status" role="note">
+          Séance annulée : l'émargement est fermé et aucune absence n'est comptée.
+        </p>
+      }
+
+      <!-- Remplacements de formateur (G1-C.2) -->
+      <section class="sessions__section" aria-label="Remplacements de formateur">
+        <div class="sessions__header">
+          <h2 class="sessions__subtitle">Remplacements</h2>
+          @if (canAddSubstitution()) {
+            <button mat-stroked-button type="button" (click)="toggleSubstitutionForm()">
+              <mat-icon aria-hidden="true">person_add</mat-icon> Ajouter un remplaçant
+            </button>
+          }
+        </div>
+
+        @if (showSubstitutionForm()) {
+          <form
+            class="sessions__inline-form"
+            [formGroup]="substitutionForm"
+            (ngSubmit)="submitSubstitution()"
+          >
+            <mat-form-field appearance="outline">
+              <mat-label>Remplaçant</mat-label>
+              <mat-select formControlName="substituteTeacherPublicId">
+                @for (t of eligibleTeachers(); track t.publicId) {
+                  <mat-option [value]="t.publicId">{{ t.firstName }} {{ t.lastName }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Début (validité)</mat-label>
+              <input matInput type="datetime-local" formControlName="validFrom" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Fin (validité)</mat-label>
+              <input matInput type="datetime-local" formControlName="validUntil" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Motif</mat-label>
+              <input matInput formControlName="reason" maxlength="500" required />
+            </mat-form-field>
+            <div class="sessions__form-actions">
+              <button
+                mat-flat-button
+                type="submit"
+                [disabled]="substitutionBusy() || substitutionForm.invalid"
+              >
+                Affecter
+              </button>
+              <button mat-button type="button" (click)="toggleSubstitutionForm()">Annuler</button>
+            </div>
+          </form>
+        }
+        @if (substitutionError()) {
+          <p class="sessions__inline-error" role="alert">{{ substitutionError() }}</p>
+        }
+
+        @if (substitutionsState() === 'error') {
+          <p class="sessions__inline-error" role="alert">
+            Les remplacements n'ont pas pu être chargés.
+          </p>
+        } @else if (substitutions().length === 0) {
+          <p class="sessions__status" role="note">Aucun remplacement.</p>
+        } @else {
+          <ul class="sessions__plain-list">
+            @for (s of substitutions(); track s.publicId) {
+              <li>
+                <span>
+                  {{ s.substitute.firstName }} {{ s.substitute.lastName }}
+                  remplace {{ s.originalTeacher.firstName }} {{ s.originalTeacher.lastName }}
+                </span>
+                <span>
+                  du {{ formatInstantUtc(s.validFrom) }} au {{ formatInstantUtc(s.validUntil) }}
+                  — {{ s.status === 'ACTIVE' ? 'actif' : 'terminé' }}
+                </span>
+                @if (s.status === 'ACTIVE' && canManageSubstitutions()) {
+                  <button
+                    mat-button
+                    type="button"
+                    (click)="endSubstitution(s.publicId)"
+                    [disabled]="substitutionBusy()"
+                  >
+                    Terminer
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
 
       <!-- Points de contrôle -->
       <section class="sessions__section" aria-label="Points de contrôle">

@@ -113,6 +113,22 @@ class ClassGroupDirectoryTests {
         assertThat(classGroupDirectory.findByInternalId(-1L)).isEmpty();
     }
 
+    @Test
+    void findByPublicIdsResolvesABatchInOneCallAndIgnoresUnknownOrNull() {
+        String admin = adminToken();
+        UUID classA = UUID.fromString(chain(admin, "PRG-" + shortCode(), "AY-" + shortCode()));
+        UUID classB = UUID.fromString(chain(admin, "PRG-" + shortCode(), "AY-" + shortCode()));
+
+        var refs = classGroupDirectory.findByPublicIds(
+                java.util.Arrays.asList(classA, classB, UUID.randomUUID(), null, classA));
+
+        assertThat(refs).extracting(ClassGroupRef::publicId)
+                .containsExactlyInAnyOrder(classA, classB);
+
+        assertThat(classGroupDirectory.findByPublicIds(java.util.List.of())).isEmpty();
+        assertThat(classGroupDirectory.findByPublicIds(null)).isEmpty();
+    }
+
     // ------------------------------------------------------------------
 
     private String chain(String admin, String programCode, String yearCode) {

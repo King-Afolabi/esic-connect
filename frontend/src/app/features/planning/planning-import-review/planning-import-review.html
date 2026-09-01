@@ -1,0 +1,176 @@
+<nav class="plan__tabs" aria-label="Planning">
+  <a routerLink="/planning/import" routerLinkActive="plan__tab--active">Importer un planning</a>
+  <a routerLink="/planning/versions" routerLinkActive="plan__tab--active">Versions publiées</a>
+</nav>
+
+@switch (jobState().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement de l'import"></mat-progress-bar>
+    <p class="plan__status" role="status">Chargement…</p>
+  }
+  @case ('not-found') {
+    <div class="plan__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucun import de planning ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/planning/import">Nouvel import</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="plan__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter cet import.</p>
+      <a mat-stroked-button routerLink="/dashboard">Retour au tableau de bord</a>
+    </div>
+  }
+  @case ('error') {
+    <div class="plan__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ jobErrorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    <h1 class="plan__title">Revue de l'import « {{ job()!.originalFileName }} »</h1>
+
+    <mat-card appearance="outlined">
+      <mat-card-content>
+        <dl class="plan__facts">
+          <div><dt>Statut</dt><dd>{{ statusLabel(job()!.status) }}</dd></div>
+          <div><dt>Lignes</dt><dd>{{ job()!.totalRows }}</dd></div>
+          <div><dt>Valides</dt><dd>{{ job()!.validRows }}</dd></div>
+          <div><dt>Avertissements</dt><dd>{{ job()!.warningRows }}</dd></div>
+          <div><dt>Erreurs</dt><dd>{{ job()!.errorRows }}</dd></div>
+          <div><dt>Ajouts</dt><dd>{{ job()!.addedRows }}</dd></div>
+          <div><dt>Modifications</dt><dd>{{ job()!.modifiedRows }}</dd></div>
+          <div><dt>Inchangés</dt><dd>{{ job()!.unchangedRows }}</dd></div>
+          <div><dt>Retraits</dt><dd>{{ job()!.removedEntries }}</dd></div>
+          <div><dt>Simulé le</dt><dd>{{ formatInstant(job()!.simulatedAt) }}</dd></div>
+          @if (job()!.status === 'FAILED' && job()!.failureReason) {
+            <div><dt>Motif</dt><dd>{{ job()!.failureReason }}</dd></div>
+          }
+        </dl>
+      </mat-card-content>
+    </mat-card>
+
+    @if (isPublished()) {
+      <div class="plan__panel" role="status">
+        <mat-icon aria-hidden="true">check_circle</mat-icon>
+        <p>Ce planning est publié. Les séances de la classe sont à jour.</p>
+        <a mat-stroked-button routerLink="/planning/versions">Voir les versions</a>
+      </div>
+    } @else {
+      <div class="plan__form-actions">
+        @if (canPublish()) {
+          <button mat-flat-button type="button" (click)="startPublish()">
+            <mat-icon aria-hidden="true">publish</mat-icon>
+            Publier le planning
+          </button>
+        } @else if (job()!.status === 'SIMULATED') {
+          <p class="plan__status">
+            La publication est bloquée : {{ job()!.errorRows }} ligne(s) en anomalie.
+            Corrigez le fichier et relancez un import.
+          </p>
+        }
+        @if (canCancel()) {
+          <button mat-stroked-button type="button" (click)="cancelJob()" [disabled]="submitting()">
+            Annuler l'import
+          </button>
+        }
+      </div>
+
+      @if (confirmingPublish()) {
+        <div class="plan__confirm" role="group" aria-label="Confirmer la publication">
+          <p>
+            La publication crée ou met à jour les séances de la classe et
+            fige une nouvelle version du planning. Cette opération est
+            atomique.
+          </p>
+          @if (actionError()) {
+            <p class="plan__form-error" role="alert">{{ actionError() }}</p>
+          }
+          <div class="plan__form-actions">
+            <button mat-flat-button type="button" (click)="confirmPublish()" [disabled]="submitting()">
+              Publier
+            </button>
+            <button mat-button type="button" (click)="cancelPublish()">Annuler</button>
+          </div>
+        </div>
+      }
+      @if (actionError() && !confirmingPublish()) {
+        <p class="plan__form-error" role="alert">{{ actionError() }}</p>
+      }
+    }
+
+    <h2 class="plan__section-title">Lignes du fichier</h2>
+
+    @switch (rowsState().kind) {
+      @case ('loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement des lignes"></mat-progress-bar>
+      }
+      @case ('error') {
+        <div class="plan__panel" role="alert">
+          <p>{{ rowsErrorMessage() }}</p>
+          <button mat-stroked-button type="button" (click)="loadRows()">Réessayer</button>
+        </div>
+      }
+      @case ('ready') {
+        @if (rows().length === 0) {
+          <p class="plan__status" role="status">Aucune ligne.</p>
+        } @else {
+          <div class="plan__table-wrapper">
+            <table mat-table [dataSource]="rows()" class="plan__table">
+              <ng-container matColumnDef="rowNumber">
+                <th mat-header-cell *matHeaderCellDef>Ligne</th>
+                <td mat-cell *matCellDef="let row">{{ row.rowNumber }}</td>
+              </ng-container>
+              <ng-container matColumnDef="slotKey">
+                <th mat-header-cell *matHeaderCellDef>Créneau</th>
+                <td mat-cell *matCellDef="let row">{{ row.slotKey || '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="title">
+                <th mat-header-cell *matHeaderCellDef>Intitulé</th>
+                <td mat-cell *matCellDef="let row">{{ row.title || '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="window">
+                <th mat-header-cell *matHeaderCellDef>Créneau horaire</th>
+                <td mat-cell *matCellDef="let row">
+                  {{ row.sessionDate || '—' }} {{ row.startTime || '' }}–{{ row.endTime || '' }}
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="action">
+                <th mat-header-cell *matHeaderCellDef>Effet</th>
+                <td mat-cell *matCellDef="let row">{{ actionLabel(row.plannedAction) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>État</th>
+                <td mat-cell *matCellDef="let row">
+                  {{ row.rowStatus }}
+                  @if (row.issues.length > 0) {
+                    <ul class="plan__issues">
+                      @for (issue of row.issues; track $index) {
+                        <li [class.plan__issue--error]="issue.severity === 'ERROR' || issue.severity === 'BLOCKING'">
+                          {{ issue.message }}
+                        </li>
+                      }
+                    </ul>
+                  }
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="rowColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: rowColumns"></tr>
+            </table>
+          </div>
+
+          <mat-paginator
+            [length]="rowsTotal()"
+            [pageSize]="pageSize()"
+            [pageIndex]="pageIndex()"
+            [pageSizeOptions]="pageSizeOptions"
+            (page)="onPageChange($event)"
+            aria-label="Pagination des lignes"
+          ></mat-paginator>
+        }
+      }
+    }
+  }
+}

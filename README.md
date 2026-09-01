@@ -33,32 +33,72 @@ Audit vérifiable et matrices d'exigences :
 Autres briques livrées : authentification JWT, administration des comptes
 et des rôles, invitation / activation par email (Mailpit), référentiels
 organisationnel et académique, périmètre pédagogique, inscriptions
-historisées, rythmes d'alternance, justificatif métier (sans fichier),
-piste d'audit.
+historisées, rythmes d'alternance, **import → publication versionnée du
+planning** (module `planning`, G1-B), **justificatif avec pièce jointe**
+(G1-E — dépôt / téléchargement sécurisés, réconciliation ; antivirus et
+balayage des orphelins non implémentés), **tableaux de bord par rôle**
+(module `dashboard`, G1-F ; contexte de rôle multi-rôle vérifié côté
+serveur ; infrastructure et cartes `STUDENT` / `TEACHER`
+`IMPLEMENTED_AND_TESTED`, mais bloc **global `PARTIAL`** — cartes
+`PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes, voir
+`docs/CURRENT-STATE.md`), piste d'audit, **centre de notifications métier persistantes**
+(G1-D /
+G1-D.1 — planning publié / séance annulée / remplaçant affecté / remplacement
+terminé → notifications after-commit pour les formateurs, idempotentes,
+isolées par destinataire ; `/api/v1/me/notifications` + cloche + centre
+Angular. Livraison « au mieux » après commit, sans reprise ;
+`EF-NOTIF-002` / `RG-033` = `PARTIAL`).
 
 ## Périmètre non livré (décision de finalisation — assumée)
+
+> **Mise à jour G1 (1er septembre 2026).** Le lot produit G1 (branche
+> `feature/master-level-product-expansion`) a **livré** deux des éléments
+> ci-dessous : le **référentiel organisationnel Angular** (G1-A) et
+> l'**import → simulation → publication versionnée du planning et la
+> création des séances associées** (G1-B, module `planning` réel,
+> migrations V12/V13, endpoints et écrans). `EF-PLAN-001..005`,
+> `EF-PLAN-007`, `EF-SES-001`, `RG-016`, `RG-030..RG-035`, `AC-007`,
+> `AC-008` sont désormais `IMPLEMENTED_AND_TESTED`. Détail :
+> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` et
+> `docs/CURRENT-STATE.md` (§ « Mise à jour G1 »). La liste ci-dessous
+> reflète l'état **avant G1** ; les items barrés sont livrés.
 
 Pour cette livraison de prototype, les éléments suivants **ne sont pas
 implémentés** et ne doivent jamais être présentés comme livrés :
 
-- **Import du planning → prévisualisation → publication → versionnement →
-  création automatique des séances depuis un planning.** Aucun module
-  `planning`, aucune table, aucun endpoint, aucun écran. Le prototype ne
-  permet que la **création manuelle de séances exceptionnelles**.
-  Exigences classées `HORS_PÉRIMÈTRE_ASSUMÉ` : **EF-PLAN-001 à
-  EF-PLAN-007, EF-SES-001, RG-016, AC-007, AC-008**. C'est la lacune la
-  plus visible du parcours prioritaire de `CLAUDE.md` ; elle est **assumée
-  et signalée** ici, dans `docs/01-cadrage.md`, `docs/02-cahier-des-charges.md`
-  et devra l'être en soutenance.
-- Séances : `PATCH`, annulation, affectation d'un remplaçant.
+- ~~**Import du planning → prévisualisation → publication → versionnement →
+  création automatique des séances depuis un planning.**~~ **Livré au bloc
+  G1-B.** Seul `EF-PLAN-006` (création manuelle plein calendrier) reste
+  `HORS_PÉRIMÈTRE_ASSUMÉ`.
+- Séances : ~~annulation, affectation d'un remplaçant~~ — **livrés au
+  bloc G1-C** (annulation `POST /sessions/{id}/cancel` ; remplacements
+  `teacher_substitution` + `GET/POST …/substitutions` ; séance
+  `CANCELLED` consultable, remplaçant actif visible et gestionnaire
+  pendant sa période, audit `AFTER_COMMIT` — checkpoint G1-C.3). `PATCH`
+  d'une séance manuelle `PLANNED` : non livré (non requis).
 - QR fixe de salle + contrôle réseau CIDR (référentiel présent, non
   consommé) ; scan caméra mobile (code court uniquement).
 - WebAuthn / passkeys, MFA TOTP, anti-bot (Turnstile).
-- Réclamations / messagerie, départ anticipé, justificatif avec pièce
-  jointe, import Excel `.xlsx` / multifeuille.
+- Réclamations / messagerie, départ anticipé, import Excel `.xlsx` /
+  multifeuille.
+- Justificatif **avec pièce jointe** : **livré (G1-E)** — dépôt multipart
+  propriétaire, compensation base/fichier, réconciliation des
+  `PENDING_STORAGE`, téléchargement `Content-Disposition: attachment` +
+  `nosniff` (propriétaire + examinateur périmétré). **Non livré** :
+  antivirus (`NOT_IMPLEMENTED`), balayage des fichiers orphelins
+  (`NOT_IMPLEMENTED` — la réconciliation ne traite que les
+  `PENDING_STORAGE`), remplacement direct d'une pièce, rétention `DELETED`
+  (`À_DÉFINIR`).
 - Service IA (FastAPI, mapping de colonnes, score d'anomalie).
 - IoT / MQTT / Raspberry Pi (broker Mosquitto démarré, **aucun code**).
-- PWA installable / offline / notifications push.
+- Notifications : le centre in-app persistant est livré (G1-D / G1-D.1)
+  pour l'audience **formateur** (principal + remplaçants `ACTIVE` +
+  remplaçant tout juste terminé) ; notifications aux **apprenants** et
+  **responsables pédagogiques** (dette G1-D-AUDIENCE), **garantie de
+  livraison / reprise** (best effort après commit — dette G1-D-OUTBOX),
+  préférences par type, email métier, push PWA, purge / rétention
+  (`À_DÉFINIR`) — non livrés. `EF-NOTIF-002` / `RG-033` = `PARTIAL`.
+- PWA installable / offline.
 - Mot de passe oublié, `/auth/logout` + révocation de session (JWT
   stateless assumé).
 - Déploiement cloud / staging / HTTPS / haute disponibilité.
@@ -71,13 +111,13 @@ Liste complète et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md`
 ## Architecture réelle
 
 - **Back-end** : Java 21, Spring Boot 3.5, Maven, **Spring Modulith 1.4**.
-  Monolithe modulaire — 12 modules :
+  Monolithe modulaire — **14 modules** :
   `identity`, `organization`, `academic`, `enrollment`, `alternation`,
-  `coursesession`, `attendance`, `studentimport`, `notification`,
-  `audit`, `bootstrap`, `shared`. Frontières vérifiées par
-  `ModularityTests`.
-- **Base** : MySQL 8, schéma géré **uniquement** par Flyway (`V1` → `V11`,
-  schéma en version 11), `ddl-auto: validate`.
+  `planning`, `coursesession`, `attendance`, `studentimport`,
+  `notification`, `dashboard`, `audit`, `bootstrap`, `shared`. Frontières
+  vérifiées par `ModularityTests`.
+- **Base** : MySQL 8, schéma géré **uniquement** par Flyway (`V1` → `V16`,
+  schéma en version 16), `ddl-auto: validate`.
 - **Cache / données temporaires** : Redis 7 — consommé **uniquement**
   pour les jetons d'émargement.
 - **Front-end** : Angular 21.2 (standalone, zoneless, signaux, lazy
@@ -87,8 +127,9 @@ Liste complète et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md`
   `@EnableMethodSecurity` + `@PreAuthorize` sur toutes les routes non
   publiques, contrôle de périmètre côté serveur.
 
-Modules `planning`, `claim`, `reporting`, `ai`, `iot` décrits dans
-`docs/03-architecture.md` §7 = **architecture cible non implémentée**.
+Modules `claim`, `reporting`, `ai`, `iot` décrits dans
+`docs/03-architecture.md` §7 = **architecture cible non implémentée**
+(`planning` et `dashboard` sont désormais réels — G1-B, G1-F).
 
 Architecture cible cloud (AWS) : documentée, **non déployée**
 (`docs/03-architecture.md` §37).

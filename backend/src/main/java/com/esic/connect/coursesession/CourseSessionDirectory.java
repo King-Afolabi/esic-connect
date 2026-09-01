@@ -78,6 +78,96 @@ public interface CourseSessionDirectory {
      */
     List<SessionRef> findSessionsInRange(Instant from, Instant to);
 
+    /**
+     * Séances <strong>opérationnelles</strong> confiées au formateur
+     * {@code teacherPublicId} dont le début tombe dans {@code [from, to]}
+     * ({@code null} = borne ouverte), triées par début, <strong>bornées</strong>
+     * à {@code limit} (le module {@code dashboard} borne à ≤ 10).
+     * Contrat d'entrée en UUID public ; sans contrôle d'accès de
+     * l'appelant (le {@code dashboard} a déjà résolu que l'appelant
+     * <em>est</em> ce formateur).
+     *
+     * <p>Inclut, en plus des séances où il est <strong>formateur
+     * principal</strong>, celles où il intervient comme
+     * <strong>remplaçant {@code ACTIVE}</strong> dont la période de
+     * validité couvre l'instant courant (mêmes règles métier que
+     * {@code GET /sessions}, G1-C.3) — une seule requête de substitutions,
+     * pas de N+1, aucun doublon (un formateur à la fois principal et
+     * remplaçant d'une même séance ne la voit qu'une fois).
+     */
+    List<SessionRef> findUpcomingForTeacher(UUID teacherPublicId, Instant from, Instant to, int limit);
+
+    /**
+     * Fenêtres des séances <strong>opérationnelles</strong> (hors
+     * supersédées / annulées) dont l'intervalle {@code [startsAt, endsAt)}
+     * chevauche {@code [from, to)}. Contrat <strong>100 % UUID publics</strong> :
+     * le module {@code planning} s'en sert pour détecter un conflit
+     * formateur / classe avec des séances <strong>déjà publiées</strong>
+     * (RG-034) sans importer aucun repository ni entité de
+     * {@code coursesession}.
+     *
+     * @param from borne basse (incluse ; {@code null} = ouverte)
+     * @param to   borne haute (exclue ; {@code null} = ouverte)
+     */
+    List<ExistingSessionWindow> findOperationalSessionWindows(Instant from, Instant to);
+
+    /**
+     * Destinataires « métier » d'un changement de séance (G1-D) : le
+     * formateur principal et les remplaçants {@code ACTIVE} de la séance,
+     * en identifiants publics. Contrat <strong>100 % UUID publics</strong> :
+     * le module {@code notification} s'en sert pour cibler ses
+     * destinataires sans importer aucune entité ni repository de
+     * {@code coursesession}. Renvoie {@link Optional#empty()} si la séance
+     * n'existe pas (une séance {@code CANCELLED} ou supersédée est
+     * <strong>renvoyée</strong> : on notifie justement de son annulation).
+     */
+    Optional<SessionNotificationInfo> findSessionNotificationInfo(UUID sessionPublicId);
+
+    /**
+     * Identifiants publics des <strong>formateurs principaux</strong> des
+     * séances {@code sessionPublicIds} (G1-D) — pour notifier les
+     * formateurs concernés par une publication de planning. Les séances
+     * inconnues sont ignorées.
+     */
+    Set<UUID> findPrincipalTeacherPublicIds(java.util.Collection<UUID> sessionPublicIds);
+
+    /**
+     * Cibles de notification d'une séance.
+     *
+     * @param sessionPublicId              identifiant public de la séance
+     * @param title                        libellé libre de la séance ({@code null} possible)
+     * @param principalTeacherPublicId     formateur principal ({@code user_account.public_id})
+     * @param substituteTeacherPublicIds   remplaçants {@code ACTIVE} ({@code user_account.public_id})
+     */
+    record SessionNotificationInfo(
+            UUID sessionPublicId,
+            String title,
+            UUID principalTeacherPublicId,
+            Set<UUID> substituteTeacherPublicIds) {
+    }
+
+    /**
+     * Fenêtre publique minimale d'une séance existante — pour la
+     * détection de conflit inter-modules.
+     *
+     * @param sessionPublicId      identifiant public de la séance
+     * @param planningSlotPublicId identité stable du créneau de planning
+     *                             d'origine, ou {@code null} pour une
+     *                             séance exceptionnelle manuelle
+     * @param teacherPublicId      formateur principal ({@code user_account.public_id})
+     * @param classGroupPublicIds  classes rattachées
+     * @param startsAt             début (UTC)
+     * @param endsAt               fin (UTC)
+     */
+    record ExistingSessionWindow(
+            UUID sessionPublicId,
+            UUID planningSlotPublicId,
+            UUID teacherPublicId,
+            Set<UUID> classGroupPublicIds,
+            Instant startsAt,
+            Instant endsAt) {
+    }
+
     /** Niveau d'accès demandé sur une séance. */
     enum AccessLevel {
         /** Consultation (séance + présences). {@code TEACHER} : sa séance uniquement. */

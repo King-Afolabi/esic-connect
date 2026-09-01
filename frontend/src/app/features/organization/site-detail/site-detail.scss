@@ -1,0 +1,50 @@
+@use '../organization.shared';
+
+.org__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.org__tabs a {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+  text-decoration: none;
+  padding: 0.25rem 0.25rem 0.5rem;
+  border-bottom: 2px solid transparent;
+}
+
+.org__tab--active {
+  color: var(--mat-sys-primary);
+  border-bottom-color: var(--mat-sys-primary);
+}
+
+.org__card {
+  max-width: 48rem;
+}
+
+.org__confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 0.5rem;
+  background: var(--mat-sys-surface-container);
+  max-width: 40rem;
+}
+
+.org__confirm-field {
+  width: 100%;
+}
+
+.org__form-error {
+  margin: 0;
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-medium);
+}

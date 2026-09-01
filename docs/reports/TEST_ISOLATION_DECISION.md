@@ -74,6 +74,37 @@
     -e "DROP DATABASE esic_test;"
   ```
 
+## Incident observé — `EnrollmentDirectoryTests` sous `TZ=UTC` (1er septembre 2026)
+
+Pendant la 1re passe corrective du grand lot G1, **un** run
+`TZ=UTC ./mvnw clean test` a produit **deux erreurs** dans
+`EnrollmentDirectoryTests` : réponse HTTP nulle sur `POST
+/api/v1/auth/login`, puis `NullPointerException` dans la fixture
+`adminToken()` (`login.get("accessToken")` sur un corps nul). Le run
+`TZ=UTC` **suivant** de la même passe, puis tous les runs de la 2e passe,
+sont repassés verts (809 puis 811 tests, 0 échec).
+
+Campagne bornée de vérification (2e passe corrective) :
+`EnrollmentDirectoryTests` **seul**, sous `TZ=UTC`, **5 répétitions
+isolées** → **5/5 vertes** (`Tests run: 3, Failures: 0, Errors: 0` à
+chaque itération).
+
+**Qualification retenue** : *« incident intermittent observé une fois,
+non reproduit lors des répétitions et du run final ; cause non
+déterminée »*. Ce n'est **pas** un « problème d'infrastructure
+confirmé ».
+
+Mécanisme **plausible mais non prouvé** : `adminToken()` fait un
+`saveAndFlush` puis un appel HTTP réel `/auth/login` ; un corps de
+réponse nul correspond à une connexion avortée avant réception complète.
+La contention du pool HikariCP **plafonné à 4** partagé entre la
+vingtaine de contextes `@SpringBootTest` cachés lors d'un `clean test`
+**complet** (voir la section « Constat » ci-dessus) peut provoquer un
+échec transitoire d'acquisition de connexion sur la route de login
+(BCrypt + accès MySQL). La correction structurelle est la migration
+Testcontainers déjà planifiée ci-dessous ; aucune modification de code ou
+de test n'a été faite pour cet incident (non reproductible).
+
 ## Travail à planifier (hors périmètre de ce lot)
 
 1. Ajouter `org.testcontainers:mysql` + `:junit-jupiter` (scope `test`).
