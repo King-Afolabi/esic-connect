@@ -791,8 +791,9 @@ Une exigence décrite n’est pas automatiquement réalisée.
     (`STUDENT`). Dépendance ajoutée : `angularx-qrcode@21.0.5` (MIT) ;
     aucune dépendance de scan caméra.
   * **Amorçage de démonstration** : module `bootstrap` +
-    `DemoDataInitializer` (`@Profile("demo")`, idempotent) crée 4 comptes
-    fictifs (domaine `example.test`) via le port public
+    `DemoDataInitializer` (`@Profile("demo")`, idempotent) crée 6 comptes
+    fictifs (domaine `example.test`, dont un `SUPER_ADMIN` séparé du
+    compte d'administration quotidienne) via le port public
     `identity.DemoAccountProvisioner` (implémentation elle-même
     `@Profile("demo")`) ; mot de passe via `ESIC_DEMO_PASSWORD`
     (obligatoire, ≥ 12 caractères, jamais commité, jamais journalisé).

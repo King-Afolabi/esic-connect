@@ -466,7 +466,7 @@ iot            → attendance, coursesession, shared
 > | `notification` | §7.11 — email d'activation **+ centre de notifications persistantes** (G1-D : table `notification`, listeners `AFTER_COMMIT`, idempotence `dedup_key`, API `/api/v1/me/notifications`). **Pas de file persistante ni de DLQ, pas de push ; audience formateur uniquement** | V15 |
 > | **`dashboard`** | **nouveau (G1-F)** — `GET /api/v1/me/dashboard` typé par rôle, lecture seule, agrégats bornés via ports publics, contexte de rôle vérifié côté serveur. Répond à CDC §25 de façon **partielle** | — |
 > | `audit` | §7.13 | V1 |
-> | `bootstrap` | **nouveau** — amorçage `demo` (5 comptes fictifs, profil `demo` uniquement) | — |
+> | `bootstrap` | **nouveau** — amorçage `demo` (6 comptes fictifs dont `SUPER_ADMIN`, profil `demo` uniquement) | — |
 > | `shared` | §7.16 | — |
 >
 > **Architecture cible non implémentée** (aucun package, aucune table,
