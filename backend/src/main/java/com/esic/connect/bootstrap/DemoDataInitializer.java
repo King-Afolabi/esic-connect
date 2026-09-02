@@ -13,7 +13,7 @@ import java.util.Set;
 
 /**
  * Amorçage de démonstration — actif uniquement sous le profil
- * {@code demo}. Crée quatre comptes fictifs de façon idempotente ; ne
+ * {@code demo}. Crée six comptes fictifs de façon idempotente ; ne
  * touche à aucune donnée métier réelle et ne s'exécute jamais sous
  * {@code local}, {@code test} ou en production.
  *
@@ -22,6 +22,12 @@ import java.util.Set;
  * à la formation de démonstration sont créés séparément par
  * {@code scripts/seed-demo.sh} via les API REST réelles (avec le compte
  * {@code ADMIN} ci-dessous).
+ *
+ * <p>Le compte {@code superadmin@example.test} rend démontrables les
+ * routes réservées à {@code SUPER_ADMIN} — notamment les plages réseau
+ * CIDR ({@code SiteNetworkRangeController}), inaccessibles même à
+ * {@code ADMIN}. Le rôle {@code SUPER_ADMIN} est déjà créé par la
+ * migration {@code V2} ; aucun privilège nouveau n'est introduit ici.
  *
  * <p>Le compte {@code responsable@example.test} porte <strong>deux
  * rôles</strong> ({@code PEDAGOGICAL_MANAGER} + {@code TEACHER}) afin de
@@ -36,18 +42,27 @@ class DemoDataInitializer implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(DemoDataInitializer.class);
     private static final int MIN_PASSWORD_LENGTH = 12;
 
-    /** Comptes fictifs — domaine d'email réservé {@code example.test}. */
+    /**
+     * Comptes fictifs — domaine d'email réservé {@code example.test}.
+     *
+     * <p>Les noms affichés portent leur rôle : devant un jury, la colonne
+     * « nom » d'une liste d'utilisateurs suffit à identifier qui est qui,
+     * sans revenir à la grille des comptes.
+     */
+    private static final DemoAccount SUPER_ADMIN =
+            new DemoAccount("superadmin@example.test", "Super Administrateur", "Démo",
+                    Set.of("SUPER_ADMIN"));
     private static final DemoAccount ADMIN =
-            new DemoAccount("admin@example.test", "Awa", "Diallo", Set.of("ADMIN"));
+            new DemoAccount("admin@example.test", "Administrateur", "Démo", Set.of("ADMIN"));
     private static final DemoAccount TEACHER =
-            new DemoAccount("formateur@example.test", "Karim", "Benali", Set.of("TEACHER"));
+            new DemoAccount("formateur@example.test", "Formateur", "Démo", Set.of("TEACHER"));
     private static final DemoAccount STUDENT_ONE =
-            new DemoAccount("apprenant1@example.test", "Lina", "Sow", Set.of("STUDENT"));
+            new DemoAccount("apprenant1@example.test", "Alice", "Martin", Set.of("STUDENT"));
     private static final DemoAccount STUDENT_TWO =
-            new DemoAccount("apprenant2@example.test", "Noah", "Mercier", Set.of("STUDENT"));
+            new DemoAccount("apprenant2@example.test", "Karim", "Diallo", Set.of("STUDENT"));
     /** Compte multi-rôles : démontre le sélecteur de contexte de rôle (EF-AUTH-003). */
     private static final DemoAccount RESPONSIBLE =
-            new DemoAccount("responsable@example.test", "Sofia", "Traoré",
+            new DemoAccount("responsable@example.test", "Responsable Pédagogique", "Démo",
                     Set.of("PEDAGOGICAL_MANAGER", "TEACHER"));
 
     private final DemoAccountProvisioner provisioner;
@@ -66,13 +81,15 @@ class DemoDataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        for (DemoAccount account : Set.of(ADMIN, TEACHER, STUDENT_ONE, STUDENT_TWO, RESPONSIBLE)) {
+        for (DemoAccount account :
+                Set.of(SUPER_ADMIN, ADMIN, TEACHER, STUDENT_ONE, STUDENT_TWO, RESPONSIBLE)) {
             provisioner.ensureActiveAccount(account.email(), account.firstName(), account.lastName(),
                     demoPassword, account.roles());
         }
         // Le mot de passe n'est jamais journalisé.
-        log.info("Amorçage demo : 5 comptes fictifs synchronisés "
-                + "(admin / formateur / 2 apprenants / responsable pédagogique multi-rôles) — "
+        log.info("Amorçage demo : 6 comptes fictifs synchronisés "
+                + "(super-admin / admin / formateur / 2 apprenants / responsable pédagogique "
+                + "multi-rôles) — "
                 + "statut ACTIVE et mot de passe aligné sur la valeur courante de "
                 + "ESIC_DEMO_PASSWORD. Complétez avec scripts/seed-demo.sh.");
     }
