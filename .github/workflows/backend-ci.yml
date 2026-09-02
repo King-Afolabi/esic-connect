@@ -68,6 +68,13 @@ jobs:
       # Datasource / Redis résolus par application-test.yml.
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: "3306"
+      # `application-test.yml` lit `MYSQL_TEST_DATABASE` (défaut local
+      # `esic_test`) pour ne jamais écrire dans la base applicative ni dans
+      # la base de démonstration. En CI la base du service est jetée à
+      # chaque run : on la désigne donc explicitement, sans dépendre du
+      # défaut local. `MYSQL_DATABASE` reste fourni pour le service MySQL
+      # lui-même et pour tout profil non-test.
+      MYSQL_TEST_DATABASE: esic_connect_ci
       MYSQL_DATABASE: esic_connect_ci
       MYSQL_USER: esic_ci_user
       MYSQL_PASSWORD: esic_ci_mysql_pw

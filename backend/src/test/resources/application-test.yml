@@ -4,9 +4,17 @@
 # planifier dans docs/reports/TEST_ISOLATION_DECISION.md (FINAL-021).
 # En CI, l'isolation existe de fait : base éphémère `esic_connect_ci`
 # d'un service GitHub Actions jeté à chaque run.
+#
+# ISOLATION TEST / DÉMONSTRATION — la suite lit `MYSQL_TEST_DATABASE`, et
+# NON `MYSQL_DATABASE`. Les deux variables étaient confondues : lancer le
+# back-end de démonstration avec `MYSQL_DATABASE=esic_connect_demo`
+# faisait alors écrire la suite de tests DANS la base de démonstration
+# (les tests créent des milliers de comptes et tronquent des tables).
+# Défaut local `esic_test` ; la CI impose explicitement
+# `MYSQL_TEST_DATABASE: esic_connect_ci` (voir .github/workflows/backend-ci.yml).
 spring:
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_TEST_DATABASE:esic_test}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
     hikari:
