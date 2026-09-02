@@ -2174,7 +2174,7 @@ répétitions et du run final ; cause non déterminée »**. **Pas**
 - **Tests verts (fin G1-G)** : back **800/0** (`./mvnw clean test`, 3
   fuseaux, base `esic_test` recréée vierge → Flyway `V1→V16`) ; front
   **596/0** ; `lint` / `build` (484,52 kB, 0 alerte de budget) / `audit`
-  (0 vuln.) verts ; `ModularityTests` vert (13 modules).
+  (0 vuln.) verts ; `ModularityTests` vert (~~13~~ **14** modules — décompte corrigé à la passe corrective, cf. `G1_FINAL_REPORT.md` §10).
 - **Tests rouges** : aucun.
 - **Migrations** : schéma en **V16** (consommée). **V17 non créée** —
   aucun index de perf ne s'est avéré nécessaire pour G1-F (`DEC-G1-010`,
@@ -2243,7 +2243,7 @@ Commits de la session autonome (1er septembre 2026), sur
 ## Commandes de reprise
 
 ```bash
-cd /Users/kingafolabi/Desktop/projet_final
+cd <racine-du-dépôt>
 git switch feature/master-level-product-expansion
 git log --oneline main..HEAD
 
@@ -2278,3 +2278,54 @@ npm ci && npm test -- --watch=false && npm run lint && npm run build && npm audi
 3. Démarrer G1-A : audit endpoint → écran (§3.1 du plan), puis écrans
    `organization`, écritures `academic`, affectations pédagogiques,
    profils / inscriptions / transferts, émission d'invitation.
+
+---
+
+## Clôture documentaire G1 — 2 septembre 2026
+
+Journal clos. Le lot G1 est **fusionné sur `main`** par la **PR #40**
+(commit `d3450e6`) ; la branche `feature/master-level-product-expansion`
+a un contenu **identique** à `main` (`git diff` vide).
+
+**État final des blocs** (statuts autorisés uniquement) :
+
+| Bloc | Statut final |
+|---|---|
+| G1-A — écrans des API administratives | `PARTIAL` |
+| G1-B — module `planning` | `IMPLEMENTED_AND_TESTED` |
+| G1-C — cycle de vie des séances | `IMPLEMENTED_AND_TESTED` |
+| G1-D — notifications persistantes | `EF-NOTIF-001 IMPLEMENTED_AND_TESTED` / `EF-NOTIF-002` + `RG-033` `PARTIAL` |
+| G1-E — pièces jointes | périmètre fonctionnel `IMPLEMENTED_AND_TESTED` ; durcissement opérationnel `PARTIAL` |
+| G1-F — tableaux de bord | **`PARTIAL`** (bloc global) |
+| G1-G — recette et documentation | recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `NOT_IMPLEMENTED` ; démonstration manuelle `NOT_PERFORMED` |
+| **Groupe 1 global** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** |
+
+**Tests de référence** (HEAD `d3450e6`) : back **811 / 0 échec** (96
+classes, `ModularityTests` vert, **14 modules**, Flyway **V1 → V16**) ;
+front **71 fichiers / 600 tests / 0 échec** ; `lint` OK ; build
+**484,52 kB** ; `npm audit --audit-level=high` → 0 vulnérabilité.
+
+**Limites conservées, jamais masquées** : aucun e2e navigateur ; aucune
+démonstration manuelle consignée ; audience de notification limitée aux
+formateurs ; pas d'outbox (notifications ni audit) ; antivirus et
+balayage d'orphelins absents ; cartes manager / administration
+incomplètes ; coût SQL linéaire par séance sur le tableau de bord ;
+rate-limiting de connexion absent ; rétention des pièces `DELETED` non
+définie.
+
+**Documents mis à jour lors de cette clôture** : `README.md`,
+`docs/CURRENT-STATE.md` (raccourci, chronologie archivée dans
+`PROJECT_HISTORY.md`), `docs/03-architecture.md`,
+`docs/04-modele-donnees.md`, `docs/05-product-backlog.md`,
+`docs/06-risques.md`, `docs/07-securite-rgpd.md`,
+`docs/08-tests-recette.md`, `docs/09-matrice-rncp.md`,
+`docs/10-journal-ia.md`, `docs/11-guide-demonstration.md`,
+`docs/12-guide-utilisateur.md`, `G1_REQUIREMENTS_TRACEABILITY.md`,
+`G1_ARCHITECTURE_DECISIONS.md`, `G1_IMPLEMENTATION_PLAN.md`, ce fichier.
+
+**Document produit pour la soutenance** :
+`docs/reports/SOUTENANCE_TECHNICAL_SOURCE.md`.
+
+**Aucun code de production, aucun test, aucune migration, aucun `.env`
+modifié** pendant cette clôture ; aucun `push`, aucune PR, aucun
+`--amend`.

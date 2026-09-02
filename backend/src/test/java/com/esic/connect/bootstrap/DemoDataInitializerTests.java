@@ -29,21 +29,29 @@ class DemoDataInitializerTests {
     }
 
     @Test
-    void provisionsExactlyFiveFictionalAccountsIncludingAMultiRoleOne() {
+    void provisionsExactlySixFictionalAccountsIncludingAMultiRoleOne() {
         DemoDataInitializer initializer = new DemoDataInitializer(provisioner, "demo-password-1234");
         initializer.run(new DefaultApplicationArguments());
 
-        assertThat(provisioner.calls.get()).isEqualTo(5);
+        assertThat(provisioner.calls.get()).isEqualTo(6);
         assertThat(provisioner.emails)
-                .containsExactlyInAnyOrder("admin@example.test", "formateur@example.test",
-                        "apprenant1@example.test", "apprenant2@example.test",
-                        "responsable@example.test");
+                .containsExactlyInAnyOrder("superadmin@example.test", "admin@example.test",
+                        "formateur@example.test", "apprenant1@example.test",
+                        "apprenant2@example.test", "responsable@example.test");
         assertThat(provisioner.emails).allMatch(email -> email.endsWith("@example.test"));
-        assertThat(provisioner.roles).contains("ADMIN", "TEACHER", "STUDENT", "PEDAGOGICAL_MANAGER");
+        assertThat(provisioner.roles)
+                .contains("SUPER_ADMIN", "ADMIN", "TEACHER", "STUDENT", "PEDAGOGICAL_MANAGER");
         // Le compte responsable cumule deux rôles (sélecteur de contexte, EF-AUTH-003).
         assertThat(provisioner.rolesByEmail.get("responsable@example.test"))
                 .containsExactlyInAnyOrder("PEDAGOGICAL_MANAGER", "TEACHER");
-        // Le mot de passe transmis n'est jamais journalisé par l'initialiseur.
+        // SUPER_ADMIN reste un compte SÉPARÉ du compte d'administration
+        // quotidienne (RG-003 / cahier §6.2) : il ne cumule aucun autre rôle.
+        assertThat(provisioner.rolesByEmail.get("superadmin@example.test"))
+                .containsExactly("SUPER_ADMIN");
+        assertThat(provisioner.rolesByEmail.get("admin@example.test"))
+                .doesNotContain("SUPER_ADMIN");
+        // Les six comptes partagent la même valeur locale d'ESIC_DEMO_PASSWORD,
+        // jamais journalisée par l'initialiseur.
         assertThat(provisioner.passwords).containsOnly("demo-password-1234");
     }
 

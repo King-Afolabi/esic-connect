@@ -444,49 +444,82 @@ iot            → attendance, coursesession, shared
 
 # 7. Modules du back-end
 
-> **État réel d'implémentation (checkpoint de finalisation F2,
-> 31 août 2026 — base `main` = `e44ccb1`).**
+> **État réel d'implémentation (audit documentaire du 2 septembre 2026 —
+> `main` = HEAD = `d3450e6`, lot G1 fusionné par la PR #40).**
 >
 > Les sous-sections §7.1 à §7.16 décrivent le **découpage cible** issu de
-> la conception initiale. Le code réellement fusionné sur `main` contient
-> **12 modules Spring Modulith** (`ModularityTests` vert) :
+> la conception initiale. Le code réellement fusionné contient
+> **14 modules Spring Modulith** (`ModularityTests` vert — aucune
+> dépendance vers un package `.internal` d'un autre module, aucun cycle) :
 >
 > | Module réel (`com.esic.connect.`) | §7 correspondant | Migration(s) |
 > |---|---|---|
 > | `identity` | §7.1 | V1, V2, V3 |
-> | `organization` | **remplace §7.6 `room`** (site / bâtiment / salle / plage réseau CIDR) | V4 |
+> | `organization` | **remplace §7.6 `room`** (site / bâtiment / salle / plage réseau CIDR) ; écrans Angular livrés en G1-A | V4 |
 > | `academic` | §7.2 (+ affectations pédagogiques et `AcademicScopeGuard`) | V5, V6 |
 > | `enrollment` | §7.3 | V7 |
 > | `alternation` | §7.4 | V8 |
-> | `coursesession` | §7.7 — séances manuelles **et** issues d'un planning publié (G1-B) ; cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C) ; remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
-> | `attendance` | §7.8 (+ le justificatif métier de §7.9 — **socle des pièces jointes** livré en G1-E cp1 : port `JustificationFileStorage`, contenu hors base / hors webroot ; et une partie du reporting de §7.12) | V9, V10, V16 |
-> | `studentimport` | **nouveau** — import CSV contrôlé des apprenants (non prévu explicitement en §7 ; parcours d'import de §7.3) | V11 |
-> | `notification` | §7.11 — email d'activation **+ centre de notifications internes persistantes** (G1-D : table `notification`, listeners `AFTER_COMMIT`, API `/api/v1/me/notifications`) ; **pas de file persistante / DLQ, pas de push, audience formateur uniquement** | V15 |
+> | **`planning`** | **§7.5 — implémenté au bloc G1-B** : import CSV, simulation sans écriture métier, conflits, publication atomique versionnée, création des séances via un **port public** | V12, V13 |
+> | `coursesession` | §7.7 — séances manuelles **et** issues d'un planning publié (G1-B) ; cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` (G1-C.1) ; remplacements de formateur (G1-C.2) | V9, V10, V13, V14 |
+> | `attendance` | §7.8 (+ le justificatif de §7.9, **pièces jointes incluses** depuis G1-E : port `JustificationFileStorage`, contenu hors base et hors webroot ; et une partie du reporting de §7.12) | V9, V10, V16 |
+> | `studentimport` | **nouveau** — import CSV contrôlé des apprenants (parcours d'import de §7.3) | V11 |
+> | `notification` | §7.11 — email d'activation **+ centre de notifications persistantes** (G1-D : table `notification`, listeners `AFTER_COMMIT`, idempotence `dedup_key`, API `/api/v1/me/notifications`). **Pas de file persistante ni de DLQ, pas de push ; audience formateur uniquement** | V15 |
+> | **`dashboard`** | **nouveau (G1-F)** — `GET /api/v1/me/dashboard` typé par rôle, lecture seule, agrégats bornés via ports publics, contexte de rôle vérifié côté serveur. Répond à CDC §25 de façon **partielle** | — |
 > | `audit` | §7.13 | V1 |
-> | `bootstrap` | **nouveau** — amorçage `demo` (comptes fictifs, profil `demo` uniquement) | — |
+> | `bootstrap` | **nouveau** — amorçage `demo` (6 comptes fictifs dont `SUPER_ADMIN`, profil `demo` uniquement) | — |
 > | `shared` | §7.16 | — |
 >
 > **Architecture cible non implémentée** (aucun package, aucune table,
 > aucun endpoint) :
 >
-> - **§7.5 `planning`** — import du planning, simulation, versions,
->   publication, création automatique des séances, mapping intelligent.
->   `HORS_PÉRIMÈTRE_ASSUMÉ` pour cette livraison (EF-PLAN-001..007,
->   EF-SES-001, RG-016, AC-007, AC-008) — voir `README.md` et
->   `docs/reports/PROJECT_FINAL_AUDIT.md` §7.4.
-> - **§7.9 `justification`** comme module autonome + **pièces jointes** —
->   seule la métadonnée métier existe, portée par `attendance`.
+> - **§7.9 `justification`** comme module **autonome** — le justificatif
+>   et ses pièces jointes sont portés par `attendance` (le contenu des
+>   fichiers vit sur le système de fichiers via le port
+>   `attendance.JustificationFileStorage`, jamais en base).
 > - **§7.10 `claim`** — réclamations / messagerie.
-> - **§7.12 `reporting`** comme module autonome — les rapports et l'export
->   CSV vivent dans `attendance` ; pas d'export Excel, pas de mise en
->   page « officielle ».
-> - **§7.14 `ai`** — service FastAPI, mapping de colonnes, score.
-> - **§7.15 `iot`** — broker Mosquitto démarré par `compose.yaml`, aucun
->   code back-end.
+> - **§7.12 `reporting`** comme module autonome — les rapports et
+>   l'export CSV vivent dans `attendance` ; pas d'export Excel, pas de
+>   mise en page « officielle », pas de PDF.
+> - **§7.14 `ai`** — service FastAPI, mapping de colonnes, score
+>   d'anomalie. Le module `planning` livré est **CSV strict, sans
+>   assistance IA** (CDC §13.10 reste une cible).
+> - **§7.15 `iot`** — broker Mosquitto démarré par `compose.yaml`,
+>   **aucun code back-end**.
+>
+> **Frontières réelles entre modules** (vérifiées par `ModularityTests`) :
+> aucun module n'accède au repository ou à l'entité JPA d'un autre. Les
+> échanges passent par des **ports publics** (interfaces + records
+> d'UUID publics) et des **événements** :
+>
+> | Port public | Fournisseur → consommateur(s) | Objet |
+> |---|---|---|
+> | `coursesession.PlanningSessionWriter` | `coursesession` → `planning` | créer / réutiliser / superséder des séances à la publication (`DEC-G1-001`) |
+> | `coursesession.CourseSessionDirectory` | `coursesession` → `planning`, `notification`, `dashboard` | fenêtres de séances, destinataires, séances à venir |
+> | `academic.AcademicScopeDirectory`, `academic.ClassGroupDirectory` | `academic` → `planning`, `dashboard`, `studentimport` | périmètre pédagogique, résolution de classes **par lot** |
+> | `enrollment.EnrollmentDirectory`, `enrollment.StudentEnrollmentProvisioner` | `enrollment` → `attendance`, `studentimport` | inscription active, création d'inscription à l'import |
+> | `identity.StudentAccountProvisioner`, `identity.TeacherDirectory`, `identity.UserDirectory`, `identity.CurrentUserResolver` | `identity` → `studentimport`, `planning`, `notification`, `dashboard` | provisionnement de comptes, résolution d'utilisateurs |
+> | `attendance.JustificationFileStorage` | port **sortant** de `attendance` → adaptateur local | stockage du contenu des pièces jointes hors base (`DEC-G1-008`) |
+> | `alternation.AlternationDirectory` | `alternation` → `attendance`, `planning` | contexte `SCHOOL` / `COMPANY` / `UNKNOWN` |
+> | `attendance.AttendanceDashboardDirectory`, `studentimport.StudentImportDashboardDirectory`, `identity.AccountStatsDirectory`, `organization.SiteDirectory` | → `dashboard` | agrégats bornés |
+>
+> | Événement public | Émetteur | Consommateur(s) |
+> |---|---|---|
+> | `planning.PlanningPublishedEvent` | `planning` | `notification`, `audit` |
+> | `coursesession.CourseSessionChangeEvent` (+ `AttendanceCheckpointChangeEvent`) | `coursesession` | `notification`, `audit`, `attendance` |
+> | `attendance.AttendanceChangeEvent`, `attendance.JustificationReviewedEvent` | `attendance` | `notification`, `audit` |
+> | `identity.*Event`, `academic.AcademicChangeEvent`, `enrollment.*`, `alternation.*`, `organization.*`, `studentimport.StudentImportChangeEvent` | modules métier | `audit` |
+>
+> **Transactionnalité des événements** : `planning`, `coursesession`,
+> `studentimport` et `notification` publient / consomment en
+> `@TransactionalEventListener(AFTER_COMMIT)` — un rollback métier ne
+> laisse **ni** notification **ni** trace d'audit de succès. **8 des 9
+> listeners d'audit** restent des `@EventListener` **synchrones** en
+> `REQUIRES_NEW` : dette assumée, décrite dans
+> `docs/reports/G1_FINAL_REPORT.md` §12.
 >
 > Les §6.2, §6.5 et §6.6 (listes de modules et règles de dépendance)
 > décrivent également le découpage cible et ne sont pas alignées sur les
-> 12 modules réels ci-dessus.
+> 14 modules réels ci-dessus.
 
 ## 7.1 `identity`
 
@@ -1780,6 +1813,27 @@ Le staging ne doit donc pas être l’unique support de la soutenance.
 Une démonstration locale et une vidéo de secours restent obligatoires.
 
 ---
+
+# 24bis. État réel du déploiement (2 septembre 2026)
+
+> Les §24, §25, §26, §28 et §29 décrivent des **cibles**. Rien n'en est
+> déployé. L'état réel est le suivant :
+
+| Sujet | Réel | Cible documentée |
+|---|---|---|
+| Exécution | **local uniquement** — `docker compose` (MySQL 8.4, Redis 7.4, Mailpit, Mosquitto) + `./mvnw spring-boot:run` + `ng serve` | §24 staging, §25 AWS |
+| HTTPS / TLS | **aucun** — HTTP en clair sur `localhost` ; HSTS non exigé et non testé en HTTP | §26 |
+| Redis | consommé **uniquement** pour les jetons d'émargement (jeton opaque + code court, TTL, rotation, purge après commit). Indisponibilité ⇒ `503 ATT_TOKEN_BACKEND_UNAVAILABLE`, **jamais** de validation dégradée | cache de planning, rate-limiting, droits calculés (§17 de `docs/02`) |
+| Stockage de fichiers | **système de fichiers local**, répertoire `app.attendance.justification-storage-path` **hors webroot** (défaut `${UPLOAD_DIRECTORY}/justifications`). Clé opaque dispersée `aa/bb/<uuid>`, écriture temporaire + **déplacement atomique**, garde anti-traversal. **Non persistant sur un hébergement éphémère** : le port `attendance.JustificationFileStorage` est prévu pour un adaptateur objet (S3…) sans toucher au métier | §25 (S3) |
+| Messagerie | SMTP local **Mailpit**, envoi asynchrone ; échec seulement journalisé | SES + file + DLQ |
+| MQTT / IoT | broker Mosquitto **démarré**, **aucun code back-end** ne s'y connecte | §25 (IoT Core) |
+| Supervision | `/actuator/health` seul, `show-details: never` | métriques, logs JSON structurés (§27) |
+| Sauvegarde / restauration | **non outillée, jamais testée** | §28 |
+| Haute disponibilité | **aucune** (instance unique) | §29 |
+| CORS | **restrictif**, piloté par `APP_ALLOWED_ORIGINS`, jamais `*`, `allowCredentials=false` (le jeton circule dans `Authorization`) | — |
+| En-têtes HTTP | `nosniff`, `X-Frame-Options: DENY`, anti-cache, **CSP** (`script-src 'self'`), `Referrer-Policy: no-referrer` — testés par `HttpSecurityHeadersIntegrationTests` | — |
+
+Aucune de ces cibles ne doit être présentée comme livrée.
 
 # 25. Architecture AWS cible
 

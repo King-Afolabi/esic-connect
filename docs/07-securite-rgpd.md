@@ -348,6 +348,45 @@ planifié dédié, avec clé NVD en secret et cache de la base.
 - URL publique permanente ;
 - inclusion directe du nom original dans le chemin.
 
+## État d'implémentation réel (bloc G1-E — 1er septembre 2026)
+
+La liste ci-dessus est la **cible**. Ce qui est réellement livré et testé
+pour les pièces jointes de justificatifs (`justification_attachment`,
+migration `V16`) :
+
+| Contrôle | État | Détail vérifiable |
+|---|---|---|
+| Extension autorisée (`.pdf`, `.jpg`, `.jpeg`, `.png`) | `IMPLEMENTED_AND_TESTED` | `JustificationFileSafetyValidator` |
+| Type déclaré (`Content-Type`) toléré **mais jamais faisant foi** | `IMPLEMENTED_AND_TESTED` | idem |
+| **Signature réelle (magic bytes)** — `%PDF-`, JPEG, PNG ; **type re-dérivé du contenu** | `IMPLEMENTED_AND_TESTED` | rejet **ZIP** (`PK\x03\x04`) et **OLE2** ; cohérence extension ↔ contenu |
+| Taille bornée (5 Mo, `RG-071`) — appliquée **pendant le flux** | `IMPLEMENTED_AND_TESTED` | enveloppe servlet 6 Mo + borne métier `JUSTIFICATION_MAX_FILE_BYTES` |
+| Nom de stockage **généré**, opaque, jamais dérivé du nom client | `IMPLEMENTED_AND_TESTED` | `storage_key` UNIQUE, clé dispersée `aa/bb/<uuid>` ; nom d'origine **assaini** et conservé comme métadonnée d'affichage seulement |
+| Stockage **hors webroot**, contenu **jamais en base** | `IMPLEMENTED_AND_TESTED` | port `attendance.JustificationFileStorage` + adaptateur local ; répertoire configurable |
+| Garde **anti-traversal** (`..`, chemin absolu, sortie de la base) | `IMPLEMENTED_AND_TESTED` | clé résolue vérifiée sous la racine à chaque `open` / `delete` |
+| Écriture temporaire + **déplacement atomique** ; aucun fichier partiel sur erreur | `IMPLEMENTED_AND_TESTED` | repli non atomique documenté |
+| Empreinte SHA-256 calculée **pendant l'écriture** et re-vérifiée | `IMPLEMENTED_AND_TESTED` | divergence ⇒ suppression + `503` |
+| Téléchargement **par API authentifiée** : `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`, type re-dérivé | `IMPLEMENTED_AND_TESTED` | jamais de rendu HTML, jamais d'URL publique permanente |
+| Contrôle d'accès : **propriétaire** ou **examinateur dans son périmètre** ; hors périmètre ⇒ `404` (pas `403`, pas d'oracle d'existence) | `IMPLEMENTED_AND_TESTED` | — |
+| **Antivirus** | **`NOT_IMPLEMENTED`** | `DEC-G1-E-ANTIVIRUS` — aucun moteur dans l'architecture. Le contrôle est **structurel** : ne **jamais** écrire « fichier garanti sans malware ». Abstraction cible : `FileSafetyScanner` |
+| **Balayage des fichiers orphelins** | **`NOT_IMPLEMENTED`** | la réconciliation `@Scheduled` ne traite **que** les lignes `PENDING_STORAGE` ; un fichier subsistant après l'échec best-effort d'une suppression (ligne `DELETED`) n'est pas balayé |
+| Rétention / purge des pièces `DELETED` | **`À_DÉFINIR`** | risque `R-G1-30` ; aucune durée inventée |
+
+**Limites du stockage sur système de fichiers local**, à énoncer telles
+quelles :
+
+- le répertoire de stockage n'est **pas** chiffré au repos par
+  l'application ; la protection dépend du système hôte ;
+- l'écriture n'est **pas transactionnelle** avec MySQL : la cohérence
+  repose sur une **séquence compensée** (`DEC-G1-009`), pas sur une
+  transaction distribuée ;
+- les protections contre les **liens symboliques** et les courses
+  **TOCTOU** portent sur les clés manipulées par l'application ; elles ne
+  couvrent pas un attaquant disposant déjà d'un accès au système de
+  fichiers de l'hôte ;
+- sur un hébergement à système de fichiers **éphémère**, les pièces sont
+  **perdues** au redéploiement (risque `R-G1-22`) — un volume persistant
+  ou un adaptateur objet est requis avant tout usage réel.
+
 ---
 
 # 10. Sécurité des imports
@@ -515,6 +554,8 @@ limitation de conservation.
 | Piste d’audit (`audit_event`) | **NON** | append-only, **aucune** rétention / archivage / anonymisation outillé. |
 | Présences, corrections, justificatifs | **NON** | aucune purge ni anonymisation ; conservation de fait illimitée en base. |
 | **Notifications persistantes (`notification`, G1-D)** | **NON — rétention `À_DÉFINIR`** | aucune durée de conservation documentaire (MDD §23.1 décrit la table, pas de durée). **Aucune purge n’est implémentée** : l’inventer serait arbitraire. La table croît sans borne tant qu’une politique n’est pas validée (direction / DPO). Risque `R-G1-30` (`docs/06`), dette **G1-D-RETENTION** (`docs/05` §9bis). Corps déjà **neutre** (aucun jeton / PII / IP / chemin / motif nominatif). Conformité RGPD **non revendiquée** sur ce point. |
+| **Pièces jointes de justificatifs (`justification_attachment` + fichiers, G1-E)** | **NON — rétention `À_DÉFINIR`** | la **réconciliation `@Scheduled`** existante est **technique**, pas une purge : elle ne traite que les lignes `PENDING_STORAGE` (crash entre commit et bascule `STORED`). Aucune durée de conservation métier n'est définie ; les lignes `DELETED` et leurs éventuels fichiers résiduels ne sont **pas** balayés (`NOT_IMPLEMENTED`). Le cahier des charges vise 12 mois (`docs/02` §21.10) — **non implémenté**. Risque `R-G1-30` / `R-G1-32`. |
+| **Jobs d'import de planning (`planning_import_*`, G1-B)** | **OUI — implémentée** | `PlanningPurgeService` (`@Scheduled`, `app.planning.purge-interval-ms`) : un job `SIMULATED` dont le TTL est dépassé passe `EXPIRED` et ses lignes filles sont supprimées (`CASCADE` sur les anomalies). Les données **publiées** (`planning_schedule` / `planning_version` / `planning_entry` / `course_session`) ne sont **jamais** touchées. Le fichier CSV n'est **jamais** écrit sur disque (empreinte SHA-256 seule). |
 | Comptes archivés | **NON** | statut `ARCHIVED` (pas de connexion), historique conservé ; **pas** de séparation en archivage intermédiaire ni d’anonymisation. |
 | Logs techniques du serveur | **NON géré ici** | dépend de la configuration d’exploitation (rotation logback / plateforme). |
 

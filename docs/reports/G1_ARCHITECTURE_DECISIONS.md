@@ -1177,3 +1177,100 @@ V1→V17), `ModularityTests`, `ddl-auto=validate` sans erreur.
 
 **Impact déploiement.** Migrations rejouables sur une base de staging
 vierge ; pas de downtime (additif).
+
+---
+
+## DEC-G1-E-ANTIVIRUS — Absence de moteur antivirus sur les pièces jointes
+
+> **Décision référencée dans `README.md`, `docs/CURRENT-STATE.md`,
+> `docs/05-product-backlog.md`, `docs/06-risques.md` (`R-G1-31`),
+> `docs/07-securite-rgpd.md` §9, `docs/10-journal-ia.md` et
+> `G1_FINAL_REPORT.md`, mais absente de ce registre jusqu'à la clôture
+> documentaire du 2 septembre 2026.** Formalisée ici sans changer sa
+> substance ni son statut, tels qu'ils ont été appliqués au bloc G1-E.
+
+**Contexte.** Le bloc G1-E accepte le téléversement de fichiers
+utilisateurs (PDF / JPEG / PNG, 5 Mo max) attachés à un justificatif
+d'absence. `docs/02-cahier-des-charges.md` §21.5 et
+`docs/07-securite-rgpd.md` §9 listent « antivirus » parmi les contrôles
+attendus.
+
+**Contrainte.** Aucun moteur antivirus n'existe dans l'architecture du
+prototype : pas de ClamAV dans `compose.yaml`, aucun service d'analyse,
+aucune clé d'API vers un service tiers, et l'ajout d'un tel composant
+(daemon, base de signatures, mise à jour, mode dégradé quand le scanner
+est indisponible) dépasse le périmètre du lot.
+
+**Décision.** L'analyse antivirus est **`NOT_IMPLEMENTED`**. Le contrôle
+livré est **structurel** et **uniquement** structurel :
+
+- extension dans une liste blanche (`.pdf`, `.jpg`, `.jpeg`, `.png`) ;
+- `Content-Type` déclaré toléré mais **jamais faisant foi** ;
+- **magic bytes** vérifiés (`%PDF-`, `FF D8 FF`, `89 50 4E 47 …`) et
+  type **re-dérivé du contenu** ;
+- **rejet explicite** des conteneurs ZIP (`PK\x03\x04`) et OLE2
+  (`D0 CF 11 E0`) ;
+- cohérence extension ↔ contenu réel ;
+- taille appliquée **pendant le flux** ;
+- nom d'origine assaini, clé de stockage **opaque** et non dérivée du nom
+  client, stockage **hors webroot**, garde anti-traversal ;
+- téléchargement en `Content-Disposition: attachment` +
+  `X-Content-Type-Options: nosniff`, **jamais** de rendu HTML.
+
+**Règle de langage — non négociable.** Ne jamais écrire ni dire
+« fichier garanti sans malware », « fichier sain » ou « analysé ». Un PDF
+structurellement valide et porteur d'une charge malveillante **est
+accepté** par ce système. La formulation correcte est : *« le fichier est
+validé structurellement ; aucune analyse antivirus n'est effectuée. »*
+
+**Conséquences assumées.** Risque `R-G1-31` (`docs/06-risques.md`),
+coté 12, statut **assumé**. La surface est réduite par le fait que le
+fichier n'est **jamais** exécuté, **jamais** rendu en HTML, **jamais**
+servi depuis le webroot, et que son téléchargement est réservé au
+propriétaire et à l'examinateur de son périmètre.
+
+**Évolution cible (non implémentée).** Introduire un port sortant
+`FileSafetyScanner` symétrique de `JustificationFileStorage`, appelé
+**avant** la bascule `PENDING_STORAGE → STORED`, avec :
+un adaptateur ClamAV (ou service équivalent) ; une politique **explicite
+de mode dégradé** (scanner indisponible ⇒ refus, ou quarantaine — jamais
+acceptation silencieuse) ; un statut `QUARANTINED` en base ; et le
+rejeu des pièces déjà stockées lors de l'activation.
+
+**Tests existants (contrôle structurel uniquement).**
+`JustificationFileSafetyValidatorTests` (extension trompeuse, magic bytes
+absents ou incohérents, ZIP / OLE2, nom assaini) et
+`JustificationAttachmentIntegrationTests` (bout en bout HTTP).
+**Aucun test ne prouve l'absence de malware — il n'y a rien à tester.**
+
+---
+
+## Clôture documentaire G1 — 2 septembre 2026
+
+**État des décisions.** Les 12 décisions `DEC-G1-001` → `DEC-G1-012`,
+plus `DEC-G1-F` (choix d'agrégats du tableau de bord) et
+`DEC-G1-E-ANTIVIRUS` (formalisée ci-dessus), sont **appliquées dans le
+code fusionné**. Aucune n'a été abandonnée. Trois ont été **révisées à la
+baisse** en fin de lot, révisions conservées dans leurs sections
+respectives :
+
+| Décision | Révision finale |
+|---|---|
+| `DEC-G1-002` (identité de créneau) | corrigée à l'audit G1-B.1 : `planning_entry_public_id` (nom trompeur, identité **par version**) → **`planning_slot_public_id`** (identité **stable inter-versions**) |
+| `DEC-G1-010` (agrégats de tableau de bord sans N+1) | N+1 **par classes** corrigé et prouvé (croissance nulle) ; coût **par séance** mesuré **linéaire** (≈ 2 requêtes/séance) et **non corrigé** — hors périmètre. Ne jamais écrire « absence totale de N+1 » |
+| `DEC-G1-011` (stratégie e2e) | e2e navigateur `PARTIAL` → **`NOT_IMPLEMENTED`**. Aucune tentative d'installation ⇒ le téléchargement de navigateurs n'est **ni** « non fiable » **ni** « impossible » : il n'a **pas été tenté**, pour un rapport coût / bénéfice jugé défavorable |
+
+**Correction documentaire notable** (`DEC-G1-012`, stratégie de
+migrations) : la section est rédigée depuis un schéma « en V11 » et
+mentionne un rejeu « V1 → V17 ». Le schéma réel s'arrête à **V16**
+(aucune `V17` n'existe). La règle de fond — migrations **additives**,
+jamais de modification d'une migration poussée, un fichier par numéro —
+a été respectée : V12 et V13 ont été corrigées **en place avant tout
+push**, ce qui est explicitement documenté, avec la conséquence qu'un
+`flyway repair` ne suffirait **pas** à réparer une base ayant appliqué
+l'ancienne forme.
+
+**Vérifications à cette clôture** : 16 migrations, 14 modules,
+30 contrôleurs REST, 41 tables, 96 classes de test ; back **811 / 0**,
+front **600 / 0**. Aucun code de production, aucun test, aucune migration
+modifiés.

@@ -416,3 +416,31 @@ structure d'un bloc ultérieur dans la migration d'un bloc antérieur.
 
 Aucune modification de `V1`–`V11`. Un fichier par numéro. Numéro écrit
 seulement avec son fichier.
+
+---
+
+## Clôture documentaire G1 — 2 septembre 2026
+
+Ce plan a été **exécuté intégralement** dans son découpage
+(G1-0 → G1-G), avec deux passes correctives probatoires supplémentaires
+non prévues initialement. Il est conservé **tel quel** comme trace de la
+planification ; l'état réel fait foi ailleurs.
+
+**Écarts entre le plan et la livraison** :
+
+| Point du plan | Livré ? | Écart |
+|---|---|---|
+| G1-A — tous les écrans d'écriture administratifs | **partiellement** | seuls les écrans `organization` sont livrés ; écritures `academic` / `enrollment` / affectations / émission d'invitation restent une **dette** (API prêtes, aucune UI ne simule un endpoint absent) |
+| G1-B — module `planning` | **oui** | correction ligne à ligne remplacée par annulation + réimport (`DEC-G1-003`) ; conflit **salle** contre les séances déjà publiées non couvert |
+| G1-C — cycle de vie des séances | **oui** | un checkpoint correctif G1-C.3 non prévu a été nécessaire (lecture historique d'une séance annulée, remplaçant visible en liste, audit `AFTER_COMMIT`) |
+| G1-D — notifications | **partiellement** | audience **formateur** seule ; pas d'outbox ⇒ `EF-NOTIF-002` / `RG-033` `PARTIAL` |
+| G1-E — pièces jointes | **oui** (fonctionnel) | **antivirus** et **balayage d'orphelins** non implémentés |
+| G1-F — tableaux de bord | **partiellement** | 4 cartes manager + « audit récent » administration non livrées, faute de port agrégé borné |
+| G1-G — recette + **e2e Playwright** | **repli** | e2e navigateur **non retenu** (`DEC-G1-011`) ; repli livré : recette d'intégration API |
+| Décompte de modules « 12 » (§1.1) | — | le plan partait de **12** modules ; l'état final en compte **14** (`planning` + `dashboard`) |
+
+**Reste à faire, par ordre de valeur** : démonstration manuelle +
+captures ; outbox transactionnelle (notifications *et* audit) ; audience
+des notifications ; cartes de tableau de bord manquantes et chargement
+par lot des séances (`DEC-G1-010`) ; politique de rétention ; écrans
+d'écriture `academic` / `enrollment` / émission d'invitation.

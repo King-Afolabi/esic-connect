@@ -13,22 +13,44 @@ réalisé (voir « Périmètre non livré » ci-dessous).
 
 ## Périmètre livré
 
-Parcours implémenté et testé **au niveau API** de bout en bout :
+Parcours implémenté et rejoué **au niveau API** de bout en bout par une
+recette d'intégration automatisée (`PriorityPathRecetteIntegrationTests`,
+appels HTTP réels) :
 
 ```text
-Import CSV des apprenants (simulation → confirmation)
-  → Création d'une séance exceptionnelle (manuelle)
+Administration et référentiels (site / salle, année, formation, classe)
+  → Import CSV contrôlé des apprenants (simulation → confirmation)
+  → Activation d'un compte apprenant par invitation
+  → Import CSV du planning → simulation (0 séance créée)
+  → Publication versionnée → génération des séances
   → Ouverture de la séance par le formateur
   → Émargement de l'apprenant (QR opaque + code court, Redis)
-  → Consultation des présences
-  → Correction motivée et auditée
-  → Rapport d'assiduité (demi-journées)
-  → Export CSV
+  → Suivi et correction motivée / auditée des présences
+  → Rapport d'assiduité (demi-journées) + export CSV
+  → Justificatif avec pièce jointe → acceptation / refus
+  → Notifications métier (formateurs, propriétaire du justificatif)
+  → Tableaux de bord selon le rôle
 ```
+
+**Ce parcours n'a pas été démontré manuellement dans un navigateur** :
+aucune manipulation n'est consignée dans le dépôt et il n'existe **aucun
+test e2e navigateur** (`NOT_IMPLEMENTED`, `DEC-G1-011`). Statut global du
+lot G1 : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.
+
+Lecture des statuts employés dans toute la documentation :
+
+| Statut | Signification |
+|---|---|
+| `IMPLEMENTED_AND_TESTED` | code livré **et** couvert par des tests automatisés passants |
+| `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` | livré et testé, **jamais** manipulé manuellement de bout en bout |
+| `PARTIAL` | une partie seulement de l'exigence est livrée — jamais à présenter comme complète |
+| `NOT_IMPLEMENTED` | aucun code ; limite explicitement assumée |
+| `HORS_PÉRIMÈTRE_ASSUMÉ` | exclusion décidée et documentée pour cette livraison |
 
 Détail par capacité et statut : `docs/CURRENT-STATE.md`.
 Audit vérifiable et matrices d'exigences :
-`docs/reports/PROJECT_FINAL_AUDIT.md`.
+`docs/reports/PROJECT_FINAL_AUDIT.md` (checkpoint F1, **antérieur à G1**)
+et `docs/reports/G1_REQUIREMENTS_TRACEABILITY.md` (matrice G1).
 
 Autres briques livrées : authentification JWT, administration des comptes
 et des rôles, invitation / activation par email (Mailpit), référentiels
@@ -51,8 +73,8 @@ Angular. Livraison « au mieux » après commit, sans reprise ;
 
 ## Périmètre non livré (décision de finalisation — assumée)
 
-> **Mise à jour G1 (1er septembre 2026).** Le lot produit G1 (branche
-> `feature/master-level-product-expansion`) a **livré** deux des éléments
+> **Mise à jour G1 (1er septembre 2026, fusionné sur `main` par la
+> PR #40 — commit `d3450e6`).** Le lot produit G1 a **livré** deux des éléments
 > ci-dessous : le **référentiel organisationnel Angular** (G1-A) et
 > l'**import → simulation → publication versionnée du planning et la
 > création des séances associées** (G1-B, module `planning` réel,
@@ -171,11 +193,15 @@ cp .env.example .env
 |---|---|---|
 | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `REDIS_PASSWORD` | oui | valeurs locales de votre choix (remplacer les `change-*`) |
 | `JWT_SECRET` | oui | chaîne aléatoire **≥ 32 octets** ; le back-end refuse de démarrer sinon |
-| `ESIC_DEMO_PASSWORD` | oui (profil `demo` seulement) | mot de passe des comptes fictifs, **≥ 12 caractères** |
+| `ESIC_DEMO_PASSWORD` | oui (profil `demo` seulement) | mot de passe des comptes fictifs, **≥ 12 caractères**. Volontairement **vide** dans `.env.example` |
+| `JUSTIFICATION_STORAGE_PATH` | **oui hors Docker** | répertoire d'écriture des pièces jointes de justificatifs (G1-E). Défaut `${UPLOAD_DIRECTORY:-/data/uploads}/justifications` — **inaccessible en écriture sur un macOS / Linux classique** : voir « Lancement » §2 |
 | `APP_ALLOWED_ORIGINS` | non | origine(s) autorisée(s) du front (défaut `http://localhost:4200`) |
+| `JWT_ACCESS_TOKEN_TTL_SECONDS`, `INVITATION_TOKEN_TTL`, `ATTENDANCE_TOKEN_TTL`, `JUSTIFICATION_MAX_FILE_BYTES`, `MAIL_HOST` / `MAIL_PORT`, `MULTIPART_MAX_*` | non | valeurs par défaut sûres dans `application.yml` ; `.env.example` les documente |
 
-`.env.example` ne contient que des placeholders. **Ne jamais y mettre de
-secret réel** ni committer `.env`.
+`.env.example` ne contient que des placeholders : `JWT_SECRET=` et
+`ESIC_DEMO_PASSWORD=` y sont **délibérément vides**, les mots de passe
+d'infrastructure valent `change-*`. **Ne jamais y mettre de secret réel**
+ni committer `.env`.
 
 Génération rapide d'un secret :
 
@@ -202,12 +228,33 @@ Interface Mailpit : http://localhost:8025
 ```bash
 cd backend
 set -a && source ../.env && set +a       # exporte les variables MySQL / Redis / JWT
+
+# Pièces jointes des justificatifs (G1-E) : le défaut est /data/uploads/
+# justifications, chemin NON inscriptible hors conteneur. Pointer un
+# répertoire local, sinon tout dépôt de pièce jointe échoue en 503.
+mkdir -p ../build/demo-data/justifications
+export JUSTIFICATION_STORAGE_PATH="$(cd ../build/demo-data/justifications && pwd)"
+
 SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
 ```
 
-Le profil `demo` amorce 4 comptes fictifs (voir plus bas) **sans
-désactiver la sécurité**. Sans ce profil (`local`), aucun compte n'est
-créé.
+Le profil `demo` amorce **6 comptes fictifs** (voir plus bas) **sans
+désactiver la sécurité** ; il exige `ESIC_DEMO_PASSWORD`. Sans ce profil
+(`local`), aucun compte n'est créé.
+
+Pour une démonstration **isolée de la base applicative**, lancer le
+back-end sur une base dédiée :
+
+```bash
+MYSQL_DATABASE=esic_connect_demo SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+```
+
+La base est créée vide puis peuplée par Flyway (`V1 → V16`). La suite de
+tests, elle, lit `MYSQL_TEST_DATABASE` (défaut `esic_test`) et **n'écrit
+jamais** dans `MYSQL_DATABASE` — voir « Bases de données » ci-dessous.
+
+Aucune autre variable n'a besoin d'être exportée à la main : `set -a &&
+source ../.env` couvre MySQL, Redis, JWT, Mailpit et CORS.
 
 OpenAPI au runtime : http://localhost:8080/v3/api-docs —
 Swagger UI : http://localhost:8080/swagger-ui.html —
@@ -254,14 +301,55 @@ npm ci
 npm test -- --watch=false    # Vitest + jsdom
 npm run lint                 # angular-eslint
 npm run build                # build de production (budget initial 500 kB)
-npm audit                    # 0 vulnérabilité attendue
+npm audit --audit-level=high # doit passer : 0 haute / 0 critique
 
-# Non-régression du script de seed (faux curl déterministe)
+# Non-régression des scripts de démonstration (faux curl déterministe)
 bash scripts/test/test-seed-demo.sh
+bash scripts/test/test-prepare-planning-demo.sh
 ```
 
-Totaux de référence du dernier audit : voir
-`docs/CURRENT-STATE.md` → « Résultats du dernier audit ».
+### Bases de données — isolation test / démonstration
+
+Trois bases distinctes, jamais confondues :
+
+| Base | Qui l'utilise | Variable |
+|---|---|---|
+| `esic_connect` | runtime `local` (base applicative) | `MYSQL_DATABASE` |
+| `esic_connect_demo` | runtime `demo` (démonstration) | `MYSQL_DATABASE=esic_connect_demo` |
+| `esic_test` | **suite de tests** back-end (profil `test`) | `MYSQL_TEST_DATABASE` (défaut `esic_test`) |
+
+Le profil `test` lit **`MYSQL_TEST_DATABASE`**, jamais `MYSQL_DATABASE` :
+un `./mvnw test` lancé pendant une démonstration n'écrit donc **pas**
+dans la base de démonstration (les tests créent des milliers de comptes
+et tronquent des tables). En CI, `.github/workflows/backend-ci.yml`
+impose explicitement `MYSQL_TEST_DATABASE: esic_connect_ci`, base
+éphémère jetée à chaque run.
+
+Créer la base de démonstration (une seule fois) :
+
+```bash
+docker compose exec mysql mysql -uroot -p \
+  -e "CREATE DATABASE IF NOT EXISTS esic_connect_demo
+      CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+      GRANT ALL PRIVILEGES ON esic_connect_demo.* TO '<MYSQL_USER>'@'%';"
+```
+
+Flyway applique ensuite `V1 → V16` au premier démarrage du profil `demo`.
+
+Totaux de référence mesurés sur ce dépôt (HEAD `d3450e6`, 2 septembre 2026) :
+
+| Suite | Résultat |
+|---|---|
+| `./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — 96 classes, `ModularityTests` vert (14 modules), schéma Flyway V16 |
+| `npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** (Vitest + jsdom) |
+| `npm run lint` | « All files pass linting » |
+| `npm run build` | initial **484,52 kB** brut — 0 alerte de budget |
+| `npm audit --audit-level=high` | **passe** (0 haute, 0 critique) — 1 vulnérabilité **modérée** sur `qs`, tirée par `@angular/cli` (outillage de développement, absent du bundle servi) ; suivie dans l'issue de migrations majeures |
+
+Détail et conditions de reproduction : `docs/CURRENT-STATE.md` →
+« Résultats de tests » ; `docs/reports/G1_FINAL_REPORT.md` §11.
+Les tests marqués `perf` sont exclus du run par défaut
+(`./mvnw test -Pperf` pour les exécuter).
 
 ### Intégration continue (GitHub Actions)
 
@@ -279,17 +367,23 @@ Tous les workflows : `permissions: contents: read`, sans secret, sans
 
 ## Comptes de démonstration
 
-Créés par le profil `demo`. Domaine réservé `example.test` (données
+**Six** comptes créés et resynchronisés par le profil `demo`
+(`DemoDataInitializer`). Domaine réservé `example.test` (données
 strictement fictives). **Le mot de passe n'est pas dans le dépôt** : il
-vaut la valeur de `ESIC_DEMO_PASSWORD` de votre `.env`.
+vaut la valeur de `ESIC_DEMO_PASSWORD` de votre `.env`, et ne doit
+jamais être écrit dans un document du dépôt.
 
-| Email | Rôle(s) | Usage |
-|---|---|---|
-| `admin@example.test` | `ADMIN` | administration des comptes, import CSV, création de séance |
-| `formateur@example.test` | `TEACHER` | ouverture de séance, QR / code court, présences |
-| `apprenant1@example.test` | `STUDENT` | émargement, « mes présences », justificatif |
-| `apprenant2@example.test` | `STUDENT` | second émargement, anti-doublon |
-| `responsable@example.test` | `PEDAGOGICAL_MANAGER` + `TEACHER` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+| Email | Nom affiché | Rôle(s) | Usage |
+|---|---|---|---|
+| `superadmin@example.test` | Super Administrateur Démo | `SUPER_ADMIN` | routes techniques réservées (plages réseau CIDR), inaccessibles même à `ADMIN` |
+| `admin@example.test` | Administrateur Démo | `ADMIN` | administration des comptes, import CSV, création de séance |
+| `formateur@example.test` | Formateur Démo | `TEACHER` | ouverture de séance, QR / code court, présences |
+| `apprenant1@example.test` | Alice Martin | `STUDENT` | émargement, « mes présences », justificatif |
+| `apprenant2@example.test` | Karim Diallo | `STUDENT` | second émargement, anti-doublon |
+| `responsable@example.test` | Responsable Pédagogique Démo | `PEDAGOGICAL_MANAGER` + `TEACHER` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+
+`superadmin@example.test` reste **séparé** du compte d'administration
+quotidienne (RG-003) : il ne cumule aucun autre rôle.
 
 Le compte `responsable@example.test` est **multi-rôles** : après
 connexion, le sélecteur de contexte apparaît et permet de basculer entre
@@ -325,6 +419,11 @@ Jeu de données d'import : `docs/demo-data/apprenants-demo.csv` (voir
 | `docs/12-guide-utilisateur.md` | ce que chaque rôle peut faire dans l'application |
 | `docs/demo-data/` | jeu de données CSV fictif pour la démonstration de l'import |
 | `docs/reports/PERF_NOTES.md` · `TEST_ISOLATION_DECISION.md` | mesures de performance ; décision Testcontainers |
+| `docs/reports/G1_FINAL_REPORT.md` | **rapport final du lot G1** : anomalies corrigées, garanties transactionnelles, coûts SQL mesurés, dettes résiduelles |
+| `docs/reports/G1_REQUIREMENTS_TRACEABILITY.md` | matrice EF-* / RG-* / AC-* du lot G1 et statuts finaux |
+| `docs/reports/G1_ARCHITECTURE_DECISIONS.md` | décisions `DEC-G1-*` (frontières de modules, identité de créneau, compensation base/fichier, e2e…) |
+| `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` · `G1_IMPLEMENTATION_PLAN.md` | journal bloc par bloc ; plan du lot |
+| `docs/reports/SOUTENANCE_TECHNICAL_SOURCE.md` | **source technique consolidée** pour la rédaction du mémoire de soutenance |
 | `CLAUDE.md` | règles de travail assisté par IA |
 
 ---
@@ -342,6 +441,9 @@ Jeu de données d'import : `docs/demo-data/apprenants-demo.csv` (voir
 | Front : session perdue au rechargement | comportement **attendu** — JWT en mémoire seule, pas de refresh token (prototype) |
 | Aucun email reçu | consulter Mailpit http://localhost:8025 ; l'envoi est asynchrone, un échec est seulement journalisé côté serveur |
 | `scripts/seed-demo.sh` en `401` | comptes `demo` non amorcés (profil `demo`) ou `ESIC_DEMO_PASSWORD` différent de celui utilisé au démarrage |
+| Dépôt d'une pièce jointe en `503 ATT_ATTACHMENT_STORAGE_FAILED`, ou erreur d'écriture sur `/data/...` | back-end lancé **hors Docker** avec le `JUSTIFICATION_STORAGE_PATH` par défaut (`/data/uploads/justifications`), inexistant ou en lecture seule sur macOS / Linux — exporter un chemin local inscriptible (voir « Lancement » §2) |
+| `docker compose down -v` : comptes et données disparus | `-v` **supprime les volumes**, donc toute la base MySQL. Utiliser `docker compose down` (sans `-v`) pour un arrêt simple ; `-v` est réservé à la remise à zéro volontaire (recréation d'un schéma Flyway propre) |
+| Journaux Redis (`Lettuce`, reconnexion) au démarrage | informatifs tant que `docker compose ps` montre `redis` **healthy** ; Redis n'est consommé que par les jetons d'émargement. Une indisponibilité réelle donne `503 ATT_TOKEN_BACKEND_UNAVAILABLE` sur la génération de jeton, jamais une validation dégradée |
 
 ---
 

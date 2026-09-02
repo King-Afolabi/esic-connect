@@ -33,14 +33,17 @@ fonctions non implémentées sont signalées comme telles et ne doivent pas
 | Écran (route) | SUPER_ADMIN | ADMIN | SCHOOL_ADMIN | PEDAGO_MANAGER | TEACHER | STUDENT |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|
 | Tableau de bord (`/dashboard`) | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| **Notifications (`/notifications`)** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Administration des comptes (`/administration`) | ✔ (R/W) | ✔ (R/W) | ✔ (lecture + suspend/réactiver) | — | — | — |
+| **Référentiel organisationnel (`/organization`)** | ✔ (R/W) | ✔ (R/W) | — | — | — | — |
 | Import apprenants (`/students/import`) | ✔ | ✔ | ✔ | ✔ (son périmètre) | — | — |
 | Apprenants (`/students`) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture) | — | — | — |
 | Référentiels académiques (`/academic`) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture, périmètre) | — | — |
 | Alternance (`/alternation`) | ✔ (R/W) | ✔ (R/W) | ✔ (R/W) | ✔ (périmètre ; création de modèle : non) | — | — |
-| Séances (`/sessions`) | ✔ (R/W) | ✔ (R/W) | ✔ (lecture) | ✔ (périmètre, R/W) | ✔ (ses séances) | — |
+| **Planning — import / publication (`/planning`)** | ✔ | ✔ | — | ✔ (son périmètre) | — | — |
+| Séances (`/sessions`) | ✔ (R/W) | ✔ (R/W) | ✔ (lecture) | ✔ (périmètre, R/W) | ✔ (ses séances **+ celles où il est remplaçant actif**) | — |
 | Émargement (`/attendance`) | — | — | — | — | — | ✔ |
-| Mes présences (`/my-attendance`) | — | — | — | — | — | ✔ |
+| Mes présences (`/my-attendance`) | — | — | — | — | — | ✔ (**+ justificatif avec pièce jointe**) |
 | Suivi d'assiduité (`/attendance-management`) | ✔ | ✔ | ✔ | ✔ (périmètre) | — | — |
 
 R/W = lecture et écriture. « périmètre » = limité aux formations gérées
@@ -61,9 +64,13 @@ portant le rôle `SUPER_ADMIN` ou attribuer / retirer ce rôle.
 - Restrictions : auto-suspension / auto-archivage / retrait de son
   propre dernier rôle **interdits** (`USER_SELF_ACTION_FORBIDDEN`,
   `USER_LAST_ACTIVE_ROLE`).
-- **Non disponible dans l'UI** (API uniquement) : gestion des salles /
-  du réseau (`organization`), configuration des plages réseau CIDR
-  (`SUPER_ADMIN` requis).
+- **Non disponible dans l'UI** (API uniquement) : configuration des
+  plages réseau CIDR (`SUPER_ADMIN` requis). Les écrans de gestion des
+  sites / bâtiments / salles (`organization`) existent depuis G1-A.
+
+En démonstration, ce rôle est porté par `superadmin@example.test`,
+**distinct** du compte d'administration quotidienne `admin@example.test`
+(RG-003).
 
 ### 3.2 `ADMIN`
 
@@ -193,39 +200,132 @@ Fichier d'exemple fourni : `docs/demo-data/apprenants-demo.csv` (voir
    entreprise n'est jamais comptée en absence si un rythme d'alternance
    est affecté à la classe), export CSV.
 
-## 6. Fonctions non disponibles dans l'interface
+## 6. Ce que le lot G1 a ajouté (1er septembre 2026)
+
+Ces fonctions **n'existaient pas** dans la version précédente de ce guide.
+
+### 6.1 Contexte de rôle (compte multi-rôles)
+
+Un compte cumulant au moins deux rôles (par ex.
+`responsable@example.test` = `PEDAGOGICAL_MANAGER` + `TEACHER`) voit
+apparaître un **sélecteur de contexte** dans l'en-tête. Le basculement :
+
+- change les écrans proposés **et** le tableau de bord affiché ;
+- est **transmis au serveur** et **vérifié** contre les rôles réellement
+  détenus (un contexte non détenu est refusé) ;
+- **n'élargit jamais** les autorisations : Spring Security reste
+  l'autorité à chaque appel.
+
+### 6.2 Planning — import, simulation, publication versionnée
+
+Pour `ADMIN` et `PEDAGOGICAL_MANAGER` (dans son périmètre) :
+
+1. `/planning/import` : téléverser un **CSV** de planning ;
+2. **simulation** — lignes, anomalies (référence inconnue, hors plage
+   horaire, conflit formateur / classe / salle) et synthèse. **Aucune
+   séance n'est créée à ce stade** ;
+3. **publication** — crée une version et les séances correspondantes. Une
+   ligne en erreur **bloque** la publication ;
+4. republier crée la version **suivante** ; l'ancienne devient
+   `SUPERSEDED` et ses séances disparaissent des vues opérationnelles
+   (mais restent dans l'historique) ;
+5. `/planning/versions` : historique des versions.
+
+**Correction d'une ligne** : il n'existe **pas** d'édition ligne à ligne.
+On annule le job et on réimporte un fichier corrigé.
+
+### 6.3 Séances — annulation et remplacements
+
+- **Annuler** une séance (`PLANNED` ou `OPEN`) avec un **motif
+  obligatoire**. Une séance `CLOSED` ou déjà annulée ne peut pas l'être.
+  Une séance annulée reste **consultable** mais ne produit **aucune
+  absence**.
+- **Affecter un remplaçant** sur une période datée, avec motif. Le
+  formateur principal n'est **jamais** remplacé dans la fiche. Le
+  remplaçant peut gérer la séance **uniquement pendant sa période** ; un
+  remplacement futur, expiré ou terminé ne donne **aucun droit**.
+- Un formateur **ne peut pas** valider son propre remplacement.
+
+### 6.4 Justificatif avec pièce jointe
+
+Depuis `/my-attendance`, l'apprenant joint **un** fichier PDF, JPEG ou
+PNG (5 Mo max) à son justificatif. Le fichier est vérifié sur son
+**contenu réel** (un ZIP ou un exécutable renommé `.pdf` est refusé). Il
+est téléchargeable par l'apprenant **et** par l'examinateur de son
+périmètre ; toute autre personne obtient « introuvable ».
+
+**Limites à connaître** : pas d'**analyse antivirus** ; pas de
+remplacement direct d'une pièce (retirer puis redéposer) ; une seule
+pièce active par justificatif.
+
+### 6.5 Centre de notifications
+
+La **cloche** de l'en-tête affiche le nombre de notifications non lues ;
+`/notifications` liste, filtre (toutes / non lues) et marque comme lues.
+
+**Qui reçoit quoi, réellement** : seuls les **formateurs** (principal,
+remplaçants actifs, remplaçant tout juste terminé) sont notifiés — d'un
+planning publié, d'une séance annulée, d'une affectation ou fin de
+remplacement. Le propriétaire d'un justificatif est notifié de son
+examen. **Les apprenants et les responsables pédagogiques ne reçoivent
+pas** de notification pour les autres événements.
+
+### 6.6 Tableau de bord par rôle
+
+`/dashboard` affiche une section « Mon activité » adaptée au rôle :
+
+| Rôle | Contenu réellement affiché |
+|---|---|
+| `STUDENT` | ses présences (présent / retard / absent / excusé), ses justificatifs en attente ou refusés, ses cours des 7 jours — **ses seules données** |
+| `TEACHER` | prochaine séance, séances à venir (7 j) **y compris celles où il est remplaçant actif**, séances « à ouvrir » |
+| `PEDAGOGICAL_MANAGER` | classes de son périmètre, séances à venir. **Incomplet** : justificatifs en attente périmétrés, alternances `UNKNOWN`, planning actif et conflits récents **ne sont pas affichés** — une note renvoie vers « Suivi d'assiduité » / « Planning » |
+| `SUPER_ADMIN` / `ADMIN` / `SCHOOL_ADMINISTRATION` | comptes par statut, justificatifs en attente, imports récents, séances du jour. **Incomplet** : les dernières opérations d'audit ne sont pas affichées |
+
+### 6.7 Référentiel organisationnel
+
+`/organization` permet de créer, modifier et archiver **sites**,
+**bâtiments** et **salles**, et de gérer les **plages réseau CIDR**
+(contexte `SUPER_ADMIN`). Ces plages sont **enregistrées mais pas encore
+utilisées** pour contrôler l'émargement.
+
+---
+
+## 7. Fonctions non disponibles dans l'interface
 
 **Endpoints livrés mais sans écran** (API uniquement) :
 
-- gestion des salles / bâtiments / sites / plages réseau
-  (`organization`) ;
 - affectation d'un responsable pédagogique à une formation
   (`pedagogical-assignments`) ;
 - création / modification / archivage des référentiels académiques
-  (`academic`) — l'UI est en lecture seule ;
+  (`academic`) — l'UI est en **lecture seule** ;
 - création / transfert / clôture d'inscription (`enrollment`) — sauf via
   l'import CSV ;
-- émission / relance d'une invitation d'activation.
+- **émission / relance** d'une invitation d'activation (l'activation
+  elle-même a un écran).
 
-**Non implémenté du tout** (à ne pas présenter comme disponible) :
+**Non implémenté du tout** (à ne jamais présenter comme disponible) :
 
-- import du planning, publication, création des séances depuis un
-  planning, versionnement ;
-- annulation de séance, remplaçant, `PATCH` de séance ;
-- QR fixe de salle, contrôle réseau, scan caméra ;
+- création manuelle d'un planning plein calendrier (`EF-PLAN-006`) ;
+  correction ligne à ligne d'un import de planning ; retour à une version
+  antérieure ;
+- `PATCH` d'une séance manuelle `PLANNED` ;
+- QR **fixe** de salle, contrôle réseau à l'émargement, **scan caméra**
+  (seul le **code court** est utilisable) ;
 - WebAuthn / passkeys, MFA TOTP, anti-bot ;
-- réclamations / messagerie, départ anticipé, justificatif **avec pièce
-  jointe**, import Excel / multifeuille ;
-- notifications **push PWA** et **email métier**, préférences de
-  notification (le **centre de notifications in-app** `/notifications`
-  est livré depuis G1-D pour l'audience **formateur** — planning publié /
-  séance annulée / remplaçant ; livraison « au mieux » après commit) ;
+- réclamations / messagerie, départ anticipé, import Excel `.xlsx` /
+  multifeuille ;
+- **analyse antivirus** des pièces jointes ;
+- notifications **push PWA**, **email métier**, préférences par type,
+  purge ; notification des **apprenants** et **responsables
+  pédagogiques** ;
 - service IA (mapping de colonnes, score d'anomalie) ;
 - IoT / MQTT / Raspberry Pi ;
 - PWA installable / hors ligne ;
-- mot de passe oublié, déconnexion serveur / révocation de session ;
+- mot de passe oublié, déconnexion serveur / révocation de session
+  (fermer l'onglet suffit : le jeton n'est qu'en mémoire) ;
 - rapports « officiels » (logo, PDF), export Excel.
 
-Détail et justifications : `docs/reports/PROJECT_FINAL_AUDIT.md` §0.3 et
-§7.4 ; `docs/01-cadrage.md` §23.5 ; `docs/02-cahier-des-charges.md`
-§4.5.1.
+Détail et justifications : `docs/CURRENT-STATE.md` (« Fonctionnalités
+partielles » et « Hors périmètre assumé ») ;
+`docs/reports/G1_FINAL_REPORT.md` §12 ;
+`docs/reports/G1_REQUIREMENTS_TRACEABILITY.md`.
