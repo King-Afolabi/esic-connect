@@ -15,6 +15,10 @@
 > - [`docs/reports/PROJECT_FINAL_AUDIT.md`](reports/PROJECT_FINAL_AUDIT.md)
 >   — audit vérifiable de la finalisation F1 (**antérieur à G1** :
 >   ses totaux « 12 modules / V11 / 682 tests » sont **périmés**) ;
+> - [`docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md`](reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md)
+>   — ce qui bloquait le parcours de démonstration, le parcours vérifié
+>   **par API** (statuts HTTP), les volumes du jeu `esic_connect_demo`, et
+>   un défaut d'API **non corrigé** ;
 > - `git log` — le code et les tests font foi.
 
 ## Dernière mise à jour
