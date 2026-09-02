@@ -78,6 +78,31 @@ esic_connect_ci`.
 tables métier suivies. Vérification refaite après une seconde exécution
 complète.
 
+### 1.3bis Fuite résiduelle par le profil `demo` activé en test
+
+La bascule vers `MYSQL_TEST_DATABASE` ne suffisait pas.
+`DefaultDemoAccountProvisionerTests` est la seule classe à activer
+`@ActiveProfiles({"test", "demo"})`. `application-demo.yml` définit
+`spring.datasource.url` sur `${MYSQL_DATABASE}` et, `demo` étant déclaré
+**après** `test`, cette valeur l'emportait : cette classe se connectait
+encore à la base de **démonstration**.
+
+Comment le trou a été trouvé : le relevé de volumes avant/après ne
+montrait **rien** — le provisionnement de démonstration est idempotent
+et les comptes existaient déjà, donc aucune ligne n'était ajoutée. La
+fuite n'est apparue qu'en cherchant les **URL JDBC réellement ouvertes**
+dans le journal de la suite, qui en contenait deux :
+`…/esic_test` et `…/esic_connect_demo`.
+
+C'est un rappel utile : une comparaison de volumes prouve l'absence
+d'écriture **observable**, pas l'absence de connexion.
+
+**Corrigé** par un `@TestPropertySource` au niveau de la classe, qui
+prime sur tout fichier de profil et réimpose `MYSQL_TEST_DATABASE`, sans
+modifier le profil `demo` du runtime. Vérifié : avec
+`MYSQL_DATABASE=esic_connect_demo` exporté, la classe journalise
+`Database: jdbc:mysql://localhost:3306/esic_test`.
+
 ### 1.4 Absence de compte `SUPER_ADMIN`
 
 Aucun des cinq comptes amorcés ne portait `SUPER_ADMIN` : les routes qui

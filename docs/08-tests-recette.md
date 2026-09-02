@@ -125,11 +125,20 @@ auparavant confondues : lancer le back-end de démonstration avec
 la base de démonstration** (les tests créent des milliers de comptes et
 tronquent des tables).
 
+Une classe faisait exception : `DefaultDemoAccountProvisionerTests`
+active `@ActiveProfiles({"test", "demo"})`, et `application-demo.yml`
+redéfinit `spring.datasource.url` sur `${MYSQL_DATABASE}` — valeur qui
+l'emportait, `demo` étant déclaré après `test`. Elle est désormais
+épinglée sur `MYSQL_TEST_DATABASE` par `@TestPropertySource`.
+
 Vérification exécutée le 2 septembre 2026 : suite complète lancée avec
 `MYSQL_DATABASE=esic_connect_demo` **exporté**, volumes de
 `esic_connect_demo` relevés avant et après — **identiques** sur les 15
 tables métier suivies (`user_account` 14, `enrollment` 10,
-`attendance_record` 10, `audit_event` 67, …). En CI,
+`attendance_record` 10, `audit_event` 67, …) — **et** aucune URL JDBC
+pointant vers `esic_connect_demo` dans le journal de la suite. Ce second
+contrôle est le plus sûr : une comparaison de volumes ne prouve que
+l'absence d'écriture **observable**, pas l'absence de connexion. En CI,
 `.github/workflows/backend-ci.yml` impose `MYSQL_TEST_DATABASE:
 esic_connect_ci` (base éphémère du service, jetée à chaque run).
 
