@@ -116,3 +116,37 @@ de test n'a été faite pour cet incident (non reproductible).
 4. Vérifier : total de tests inchangé, `ModularityTests` vert, invariants
    T1–T6, cas concurrents, temps de suite acceptable.
 5. Retirer la dépendance à `compose.yaml` pour `./mvnw test`.
+
+
+---
+
+## Addendum — 2 septembre 2026
+
+### Séparation effective des bases test / runtime
+
+`application-test.yml` résolvait sa base via `${MYSQL_DATABASE}`, la
+**même variable** que les profils `local` et `demo`. Le profil `test` lit
+désormais **`MYSQL_TEST_DATABASE`** (défaut `esic_test`) ; la CI impose
+`MYSQL_TEST_DATABASE: esic_connect_ci`. Une démonstration lancée sur
+`MYSQL_DATABASE=esic_connect_demo` ne peut donc plus être détruite par un
+`./mvnw test` (vérifié : suite complète exécutée avec la variable de
+démonstration exportée, volumes de `esic_connect_demo` inchangés).
+
+Cela ne remplace **pas** Testcontainers : la suite écrit toujours dans
+une base locale partagée entre exécutions, dont l'état s'accumule
+(`esic_test` : 95 pièces jointes `STORED`, 47 `DELETED` avant cette
+passe). L'isolation par exécution reste `DEFERRED`.
+
+### Nouvelle observation d'instabilité
+
+`JustificationAttachmentIntegrationTests.reconciliationPromotesAnAgedPendingRowWhoseFileIsValid`
+a **échoué une fois** (`expected "STORED" but was "PENDING_STORAGE"`) sur
+une première suite complète, puis **passé** :
+
+- en isolation (`-Dtest=JustificationAttachmentIntegrationTests`) → 17/17 ;
+- sur une seconde suite complète → **811 tests, 0 échec**.
+
+**Cause non déterminée.** Même signature que l'échec unique et non
+reproduit d'`EnrollmentDirectoryTests` déjà consigné plus haut : un test
+d'intégration sensible au temps/à l'état partagé, vert en isolation. À
+reprendre avec l'isolation par exécution ; ne pas le déclarer corrigé.
