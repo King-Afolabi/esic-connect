@@ -1651,7 +1651,7 @@ Personas :
 | Définition de fini | `V14` (`teacher_substitution` ; `session_cancellation_request` si workflow retenu) ; endpoints `PATCH`/`cancel`/`substitute`/`history` ; `PATCH` limité aux séances d'origine manuelle (`planning_entry_public_id IS NULL`) `PLANNED` ; suite back (transitions, concurrence, sécurité, audit, planning vs manuel) + front |
 | Statut initial | `NOT_IMPLEMENTED` |
 | Preuves attendues | `CourseSessionService.update/cancel`, `SubstitutionService`, tests |
-| **Statut (01/09/2026)** | **`IMPLEMENTED_FULL_SUITE_GREEN`** — **G1-C.1** annulation (`V14`, `POST /sessions/{id}/cancel`), **G1-C.2** remplacements (`teacher_substitution`, `GET/POST …/substitutions`, `…/{id}/end`, `AccessGuard` étendu), **G1-C.3** audit correctif : séance `CANCELLED` **consultable** (`GET` historique, gardes `isHistoricallyReadable` vs `isOperational`), remplaçant `ACTIVE` **visible en liste** + `MANAGE`, période de remplacement devant **chevaucher la séance** (± 60 min, `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION`), audit `coursesession` + purge Redis **`AFTER_COMMIT`** (rollback ⇒ 0 audit, testé). `EF-SES-004`, `EF-SES-005`, `CAD §24 RG-12`, `CDC §43 RG-015` → `IMPLEMENTED_AND_TESTED`. `PATCH /sessions/{id}` d'une séance manuelle `PLANNED` : **non livré** (non requis). Back +6 tests G1-C.3 (729→735, 3 fuseaux) ; front +2 (557→559). Détail : `G1_IMPLEMENTATION_PROGRESS.md` §§ G1-C.1/C.2/« Audit G1-C.3 » |
+| **Statut (01/09/2026)** | **`IMPLEMENTED_AND_TESTED`** (`IMPLEMENTED_FULL_SUITE_GREEN` employé pendant le lot ne qualifie que la **couleur de la suite**, pas la complétude produit) — **G1-C.1** annulation (`V14`, `POST /sessions/{id}/cancel`), **G1-C.2** remplacements (`teacher_substitution`, `GET/POST …/substitutions`, `…/{id}/end`, `AccessGuard` étendu), **G1-C.3** audit correctif : séance `CANCELLED` **consultable** (`GET` historique, gardes `isHistoricallyReadable` vs `isOperational`), remplaçant `ACTIVE` **visible en liste** + `MANAGE`, période de remplacement devant **chevaucher la séance** (± 60 min, `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION`), audit `coursesession` + purge Redis **`AFTER_COMMIT`** (rollback ⇒ 0 audit, testé). `EF-SES-004`, `EF-SES-005`, `CAD §24 RG-12`, `CDC §43 RG-015` → `IMPLEMENTED_AND_TESTED`. `PATCH /sessions/{id}` d'une séance manuelle `PLANNED` : **non livré** (non requis). Back +6 tests G1-C.3 (729→735, 3 fuseaux) ; front +2 (557→559). Détail : `G1_IMPLEMENTATION_PROGRESS.md` §§ G1-C.1/C.2/« Audit G1-C.3 » |
 
 ## G1-D — Centre de notifications métier persistantes
 
@@ -1666,7 +1666,7 @@ Personas :
 | Définition de fini | `V15` (`notification`) ; listener `AFTER_COMMIT` / `REQUIRES_NEW` (motif du seul `StudentImportAuditListener`) ; endpoints `/me/notifications*` ; cloche + badge front ; suite back (after-commit, rollback métier, idempotence, destinataires, sécurité) + front |
 | Statut initial | `PARTIAL` (email d'activation seul) |
 | Preuves attendues | `com.esic.connect.notification` étendu, `V15`, tests |
-| **Statut (01/09/2026)** | **`IMPLEMENTED_FULL_SUITE_GREEN`** — `V15` (table `notification`, `dedup_key` UNIQUE) ; `NotificationListener` (`AFTER_COMMIT`) sur `PlanningPublishedEvent` + `CourseSessionChangeEvent(CANCELLED / SUBSTITUTION_ADDED / SUBSTITUTION_ENDED)` ; `NotificationWriter` → `NotificationRowWriter` (`REQUIRES_NEW` **par ligne**) ; idempotence `dedup_key` (SHA-256, `eventId` / `versionPublicId`) ; 4 endpoints `/api/v1/me/notifications` (liste paginée bornée, `unread-count`, `{id}/read` idempotent, `read-all`), isolation par destinataire (`404` sur une notif d'autrui), `NOTIF_*` ; front cloche `mat-badge` (`app-shell`) + centre `/notifications`. Destinataires = **formateurs** (principal + remplaçants `ACTIVE`) ; **apprenants / responsables pédagogiques = prolongement documenté** (nouveaux ports `enrollment` / `academic`). Pas de préférences, pas de push, pas de purge (dettes documentées). Back +8 tests (735→743, 3 fuseaux) ; front +11 (559→570). |
+| **Statut (01/09/2026)** | **`EF-NOTIF-001` `IMPLEMENTED_AND_TESTED` ; `EF-NOTIF-002` / `RG-033` `PARTIAL`** (`IMPLEMENTED_FULL_SUITE_GREEN` employé pendant le lot ne qualifie que la couleur de la suite) — `V15` (table `notification`, `dedup_key` UNIQUE) ; `NotificationListener` (`AFTER_COMMIT`) sur `PlanningPublishedEvent` + `CourseSessionChangeEvent(CANCELLED / SUBSTITUTION_ADDED / SUBSTITUTION_ENDED)` ; `NotificationWriter` → `NotificationRowWriter` (`REQUIRES_NEW` **par ligne**) ; idempotence `dedup_key` (SHA-256, `eventId` / `versionPublicId`) ; 4 endpoints `/api/v1/me/notifications` (liste paginée bornée, `unread-count`, `{id}/read` idempotent, `read-all`), isolation par destinataire (`404` sur une notif d'autrui), `NOTIF_*` ; front cloche `mat-badge` (`app-shell`) + centre `/notifications`. Destinataires = **formateurs** (principal + remplaçants `ACTIVE`) ; **apprenants / responsables pédagogiques = prolongement documenté** (nouveaux ports `enrollment` / `academic`). Pas de préférences, pas de push, pas de purge (dettes documentées). Back +8 tests (735→743, 3 fuseaux) ; front +11 (559→570). |
 | **Statut après audit G1-D.1 (01/09/2026)** | `EF-NOTIF-001` → **`IMPLEMENTED_AND_TESTED`** ; `EF-NOTIF-002` / `RG-033` → **`PARTIAL`** (audience formateur uniquement ; livraison « au mieux » sans reprise). **Corrigé** : `SESSION_SUBSTITUTION_ENDED` notifie désormais le remplaçant tout juste terminé (`CourseSessionChangeEvent.affectedUserPublicIds`) ; frontière transactionnelle par ligne durcie (plus d'`UnexpectedRollbackException` qui interrompait les destinataires suivants) ; liens front en **liste blanche par rôle** ; compteur non sondé hors session authentifiée. Back **743→749** (`Notification*` +6, 3 fuseaux) ; front **570→574** (+4). Dettes ouvertes : **G1-D-OUTBOX**, **G1-D-AUDIENCE**, rétention (`R-G1-30`). Détail : `G1_IMPLEMENTATION_PROGRESS.md` § « Audit G1-D.1 » |
 
 ### Dettes ouvertes issues de G1-D.1
@@ -1722,6 +1722,35 @@ Personas :
 | Statut initial | `PARTIAL` (recette API partielle, §11.8 du guide de démo) |
 | Preuves attendues | `frontend/e2e/**` ou script API, `docs/reports/G1_FINAL_REPORT.md` |
 | **Statut final (01/09/2026)** | **Recette API : `IMPLEMENTED_AND_TESTED`** — `PriorityPathRecetteIntegrationTests` (`@SpringBootTest`, `TestRestTemplate`) rejoue en continu référentiel → import apprenants → **activation d'un apprenant réellement importé** → import planning (simulation AC-007) → publication → **ce même apprenant** émarge → rapport + export CSV → annulation + notification → remplacement → justificatif + pièce jointe → acceptation + notification → tableaux de bord. **e2e navigateur : `NOT_IMPLEMENTED`** (Playwright non retenu, coût disproportionné — `DEC-G1-011` ; aucune tentative). **Démonstration manuelle (UI navigateur) : `NOT_PERFORMED`** — aucune interaction navigateur consignée ; la recette API vaut **preuve automatisée uniquement**. Totaux : back **811 tests, 0 échec** (défaut / `TZ=UTC` / `TZ=Europe/Paris`), front **71 fichiers / 600 tests / 0 échec**, `ModularityTests` vert (**14 modules**), Flyway **V1 → V16**. **Groupe 1 global : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** Détail : `G1_FINAL_REPORT.md`. |
+
+
+## Clôture du lot G1 — synthèse (2 septembre 2026)
+
+Fusionné sur `main` par la **PR #40** (commit `d3450e6`). Statuts finaux,
+avec les seuls statuts autorisés :
+
+| Bloc | Statut final | Reste ouvert |
+|---|---|---|
+| G1-A — écrans des API administratives | **`PARTIAL`** | écritures `academic` / `enrollment`, affectation d'un RP, **émission** d'invitation : API livrées, **aucun écran** |
+| G1-B — module `planning` | **`IMPLEMENTED_AND_TESTED`** | `EF-PLAN-003` `PARTIAL` (annulation + réimport) ; conflit **salle** contre les séances déjà publiées non détecté ; `EF-PLAN-006` `HORS_PÉRIMÈTRE_ASSUMÉ` ; avertissement d'alternance (`DEC-G1-006`) |
+| G1-C — cycle de vie des séances | **`IMPLEMENTED_AND_TESTED`** | `PATCH` d'une séance manuelle `PLANNED` (non requis) |
+| G1-D — notifications persistantes | **`EF-NOTIF-001 IMPLEMENTED_AND_TESTED` / `EF-NOTIF-002` + `RG-033` `PARTIAL`** | audience **formateur** seule (**G1-D-AUDIENCE**) ; livraison « au mieux » sans reprise (**G1-D-OUTBOX**) ; pas d'email métier, de push, de préférences, de purge |
+| G1-E — pièces jointes | **périmètre fonctionnel `IMPLEMENTED_AND_TESTED` ; durcissement opérationnel `PARTIAL`** | **antivirus `NOT_IMPLEMENTED`** ; **balayage des orphelins `NOT_IMPLEMENTED`** ; remplacement direct d'une pièce ; rétention `DELETED` `À_DÉFINIR` (`R-G1-30`) |
+| G1-F — tableaux de bord | **`PARTIAL`** | cartes manager (justificatifs périmétrés, alternance `UNKNOWN`, planning actif, conflits) et « audit récent » administration ; coût SQL linéaire par séance (`DEC-G1-010`) ; pas de cache Redis |
+| G1-G — recette et documentation | **recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `NOT_IMPLEMENTED` ; démonstration manuelle `NOT_PERFORMED`** | démonstration UI + captures d'écran |
+| **Groupe 1 global** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** | — |
+
+**Prochaines actions produit**, dans l'ordre de valeur :
+
+1. démonstration manuelle du parcours + captures (seul point qui empêche
+   de dépasser `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`) ;
+2. **outbox transactionnelle** (notifications *et* audit) — lève
+   G1-D-OUTBOX et la dette des 8 listeners d'audit synchrones ;
+3. audience des notifications (apprenants / responsables pédagogiques) ;
+4. cartes de tableau de bord manquantes + chargement par lot des séances
+   (`DEC-G1-010`) ;
+5. politique de rétention (pièces `DELETED`, audit, invitations échues) ;
+6. écrans d'écriture `academic` / `enrollment` / émission d'invitation.
 
 ---
 

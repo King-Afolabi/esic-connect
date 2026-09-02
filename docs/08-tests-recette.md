@@ -94,6 +94,123 @@ Vérifie que la solution répond aux besoins du Product Owner.
 
 ---
 
+# 2bis. État réel des tests (audit du 2 septembre 2026)
+
+> Les §2 et §5 à §16 décrivent une **stratégie cible**. Cette section
+> donne ce qui existe **réellement** dans le dépôt, mesuré sur HEAD
+> `d3450e6`.
+
+## 2bis.1 Totaux mesurés
+
+| Suite | Commande | Résultat |
+|---|---|---|
+| Back-end | `cd backend && ./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — **96 classes** de test |
+| Front-end | `cd frontend && npm test -- --watch=false` | **71 fichiers / 600 tests / 0 échec** (Vitest + jsdom) |
+| Lint front | `npm run lint` | « All files pass linting » |
+| Build front | `npm run build` | initial **484,52 kB** brut, 0 alerte de budget |
+| Audit npm | `npm audit --audit-level=high` | **0 vulnérabilité** |
+
+Preuves complémentaires relevées pendant le lot G1
+(`G1_FINAL_REPORT.md` §11) : suite back verte sous les **trois fuseaux**
+(défaut, `TZ=UTC`, `TZ=Europe/Paris`) ; **Flyway `V1 → V16` rejoué sur
+une base `esic_test` recréée vierge** suivi de `ddl-auto=validate` OK ;
+`ModularityTests` vert (**14 modules**).
+
+Les tests marqués du tag JUnit `perf` (`AttendanceTokenPerfTests`,
+`StudentImportSimulationPerfTests`) sont **exclus** du run par défaut ;
+`./mvnw test -Pperf` les exécute. Ils produisent des mesures
+**indicatives**, pas une campagne de charge
+(`docs/reports/PERF_NOTES.md`).
+
+## 2bis.2 Nature exacte de chaque niveau — ne pas confondre
+
+| Niveau | Existe ? | Ce que c'est réellement |
+|---|---|---|
+| **Tests unitaires** | oui | JUnit 5 (+ Mockito) sur les règles pures : parseurs CSV, normalisation, validation de champs, `CidrValidator`, résolution d'alternance, seuil de retard, calcul de demi-journées, tri des rapports, `JustificationFileSafetyValidator`, isolation de l'échec d'audit |
+| **Tests d'intégration** | oui | `@SpringBootTest` / `@DataJpaTest` sur **MySQL réel** (pas H2) et **Redis réel** — contraintes SQL, migrations Flyway, transactions, concurrence |
+| **Tests d'API** | oui | `TestRestTemplate` / `MockMvc` : statuts HTTP, corps d'erreur, en-têtes |
+| **Recette de bout en bout (API)** | oui | `recette/PriorityPathRecetteIntegrationTests` — **une seule** classe rejouant le parcours prioritaire complet par appels HTTP réels, avec **un seul apprenant** créé par l'import puis activé et réutilisé jusqu'au justificatif |
+| **Tests e2e navigateur** | **NON — `NOT_IMPLEMENTED`** | aucune dépendance Playwright / Cypress / Puppeteer, aucun script `e2e`. Décision `DEC-G1-011`. **La recette API n'est pas un e2e** : elle ne pilote aucun navigateur, ne rend aucun composant Angular et ne valide aucune interaction utilisateur |
+| **Tests manuels / démonstration** | **NON consignés** | aucune manipulation UI enregistrée dans le dépôt. Seul le **parcours API** a été relevé à la main (`docs/11-guide-demonstration.md` §11.8, statuts HTTP) |
+| **Tests de performance** | partiels | 2 tests taggés `perf` + mesures indicatives ; **aucune** campagne de charge, objectif « < 100 ms » non validé sur l'ensemble des routes |
+| **Tests d'accessibilité** | partiels | 2 fichiers `*.a11y.spec.ts` avec `axe-core` ; pas d'audit outillé complet, pas de test lecteur d'écran |
+
+## 2bis.3 Ce qui est réellement couvert, par thème
+
+**Sécurité** — une classe `*SecurityTests` par module
+(`identity`, `academic`, `enrollment`, `alternation`, `organization`,
+`attendance`…) : matrice `401` anonyme / `403` hors rôle ou hors
+périmètre / `200` autorisé. Plus :
+`HttpSecurityHeadersIntegrationTests` (CSP, `Referrer-Policy`, `nosniff`,
+`X-Frame-Options`, anti-cache, CORS accepté depuis une origine listée et
+**rejeté sinon**), cloisonnement apprenant (AC-017), accès croisé à une
+pièce jointe (`404`, pas d'oracle d'existence).
+
+**Transactionnalité** — invariants nommés `T1` à `T6` de l'import CSV :
+`T1` simulation sans écriture métier, `T3` rollback total sur exception,
+`T4` e-mail seulement `AFTER_COMMIT`, `T5` aucune trace d'audit si
+rollback. Étendus au lot G1 : publication de planning qui rollbacke ⇒
+job `FAILED` **déterministe** ; rollback métier ⇒ **0** notification ;
+annulation de séance qui rollbacke ⇒ **0** ligne d'audit
+`SESSION_CANCELLED` (faute injectée, sans modifier de bean de
+production) ; purge Redis seulement **après** commit.
+
+**Concurrence** — inscriptions simultanées, affectations pédagogiques,
+émargement double, corrections concurrentes, confirmations d'import,
+**publications de planning concurrentes** (le perdant est idempotent,
+jamais `FAILED`), ouverture / annulation simultanées d'une séance, fin de
+remplacement concurrente. Attendu systématique : `2xx` / `409`, **jamais
+de `5xx`**.
+
+**Fuseaux horaires** — la suite complète est verte sous défaut, `UTC` et
+`Europe/Paris`. Un incident de fuseau réel a été corrigé au lot G1
+(couverture d'inscription décidée à la **date civile de la séance**, plus
+à « aujourd'hui en UTC » — `AttendanceServiceSessionDateTests`).
+
+**Fichiers** — `CsvFileGuardTests` (rejet ZIP / OLE2 / PDF / octet nul,
+UTF-8 strict, taille), `JustificationFileSafetyValidatorTests` (magic
+bytes, extension trompeuse, polyglotte, nom assaini),
+`LocalFilesystemJustificationFileStorageTests` (déplacement atomique,
+anti-traversal, aucun fichier partiel),
+`JustificationAttachmentIntegrationTests` (dépôt, compensation,
+réconciliation, téléchargement, accès croisé).
+
+**Notifications** — `NotificationIntegrationTests` (idempotence
+`dedup_key`, isolation par destinataire, rollback ⇒ 0 notification) et
+`NotificationDeliveryResilienceIntegrationTests` (l'échec d'un
+destinataire n'interrompt pas les autres ; l'échec complet du writer ne
+casse pas la mutation métier).
+
+**Tableaux de bord** — `DashboardIntegrationTests` : périmètre par rôle,
+contexte multi-rôle vérifié (`403` si le rôle n'est pas détenu),
+remplaçant actif inclus, et **deux mesures de compteur de requêtes
+Hibernate** (croissance nulle selon le nombre de classes ; croissance
+linéaire ≈ 2 requêtes/séance selon le nombre de séances).
+
+**Modularité** — `ModularityTests` (Spring Modulith) : aucune dépendance
+vers un package `.internal` d'un autre module, aucun cycle.
+
+## 2bis.4 Limites de couverture assumées
+
+- **Aucun e2e navigateur** et **aucune démonstration UI consignée** ⇒ le
+  lot G1 reste `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`.
+- Aucune mesure de **couverture de code** (JaCoCo non configuré) : le
+  nombre de tests ne dit rien du pourcentage de lignes couvertes.
+- Pas de tests de **charge**, de **résilience infrastructure** (panne
+  MySQL en cours de transaction), ni de **restauration de sauvegarde**.
+- Pas de tests IA ni IoT (§12 et §13 ci-dessous) — **ces domaines n'ont
+  aucun code**.
+- Pas de test d'**injection / XSS / CSRF automatisé** : l'exposition est
+  réduite par construction (JPA paramétré, Angular échappant par défaut,
+  JWT en en-tête et non en cookie, pas de rendu HTML de fichier
+  utilisateur) mais **aucun scanner n'a été passé**.
+- Un test d'intégration (`EnrollmentDirectoryTests`) a échoué **une
+  fois** sous `TZ=UTC` pendant le lot G1 ; **non reproduit** en 5
+  répétitions isolées ni sur les runs complets — **cause non
+  déterminée** (`docs/reports/TEST_ISOLATION_DECISION.md`).
+
+---
+
 # 3. Environnements de tests
 
 | Environnement | Utilisation |

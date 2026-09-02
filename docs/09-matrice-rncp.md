@@ -875,6 +875,72 @@ détail de validation exposé).
 
 ---
 
+# 6bis. Couverture RNCP réellement démontrable (audit du 2 septembre 2026)
+
+> **Règle appliquée** : une compétence n'est **pas** cochée parce qu'un
+> fichier existe. Chaque ligne porte une **preuve exécutable ou
+> consultable**, une **limite honnête**, et ce qui est **montrable au
+> jury**. HEAD `d3450e6`, 811 tests back / 600 tests front verts.
+
+## BC01 — Piloter la stratégie du système d'information
+
+| Compétence mobilisée | Réalisation | Preuve | Limite | À montrer au jury |
+|---|---|---|---|---|
+| Analyse du besoin et de l'existant | Cadrage complet : contexte ESIC réel (planning sur Teams, émargement papier), problèmes identifiés, problématique formulée | `docs/01-cadrage.md` §2-§3 ; `docs/02-cahier-des-charges.md` §2 | l'existant est décrit à partir d'une observation, **sans étude terrain formalisée** ni entretiens tracés | la chaîne « problème observé → exigence numérotée → code → test » sur l'émargement |
+| Formalisation des exigences | **62** exigences `EF-*`, **59** règles `RG-*` (CDC §43), **20** critères d'acceptation `AC-*`, priorisation MUST / SHOULD / COULD / FUTURE | `docs/02` §43-§45, §56 | certaines exigences restent des **cibles** jamais implémentées et sont marquées comme telles | la matrice `G1_REQUIREMENTS_TRACEABILITY.md` : chaque ID relié à un statut vérifié |
+| Cadrage et **réduction assumée** du périmètre | Deux réductions **datées, documentées et signalées** : addendum F2 (planning exclu) puis **levée** au lot G1 ; `EF-PLAN-006`, IA, IoT, WebAuthn restent exclus | `docs/01` §23.5, `docs/02` §4.5.1, `README.md` « Périmètre non livré », `docs/CURRENT-STATE.md` | — | savoir dire « ceci n'est pas livré, voici pourquoi et ce qu'il faudrait » — c'est la compétence évaluée |
+| Gestion des risques | 38 risques cotés (probabilité × impact) avec atténuation ; risques **rouverts** ou reclassés au fil du projet (`R-G1-16`, `R-G1-21`, `R-G1-32`) | `docs/06-risques.md` | pas de revue de risques formelle avec un comité | l'évolution d'un risque : `R-G1-20` (fuseau) ouvert → corrigé → fermé avec preuve |
+| Priorisation et conduite | Backlog produit + backlog de sprint + feuille de route 6 mois ; lots F2→F6 puis G1-A→G1-G, chacun clos par un rapport | `docs/05-product-backlog.md`, `05a`, `05b`, `docs/reports/G1_IMPLEMENTATION_PLAN.md` | projet **individuel** : aucune conduite d'équipe réelle, aucune gouvernance multi-acteurs | le découpage en blocs livrables indépendants et leur clôture tracée |
+| Indicateurs et pilotage qualité | Totaux de tests, budget de bundle, `npm audit`, compteurs de requêtes SQL, suivi des dettes nommées | `docs/CURRENT-STATE.md`, `G1_FINAL_REPORT.md` §11 | pas d'indicateurs d'usage réels (aucun utilisateur) | la mesure N+1 avant / après correction (14 → 28 → 14 requêtes) |
+| **Recul critique** | Reclassements **à la baisse** décidés en fin de lot : G1-F `IMPLEMENTED_AND_TESTED` → **`PARTIAL`** ; e2e `PARTIAL` → **`NOT_IMPLEMENTED`** ; incident UTC « infra confirmée » → **« cause non déterminée »** | `G1_FINAL_REPORT.md` §1bis, §3.4 ; `G1_REQUIREMENTS_TRACEABILITY.md` §8quater | — | **le point fort du dossier** : avoir dégradé ses propres statuts sur preuve insuffisante |
+
+## BC02 — Concevoir et développer des solutions applicatives
+
+| Compétence mobilisée | Réalisation | Preuve (code / test) | Limite | À montrer au jury |
+|---|---|---|---|---|
+| Architecture applicative | Monolithe **modulaire** Spring Modulith, **14 modules**, frontières vérifiées automatiquement, communication par **ports publics** et **événements** — aucun partage d'entité JPA ni de repository | `backend/.../*/package-info.java` ; `ModularityTests` (vert) ; `coursesession.PlanningSessionWriter` ; `docs/03-architecture.md` §7 | monolithe assumé ; pas de microservices (choix explicite, `DEC-G1-001`) | ouvrir `ModularityTests`, casser volontairement une frontière et montrer l'échec |
+| Développement back-end | Java 21 / Spring Boot / JPA ; 30 contrôleurs REST ; DTO sans identifiant SQL ; gestion d'erreurs structurée par module | `backend/src/main/java/com/esic/connect/**` | pas de versionnement d'API au-delà de `/api/v1` | un module complet de bout en bout : `planning` (contrôleur → service → port → migration → test) |
+| Développement front-end | Angular 21.2 **standalone, zoneless, signaux**, lazy routes, Angular Material ; JWT et contexte de rôle **en mémoire seule** (asserté par test) | `frontend/src/app/**` ; build **484,52 kB** sous le budget de 500 kB | plusieurs écrans en **lecture seule** (dette G1-A) ; pas de PWA installable | le sélecteur de contexte multi-rôle et sa **vérification côté serveur** |
+| Persistance et migrations | **16 migrations Flyway** additives, `ddl-auto: validate`, 41 tables, double identité interne/`public_id`, verrouillage optimiste | `backend/src/main/resources/db/migration/` ; `docs/04-modele-donnees.md` §6bis | V12/V13 corrigées **en place** avant tout push — une base ayant appliqué l'ancienne forme n'est **pas** réparable par `flyway repair` (documenté) | rejouer `V1 → V16` sur une base vierge + `validate` |
+| Imports de données contrôlés | Deux imports CSV (apprenants, planning) : lecture **sécurisée**, **simulation sans écriture métier**, confirmation transactionnelle, idempotence, rapport d'anomalies ligne / colonne / motif | `studentimport`, `planning` ; invariants `T1`–`T6` | CSV uniquement — **pas d'Excel**, **pas d'assistance IA** au mapping | la simulation qui produit 0 écriture, puis la confirmation atomique |
+| Restitution et rapports | Rapports séance / classe / apprenant / synthèse, calcul de demi-journées tenant compte de l'alternance, export CSV durci (BOM, `;`, **neutralisation d'injection de formule**) | `attendance` ; `AttendanceReportSortTests` | pas d'export Excel ni PDF, pas de mise en page « officielle » | l'export CSV et la neutralisation `=`/`+`/`-`/`@` |
+| Tableaux de bord | Endpoint typé par rôle, agrégats bornés, périmètre serveur | `dashboard` ; `DashboardIntegrationTests` | **bloc `PARTIAL`** : cartes manager et administration incomplètes | assumer publiquement ce `PARTIAL` |
+| **IA applicative** | **AUCUNE** | — | `EF-AI-001..003` = `HORS_PÉRIMÈTRE_ASSUMÉ` ; aucun service FastAPI, aucun modèle | dire clairement que l'IA du projet est un **outil de développement**, pas une fonctionnalité livrée |
+
+## BC03 — Sécuriser et administrer l'infrastructure
+
+| Compétence mobilisée | Réalisation | Preuve | Limite | À montrer au jury |
+|---|---|---|---|---|
+| Authentification | JWT HS256 stateless (signature + `exp` + `iss`), BCrypt, réponse **uniforme** quel que soit le motif d'échec, invitation / activation à jeton usage unique (empreinte SHA-256 seule stockée) | `identity` ; `AuthenticationSecurityTests` | **pas** de MFA, pas de WebAuthn, pas de mot de passe oublié, pas de `logout` / révocation | la réponse identique pour email inconnu / mot de passe faux / compte suspendu |
+| Autorisation | RBAC + **périmètre pédagogique décidé côté serveur** (`AcademicScopeGuard`) + propriété de la ressource + contexte de séance ; `@PreAuthorize` sur toutes les routes non publiques ; refus par défaut | matrices `*SecurityTests` par module (`401`/`403`/`200`) | — | le cumul de rôles qui **n'élargit jamais** le périmètre (AC-003) |
+| Durcissement HTTP | CORS **restrictif** (jamais `*`, `allowCredentials=false`), **CSP**, `Referrer-Policy: no-referrer`, `nosniff`, `X-Frame-Options: DENY`, anti-cache | `HttpSecurityHeadersIntegrationTests` (4 tests) | **pas de HTTPS**, pas de HSTS effectif ; **rate-limiting `NOT_IMPLEMENTED`** | l'origine non listée refusée en `403` |
+| Sécurité des fichiers | Extension + type déclaré + **magic bytes** (type re-dérivé), rejet ZIP/OLE2, taille pendant le flux, clé de stockage **opaque**, **hors webroot**, anti-traversal, téléchargement `attachment` + `nosniff` | `JustificationFileSafetyValidatorTests`, `LocalFilesystemJustificationFileStorageTests` | **antivirus `NOT_IMPLEMENTED`** — ne jamais dire « garanti sans malware » | un fichier ZIP renommé `.pdf` rejeté par les magic bytes |
+| Audit et traçabilité | `audit_event` alimenté par tous les flux métier, **sans PII, sans jeton, sans adresse IP** ; corrections append-only avec motif obligatoire | `audit` ; `AuditEventTests` | **8 des 9 listeners** restent synchrones (dette d'outbox) ; aucune rétention outillée | une correction de présence et sa trace complète (ancienne valeur, nouvelle, auteur, motif, date) |
+| Protection des secrets | Aucun secret versionné ; `.env` ignoré ; `.env.example` à placeholders, `JWT_SECRET=` et `ESIC_DEMO_PASSWORD=` **vides** ; démarrage **refusé** si `JWT_SECRET` < 32 octets | `.env.example`, `SecurityConfig` | — | le back-end qui refuse de démarrer sans secret |
+| Chaîne d'approvisionnement | Dependabot (Maven, npm, Actions), `dependency-review-action` bloquant ≥ `high`, `npm audit --audit-level=high` en CI ; workflows en `permissions: contents: read`, sans secret, sans `pull_request_target` | `.github/workflows/**` | **pas** de SCA de fond sur tout l'arbre Maven (écart assumé, motivé) | le workflow de revue de dépendances |
+| Conteneurisation | `docker compose` : MySQL 8.4, Redis 7.4, Mailpit, Mosquitto ; sondes de santé | `compose.yaml` | **local uniquement** ; aucun déploiement, aucune HA, **aucune sauvegarde testée** | le démarrage complet en une commande |
+| Supervision | `/actuator/health`, `show-details: never` | `application.yml` | pas de métriques, pas de logs JSON structurés | — |
+
+## BC04 — IoT sécurisé et intelligence artificielle
+
+| Compétence | Réalisation | Preuve | Limite |
+|---|---|---|---|
+| Intégration IoT (Raspberry Pi, MQTT) | **AUCUN CODE** | broker Mosquitto démarré par `compose.yaml`, **jamais consommé** | `EF-IOT-001/002` = `HORS_PÉRIMÈTRE_ASSUMÉ` |
+| Détection d'anomalies / IA de service | **AUCUN CODE** | — | `EF-AI-001..003` = `HORS_PÉRIMÈTRE_ASSUMÉ` |
+| Conception documentée | Architecture IoT et IA **conçue** : topics MQTT, format d'événement, identité de dispositif, protection contre le rejeu, scores d'anomalie | `docs/01` §19-§20, `docs/02` §33-§34, `docs/03` §7.14-§7.15 | **conception seule** — `DOCUMENTATION_ONLY` |
+
+> **BC04 est le bloc le plus faible du dossier et doit être présenté
+> comme tel.** Ce qui est défendable : la **conception** (identité de
+> dispositif, idempotence par `eventId`, protection contre le rejeu,
+> pseudonymisation, validation humaine des alertes) et le fait que les
+> mécanismes équivalents sont **réellement implémentés ailleurs** dans le
+> projet — idempotence (`dedup_key` des notifications), anti-rejeu
+> (jetons d'émargement opaques à TTL, usage unique), pseudonymisation
+> (audit sans PII ni IP). Ne **jamais** laisser entendre qu'une borne ou
+> un modèle existe.
+
+---
+
 # 7. Mise à jour
 
 Après chaque fonctionnalité :

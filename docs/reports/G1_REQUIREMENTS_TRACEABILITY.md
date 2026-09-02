@@ -42,9 +42,11 @@
 
 ## 1. Vue d'ensemble par bloc
 
-> **Avancement (1er septembre 2026, session autonome).** G1-A et G1-B
-> sont **livrés et verts** (suites back 713/0, front 548/0). Détail par
-> commit : `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
+> **⚠ Table historique.** Le tableau ci-dessous a été rempli **au fil du
+> lot** ; ses colonnes « Statut après cette session » reflètent l'état de
+> chaque bloc **au moment où il a été écrit**, pas l'état final. Les
+> statuts **finaux** font foi et sont donnés au §1bis ci-dessous, puis
+> détaillés aux §3bis, §4bis, §5ter, §6bis, §7ter, §8ter et §8quater.
 
 | Bloc | Intitulé | Exigences pilotes | Décisions | Statut avant G1 | Statut après cette session |
 |---|---|---|---|---|---|
@@ -55,6 +57,28 @@
 | G1-F | Tableaux de bord par rôle | CDC §25.1..25.4 (dashboards par rôle) | DEC-G1-010, DEC-G1-F | `PARTIAL` (dashboard générique unique) | **`IMPLEMENTED_AND_TESTED`** — module `dashboard`, `GET /api/v1/me/dashboard` typé par rôle (rôle effectif décidé serveur, priorité fixe), agrégats bornés via ports publics, périmètre serveur (`STUDENT` = ses données AC-017, `TEACHER` = ses séances, RP = `AcademicScopeDirectory`), anti-N+1 testé (manager). Cartes `PARTIAL` : justificatifs périmétrés RP / alternance `UNKNOWN`, dernières opérations d'audit, planning actif, conflits (non exposées). Front : cartes par rôle sous « Mon activité ». Voir §6bis. |
 | G1-E | Pièces jointes des justificatifs | EF-JUS-001, EF-JUS-002, RG-071, RG-072, RG-073, RG-075, RG-076, CDC §21.5 | DEC-G1-008, DEC-G1-009 | `PARTIAL` (justificatif métier sans fichier) | **`IMPLEMENTED_AND_TESTED`** — dépôt owner + endpoints + séquence base/fichier avec compensation + réconciliation `@Scheduled` + téléchargement sécurisé (owner + examinateur) + notification au propriétaire + écrans. `V16` consommée. **Antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; rétention pièces `À_DÉFINIR` (`R-G1-30`) ; pas de remplacement direct (retrait puis redépôt). Voir §7ter. |
 | G1-G | Recette globale, e2e, doc | CDC §46, §47 ; AC-007, AC-008, AC-017 | DEC-G1-011 | `PARTIAL` (recette API §11.8 du guide de démo) | **`IMPLEMENTED_AND_TESTED`** pour la recette **API** de bout en bout (`PriorityPathRecetteIntegrationTests`, parcours prioritaire + extensions G1) ; **e2e navigateur `PARTIAL`** (Playwright non ajouté, repli API livré) ; **aucune démonstration manuelle** ⇒ G1 global `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`. Voir §8bis. |
+
+
+### 1bis. Statuts finaux du lot G1 (clôture documentaire, 2 septembre 2026)
+
+Fusionné sur `main` par la **PR #40** (commit `d3450e6`). Vérifié :
+**14 modules** (`ModularityTests` vert), Flyway **V1 → V16**, back
+**811 tests / 0 échec**, front **71 fichiers / 600 tests / 0 échec**.
+
+| Bloc | **Statut final** | Écart avec la table §1 (historique) |
+|---|---|---|
+| G1-A | **`PARTIAL`** | §1 annonçait `IMPLEMENTED_AND_TESTED` pour `EF-ROOM-001` seul ; le **bloc** reste `PARTIAL` (écritures `academic` / `enrollment` / affectations / émission d'invitation sans écran) |
+| G1-B | **`IMPLEMENTED_AND_TESTED`** | conforme ; `EF-PLAN-003` `PARTIAL`, `RG-032..035` `PARTIAL` après l'audit G1-B.1, `EF-PLAN-006` `HORS_PÉRIMÈTRE_ASSUMÉ` |
+| G1-C | **`IMPLEMENTED_AND_TESTED`** | §1 indiquait encore **`NOT_STARTED`** — **périmé** : C.1 (annulation), C.2 (remplacements) et C.3 (audit correctif) sont livrés |
+| G1-D | **`EF-NOTIF-001 IMPLEMENTED_AND_TESTED` ; `EF-NOTIF-002` / `RG-033` `PARTIAL`** | conforme (§5ter) |
+| G1-E | **périmètre fonctionnel `IMPLEMENTED_AND_TESTED` ; durcissement opérationnel `PARTIAL`** | antivirus et balayage d'orphelins `NOT_IMPLEMENTED` ; rétention `DELETED` `À_DÉFINIR` |
+| G1-F | **`PARTIAL`** (bloc global) | §1 annonçait `IMPLEMENTED_AND_TESTED` — **périmé** : seules l'infrastructure et les cartes `STUDENT` / `TEACHER` le sont ; cartes manager et administration `PARTIAL` (§8quater) |
+| G1-G | **recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `NOT_IMPLEMENTED` ; démonstration manuelle `NOT_PERFORMED`** | §1 annonçait l'e2e `PARTIAL` — **périmé**, requalifié `NOT_IMPLEMENTED` (§8ter) |
+| **Groupe 1 global** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** | jamais `DEMONSTRATED`, jamais « intégralement complet » |
+
+Statut `IMPLEMENTED_FULL_SUITE_GREEN` employé pendant le lot : **ce n'est
+pas un statut de complétude produit**, seulement la couleur de la suite
+de tests. Il n'apparaît plus dans les statuts finaux.
 
 ---
 

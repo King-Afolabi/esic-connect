@@ -58,8 +58,17 @@ Renseigner au minimum dans `.env` :
 export JWT_SECRET="$(head -c 48 /dev/urandom | base64 | tr -d '\n')"
 
 # Mot de passe des comptes de démonstration (≥ 12 caractères).
-export ESIC_DEMO_PASSWORD='demo-password-1234'
+# Générer une valeur locale ; ne JAMAIS écrire de mot de passe réel dans
+# un document du dépôt, ni dans .env.example.
+export ESIC_DEMO_PASSWORD="$(head -c 18 /dev/urandom | base64 | tr -d '\n')"
+
+# Le noter pour les connexions du jour J (gestionnaire de mots de passe,
+# ou simplement : echo "$ESIC_DEMO_PASSWORD").
 ```
+
+> **Aucun mot de passe réel ne figure dans ce guide.** Les cinq comptes
+> de démonstration partagent la valeur de `ESIC_DEMO_PASSWORD` du shell
+> qui lance le back-end.
 
 ---
 
@@ -81,6 +90,14 @@ export JAVA_HOME="$(/usr/libexec/java_home -v 21)"   # ou votre chemin OpenJDK 2
 set -a && source ../.env && set +a
 export SPRING_PROFILES_ACTIVE=demo
 # JWT_SECRET et ESIC_DEMO_PASSWORD proviennent de l'étape 3
+
+# OBLIGATOIRE hors Docker : les pièces jointes de justificatifs sont
+# écrites sur le système de fichiers local. Le défaut
+# (/data/uploads/justifications) n'est PAS inscriptible sur macOS/Linux :
+# sans cet export, tout dépôt de pièce jointe échoue en 503.
+mkdir -p ../build/demo-data/justifications
+export JUSTIFICATION_STORAGE_PATH="$(cd ../build/demo-data/justifications && pwd)"
+
 ./mvnw -q spring-boot:run
 ```
 
@@ -110,7 +127,7 @@ valeur courante de ESIC_DEMO_PASSWORD. …
 Dans un autre terminal, depuis la racine du dépôt :
 
 ```bash
-API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD='demo-password-1234' \
+API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD="$ESIC_DEMO_PASSWORD" \
   ./scripts/seed-demo.sh
 ```
 
@@ -164,7 +181,7 @@ npm start        # http://localhost:4200 (proxifie /api vers :8080)
 
 Toutes les adresses sont **fictives** (domaine réservé `example.test`).
 Mot de passe commun : la valeur de `ESIC_DEMO_PASSWORD` (par défaut du
-guide : `demo-password-1234`). Elle est réappliquée aux **5 comptes** à
+guide — voir l'étape 3). Elle est réappliquée aux **5 comptes** à
 chaque démarrage sous le profil `demo` (voir l'encadré § 4.2), même sur
 une base MySQL déjà peuplée par une session précédente.
 
@@ -425,8 +442,16 @@ isolée n'avait alors pas été exécutée (le compte `esic_app` n'a pas
 
 ## 11. Scénario « import CSV → séance → émargement → rapport » (bout en bout)
 
-Ce scénario couvre le parcours réellement livré. **Il n'y a pas d'import
-de planning** : la séance est créée manuellement (séance exceptionnelle).
+> **Mise à jour du 2 septembre 2026.** Ce scénario a été écrit **avant**
+> le lot G1. Il reste valable tel quel (la création manuelle d'une séance
+> exceptionnelle existe toujours), mais la phrase « il n'y a pas d'import
+> de planning » est **périmée** : le module `planning` est livré depuis
+> G1-B. Le parcours **complet** à démontrer aujourd'hui est décrit au
+> §11bis ci-dessous ; les étapes 11.2 à 11.7 restent utilisables pour la
+> partie import apprenants / émargement / rapport.
+
+Ce scénario couvre le parcours livré **avant G1** : la séance y est créée
+manuellement (séance exceptionnelle).
 
 ### 11.1 Préparation
 
@@ -542,6 +567,72 @@ Back-end arrêté proprement en fin de vérification ; infrastructure Docker
 laissée en l'état. **La démonstration UI de bout en bout (navigateur) n'a
 pas été rejouée automatiquement** — les composants front sont couverts
 par 475 tests Vitest ; le §11 est le mode opératoire pour le jour J.
+
+---
+
+## 11bis. Parcours complet après le lot G1 (2 septembre 2026)
+
+> **Statut honnête** : ce parcours est **rejoué automatiquement** par
+> `PriorityPathRecetteIntegrationTests` (appels HTTP réels). Il **n'a
+> jamais été exécuté manuellement dans un navigateur** — aucune capture
+> n'existe dans le dépôt. À le faire avant la soutenance.
+
+### 11bis.1 Prérequis spécifiques
+
+- back-end lancé **avec `JUSTIFICATION_STORAGE_PATH`** (§4.2) — sinon le
+  dépôt de pièce jointe échoue en `503` ;
+- `scripts/seed-demo.sh` exécuté (site, formation, classe `C-DEMO`,
+  profils, inscriptions ; affecte `responsable@example.test` à
+  `PRG-DEMO`) ;
+- jeux de données : `docs/demo-data/apprenants-demo.csv`,
+  `docs/demo-data/planning-demo.csv`,
+  `docs/demo-data/planning-conflicts-demo.csv` (tous **fictifs**,
+  résultats attendus dans `docs/demo-data/README.md`) ;
+- un petit PDF ou PNG **fictif** pour la pièce jointe.
+
+### 11bis.2 Déroulé par rôle
+
+| # | Rôle / compte | Écran | Action | Résultat attendu |
+|---|---|---|---|---|
+| 1 | `responsable@example.test` | `/login` puis en-tête | se connecter, **basculer le contexte de rôle** | le sélecteur apparaît (compte multi-rôles) ; le **tableau de bord change** au basculement — la vérification est **serveur** (`?context=`), pas cosmétique |
+| 2 | `responsable@example.test` (contexte RP) | `/students/import` | téléverser le CSV apprenants | **simulation** : lignes valides / doublon interne / e-mail invalide / classe inexistante, avec ligne + colonne + motif. **Aucun compte créé** à ce stade |
+| 3 | idem | `/students/import/:jobId` | confirmer (sur la copie réduite aux 8 lignes valides) | comptes créés `PENDING_ACTIVATION`, invitations envoyées → visibles dans **Mailpit** (`:8025`) |
+| 4 | apprenant importé | lien d'activation (Mailpit) | définir un mot de passe | compte `ACTIVE` — l'apprenant est **déjà inscrit** à la classe par l'import |
+| 5 | `responsable@example.test` | `/planning/import` | téléverser `planning-conflicts-demo.csv` | **anomalies de conflit** (formateur / classe / salle, hors plage horaire) ; publication refusée tant qu'une ligne est en erreur |
+| 6 | idem | `/planning/import` | téléverser `planning-demo.csv` | simulation propre — **0 séance créée** (`AC-007`) |
+| 7 | idem | `/planning/import/:jobId` | **publier** | version **N** `PUBLISHED`, séances créées ; `/planning/versions` montre l'historique |
+| 8 | idem | republier un fichier modifié | version **N+1**, ancienne `SUPERSEDED` (`AC-008`) | les séances supersédées disparaissent des vues opérationnelles, pas de l'historique |
+| 9 | `formateur@example.test` | `/dashboard` puis `/sessions` | voir la séance issue du planning, l'**ouvrir** | statut `OPEN` ; QR + **code court** affichés (le QR n'encode qu'un jeton **opaque**) |
+| 10 | apprenant activé | `/attendance` | saisir le code court | présence enregistrée ; un **second essai** donne `409` (anti-doublon) ; un code **expiré** est refusé |
+| 11 | `formateur@example.test` | `/sessions/:id` | corriger une présence **avec motif** | correction tracée : ancienne valeur, nouvelle, auteur, motif, date (`AC-015`) |
+| 12 | apprenant | `/my-attendance` | déposer un justificatif **+ pièce jointe** | dépôt accepté ; un fichier ZIP renommé `.pdf` est **refusé** (magic bytes) |
+| 13 | `responsable@example.test` | `/attendance-management/justifications` | **accepter** le justificatif | `ABSENT → EXCUSED_ABSENCE` (`AC-014`) ; le propriétaire reçoit une **notification** (cloche) |
+| 14 | `responsable@example.test` | `/sessions/:id` | **annuler** une séance avec motif, puis **affecter un remplaçant** | notifications au formateur principal **et** au remplaçant ; le remplaçant voit la séance et peut la gérer **pendant sa période seulement** |
+| 15 | `responsable@example.test` | `/attendance-management` | rapport de classe puis **export CSV** | fichier UTF-8 + BOM, `;`, cellules commençant par `=`/`+`/`-`/`@` **neutralisées** |
+| 16 | `apprenant2@example.test` | tenter d'ouvrir les données d'un autre apprenant | — | **refus** (`AC-017`) — cloisonnement démontré |
+
+### 11bis.3 Ce qui **ne peut pas** être démontré (à dire, pas à cacher)
+
+- QR **scanné par la caméra** : seul le **code court** est utilisable ;
+- WebAuthn / passkey, MFA, mot de passe oublié, anti-bot ;
+- notification d'un **apprenant** ou d'un **responsable pédagogique**
+  (audience formateur uniquement) ;
+- cartes de tableau de bord manager « justificatifs périmétrés »,
+  « alternance `UNKNOWN` », « planning actif », « conflits récents » ;
+- réclamations, départ anticipé, import Excel ;
+- IA, IoT / Raspberry Pi, PWA installable ;
+- écrans d'écriture `academic` / `enrollment`, émission d'invitation
+  depuis l'IHM (API livrées, **pas d'écran**).
+
+### 11bis.4 Plan de secours
+
+| Si… | Alors |
+|---|---|
+| l'infra Docker ne démarre pas | montrer la **recette API** : `./mvnw test -Dtest=PriorityPathRecetteIntegrationTests` rejoue tout le parcours |
+| une étape UI échoue en direct | basculer sur Swagger UI (`:8080/swagger-ui.html`) pour la même opération, puis expliquer l'écart |
+| le dépôt de pièce jointe renvoie `503` | `JUSTIFICATION_STORAGE_PATH` n'a pas été exporté — le dire, le corriger, relancer |
+| le temps manque | prioriser : contexte de rôle (1) → import apprenants (2-3) → publication planning (6-7) → émargement (9-10) → export (15) |
+| tout échoue | dérouler la **matrice §13** et les résultats de tests : 811 back / 600 front, 0 échec |
 
 ---
 

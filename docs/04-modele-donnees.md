@@ -500,6 +500,133 @@ est attribué.
 
 ---
 
+# 6bis. Schéma réellement en base (audit du 2 septembre 2026)
+
+> **Ce document décrit un modèle cible.** Les sections §9 à §25
+> ci-dessous contiennent des tables qui **n'existent pas** (`subject`,
+> `teacher_profile`, `teaching_assignment`, `schedule*`, `file_asset`,
+> `claim*`, `email_delivery`, `iot_*`, `webauthn_credential`,
+> `mfa_totp_secret`, `trusted_device`, `daily_attendance_summary`,
+> `provisional_attendee`, `session_cancellation_request`…) et des noms
+> qui diffèrent du réel (`import_*` → `student_import_*` ;
+> `schedule*` → `planning_*` ; `notification` existe mais avec une autre
+> forme). Elles restent conservées comme **conception cible**.
+>
+> Le schéma réel est géré **uniquement par Flyway**, avec
+> `spring.jpa.hibernate.ddl-auto = validate` : Hibernate ne génère jamais
+> le schéma et **échoue au démarrage** si le mapping diverge. Aucune
+> migration n'insère de donnée métier (seule `V2` amorce les 6 rôles de
+> référence).
+
+## 6bis.1 Migrations et tables réelles — `V1` → `V16` (41 tables)
+
+| Migration | Tables créées | Domaine |
+|---|---|---|
+| `V1__create_identity_and_audit_tables` | `user_account`, `role`, `user_role`, `audit_event` | identité, audit |
+| `V2__seed_reference_roles` | *(aucune)* — amorce les 6 rôles de référence | identité |
+| `V3__create_account_invitation` | `account_invitation` | invitation / activation |
+| `V4__create_organization_tables` | `site`, `building`, `room`, `site_network_range` | organisation |
+| `V5__create_academic_tables` | `academic_year`, `program`, `program_level`, `promotion`, `class_group` | pédagogie |
+| `V6__create_pedagogical_assignment` | `pedagogical_assignment` | périmètre du responsable pédagogique |
+| `V7__create_student_profile_and_enrollment` | `student_profile`, `enrollment` | apprenants, inscriptions |
+| `V8__create_alternation_tables` | `work_study_pattern`, `class_work_study_pattern`, `student_schedule_exception` | alternance |
+| `V9__create_course_sessions_and_attendance` | `course_session`, `session_class`, `attendance_checkpoint`, `attendance_record` | séances, émargement |
+| `V10__extend_attendance_management_and_reporting` | `attendance_correction`, `attendance_justification` | corrections, justificatifs |
+| `V11__create_student_import_tables` | `student_import_job`, `student_import_job_issue`, `student_import_row`, `student_import_row_issue`, `student_number_sequence` | import CSV apprenants |
+| `V12__create_planning_tables` **[G1-B]** | `planning_schedule`, `planning_version`, `planning_entry`, `planning_import_job`, `planning_import_job_issue`, `planning_import_row`, `planning_import_row_issue` | planning |
+| `V13__link_course_session_to_planning` **[G1-B]** | *(aucune)* — colonnes **additives** sur `course_session` (dont `planning_slot_public_id`) | lien planning ↔ séance |
+| `V14__create_session_lifecycle_tables` **[G1-C]** | `teacher_substitution` ; colonnes `cancellation_reason` / `cancelled_at` / `cancelled_by_id` + `CHECK` étendu sur `course_session` | cycle de vie des séances |
+| `V15__create_notification_table` **[G1-D]** | `notification` | notifications persistantes |
+| `V16__create_justification_attachment_table` **[G1-E]** | `justification_attachment` | pièces jointes (**métadonnées seules**) |
+
+## 6bis.2 Identifiants et colonnes techniques réels
+
+- **Double identité** : clé primaire interne `BIGINT AUTO_INCREMENT`
+  (jamais exposée) + `public_id` **UUID** (stocké en `BINARY(16)`), **unique**, seul identifiant qui
+  circule dans l'API, les DTO, les événements inter-modules et le front.
+  Aucun DTO ni événement ne transporte de clé SQL.
+- `shared.BaseEntity` fournit `created_at`, `updated_at` et `version`
+  (**verrouillage optimiste** : une modification concurrente renvoie
+  `409`, jamais `500`).
+- Les entités archivables portent un statut / `archived_at` :
+  l'**archivage remplace la suppression** sur le métier.
+- Les clés étrangères vers `user_account` sont en `RESTRICT` : un compte
+  référencé par un historique ne peut pas être supprimé.
+
+## 6bis.3 Tables et contraintes structurantes livrées en G1
+
+### `planning_*` (V12) — import, versions, créneaux
+- `planning_import_job` : job d'import (`SIMULATED` → `PUBLISHED` /
+  `CANCELLED` / `FAILED`), **empreinte SHA-256** du fichier ; le fichier
+  lui-même n'est **jamais** écrit sur disque.
+- `planning_version` : `version_number` incrémental par planning,
+  statut `DRAFT` / `PUBLISHED` / `SUPERSEDED`. **Aucune suppression
+  physique** de version (EF-PLAN-007).
+- `planning_entry` : créneau publié, porteur d'un `slot_public_id`
+  **déterministe** — identité **stable** d'un créneau d'une publication à
+  l'autre (`DEC-G1-002`, corrigée à l'audit G1-B.1).
+- `course_session.planning_slot_public_id` (V13, additif) : discriminant
+  d'origine. Renseigné ⇒ séance issue d'un planning publié (RG-016) ;
+  nul ⇒ séance exceptionnelle manuelle, `exception_reason` obligatoire.
+
+### `course_session` / `teacher_substitution` (V9, V14)
+- `status ∈ {PLANNED, OPEN, CLOSED, CANCELLED}` (`CHECK`), transitions
+  strictes, pas de réouverture. `cancellation_reason` obligatoire à
+  l'annulation.
+- `teacher_substitution` : `original_teacher_user_id` **figé** (le
+  formateur principal n'est jamais écrasé), remplaçant, période, motif,
+  statut. **Une seule substitution `ACTIVE` applicable** à un instant
+  donné (verrou de ligne sur la séance + contrôle de chevauchement).
+- `session_class` : table d'association séance ↔ classes (une séance peut
+  concerner plusieurs classes).
+
+### `notification` (V15)
+- `recipient_user_id` (FK `RESTRICT`), `type`, `title`, `body`
+  **neutre** (pas de PII), `resource_type` / `resource_public_id`,
+  `status ∈ {UNREAD, READ, ARCHIVED}`.
+- `dedup_key CHAR(64) UNIQUE` = `SHA-256(type | resourcePublicId |
+  recipientUserId | eventKey)` ⇒ **idempotence** : rejouer le listener
+  ne crée pas de doublon.
+- `CHECK ((status='UNREAD') = (read_at IS NULL))` ; index
+  `(recipient, status, created_at)`.
+
+### `justification_attachment` (V16)
+- **Métadonnées uniquement — le contenu du fichier n'est jamais en
+  base.** `storage_key` VARCHAR(180) **UNIQUE et opaque**, jamais dérivée
+  du nom client ; `original_file_name` assaini ; `content_type`
+  `CHECK IN {application/pdf, image/jpeg, image/png}` **re-dérivé des
+  magic bytes**, jamais du `Content-Type` déclaré ; `size_bytes CHECK > 0` ;
+  `sha256 CHAR(64)`.
+- `status ∈ {PENDING_STORAGE, STORED, DELETED}` : la ligne
+  `PENDING_STORAGE` est committée **avant** l'écriture du fichier
+  (`DEC-G1-009`), ce qui rend tout état intermédiaire réconciliable.
+- Colonne **générée** + `UNIQUE` ⇒ **une seule pièce active** par
+  justificatif.
+
+### `student_import_*` (V11)
+- Chaîne `ON DELETE CASCADE` job → lignes → anomalies ; FK `RESTRICT`
+  vers `user_account`.
+- `student_number_sequence` : allocation **atomique** du numéro
+  `ESIC-{annéeDébut}-{NNNNN}`.
+
+### Contraintes métier notables ailleurs
+- `enrollment` : **une seule inscription active** par apprenant et par
+  année (contrainte SQL + isolation de la concurrence testée).
+- `attendance_record` : **anti-double présence** par contrainte
+  d'unicité — la concurrence produit `200` / `409`, jamais `500`.
+- `attendance_correction` : historique **append-only**, motif
+  obligatoire, jamais de mise à jour destructive.
+- `audit_event` : **sans PII, sans jeton, sans adresse IP** (RG-086).
+
+## 6bis.4 Données absentes du schéma réel
+
+Aucune donnée biométrique, aucune adresse IP persistée dans l'audit
+métier, aucun contenu binaire de fichier, aucun mot de passe ou jeton en
+clair (mots de passe BCrypt ; jetons d'invitation et d'émargement stockés
+sous forme d'**empreinte** ou dans Redis avec TTL).
+
+---
+
 # 7. Vue globale des domaines
 
 ```mermaid

@@ -17,7 +17,8 @@
 | Élément | Valeur |
 |---|---|
 | Lot | G1 — grand lot produit |
-| Branche | `feature/master-level-product-expansion` |
+| Branche (au moment du lot) | `feature/master-level-product-expansion` |
+| **Devenir** | **fusionné sur `main` par la PR #40** — commit `d3450e6` (`git diff main feature/master-level-product-expansion` **vide** : contenu identique). Constaté à la clôture documentaire du 2 septembre 2026 |
 | Date du rapport | 1er septembre 2026 |
 | HEAD au démarrage de la 1re passe corrective | `55f999a` |
 | HEAD au démarrage de la 2e passe corrective (probatoire) | `d606f3d` |
