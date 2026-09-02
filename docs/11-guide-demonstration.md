@@ -66,7 +66,7 @@ export ESIC_DEMO_PASSWORD="$(head -c 18 /dev/urandom | base64 | tr -d '\n')"
 # ou simplement : echo "$ESIC_DEMO_PASSWORD").
 ```
 
-> **Aucun mot de passe réel ne figure dans ce guide.** Les cinq comptes
+> **Aucun mot de passe réel ne figure dans ce guide.** Les six comptes
 > de démonstration partagent la valeur de `ESIC_DEMO_PASSWORD` du shell
 > qui lance le back-end.
 
@@ -91,6 +91,12 @@ set -a && source ../.env && set +a
 export SPRING_PROFILES_ACTIVE=demo
 # JWT_SECRET et ESIC_DEMO_PASSWORD proviennent de l'étape 3
 
+# RECOMMANDÉ : base dédiée à la démonstration, distincte de la base
+# applicative `esic_connect` (qui reste intacte) et de la base de tests
+# `esic_test`. Créer la base une seule fois (voir README, « Bases de
+# données »), Flyway applique ensuite V1 → V16 au premier démarrage.
+export MYSQL_DATABASE=esic_connect_demo
+
 # OBLIGATOIRE hors Docker : les pièces jointes de justificatifs sont
 # écrites sur le système de fichiers local. Le défaut
 # (/data/uploads/justifications) n'est PAS inscriptible sur macOS/Linux :
@@ -102,16 +108,16 @@ export JUSTIFICATION_STORAGE_PATH="$(cd ../build/demo-data/justifications && pwd
 ```
 
 Au démarrage, `DemoDataInitializer` (actif **uniquement** sous le profil
-`demo`) crée 5 comptes fictifs et journalise :
+`demo`) crée 6 comptes fictifs et journalise :
 
 ```
-Amorçage demo : 5 comptes fictifs synchronisés (admin / formateur / 2 apprenants /
+Amorçage demo : 6 comptes fictifs synchronisés (super-admin / admin / formateur / 2 apprenants /
 responsable pédagogique multi-rôles) — statut ACTIVE et mot de passe aligné sur la
 valeur courante de ESIC_DEMO_PASSWORD. …
 ```
 
 > **Base MySQL persistante.** Le volume MySQL survit d'un démarrage à
-> l'autre. À **chaque** amorçage sous le profil `demo`, les 5 comptes
+> l'autre. À **chaque** amorçage sous le profil `demo`, les 6 comptes
 > fictifs sont *resynchronisés* : leur statut est ramené à `ACTIVE`
 > (suspension éventuelle levée) et leur mot de passe est réaligné sur la
 > valeur **courante** de `ESIC_DEMO_PASSWORD` — le hachage n'est réécrit
@@ -121,6 +127,13 @@ valeur courante de ESIC_DEMO_PASSWORD. …
 > inscriptions sont conservés. **Ce comportement de synchronisation
 > n'existe que sous le profil `demo`** ; sous `local`, `test` ou en
 > production, aucun compte n'est créé ni modifié de cette façon.
+
+> **Isolation test / démonstration.** La suite de tests back-end lit
+> `MYSQL_TEST_DATABASE` (défaut `esic_test`), **jamais** `MYSQL_DATABASE`.
+> Un `./mvnw test` lancé pendant la préparation de la soutenance
+> n'écrase donc pas la base de démonstration. Vérification : relever les
+> volumes de `esic_connect_demo` avant et après la suite — ils doivent
+> être identiques.
 
 ### 4.3 Jeu de données de démonstration
 
@@ -181,17 +194,21 @@ npm start        # http://localhost:4200 (proxifie /api vers :8080)
 
 Toutes les adresses sont **fictives** (domaine réservé `example.test`).
 Mot de passe commun : la valeur de `ESIC_DEMO_PASSWORD` (par défaut du
-guide — voir l'étape 3). Elle est réappliquée aux **5 comptes** à
+guide — voir l'étape 3). Elle est réappliquée aux **6 comptes** à
 chaque démarrage sous le profil `demo` (voir l'encadré § 4.2), même sur
 une base MySQL déjà peuplée par une session précédente.
 
-| Rôle(s) | Adresse | Usage |
-|---|---|---|
-| `ADMIN` | `admin@example.test` | administration, import CSV, création de séance |
-| `TEACHER` | `formateur@example.test` | ouverture de séance, QR / code court, présences |
-| `STUDENT` | `apprenant1@example.test` | émargement, « mes présences », justificatif |
-| `STUDENT` | `apprenant2@example.test` | second émargement, anti-doublon |
-| `PEDAGOGICAL_MANAGER` + `TEACHER` | `responsable@example.test` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+| Rôle(s) | Adresse | Nom affiché | Usage |
+|---|---|---|---|
+| `SUPER_ADMIN` | `superadmin@example.test` | Super Administrateur Démo | routes techniques réservées (plages réseau CIDR) — **inaccessibles même à `ADMIN`** |
+| `ADMIN` | `admin@example.test` | Administrateur Démo | administration, import CSV, création de séance |
+| `TEACHER` | `formateur@example.test` | Formateur Démo | ouverture de séance, QR / code court, présences |
+| `STUDENT` | `apprenant1@example.test` | Alice Martin | émargement, « mes présences », justificatif |
+| `STUDENT` | `apprenant2@example.test` | Karim Diallo | second émargement, anti-doublon |
+| `PEDAGOGICAL_MANAGER` + `TEACHER` | `responsable@example.test` | Responsable Pédagogique Démo | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+
+`superadmin@example.test` est **distinct** du compte d'administration
+quotidienne (RG-003 / cahier §6.2) : il ne cumule aucun autre rôle.
 
 Le compte `responsable@example.test` porte **deux rôles** : après
 connexion, le **sélecteur de contexte** apparaît en haut à droite et
@@ -278,7 +295,7 @@ courant** → `200`.
 | Back-end refuse de démarrer, `JWT_SECRET doit contenir au moins 32 octets` | `JWT_SECRET` absent / trop court | Refaire l'étape 3 dans le shell qui lance `spring-boot:run`. |
 | Back-end refuse de démarrer, `ESIC_DEMO_PASSWORD … obligatoire` | Variable absente ou < 12 caractères | `export ESIC_DEMO_PASSWORD='…'` (≥ 12 caractères). |
 | `503 ATT_TOKEN_BACKEND_UNAVAILABLE` à l'émission d'un jeton | Redis arrêté / injoignable | `docker compose up -d redis` ; vérifier `docker compose ps`. |
-| `scripts/seed-demo.sh` : « Échec de connexion ADMIN » | Back-end pas en profil `demo`, `ESIC_DEMO_PASSWORD` différent entre le back-end et le script, ou back-end lancé avant la mise à jour de la variable | Vérifier `SPRING_PROFILES_ACTIVE=demo` et la **même** valeur `ESIC_DEMO_PASSWORD` des deux côtés, puis **redémarrer le back-end** : l'amorçage `demo` réaligne alors les 5 comptes sur cette valeur (base MySQL déjà peuplée incluse). |
+| `scripts/seed-demo.sh` : « Échec de connexion ADMIN » | Back-end pas en profil `demo`, `ESIC_DEMO_PASSWORD` différent entre le back-end et le script, ou back-end lancé avant la mise à jour de la variable | Vérifier `SPRING_PROFILES_ACTIVE=demo` et la **même** valeur `ESIC_DEMO_PASSWORD` des deux côtés, puis **redémarrer le back-end** : l'amorçage `demo` réaligne alors les 6 comptes sur cette valeur (base MySQL déjà peuplée incluse). |
 | Back-end : `Too many connections` (MySQL) | Trop de contextes / connexions | `docker compose restart mysql`. |
 | `Le code d'émargement a expiré` | TTL court (30 s) | Le formateur ré-affiche un code (« Renouveler maintenant »). |
 | Émargement refusé : « Vous n'êtes pas inscrit à une classe de cette séance » | Apprenant sans inscription active dans une classe de la séance | Ré-exécuter `scripts/seed-demo.sh` (crée les inscriptions dans `C-DEMO`). |
@@ -584,10 +601,29 @@ par 475 tests Vitest ; le §11 est le mode opératoire pour le jour J.
 - `scripts/seed-demo.sh` exécuté (site, formation, classe `C-DEMO`,
   profils, inscriptions ; affecte `responsable@example.test` à
   `PRG-DEMO`) ;
-- jeux de données : `docs/demo-data/apprenants-demo.csv`,
-  `docs/demo-data/planning-demo.csv`,
-  `docs/demo-data/planning-conflicts-demo.csv` (tous **fictifs**,
-  résultats attendus dans `docs/demo-data/README.md`) ;
+- jeux de données **fictifs** (résultats attendus dans
+  `docs/demo-data/README.md`) :
+  - apprenants : `docs/demo-data/apprenants-demo.csv`, importable
+    **directement** ;
+  - planning : les fichiers versionnés `docs/demo-data/planning-demo.csv`
+    et `docs/demo-data/planning-conflicts-demo.csv` sont des **modèles**.
+    Ils portent le marqueur `__TEACHER_PUBLIC_ID__` à la place de
+    l'identifiant du formateur et **ne doivent jamais être importés
+    tels quels** — l'import échouerait, le marqueur n'étant pas un UUID.
+    Exécuter d'abord :
+
+    ```bash
+    ./scripts/prepare-planning-demo.sh
+    # ou, si l'API n'est pas jointe : ./scripts/prepare-planning-demo.sh <uuid-formateur>
+    ```
+
+    Le script résout le `publicId` de `formateur@example.test` (login
+    ADMIN de démonstration, puis `GET /api/v1/users?q=…`) et écrit les
+    copies **prêtes à importer**, non versionnées, dans
+    `build/demo-data/`. Ce sont **ces copies** qui sont téléversées à
+    l'étape 5 et à l'étape 6. Si le formateur est introuvable, le script
+    échoue explicitement : ne pas contourner, corriger la préparation
+    (`scripts/seed-demo.sh`, profil `demo`, `ESIC_DEMO_PASSWORD`) ;
 - un petit PDF ou PNG **fictif** pour la pièce jointe.
 
 ### 11bis.2 Déroulé par rôle
@@ -598,8 +634,8 @@ par 475 tests Vitest ; le §11 est le mode opératoire pour le jour J.
 | 2 | `responsable@example.test` (contexte RP) | `/students/import` | téléverser le CSV apprenants | **simulation** : lignes valides / doublon interne / e-mail invalide / classe inexistante, avec ligne + colonne + motif. **Aucun compte créé** à ce stade |
 | 3 | idem | `/students/import/:jobId` | confirmer (sur la copie réduite aux 8 lignes valides) | comptes créés `PENDING_ACTIVATION`, invitations envoyées → visibles dans **Mailpit** (`:8025`) |
 | 4 | apprenant importé | lien d'activation (Mailpit) | définir un mot de passe | compte `ACTIVE` — l'apprenant est **déjà inscrit** à la classe par l'import |
-| 5 | `responsable@example.test` | `/planning/import` | téléverser `planning-conflicts-demo.csv` | **anomalies de conflit** (formateur / classe / salle, hors plage horaire) ; publication refusée tant qu'une ligne est en erreur |
-| 6 | idem | `/planning/import` | téléverser `planning-demo.csv` | simulation propre — **0 séance créée** (`AC-007`) |
+| 5 | `responsable@example.test` | `/planning/import` | téléverser **`build/demo-data/planning-conflicts-demo.csv`** (généré par `prepare-planning-demo.sh`, **jamais** le modèle `docs/demo-data/`) | **anomalies de conflit** (formateur / classe / salle, hors plage horaire) ; publication refusée tant qu'une ligne est en erreur |
+| 6 | idem | `/planning/import` | téléverser **`build/demo-data/planning-demo.csv`** (généré par `prepare-planning-demo.sh`, **jamais** le modèle `docs/demo-data/`) | simulation propre — **0 séance créée** (`AC-007`) |
 | 7 | idem | `/planning/import/:jobId` | **publier** | version **N** `PUBLISHED`, séances créées ; `/planning/versions` montre l'historique |
 | 8 | idem | republier un fichier modifié | version **N+1**, ancienne `SUPERSEDED` (`AC-008`) | les séances supersédées disparaissent des vues opérationnelles, pas de l'historique |
 | 9 | `formateur@example.test` | `/dashboard` puis `/sessions` | voir la séance issue du planning, l'**ouvrir** | statut `OPEN` ; QR + **code court** affichés (le QR n'encode qu'un jeton **opaque**) |
@@ -645,14 +681,19 @@ Avant la séance :
 - [ ] `JWT_SECRET` (≥ 32 o) et `ESIC_DEMO_PASSWORD` (≥ 12 c) **exportés
       dans le shell** du back-end (jamais commités).
 - [ ] Back-end lancé en **profil `demo`**, démarrage sans erreur
-      (message « 5 comptes fictifs synchronisés »).
+      (message « 6 comptes fictifs synchronisés »).
 - [ ] `scripts/seed-demo.sh` exécuté (site / `PRG-DEMO` / `C-DEMO` /
       profils / inscriptions / séance `PLANNED` / affectation RP).
 - [ ] Front-end lancé (`npm start`), ouvert en **fenêtre de navigation
       privée** (session en mémoire : un rechargement déconnecte).
 - [ ] `docs/demo-data/apprenants-demo.csv` accessible + la version
       réduite `/tmp/apprenants-demo-ok.csv` préparée.
-- [ ] Les 5 comptes de démonstration testés (connexion OK).
+- [ ] `./scripts/prepare-planning-demo.sh` exécuté **après**
+      `seed-demo.sh` : `build/demo-data/planning-demo.csv` et
+      `build/demo-data/planning-conflicts-demo.csv` existent et ne
+      contiennent plus `__TEACHER_PUBLIC_ID__`. **Ne jamais importer
+      directement les modèles `docs/demo-data/planning*.csv`.**
+- [ ] Les 6 comptes de démonstration testés (connexion OK).
 - [ ] Mailpit ouvert (http://localhost:8025), boîte vidée.
 
 Réinitialiser entre deux démonstrations :

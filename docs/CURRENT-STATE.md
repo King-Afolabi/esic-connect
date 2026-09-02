@@ -20,7 +20,8 @@
 ## Dernière mise à jour
 
 ```text
-2 septembre 2026 — audit documentaire de clôture (aucun code modifié)
+2 septembre 2026 — préparation du chemin critique de démonstration
+(base `esic_connect_demo`, isolation test/démo, 6e compte SUPER_ADMIN)
 ```
 
 ## Point de référence Git
@@ -53,7 +54,7 @@
 | `notification` | email d'activation (Mailpit) **+ centre de notifications métier persistantes** (`AFTER_COMMIT`, idempotence `dedup_key`) | V15 |
 | `dashboard` | `GET /api/v1/me/dashboard` par rôle (lecture seule, agrégats bornés, contexte multi-rôle vérifié côté serveur) | — |
 | `audit` | piste d'audit `audit_event` alimentée par les événements métier | V1 |
-| `bootstrap` | amorçage `demo` (5 comptes fictifs, profil `demo` uniquement) | — |
+| `bootstrap` | amorçage `demo` (6 comptes fictifs dont `SUPER_ADMIN`, profil `demo` uniquement) | — |
 | `shared` | types transverses, `BaseEntity`, `ApiError`, `GlobalExceptionHandler`, `ClockConfig` | — |
 
 Modules décrits dans `docs/03-architecture.md` §7 comme **architecture
@@ -306,7 +307,8 @@ Les tests portant le tag JUnit `perf` sont **exclus** du run par défaut
 |---|---|
 | Recette d'intégration **API** du parcours prioritaire (`PriorityPathRecetteIntegrationTests`) | `IMPLEMENTED_AND_TESTED` |
 | Parcours API relevé à la main (statuts HTTP, `docs/11-guide-demonstration.md` §11.8) | exécuté |
-| Démonstration **UI** de bout en bout | **`NOT_PERFORMED`** — aucune manipulation consignée |
+| Jeu de démonstration **amorcé et vérifié par API** sur `esic_connect_demo` (6 connexions, import apprenants simulé + confirmé, planning publié v1, import conflictuel refusé `409`, présences, justificatifs, pièce jointe) — 2 septembre 2026 | exécuté |
+| Démonstration **UI** de bout en bout | **`NOT_PERFORMED`** — aucune manipulation d'interface consignée |
 | Tests **e2e navigateur** | **`NOT_IMPLEMENTED`** |
 | **Statut global du lot G1** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** |
 
@@ -336,6 +338,20 @@ local non versionné (`cp .env.example .env`, puis renseigner au minimum
 caractères). Hors Docker, exporter aussi `JUSTIFICATION_STORAGE_PATH`
 vers un répertoire local inscriptible — le défaut `/data/uploads/...`
 n'est pas accessible en écriture. Voir `README.md`.
+
+**Trois bases MySQL distinctes**, jamais confondues :
+
+| Base | Usage | Variable |
+|---|---|---|
+| `esic_connect` | runtime `local` (base applicative) | `MYSQL_DATABASE` |
+| `esic_connect_demo` | runtime `demo` (démonstration, Flyway V16) | `MYSQL_DATABASE=esic_connect_demo` |
+| `esic_test` | suite de tests back-end (profil `test`) | `MYSQL_TEST_DATABASE` (défaut `esic_test`) |
+
+Le profil `test` lit **`MYSQL_TEST_DATABASE`** et non `MYSQL_DATABASE` :
+un `./mvnw test` lancé pendant une démonstration n'écrit donc pas dans
+`esic_connect_demo` (vérifié par relevé de volumes avant/après, suite
+complète lancée avec `MYSQL_DATABASE=esic_connect_demo` exporté). La CI
+impose `MYSQL_TEST_DATABASE: esic_connect_ci`.
 
 ## Prochaines priorités produit
 

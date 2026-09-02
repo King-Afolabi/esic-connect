@@ -116,6 +116,23 @@ Preuves complémentaires relevées pendant le lot G1
 une base `esic_test` recréée vierge** suivi de `ddl-auto=validate` OK ;
 `ModularityTests` vert (**14 modules**).
 
+## 2bis.1bis Base utilisée par la suite — isolation test / démonstration
+
+La suite back-end s'exécute sur **`MYSQL_TEST_DATABASE`** (défaut
+`esic_test`), jamais sur `MYSQL_DATABASE`. Les deux variables étaient
+auparavant confondues : lancer le back-end de démonstration avec
+`MYSQL_DATABASE=esic_connect_demo` faisait alors écrire la suite **dans
+la base de démonstration** (les tests créent des milliers de comptes et
+tronquent des tables).
+
+Vérification exécutée le 2 septembre 2026 : suite complète lancée avec
+`MYSQL_DATABASE=esic_connect_demo` **exporté**, volumes de
+`esic_connect_demo` relevés avant et après — **identiques** sur les 15
+tables métier suivies (`user_account` 14, `enrollment` 10,
+`attendance_record` 10, `audit_event` 67, …). En CI,
+`.github/workflows/backend-ci.yml` impose `MYSQL_TEST_DATABASE:
+esic_connect_ci` (base éphémère du service, jetée à chaque run).
+
 Les tests marqués du tag JUnit `perf` (`AttendanceTokenPerfTests`,
 `StudentImportSimulationPerfTests`) sont **exclus** du run par défaut ;
 `./mvnw test -Pperf` les exécute. Ils produisent des mesures

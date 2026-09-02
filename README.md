@@ -238,9 +238,20 @@ export JUSTIFICATION_STORAGE_PATH="$(cd ../build/demo-data/justifications && pwd
 SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
 ```
 
-Le profil `demo` amorce **5 comptes fictifs** (voir plus bas) **sans
+Le profil `demo` amorce **6 comptes fictifs** (voir plus bas) **sans
 désactiver la sécurité** ; il exige `ESIC_DEMO_PASSWORD`. Sans ce profil
 (`local`), aucun compte n'est créé.
+
+Pour une démonstration **isolée de la base applicative**, lancer le
+back-end sur une base dédiée :
+
+```bash
+MYSQL_DATABASE=esic_connect_demo SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+```
+
+La base est créée vide puis peuplée par Flyway (`V1 → V16`). La suite de
+tests, elle, lit `MYSQL_TEST_DATABASE` (défaut `esic_test`) et **n'écrit
+jamais** dans `MYSQL_DATABASE` — voir « Bases de données » ci-dessous.
 
 Aucune autre variable n'a besoin d'être exportée à la main : `set -a &&
 source ../.env` couvre MySQL, Redis, JWT, Mailpit et CORS.
@@ -292,9 +303,38 @@ npm run lint                 # angular-eslint
 npm run build                # build de production (budget initial 500 kB)
 npm audit                    # 0 vulnérabilité attendue
 
-# Non-régression du script de seed (faux curl déterministe)
+# Non-régression des scripts de démonstration (faux curl déterministe)
 bash scripts/test/test-seed-demo.sh
+bash scripts/test/test-prepare-planning-demo.sh
 ```
+
+### Bases de données — isolation test / démonstration
+
+Trois bases distinctes, jamais confondues :
+
+| Base | Qui l'utilise | Variable |
+|---|---|---|
+| `esic_connect` | runtime `local` (base applicative) | `MYSQL_DATABASE` |
+| `esic_connect_demo` | runtime `demo` (démonstration) | `MYSQL_DATABASE=esic_connect_demo` |
+| `esic_test` | **suite de tests** back-end (profil `test`) | `MYSQL_TEST_DATABASE` (défaut `esic_test`) |
+
+Le profil `test` lit **`MYSQL_TEST_DATABASE`**, jamais `MYSQL_DATABASE` :
+un `./mvnw test` lancé pendant une démonstration n'écrit donc **pas**
+dans la base de démonstration (les tests créent des milliers de comptes
+et tronquent des tables). En CI, `.github/workflows/backend-ci.yml`
+impose explicitement `MYSQL_TEST_DATABASE: esic_connect_ci`, base
+éphémère jetée à chaque run.
+
+Créer la base de démonstration (une seule fois) :
+
+```bash
+docker compose exec mysql mysql -uroot -p \
+  -e "CREATE DATABASE IF NOT EXISTS esic_connect_demo
+      CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+      GRANT ALL PRIVILEGES ON esic_connect_demo.* TO '<MYSQL_USER>'@'%';"
+```
+
+Flyway applique ensuite `V1 → V16` au premier démarrage du profil `demo`.
 
 Totaux de référence mesurés sur ce dépôt (HEAD `d3450e6`, 2 septembre 2026) :
 
@@ -327,19 +367,23 @@ Tous les workflows : `permissions: contents: read`, sans secret, sans
 
 ## Comptes de démonstration
 
-**Cinq** comptes créés et resynchronisés par le profil `demo`
+**Six** comptes créés et resynchronisés par le profil `demo`
 (`DemoDataInitializer`). Domaine réservé `example.test` (données
 strictement fictives). **Le mot de passe n'est pas dans le dépôt** : il
 vaut la valeur de `ESIC_DEMO_PASSWORD` de votre `.env`, et ne doit
 jamais être écrit dans un document du dépôt.
 
-| Email | Rôle(s) | Usage |
-|---|---|---|
-| `admin@example.test` | `ADMIN` | administration des comptes, import CSV, création de séance |
-| `formateur@example.test` | `TEACHER` | ouverture de séance, QR / code court, présences |
-| `apprenant1@example.test` | `STUDENT` | émargement, « mes présences », justificatif |
-| `apprenant2@example.test` | `STUDENT` | second émargement, anti-doublon |
-| `responsable@example.test` | `PEDAGOGICAL_MANAGER` + `TEACHER` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+| Email | Nom affiché | Rôle(s) | Usage |
+|---|---|---|---|
+| `superadmin@example.test` | Super Administrateur Démo | `SUPER_ADMIN` | routes techniques réservées (plages réseau CIDR), inaccessibles même à `ADMIN` |
+| `admin@example.test` | Administrateur Démo | `ADMIN` | administration des comptes, import CSV, création de séance |
+| `formateur@example.test` | Formateur Démo | `TEACHER` | ouverture de séance, QR / code court, présences |
+| `apprenant1@example.test` | Alice Martin | `STUDENT` | émargement, « mes présences », justificatif |
+| `apprenant2@example.test` | Karim Diallo | `STUDENT` | second émargement, anti-doublon |
+| `responsable@example.test` | Responsable Pédagogique Démo | `PEDAGOGICAL_MANAGER` + `TEACHER` | **sélecteur de contexte de rôle** (EF-AUTH-003) ; périmètre `PRG-DEMO` |
+
+`superadmin@example.test` reste **séparé** du compte d'administration
+quotidienne (RG-003) : il ne cumule aucun autre rôle.
 
 Le compte `responsable@example.test` est **multi-rôles** : après
 connexion, le sélecteur de contexte apparaît et permet de basculer entre

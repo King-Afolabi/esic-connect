@@ -36,6 +36,10 @@ aux **8 premières lignes de données** :
 head -n 9 docs/demo-data/apprenants-demo.csv > /tmp/apprenants-demo-ok.csv
 ```
 
+(Le même fichier réduit peut être écrit dans le répertoire non versionné
+de démonstration : `head -n 9 docs/demo-data/apprenants-demo.csv >
+build/demo-data/apprenants-valides-demo.csv`.)
+
 → `summary = { total: 8, valid: 8, error: 0, plannedCreate: 8 }`,
 `confirmable = true` ; à la confirmation : `appliedSummary = { created: 8,
 invited: 8, ignored: 0 }` (8 e-mails visibles dans Mailpit) ;
@@ -78,9 +82,11 @@ Vérification automatisée : `bash scripts/test/test-prepare-planning-demo.sh`
 
 ### `planning-demo.csv` — 5 créneaux valides
 
-> Résultats **attendus** (déduits du code et des tests d'intégration
-> `PlanningImportIntegrationTests` / `PlanningPublicationIntegrationTests`),
-> **non relevés manuellement** dans une session de démonstration.
+> Résultats **relevés par appels API** le 2 septembre 2026 sur un
+> back-end `demo` (base `esic_connect_demo`, Flyway V16), et cohérents
+> avec `PlanningImportIntegrationTests` /
+> `PlanningPublicationIntegrationTests`. Relevé **par API**, pas par une
+> manipulation d'interface.
 
 Upload → simulation (`POST /api/v1/planning-imports`, sur une classe
 **sans planning publié**, sur une plage horaire **libre** pour le
@@ -102,7 +108,9 @@ réutilisées (même `slotPublicId`) / supersédées (filtrées de `/sessions`)
 
 ### `planning-conflicts-demo.csv` — 5 créneaux fautifs
 
-> Résultats **attendus**, non relevés manuellement.
+> Refus de publication **relevé par API** le 2 septembre 2026 :
+> `POST …/{id}/publish` → `409 PLAN_BLOCKING_ISSUES`. Le détail des
+> anomalies ci-dessous reste déduit du code et des tests.
 
 Simulation : `errorRows = 5`, `confirmable = false`. Anomalies **intra-fichier** :
 `PLAN_CONFLICT_CLASS` + `PLAN_CONFLICT_TEACHER` + `PLAN_CONFLICT_ROOM`
