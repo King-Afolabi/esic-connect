@@ -64,9 +64,13 @@ portant le rôle `SUPER_ADMIN` ou attribuer / retirer ce rôle.
 - Restrictions : auto-suspension / auto-archivage / retrait de son
   propre dernier rôle **interdits** (`USER_SELF_ACTION_FORBIDDEN`,
   `USER_LAST_ACTIVE_ROLE`).
-- **Non disponible dans l'UI** (API uniquement) : gestion des salles /
-  du réseau (`organization`), configuration des plages réseau CIDR
-  (`SUPER_ADMIN` requis).
+- **Non disponible dans l'UI** (API uniquement) : configuration des
+  plages réseau CIDR (`SUPER_ADMIN` requis). Les écrans de gestion des
+  sites / bâtiments / salles (`organization`) existent depuis G1-A.
+
+En démonstration, ce rôle est porté par `superadmin@example.test`,
+**distinct** du compte d'administration quotidienne `admin@example.test`
+(RG-003).
 
 ### 3.2 `ADMIN`
 
