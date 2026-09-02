@@ -284,10 +284,10 @@ Node 24.13, npm 11.6.2.
 | Commande | Résultat |
 |---|---|
 | `cd backend && ./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — 96 classes, `ModularityTests` **vert** (14 modules), schéma **V16** |
-| `cd frontend && npm test -- --watch=false` | **71 fichiers / 600 tests / 0 échec** (Vitest + jsdom) |
+| `cd frontend && npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** (Vitest + jsdom) |
 | `npm run lint` | « All files pass linting » |
 | `npm run build` | initial **484,52 kB** brut — 0 alerte de budget |
-| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| `npm audit --audit-level=high` | **passe** (0 haute, 0 critique) — 1 vulnérabilité **modérée** sur `qs`, tirée par `@angular/cli` (outillage de développement, absent du bundle servi) ; suivie dans l'issue de migrations majeures |
 
 Preuves complémentaires du lot G1 (relevées à la passe corrective,
 `G1_FINAL_REPORT.md` §11) : suite back **809 → 811** verte sous les trois

@@ -105,10 +105,10 @@ Vérifie que la solution répond aux besoins du Product Owner.
 | Suite | Commande | Résultat |
 |---|---|---|
 | Back-end | `cd backend && ./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — **96 classes** de test |
-| Front-end | `cd frontend && npm test -- --watch=false` | **71 fichiers / 600 tests / 0 échec** (Vitest + jsdom) |
+| Front-end | `cd frontend && npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** (Vitest + jsdom) |
 | Lint front | `npm run lint` | « All files pass linting » |
 | Build front | `npm run build` | initial **484,52 kB** brut, 0 alerte de budget |
-| Audit npm | `npm audit --audit-level=high` | **0 vulnérabilité** |
+| Audit npm | `npm audit --audit-level=high` | **passe** (0 haute, 0 critique) — 1 vulnérabilité **modérée** sur `qs`, tirée par `@angular/cli` (outillage de développement, absent du bundle servi) ; suivie dans l'issue de migrations majeures |
 
 Preuves complémentaires relevées pendant le lot G1
 (`G1_FINAL_REPORT.md` §11) : suite back verte sous les **trois fuseaux**

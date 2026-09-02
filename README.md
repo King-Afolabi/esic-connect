@@ -301,7 +301,7 @@ npm ci
 npm test -- --watch=false    # Vitest + jsdom
 npm run lint                 # angular-eslint
 npm run build                # build de production (budget initial 500 kB)
-npm audit                    # 0 vulnérabilité attendue
+npm audit --audit-level=high # doit passer : 0 haute / 0 critique
 
 # Non-régression des scripts de démonstration (faux curl déterministe)
 bash scripts/test/test-seed-demo.sh
@@ -341,10 +341,10 @@ Totaux de référence mesurés sur ce dépôt (HEAD `d3450e6`, 2 septembre 2026)
 | Suite | Résultat |
 |---|---|
 | `./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — 96 classes, `ModularityTests` vert (14 modules), schéma Flyway V16 |
-| `npm test -- --watch=false` | **71 fichiers / 600 tests / 0 échec** (Vitest + jsdom) |
+| `npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** (Vitest + jsdom) |
 | `npm run lint` | « All files pass linting » |
 | `npm run build` | initial **484,52 kB** brut — 0 alerte de budget |
-| `npm audit --audit-level=high` | **0 vulnérabilité** |
+| `npm audit --audit-level=high` | **passe** (0 haute, 0 critique) — 1 vulnérabilité **modérée** sur `qs`, tirée par `@angular/cli` (outillage de développement, absent du bundle servi) ; suivie dans l'issue de migrations majeures |
 
 Détail et conditions de reproduction : `docs/CURRENT-STATE.md` →
 « Résultats de tests » ; `docs/reports/G1_FINAL_REPORT.md` §11.
