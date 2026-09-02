@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import java.time.Instant;
 import java.util.Set;
@@ -30,6 +31,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles({ "test", "demo" })
+// Cette classe est la SEULE à activer le profil `demo` en plus de `test`.
+// `application-demo.yml` définit `spring.datasource.url` sur
+// `${MYSQL_DATABASE}` : comme `demo` est déclaré après `test`, sa valeur
+// l'emportait sur celle d'`application-test.yml` et la classe écrivait
+// dans la base de DÉMONSTRATION dès que `MYSQL_DATABASE` la désignait.
+// `@TestPropertySource` prime sur tout fichier de profil : la base de
+// test est réimposée ici, sans modifier le profil `demo` du runtime.
+@TestPropertySource(properties =
+        "spring.datasource.url=jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/"
+        + "${MYSQL_TEST_DATABASE:esic_test}"
+        + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC")
 @Import({ JpaAuditingConfig.class, DefaultDemoAccountProvisioner.class })
 class DefaultDemoAccountProvisionerTests {
 
