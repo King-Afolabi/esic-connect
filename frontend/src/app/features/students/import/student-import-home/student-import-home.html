@@ -15,7 +15,7 @@
       Votre contexte de rôle actuel ne permet pas de lancer un import.
     </p>
   } @else {
-    <form class="upload" (ngSubmit)="launch()">
+    <form class="upload" [formGroup]="scope" novalidate (ngSubmit)="launch()">
       <div class="upload__file">
         <label for="csv-file">Fichier CSV (≤ 2 Mo)</label>
         <input
@@ -32,7 +32,7 @@
         }
       </div>
 
-      <div class="upload__scope" [formGroup]="scope">
+      <div class="upload__scope">
         <mat-form-field appearance="outline">
           <mat-label>Code formation (facultatif)</mat-label>
           <input matInput formControlName="programCode" autocomplete="off" />

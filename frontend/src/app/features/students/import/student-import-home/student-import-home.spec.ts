@@ -112,6 +112,45 @@ describe('StudentImportHome', () => {
     expect(internals.canSubmit()).toBe(true);
   });
 
+  it('submits the real form element: ngSubmit reaches the simulation without a native reload', () => {
+    const { fixture, internals, http, navigate } = setup();
+    internals.onFileSelected(fileEvent(new File(['last_name\n'], 'ok.csv', { type: 'text/csv' })));
+    fixture.detectChanges();
+
+    const form = fixture.nativeElement.querySelector('form.upload') as HTMLFormElement;
+    expect(form).not.toBeNull();
+    // Le `[formGroup]` doit porter sur le <form> lui-même : sans lui, Angular
+    // n'attache aucune FormGroupDirective et `(ngSubmit)` ne se déclenche jamais
+    // — le clic partirait en soumission native (rechargement de page).
+    expect(form.getAttribute('novalidate')).not.toBeNull();
+
+    // Un vrai événement `submit`, annulable, tel que l'émet le navigateur.
+    const event = new Event('submit', { bubbles: true, cancelable: true });
+    form.dispatchEvent(event);
+
+    // FormGroupDirective appelle preventDefault : aucune navigation native.
+    expect(event.defaultPrevented).toBe(true);
+
+    const req = http.expectOne((r) => r.url === LIST_URL && r.method === 'POST');
+    req.flush({ publicId: 'job-submit' });
+    expect(navigate).toHaveBeenCalledWith(['/students/import', 'job-submit']);
+  });
+
+  it('submits through a click on the submit button', () => {
+    const { fixture, internals, http, navigate } = setup();
+    internals.onFileSelected(fileEvent(new File(['last_name\n'], 'ok.csv', { type: 'text/csv' })));
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.disabled).toBe(false);
+    button.click();
+
+    const req = http.expectOne((r) => r.url === LIST_URL && r.method === 'POST');
+    req.flush({ publicId: 'job-click' });
+    expect(navigate).toHaveBeenCalledWith(['/students/import', 'job-click']);
+  });
+
   it('never touches browser storage', () => {
     setup();
     expect(localStorage.length).toBe(0);
