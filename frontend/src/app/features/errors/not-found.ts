@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 
+import { SkipLink } from '../../core/a11y/skip-link';
+
 @Component({
   selector: 'app-not-found',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MatButtonModule],
+  imports: [RouterLink, MatButtonModule, SkipLink],
   template: `
+    <app-skip-link />
     <main class="error-page" id="main-content">
       <h1>Page introuvable</h1>
       <p>L'adresse demandée n'existe pas ou a été déplacée.</p>

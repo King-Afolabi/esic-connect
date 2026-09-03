@@ -57,3 +57,17 @@ temp/.claude/
 
 # Claude local files
 .claude/
+
+# Playwright / recette e2e navigateur
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+frontend/out-tsc/
+
+# Sauvegarde locale d'une version antérieure du dépôt, réalisée par le
+# porteur de projet le 3 septembre 2026. Contenu identique à des fichiers
+# déjà suivis par Git : ne jamais versionner (l'historique fait foi).
+/Archives/

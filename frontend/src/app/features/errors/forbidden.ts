@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 
+import { SkipLink } from '../../core/a11y/skip-link';
+
 @Component({
   selector: 'app-forbidden',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MatButtonModule],
+  imports: [RouterLink, MatButtonModule, SkipLink],
   template: `
+    <app-skip-link />
     <main class="error-page" id="main-content">
       <h1>Accès refusé</h1>
       <p>

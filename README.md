@@ -32,10 +32,21 @@ Administration et référentiels (site / salle, année, formation, classe)
   → Tableaux de bord selon le rôle
 ```
 
-**Ce parcours n'a pas été démontré manuellement dans un navigateur** :
-aucune manipulation n'est consignée dans le dépôt et il n'existe **aucun
-test e2e navigateur** (`NOT_IMPLEMENTED`, `DEC-G1-011`). Statut global du
-lot G1 : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.
+**Mise à jour du 3 septembre 2026 — audit QA indépendant.** Ce parcours
+est désormais rejoué **dans un vrai navigateur** de bout en bout : une
+suite Playwright de **149 tests** (`tests/`) pilote Chromium contre
+l'application réellement démarrée, avec deux apprenants réels, du QR à
+l'historique d'assiduité. Rapport complet : [`audit-report.md`](audit-report.md),
+résumé : [`TESTING-SUMMARY.txt`](TESTING-SUMMARY.txt), captures :
+`captures/`. La décision `DEC-G1-011` (« pas de suite e2e navigateur ») est
+donc **révisée** : la suite est conservée en **complément** de la recette
+d'intégration API, pas en remplacement.
+
+Ce qui n'a **pas** changé : **aucune manipulation humaine** n'est
+consignée dans le dépôt — un navigateur piloté par un script n'est pas une
+démonstration manuelle. Statut global du lot G1 :
+`IMPLEMENTED_AND_TESTED (API + e2e navigateur) / PARTIAL`, démonstration
+manuelle `NOT_PERFORMED`.
 
 Lecture des statuts employés dans toute la documentation :
 
@@ -45,6 +56,7 @@ Lecture des statuts employés dans toute la documentation :
 | `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED` | livré et testé, **jamais** manipulé manuellement de bout en bout |
 | `PARTIAL` | une partie seulement de l'exigence est livrée — jamais à présenter comme complète |
 | `NOT_IMPLEMENTED` | aucun code ; limite explicitement assumée |
+| `NOT_PERFORMED` | action jamais exécutée (ex. démonstration manuelle, déploiement) |
 | `HORS_PÉRIMÈTRE_ASSUMÉ` | exclusion décidée et documentée pour cette livraison |
 
 Détail par capacité et statut : `docs/CURRENT-STATE.md`.
@@ -195,6 +207,7 @@ cp .env.example .env
 | `JWT_SECRET` | oui | chaîne aléatoire **≥ 32 octets** ; le back-end refuse de démarrer sinon |
 | `ESIC_DEMO_PASSWORD` | oui (profil `demo` seulement) | mot de passe des comptes fictifs, **≥ 12 caractères**. Volontairement **vide** dans `.env.example` |
 | `JUSTIFICATION_STORAGE_PATH` | **oui hors Docker** | répertoire d'écriture des pièces jointes de justificatifs (G1-E). Défaut `${UPLOAD_DIRECTORY:-/data/uploads}/justifications` — **inaccessible en écriture sur un macOS / Linux classique** : voir « Lancement » §2 |
+| `MYSQL_TEST_DATABASE` | recommandé | base de la **suite de tests** (défaut `esic_test`). La renseigner explicitement évite qu'un `./mvnw test` écrive dans la base applicative — cause probable du finding F-ENV-1 |
 | `APP_ALLOWED_ORIGINS` | non | origine(s) autorisée(s) du front (défaut `http://localhost:4200`) |
 | `JWT_ACCESS_TOKEN_TTL_SECONDS`, `INVITATION_TOKEN_TTL`, `ATTENDANCE_TOKEN_TTL`, `JUSTIFICATION_MAX_FILE_BYTES`, `MAIL_HOST` / `MAIL_PORT`, `MULTIPART_MAX_*` | non | valeurs par défaut sûres dans `application.yml` ; `.env.example` les documente |
 
@@ -306,7 +319,29 @@ npm audit --audit-level=high # doit passer : 0 haute / 0 critique
 # Non-régression des scripts de démonstration (faux curl déterministe)
 bash scripts/test/test-seed-demo.sh
 bash scripts/test/test-prepare-planning-demo.sh
+
+# Tout ce qui précède, en une seule commande, arrêt au premier échec
+./scripts/verify-all.sh
+./scripts/verify-all.sh --quick   # sans la suite back-end (la plus longue)
 ```
+
+### Recette end-to-end navigateur (Playwright)
+
+Exige la pile **complète démarrée** (infra + back-end profil `demo` +
+`ng serve`) :
+
+```bash
+set -a && source .env && set +a     # ESIC_DEMO_PASSWORD obligatoire
+npm ci
+npx playwright install --with-deps chromium
+npm run test:e2e                    # 149 tests, chromium, ~18-20 min
+npm run test:e2e:report             # rapport HTML
+```
+
+La suite ne porte **aucun mot de passe de repli** : sans
+`ESIC_DEMO_PASSWORD` exporté, elle s'arrête avec un message explicite.
+Détail de la portée, de ce qui est volontairement **non** testé et des
+limites de fiabilité de l'environnement : `audit-report.md` §0, §2 et §4.
 
 ### Bases de données — isolation test / démonstration
 
@@ -336,6 +371,19 @@ docker compose exec mysql mysql -uroot -p \
 
 Flyway applique ensuite `V1 → V16` au premier démarrage du profil `demo`.
 
+### Diagnostic et remise à zéro d'une base
+
+```bash
+./scripts/db-doctor.sh                     # lecture seule : version de schéma, volumes, pollution
+./scripts/db-reset.sh esic_connect         # sauvegarde → DROP/CREATE → Flyway → contrôle
+./scripts/db-reset.sh esic_connect --yes   # non interactif
+```
+
+`db-doctor.sh` sort en code **2** quand la base contient des comptes issus
+des fixtures de test. C'est exactement l'état dans lequel l'audit QA du
+3 septembre 2026 a trouvé `esic_connect` : **27 105 comptes**
+(finding F-ENV-1). Détail complet : `docs/13-guide-deploiement.md` §3.
+
 Totaux de référence mesurés sur ce dépôt (HEAD `d3450e6`, 2 septembre 2026) :
 
 | Suite | Résultat |
@@ -358,6 +406,7 @@ Les tests marqués `perf` sont exclus du run par défaut
 | `backend-ci.yml` | push `main`, PR `main` | `./mvnw test` sur MySQL / Redis éphémères |
 | `frontend-ci.yml` | push/PR touchant `frontend/**` | `npm audit --audit-level=high`, `lint`, `test`, `build` |
 | `dependency-review.yml` | PR `main` | échec si une dépendance ajoutée/modifiée par la PR introduit une CVE ≥ `high` ou une licence interdite |
+| `e2e.yml` | **manuel** (`workflow_dispatch`) | monte la pile complète (MySQL, Redis, back-end `demo`, `ng serve`) et exécute les 149 tests Playwright. Manuel assumé : ~20 min, état partagé, `workers: 1` |
 | `dependabot.yml` | hebdomadaire | montées de version + alertes de sécurité (Maven, npm, GitHub Actions) |
 
 Tous les workflows : `permissions: contents: read`, sans secret, sans
@@ -417,6 +466,10 @@ Jeu de données d'import : `docs/demo-data/apprenants-demo.csv` (voir
 | `docs/10-journal-ia.md` | journal d'utilisation de l'IA |
 | `docs/11-guide-demonstration.md` | guide de démonstration pas à pas (+ checklist jury §12, matrice §13) |
 | `docs/12-guide-utilisateur.md` | ce que chaque rôle peut faire dans l'application |
+| `docs/13-guide-deploiement.md` | **installation, remise à zéro de la base, vérification, et ce qui manque avant une mise en service** |
+| `audit-report.md` · `TESTING-SUMMARY.txt` | audit QA indépendant du 3 septembre 2026 (rapport complet et résumé d'une page) |
+| `tests/` · `playwright.config.ts` | recette end-to-end navigateur (149 tests) |
+| `captures/` | captures d'écran produites par la campagne d'audit |
 | `docs/demo-data/` | jeu de données CSV fictif pour la démonstration de l'import |
 | `docs/reports/PERF_NOTES.md` · `TEST_ISOLATION_DECISION.md` | mesures de performance ; décision Testcontainers |
 | `docs/reports/G1_FINAL_REPORT.md` | **rapport final du lot G1** : anomalies corrigées, garanties transactionnelles, coûts SQL mesurés, dettes résiduelles |

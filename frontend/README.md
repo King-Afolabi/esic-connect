@@ -27,11 +27,18 @@ npm run build               # build de production (dossier dist/)
 npm run lint                # ESLint (angular-eslint)
 ```
 
+La recette **end-to-end navigateur** (Playwright, 149 tests) vit à la
+racine du dépôt, pas ici : `npm run test:e2e` depuis `..` avec la pile
+complète démarrée. Voir `../docs/13-guide-deploiement.md` §5.
+
+Vue d'ensemble de tout ce qui doit être vert : `../scripts/verify-all.sh`.
+
 ## Structure
 
 ```
 src/app/
   core/         infrastructure transverse
+    a11y/       SkipLink — lien d'évitement partagé par la coquille ET les pages publiques
     auth/       AuthService (session en mémoire), décodage JWT (affichage seul),
                 RoleContextService (contexte de rôle, mémoire seule)
     guards/     authGuard, guestGuard, roleGuard(...)
@@ -42,22 +49,28 @@ src/app/
     notifications/
   shared/       composants réutilisables
   features/
-    auth/login/          écran de connexion
-    account-activation/  parcours public `/activation?token=…` (validation + définition du mot de passe)
-    dashboard/           premier écran authentifié
-    administration/      comptes utilisateurs : consultation + actions (suspension / réactivation / archivage / rôles)
-    students/            liste des apprenants + fiche + historique d'inscriptions
-    academic/            consultation (lecture seule) du référentiel académique
-    alternation/         rythmes d'alternance (modèles, affectations, exceptions)
-    sessions/            séances : liste / création / détail (ouverture, fermeture, QR + code court, présences)
-    attendance-check-in/ écran d'émargement de l'apprenant (`/attendance`)
-    errors/              403 / 404
+    academic/             consultation (lecture seule) du référentiel académique
+    account-activation/   parcours public `/activation?token=…`
+    administration/       comptes utilisateurs : consultation ET actions (suspension / réactivation / archivage / rôles)
+    alternation/          rythmes d'alternance (modèles, affectations, exceptions) — lecture et écriture
+    attendance/           gestion de l'assiduité : rapports, file des justificatifs (`/attendance-management`, `/my-attendance`)
+    attendance-check-in/  écran d'émargement de l'apprenant (`/attendance`)
+    auth/login/           écran de connexion
+    dashboard/            tableau de bord typé par rôle
+    errors/               403 / 404
+    notifications/        cloche + centre de notifications métier
+    organization/         référentiel organisationnel : sites, bâtiments, salles, plages réseau CIDR (R/W, G1-A)
+    planning/             import CSV → simulation → publication versionnée (`/planning/**`, G1-B)
+    sessions/             séances : liste / création / détail (ouverture, fermeture, QR + code court, présences)
+    students/             apprenants : liste, fiche, historique d'inscriptions, import CSV
 ```
 
 ## Administration des comptes (`/administration`)
 
-Consultation **en lecture seule** des comptes utilisateurs et de leurs
-rôles (module back-end `identity`, `UserAccountController`). Réservé côté
+Consultation **et écriture** sur les comptes utilisateurs et leurs rôles
+(module back-end `identity`, `UserAccountController`) : la liste et la
+fiche sont en lecture, les cinq mutations décrites plus bas sont réellement
+appelées depuis la fiche. Réservé côté
 serveur à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` (`READ_ROLES`).
 Le `roleGuard` reprend ce périmètre pour masquer la navigation ; il ne
 remplace pas Spring Security — un `403` de l'API est rendu comme un état
@@ -204,6 +217,23 @@ stocké, et transmis uniquement à
 `POST /api/v1/account-invitations/activate` (jamais en jeton porteur).
 L'activation réussie (`204`) ne connecte pas : elle affiche un succès et
 un lien vers `/login`.
+
+## Accessibilité
+
+- **Lien d'évitement** : composant partagé `core/a11y/skip-link`
+  (`<app-skip-link />`), placé juste avant chaque `<main id="main-content">`.
+  Il était auparavant codé dans `AppShell` seul, qui n'enveloppe que les
+  routes authentifiées : `/login`, `/activation`, `/forbidden` et
+  `/not-found` portaient donc un repère `#main-content` inatteignable au
+  clavier (finding **F-A11Y-1**, `../audit-report.md`, corrigé le
+  3 septembre 2026). Toute nouvelle page publique doit l'inclure.
+- Garde-fous automatisés : fichiers `*.a11y.spec.ts` (`axe-core` sous
+  jsdom — pas de contrôle de contraste), plus les vérifications
+  structurelles de `../tests/10-performance-accessibility.spec.ts`
+  (lien d'évitement, `role="alert"`, icônes décoratives masquées,
+  navigation clavier).
+- Limite assumée : **aucun audit WCAG outillé complet**, aucun test avec
+  un lecteur d'écran réel (`../docs/CURRENT-STATE.md`).
 
 ## Authentification / session
 

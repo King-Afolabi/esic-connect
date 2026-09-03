@@ -11,6 +11,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, take } from 'rxjs';
 
+import { SkipLink } from '../../core/a11y/skip-link';
 import { normalizeHttpError } from '../../core/models/api-error';
 import { AccountActivationApiService } from './account-activation-api.service';
 import {
@@ -54,6 +55,7 @@ const PASSWORD_REJECTED_MESSAGE = `Le mot de passe doit contenir entre ${PASSWOR
     MatIconModule,
     MatProgressBarModule,
     MatProgressSpinnerModule,
+    SkipLink,
   ],
   templateUrl: './account-activation.html',
   styleUrl: './account-activation.scss',

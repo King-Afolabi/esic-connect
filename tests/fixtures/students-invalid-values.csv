@@ -1,0 +1,4 @@
+last_name,first_name,email,phone,formation_code,class_code,academic_year
+Petit,Nathan,pas-une-adresse-valide,0600000004,PRG-DEMO,C-DEMO,AY-DEMO
+,Emma,emma.sans-nom.e2e@example.test,0600000005,PRG-DEMO,C-DEMO,AY-DEMO
+Roux,Lea,lea.roux.e2e@example.test,0600000006,CODE-INEXISTANT,C-DEMO,AY-DEMO

@@ -3,21 +3,6 @@
   height: 100%;
 }
 
-.skip-link {
-  position: absolute;
-  left: -999px;
-  top: 0;
-  z-index: 1000;
-  padding: 0.5rem 1rem;
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
-  border-radius: 0 0 4px 0;
-
-  &:focus {
-    left: 0;
-  }
-}
-
 .shell {
   height: 100%;
 }

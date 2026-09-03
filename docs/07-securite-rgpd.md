@@ -197,6 +197,39 @@ formulaires publics.
 
 ---
 
+# 5bis. Traitement uniforme des erreurs d'appel (correction F-SEC-1, 3 septembre 2026)
+
+Une requête mal formée par le client est une erreur **du client** : elle
+doit produire un `4xx`, jamais un `5xx`. Un `500` sur une erreur d'appel a
+trois effets indésirables : il pollue la supervision d'incidents qui n'en
+sont pas, il suggère à un attaquant une instabilité serveur exploitable,
+et il trompe tout client de l'API documentée (OpenAPI / Swagger).
+
+Le défaut relevé — `GET /api/v1/planning/versions` sans le paramètre
+obligatoire `classGroupPublicId` renvoyait `500 INTERNAL_ERROR` — venait
+du gestionnaire générique `@ExceptionHandler(Exception.class)` de
+`GlobalExceptionHandler`, qui interceptait l'exception de liaison de
+Spring MVC. Quatre familles sont désormais traitées explicitement, avant
+le générique :
+
+| Exception | Réponse | Détail renvoyé |
+|---|---|---|
+| `MissingServletRequestParameterException` | `400 VALIDATION_ERROR` | nom du paramètre absent |
+| `MissingServletRequestPartException` | `400 VALIDATION_ERROR` | nom de la partie multipart absente |
+| `MethodArgumentTypeMismatchException` | `400 VALIDATION_ERROR` | nom du paramètre de type incompatible |
+| `HttpMessageNotReadableException` | `400 VALIDATION_ERROR` | aucun (le message d'analyse reste côté serveur) |
+
+Seul le **nom** du paramètre est exposé : il fait partie du contrat public
+de l'API. Aucun message d'implémentation, aucune trace, aucun détail de
+désérialisation ne sort du serveur — la règle du §29.2 du cahier des
+charges est inchangée.
+
+Garde-fous de non-régression : `PlanningImportIntegrationTests`
+(`aMissingRequiredQueryParameterIsA400NotA500`) côté back-end, et
+`tests/09-security-edge-cases.spec.ts` côté navigateur.
+
+---
+
 # 6. Sessions
 
 ## Stratégie

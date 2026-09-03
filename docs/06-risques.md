@@ -191,7 +191,7 @@ globale). Décisions d'atténuation détaillées dans
 | R-G1-18 | Faux positifs de conflit à l'import (cours multi-classes) | 3 | 2 | 6 | Limite documentée (une ligne = une classe à l'import G1-B) ; contournement par `title` (DEC-G1-005) |
 | R-G1-19 | Session de travail trop longue / limite de contexte | 4 | 3 | 12 | Blocs indépendants commités séparément ; `G1_IMPLEMENTATION_PROGRESS.md` mis à jour à chaque fin de bloc ; jamais démarrer un bloc non finançable |
 | R-G1-20 | ~~Reprise nocturne : suite back rouge dans la fenêtre `00:00–02:00 CEST`~~ **RÉSOLU (checkpoint G1-0.1, 1er sept. 2026)** | 1 | 2 | 2 | `AttendanceService.validate` / `AttendanceJustificationService` décident désormais la couverture d'inscription à la **date civile de la séance** (`startsAt` projeté dans son fuseau persisté), plus à « aujourd'hui en UTC » ; `AttendanceServiceSessionDateTests` (horloge figée) ; suite back **693 / 0 dans les trois modes de fuseau**. Détail : `G1_IMPLEMENTATION_PROGRESS.md` §9 + « Correctif G1-0.1 ». `ClockConfig` inchangé |
-| R-G1-21 | Absence de test e2e navigateur | 3 | 3 | 9 | **Assumé (`DEC-G1-011`)** : Playwright / Cypress **non retenus**, coût d'introduction et d'exploitation estimé disproportionné ; **aucune tentative d'installation** n'a été faite — le téléchargement de navigateurs n'est donc **ni** qualifié « non fiable » **ni** « impossible ». e2e navigateur = **`NOT_IMPLEMENTED`** ; repli livré = recette d'intégration API (`PriorityPathRecetteIntegrationTests`). Ne jamais présenter la recette API comme un e2e |
+| R-G1-21 | Absence de test e2e navigateur | 3 | 3 | 9 | **Fermé le 03/09/2026.** État au 31/08 : assumé (`DEC-G1-011`), Playwright non retenu pour coût disproportionné, aucune tentative d'installation. La suite a finalement été construite pendant l'audit QA : 149 tests Playwright / Chromium (`tests/`, `audit-report.md` §4). `DEC-G1-011` est **révisée**, pas contournée : la suite est conservée en **complément** de la recette d'intégration API, jamais en remplacement — la recette API ne pilote aucun navigateur et ne rend aucun composant Angular. Risque résiduel suivi en **R-QA-06** (§7ter) : coût d'exploitation de la suite et instabilité d'environnement observée |
 | R-G1-22 | Déploiement futur avec stockage éphémère (pièces jointes perdues) | 3 | 4 | 12 | Port de stockage abstrait ⇒ adaptateur objet S3-compatible substituable sans toucher au métier ; volume persistant identifié dans le rapport final (DEC-G1-008) |
 | R-G1-23 | Migration destructive impossible à rollback automatiquement | 1 | 5 | 5 | Aucune migration G1 n'est destructive (toutes additives) ; règle explicite (DEC-G1-012) |
 | R-G1-24 | Documentation en avance sur le code (statut « livré » sans preuve) | 3 | 5 | 15 | Statut porté à `IMPLEMENTED_AND_TESTED` uniquement si code présent + test exécuté + résultat consigné ; statuts ambigus interdits |
@@ -210,6 +210,29 @@ globale). Décisions d'atténuation détaillées dans
 | R-G1-36 | Absence de rate-limiting sur `/auth/login` | 3 | 4 | 12 | **Ouvert — dette assumée (`docs/07` §5)** : un limiteur *fail-safe*, sans énumération de comptes et testé, dépasse le périmètre livré. Atténuations en place : refus **uniforme** quel que soit le motif d'échec, hachage BCrypt, aucun message distinguant email inconnu / mot de passe faux / compte inactif |
 | R-G1-37 | Échec intermittent d'un test d'intégration sous `TZ=UTC` | 2 | 2 | 4 | **Observé une seule fois** (`EnrollmentDirectoryTests`, 1re passe corrective G1), **non reproduit** en 5 répétitions isolées ni sur les runs complets ⇒ **cause non déterminée**. Mécanisme *plausible* (non prouvé) : contention du pool HikariCP partagé entre contextes `@SpringBootTest` (`TEST_ISOLATION_DECISION.md`). Ne pas qualifier de « problème d'infrastructure confirmé » |
 | R-G1-38 | Parcours jamais démontré manuellement, aucune capture d'écran dans le dépôt | 4 | 4 | 16 | **Ouvert** — c'est le seul point qui maintient le Groupe 1 en `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`. Atténuation : recette d'intégration API rejouant le parcours complet ; `docs/11-guide-demonstration.md` §11-§13 (scénario, checklist jury, matrice preuve) ; plan de secours documenté. **Action requise avant soutenance** : exécuter le parcours UI, produire les captures, consigner le résultat |
+
+---
+
+# 7ter. Risques relevés par l'audit QA indépendant (3 septembre 2026)
+
+Source : `audit-report.md`. Cotation identique au §1
+(probabilité × impact). Ces cinq entrées ne remplacent aucun risque
+existant : elles constatent l'état vérifié en pilotant l'application.
+
+| Réf | Risque | P | I | C | État au 3 septembre 2026 |
+|---|---|:-:|:-:|:-:|---|
+| R-QA-01 | Base applicative `esic_connect` polluée par ~27 000 comptes de fixtures de test : aucune démonstration crédible, aucun identifiant connu | 5 | 4 | 20 | **Outillé, non exécuté.** `scripts/db-doctor.sh` (diagnostic, code 2) et `scripts/db-reset.sh` (sauvegarde → recréation → Flyway → contrôle) sont livrés. La base **reste polluée** tant que le script n'a pas été lancé. Cause probable traitée en amont : `MYSQL_TEST_DATABASE` désormais explicite (`.env.example`, `docs/13` §2) |
+| R-QA-02 | Contradiction documentaire sur le périmètre du planning : addendum « hors périmètre » du 31 août contre module livré le 1er septembre | 5 | 3 | 15 | **Fermé.** Tranché en faveur du périmètre livré ; `docs/01` §23.6 et `docs/02` §4.5.2 remplacent les addendums F2, marqués caducs. Aucune suppression d'historique |
+| R-QA-03 | Un paramètre de requête obligatoire absent produisait un `500` au lieu d'un `400` : fausse la supervision et trompe tout client de l'API documentée | 3 | 2 | 6 | **Fermé.** `GlobalExceptionHandler` traite désormais 4 familles d'erreurs d'appel client en `400 VALIDATION_ERROR`. Garde-fous : `PlanningImportIntegrationTests` + `tests/09-security-edge-cases.spec.ts` |
+| R-QA-04 | Lien d'évitement absent des pages publiques : repère `#main-content` inatteignable au clavier | 2 | 2 | 4 | **Fermé.** Composant partagé `core/a11y/skip-link` utilisé par la coquille **et** les 4 pages publiques ; garde-fou e2e |
+| R-QA-06 | Coût d'exploitation de la suite e2e et instabilité d'environnement : sur 7 exécutions complètes, un test **aléatoire** (jamais le même) s'est bloqué 7 à 16 min avant timeout, corrélé à une charge système croissante, non reproductible isolément | 3 | 2 | 6 | **Sous surveillance.** Ni défaut applicatif ni défaut de test (chacun réussi en < 2 s sur ≥ 5 exécutions). Atténuations : `retries: 1` déjà actif quand `CI` est défini, workflow `e2e.yml` à déclenchement **manuel** pour ne pas fragiliser chaque PR, machine sans charge concurrente recommandée. C'est exactement le coût que `DEC-G1-011` anticipait : il est désormais mesuré, pas supposé |
+| R-QA-05 | Aucune persistance de session : tout rechargement de page déconnecte, y compris pendant une démonstration | 4 | 3 | 12 | **Ouvert — assumé.** Choix de sécurité du prototype (JWT en mémoire seule, RG-085) ; le rafraîchissement de jeton est classé `SOUHAITÉ` (`docs/02` §23.4). Atténuations : redirection `?redirect=` après reconnexion, avertissement explicite en tête du guide de démonstration (`docs/11` §11bis.1) |
+
+> **R-G1-38 est reclassé.** Le parcours prioritaire est désormais rejoué
+> de bout en bout dans un **vrai navigateur** (149 tests Playwright,
+> captures dans `captures/`). Ce qui reste ouvert dans R-G1-38 est
+> strictement la **manipulation humaine** consignée : un navigateur
+> piloté par script n'en est pas une.
 
 ---
 

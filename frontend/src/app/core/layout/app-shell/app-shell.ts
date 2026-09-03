@@ -9,6 +9,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 
+import { SkipLink } from '../../a11y/skip-link';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
 import { roleLabel } from '../../models/role';
@@ -37,6 +38,7 @@ import { RoleContextMenu } from '../role-context-menu/role-context-menu';
     MatButtonModule,
     RoleContextMenu,
     NotificationBell,
+    SkipLink,
   ],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.scss',

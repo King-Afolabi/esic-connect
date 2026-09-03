@@ -1,0 +1,3 @@
+slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code
+E2E-SLOT-1,2026-09-15,09:00,10:30,Europe/Paris,Cours e2e (audit),4290d885-5757-49fd-9ad3-52cbf66f5f40,
+E2E-SLOT-2,2026-09-16,14:00,16:00,Europe/Paris,Cours e2e (audit) 2,4290d885-5757-49fd-9ad3-52cbf66f5f40,

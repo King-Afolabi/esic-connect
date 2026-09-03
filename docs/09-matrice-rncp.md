@@ -129,8 +129,8 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-001 | Connexion | `identity` | TA-001 | Swagger/capture | BC02/BC03 |
 | TR-002 | Rôles | `identity` | TZ-001 à 010 | Tests | BC03 |
 | TR-003 | Import apprenants (voir **TR-024** pour l'implémentation réelle) | `studentimport` | `StudentImport*Tests` | `./mvnw clean test` (V11) | BC02 |
-| TR-004 | Import planning | `planning` — **NON IMPLÉMENTÉ** (`HORS_PÉRIMÈTRE_ASSUMÉ` : aucun module `planning`, EF-PLAN-001..007) | — | — | BC02 |
-| TR-005 | Publication du planning + création des séances depuis le planning | `planning` — **NON IMPLÉMENTÉ** (`HORS_PÉRIMÈTRE_ASSUMÉ` : RG-016, AC-007, AC-008 ; séances **exceptionnelles manuelles** seulement, cf. TR-006/TR-022) | — | — | BC02 |
+| TR-004 | Import planning (CSV → simulation sans écriture → revue des anomalies) | `planning` — **`IMPLEMENTED_AND_TESTED`** (module réel, `V12`/`V13`, lot G1 / PR #40 ; `EF-PLAN-003` `PARTIAL` : annulation + réimport, `DEC-G1-003`) | `PlanningImport*Tests`, `PlanningSimulation*Tests` ; e2e `tests/05-planning.spec.ts` | `./mvnw clean test` (V13) + `npm run test:e2e` + `audit-report.md` §2 | BC02 |
+| TR-005 | Publication versionnée du planning + création des séances depuis le planning | `planning`, `coursesession` — **`IMPLEMENTED_AND_TESTED`** (publication atomique N/N+1, `SUPERSEDED`, port `coursesession.PlanningSessionWriter` ; `RG-016`, `AC-007`, `AC-008`). Réserves `PARTIAL` : conflit **salle** contre les séances déjà publiées non détecté, pas de retour à une version antérieure | `PlanningPublication*Tests`, `PlanningVersion*Tests` ; e2e `tests/05-planning.spec.ts` | `./mvnw clean test` (V13) + `npm run test:e2e` + `audit-report.md` §2 | BC02 |
 | TR-006 | QR / émargement (jeton dynamique opaque + code court, séance exceptionnelle, un point de contrôle) | `coursesession`, `attendance` | `CourseSession*Tests`, `Attendance*Tests` | `./mvnw clean test` (V9 appliquée) + démonstration locale API/UI | BC02/BC03 (voir TR-022) |
 | TR-007 | WebAuthn | `identity` | TA-008 | Démo | BC02/BC03 |
 | TR-008 | Rapports | `reporting` | REC-004 | Export | BC02 |
@@ -140,6 +140,7 @@ Une exigence décrite n’est pas automatiquement réalisée.
 | TR-012 | Anti-rejeu | `iot` | TO-003 | Refus doublon | BC03/BC04 |
 | TR-013 | Sauvegarde | scripts | TR-007 | Rapport | BC03 |
 | TR-014 | Pilotage | docs | Revue | Backlog | BC01 |
+| TR-025 | Recette **end-to-end navigateur** (149 tests Playwright/Chromium : authentification, matrice RBAC 5 rôles × 12 routes, référentiels, imports, planning, parcours prioritaire complet avec 2 apprenants réels, sécurité, accessibilité) | `tests/*.spec.ts`, `tests/support/`, `playwright.config.ts` | `tests/01-*.spec.ts` … `tests/10-*.spec.ts` | `npm run test:e2e` + `audit-report.md` §4 + `captures/` | BC02/BC03 |
 | TR-015 | Invitation / activation de compte | `identity`, `notification` | `AccountInvitation*Tests` | `./mvnw test` + Mailpit | BC02/BC03 |
 | TR-016 | Administration des comptes et des rôles | `identity`, `audit` | `UserManagement*Tests` | `./mvnw test` | BC02/BC03 |
 | TR-017 | Référentiel organisationnel (site/bâtiment/salle/plage réseau) | `organization`, `identity`, `audit` | `Organization*Tests`, `CidrValidatorTests` | `./mvnw test` (V4 appliquée) | BC02/BC03 |
@@ -881,7 +882,13 @@ détail de validation exposé).
 > **Règle appliquée** : une compétence n'est **pas** cochée parce qu'un
 > fichier existe. Chaque ligne porte une **preuve exécutable ou
 > consultable**, une **limite honnête**, et ce qui est **montrable au
-> jury**. HEAD `d3450e6`, 811 tests back / 600 tests front verts.
+> jury**. HEAD `d3450e6`, 811 tests back / 602 tests front verts.
+>
+> **Mise à jour du 3 septembre 2026 (audit QA indépendant).** Deux lignes
+> de ce tableau ont changé : la recette **end-to-end navigateur** existe
+> désormais (149 tests Playwright réels, `audit-report.md`) et le domaine
+> **planning** est repris dans le périmètre livré (`docs/01-cadrage.md`
+> §23.6). Ce qui n'a **pas** changé : BC04 reste sans aucun code.
 
 ## BC01 — Piloter la stratégie du système d'information
 
@@ -890,10 +897,10 @@ détail de validation exposé).
 | Analyse du besoin et de l'existant | Cadrage complet : contexte ESIC réel (planning sur Teams, émargement papier), problèmes identifiés, problématique formulée | `docs/01-cadrage.md` §2-§3 ; `docs/02-cahier-des-charges.md` §2 | l'existant est décrit à partir d'une observation, **sans étude terrain formalisée** ni entretiens tracés | la chaîne « problème observé → exigence numérotée → code → test » sur l'émargement |
 | Formalisation des exigences | **62** exigences `EF-*`, **59** règles `RG-*` (CDC §43), **20** critères d'acceptation `AC-*`, priorisation MUST / SHOULD / COULD / FUTURE | `docs/02` §43-§45, §56 | certaines exigences restent des **cibles** jamais implémentées et sont marquées comme telles | la matrice `G1_REQUIREMENTS_TRACEABILITY.md` : chaque ID relié à un statut vérifié |
 | Cadrage et **réduction assumée** du périmètre | Deux réductions **datées, documentées et signalées** : addendum F2 (planning exclu) puis **levée** au lot G1 ; `EF-PLAN-006`, IA, IoT, WebAuthn restent exclus | `docs/01` §23.5, `docs/02` §4.5.1, `README.md` « Périmètre non livré », `docs/CURRENT-STATE.md` | — | savoir dire « ceci n'est pas livré, voici pourquoi et ce qu'il faudrait » — c'est la compétence évaluée |
-| Gestion des risques | 38 risques cotés (probabilité × impact) avec atténuation ; risques **rouverts** ou reclassés au fil du projet (`R-G1-16`, `R-G1-21`, `R-G1-32`) | `docs/06-risques.md` | pas de revue de risques formelle avec un comité | l'évolution d'un risque : `R-G1-20` (fuseau) ouvert → corrigé → fermé avec preuve |
+| Gestion des risques | 103 risques cotés (probabilité × impact), dont 38 `R-G1-*` propres au lot G1 avec atténuation ; risques **rouverts** ou reclassés au fil du projet (`R-G1-16`, `R-G1-21`, `R-G1-32`) | `docs/06-risques.md` | pas de revue de risques formelle avec un comité | l'évolution d'un risque : `R-G1-20` (fuseau) ouvert → corrigé → fermé avec preuve |
 | Priorisation et conduite | Backlog produit + backlog de sprint + feuille de route 6 mois ; lots F2→F6 puis G1-A→G1-G, chacun clos par un rapport | `docs/05-product-backlog.md`, `05a`, `05b`, `docs/reports/G1_IMPLEMENTATION_PLAN.md` | projet **individuel** : aucune conduite d'équipe réelle, aucune gouvernance multi-acteurs | le découpage en blocs livrables indépendants et leur clôture tracée |
 | Indicateurs et pilotage qualité | Totaux de tests, budget de bundle, `npm audit`, compteurs de requêtes SQL, suivi des dettes nommées | `docs/CURRENT-STATE.md`, `G1_FINAL_REPORT.md` §11 | pas d'indicateurs d'usage réels (aucun utilisateur) | la mesure N+1 avant / après correction (14 → 28 → 14 requêtes) |
-| **Recul critique** | Reclassements **à la baisse** décidés en fin de lot : G1-F `IMPLEMENTED_AND_TESTED` → **`PARTIAL`** ; e2e `PARTIAL` → **`NOT_IMPLEMENTED`** ; incident UTC « infra confirmée » → **« cause non déterminée »** | `G1_FINAL_REPORT.md` §1bis, §3.4 ; `G1_REQUIREMENTS_TRACEABILITY.md` §8quater | — | **le point fort du dossier** : avoir dégradé ses propres statuts sur preuve insuffisante |
+| **Recul critique** | Reclassements **à la baisse** décidés en fin de lot : G1-F `IMPLEMENTED_AND_TESTED` → **`PARTIAL`** ; e2e `PARTIAL` → **`NOT_IMPLEMENTED`** ; incident UTC « infra confirmée » → **« cause non déterminée »**. Puis reclassement **à la hausse sur preuve** le 3 septembre : e2e `NOT_IMPLEMENTED` → **`IMPLEMENTED_AND_TESTED`** (149 tests exécutés) et planning `HORS_PÉRIMÈTRE_ASSUMÉ` → **`IMPLEMENTED_AND_TESTED`** — dans les deux sens, c'est la preuve qui décide | `G1_FINAL_REPORT.md` §1bis, §3.4 ; `G1_REQUIREMENTS_TRACEABILITY.md` §8quater ; `audit-report.md` §2-§4 | — | **le point fort du dossier** : avoir dégradé ses propres statuts sur preuve insuffisante, puis ne les avoir relevés que sur preuve exécutée |
 
 ## BC02 — Concevoir et développer des solutions applicatives
 

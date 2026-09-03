@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router } from '@angular/router';
 
+import { SkipLink } from '../../../core/a11y/skip-link';
 import { AuthService } from '../../../core/auth/auth.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
 
@@ -23,6 +24,7 @@ const GENERIC_AUTH_FAILURE =
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    SkipLink,
   ],
   templateUrl: './login.html',
   styleUrl: './login.scss',

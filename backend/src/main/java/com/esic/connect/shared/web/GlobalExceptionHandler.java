@@ -5,11 +5,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
@@ -70,6 +74,56 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiError> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Ressource introuvable.", request, List.of());
+    }
+
+    /**
+     * Paramètre de requête obligatoire absent.
+     *
+     * <p>Sans ce handler, le catch-all générique transformait une erreur
+     * d'appel du client en {@code 500 INTERNAL_ERROR} : c'est le défaut
+     * F-SEC-1 relevé sur {@code GET /api/v1/planning/versions} sans
+     * {@code classGroupPublicId} (docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md
+     * §2, reconfirmé par l'audit QA du 3 septembre 2026, audit-report.md
+     * §3). Un 500 signale à tort une panne serveur, fausse la supervision
+     * et est trompeur pour tout client de l'API documentée (OpenAPI).
+     *
+     * <p>Seul le <strong>nom</strong> du paramètre est renvoyé : il fait
+     * partie du contrat public de l'API, aucune information
+     * d'implémentation n'est exposée.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParameter(MissingServletRequestParameterException ex,
+                                                           HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "La requête contient des champs invalides.",
+                request, List.of(ex.getParameterName() + ": paramètre obligatoire absent"));
+    }
+
+    /** Partie multipart obligatoire absente (même raisonnement que ci-dessus). */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex,
+                                                      HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "La requête contient des champs invalides.",
+                request, List.of(ex.getRequestPartName() + ": partie obligatoire absente"));
+    }
+
+    /** Paramètre présent mais de type incompatible ({@code ?page=abc}). */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+                                                       HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "La requête contient des champs invalides.",
+                request, List.of(ex.getName() + ": valeur invalide"));
+    }
+
+    /**
+     * Corps de requête absent ou mal formé (JSON invalide). Erreur du
+     * client, jamais une panne serveur : le message d'analyse reste côté
+     * serveur.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException ex,
+                                                         HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
+                "Le corps de la requête est absent ou mal formé.", request, List.of());
     }
 
     @ExceptionHandler(Exception.class)

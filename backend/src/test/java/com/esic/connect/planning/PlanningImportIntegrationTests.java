@@ -226,6 +226,25 @@ class PlanningImportIntegrationTests {
         assertThat(pm.getBody().get("code")).isEqualTo("PLAN_SCOPE_FORBIDDEN");
     }
 
+    /**
+     * Régression F-SEC-1 : un paramètre obligatoire absent doit produire un
+     * {@code 400 VALIDATION_ERROR}, jamais un {@code 500 INTERNAL_ERROR}
+     * (audit-report.md §3, finding F-SEC-1).
+     */
+    @Test
+    void aMissingRequiredQueryParameterIsA400NotA500() {
+        String admin = adminToken();
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.get(URI.create("/api/v1/planning/versions"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin).build(),
+                new ParameterizedTypeReference<>() {
+                });
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().get("code")).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getBody().get("details").toString()).contains("classGroupPublicId");
+    }
+
     // ------------------------------------------------------------------
 
     private ResponseEntity<Map<String, Object>> upload(String fileName, String csv, String token, String classId) {
