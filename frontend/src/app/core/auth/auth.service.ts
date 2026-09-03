@@ -67,15 +67,53 @@ export class AuthService {
     return of(undefined);
   }
 
-  /** Déconnexion locale : efface la session et retourne à l'écran de connexion. */
+  /**
+   * Déconnexion.
+   *
+   * Appelle `POST /api/v1/auth/logout`, qui inscrit le jeton courant sur
+   * la liste de refus du serveur jusqu'à son expiration (EF-AUTH-014) :
+   * sans cet appel, un jeton copié resterait utilisable après la
+   * « déconnexion ».
+   *
+   * La session locale est effacée **quoi qu'il arrive**, y compris si
+   * l'appel échoue : refuser de déconnecter l'utilisateur parce que le
+   * serveur ne répond pas serait le pire des deux mondes. L'échec est
+   * silencieux côté interface ; le jeton expirera de lui-même.
+   */
   logout(): void {
-    // Pas de route `POST /api/v1/auth/logout` côté back-end pour l'instant
-    // (jeton stateless, aucune session serveur à révoquer — docs/CURRENT-STATE.md).
     const wasAuthenticated = this._session() !== null;
+    if (wasAuthenticated) {
+      this.http
+        .post<void>(`${environment.apiBaseUrl}/v1/auth/logout`, {})
+        .subscribe({ next: () => undefined, error: () => undefined });
+    }
     this._session.set(null);
     if (wasAuthenticated) {
       void this.router.navigate(['/login']);
     }
+  }
+
+  /**
+   * Demande un lien de réinitialisation.
+   *
+   * Le serveur répond de façon identique que l'adresse existe ou non
+   * (docs/02 §17.8) : l'interface ne doit donc jamais afficher de message
+   * différencié, ni tenter d'en déduire quoi que ce soit.
+   */
+  requestPasswordReset(email: string): Observable<void> {
+    return this.http
+      .post<{ message: string }>(`${environment.apiBaseUrl}/v1/auth/forgot-password`, {
+        email: email.trim().toLowerCase(),
+      })
+      .pipe(map(() => undefined));
+  }
+
+  /** Consomme un jeton de réinitialisation et définit le nouveau mot de passe. */
+  resetPassword(token: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(`${environment.apiBaseUrl}/v1/auth/reset-password`, {
+      token,
+      newPassword,
+    });
   }
 
   /**

@@ -124,6 +124,26 @@ export const routes: Routes = [
       import('./features/auth/login/login').then((m) => m.Login),
   },
   {
+    // Parcours PUBLIC : demander un lien de réinitialisation
+    // (EF-AUTH-005). Sous `guestGuard` — un utilisateur déjà connecté n'a
+    // rien à y faire, il change son mot de passe depuis son profil.
+    path: 'mot-de-passe-oublie',
+    canActivate: [guestGuard],
+    title: `Mot de passe oublié — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/auth/forgot-password/forgot-password').then((m) => m.ForgotPassword),
+  },
+  {
+    // Parcours PUBLIC atteint via le lien reçu par courriel
+    // (`/reinitialisation?token=…`). Aucune garde : comme pour
+    // l'activation, le jeton fait foi, indépendamment d'une éventuelle
+    // session en mémoire.
+    path: 'reinitialisation',
+    title: `Nouveau mot de passe — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/auth/reset-password/reset-password').then((m) => m.ResetPassword),
+  },
+  {
     // Parcours PUBLIC atteint via le lien d'invitation du back-end
     // (`/activation?token=…`). Aucune garde : le jeton d'invitation fait
     // foi, indépendamment d'une éventuelle session en mémoire.

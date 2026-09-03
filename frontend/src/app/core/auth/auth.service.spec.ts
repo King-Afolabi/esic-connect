@@ -70,18 +70,73 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(false);
   });
 
-  it('logout clears the session and returns to the login screen', async () => {
+  it('logout tells the server to revoke the token, clears the session and returns to login', async () => {
     await authenticate(service, http, futureExp);
 
     service.logout();
+
+    // Sans cet appel, « se déconnecter » n'effacerait que l'écran : le
+    // jeton resterait utilisable jusqu'à son expiration (EF-AUTH-014).
+    const request = http.expectOne('/api/v1/auth/logout');
+    expect(request.request.method).toBe('POST');
+    request.flush(null);
 
     expect(service.isAuthenticated()).toBe(false);
     expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 
-  it('logout does nothing (no navigation) when already signed out', () => {
+  it('logout still signs the user out locally when the server call fails', async () => {
+    await authenticate(service, http, futureExp);
+
     service.logout();
+    http.expectOne('/api/v1/auth/logout').error(new ProgressEvent('network error'));
+
+    // Refuser de déconnecter parce que le serveur ne répond pas serait
+    // le pire des deux mondes : la session locale part quoi qu'il arrive.
+    expect(service.isAuthenticated()).toBe(false);
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+  });
+
+  it('logout does nothing (no request, no navigation) when already signed out', () => {
+    service.logout();
+
+    http.expectNone('/api/v1/auth/logout');
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('requestPasswordReset posts the normalised address and resolves on success', async () => {
+    const done = firstValueFrom(service.requestPasswordReset('  Alice@ESIC-Connect.test '));
+
+    const request = http.expectOne('/api/v1/auth/forgot-password');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ email: 'alice@esic-connect.test' });
+    request.flush({ message: 'Si un compte existe pour cette adresse…' });
+
+    await expect(done).resolves.toBeUndefined();
+  });
+
+  it('resetPassword posts the token and the new password', async () => {
+    const done = firstValueFrom(service.resetPassword('un-jeton', 'cheval batterie agrafe'));
+
+    const request = http.expectOne('/api/v1/auth/reset-password');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      token: 'un-jeton',
+      newPassword: 'cheval batterie agrafe',
+    });
+    request.flush(null);
+
+    await expect(done).resolves.toBeNull();
+  });
+
+  it('never stores the reset token anywhere on the client', async () => {
+    void firstValueFrom(service.resetPassword('jeton-sensible', 'cheval batterie agrafe'));
+    http.expectOne('/api/v1/auth/reset-password').flush(null);
+
+    // Même garantie que pour le JWT : rien de sensible ne persiste
+    // côté navigateur (RG-093).
+    expect(JSON.stringify(localStorage)).not.toContain('jeton-sensible');
+    expect(JSON.stringify(sessionStorage)).not.toContain('jeton-sensible');
   });
 
   it('handleUnauthorized clears the session and redirects with reason=expired', async () => {

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 
@@ -15,16 +16,16 @@ import { Login } from './login';
 describe('Login — accessibilité (axe-core)', () => {
   let fixture: ComponentFixture<Login>;
   const auth = { login: vi.fn().mockReturnValue(new Subject<Session>().asObservable()) };
-  const router = { navigateByUrl: vi.fn() };
 
   beforeEach(async () => {
+    // Routeur de test réel : l'écran porte un `routerLink` vers « mot de
+    // passe oublié », que la directive ne peut pas résoudre avec un
+    // routeur factice. La navigation est neutralisée par un espion.
     await TestBed.configureTestingModule({
       imports: [Login],
-      providers: [
-        { provide: AuthService, useValue: auth },
-        { provide: Router, useValue: router },
-      ],
+      providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
     }).compileComponents();
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     fixture = TestBed.createComponent(Login);
     fixture.detectChanges();
   });

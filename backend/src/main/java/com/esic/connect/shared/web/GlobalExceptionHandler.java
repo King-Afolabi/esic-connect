@@ -1,8 +1,10 @@
 package com.esic.connect.shared.web;
 
+import com.esic.connect.shared.ratelimit.RateLimitExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -53,6 +55,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS",
                 "Adresse électronique ou mot de passe incorrect.", request, List.of());
+    }
+
+    /**
+     * Seuil de limitation de débit atteint (EF-AUTH-012).
+     *
+     * <p>Le corps ne dit jamais <em>quelle</em> limite a été atteinte, ni
+     * pour quelle identité : sur les routes publiques, ce serait un
+     * oracle sur l'existence d'un compte. L'en-tête {@code Retry-After}
+     * est en revanche renseigné, car il est utile au client légitime et
+     * ne révèle rien de plus que le refus lui-même.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiError> handleRateLimited(RateLimitExceededException ex, HttpServletRequest request) {
+        long retryAfterSeconds = Math.max(1, ex.getRetryAfter().toSeconds());
+        ApiError body = new ApiError(Instant.now(), HttpStatus.TOO_MANY_REQUESTS.value(), "RATE_LIMITED",
+                "Trop de tentatives. Réessayez dans un instant.",
+                request.getRequestURI(), UUID.randomUUID().toString(), List.of());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))
+                .body(body);
     }
 
     /**

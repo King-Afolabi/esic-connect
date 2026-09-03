@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
@@ -11,20 +11,24 @@ describe('Login', () => {
   let fixture: ComponentFixture<Login>;
   let loginResult: Subject<Session>;
   const auth = { login: vi.fn() };
-  const router = { navigateByUrl: vi.fn() };
+  // L'écran contient désormais un `routerLink` vers « mot de passe
+  // oublié » : la directive exige un Router et une ActivatedRoute réels.
+  // On fournit donc un vrai routeur de test, dont on espionne la
+  // navigation, plutôt qu'un objet factice incomplet.
+  let router: { navigateByUrl: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     loginResult = new Subject<Session>();
     auth.login.mockReset().mockReturnValue(loginResult.asObservable());
-    router.navigateByUrl.mockReset();
 
     await TestBed.configureTestingModule({
       imports: [Login],
-      providers: [
-        { provide: AuthService, useValue: auth },
-        { provide: Router, useValue: router },
-      ],
+      providers: [{ provide: AuthService, useValue: auth }, provideRouter([])],
     }).compileComponents();
+
+    const realRouter = TestBed.inject(Router);
+    vi.spyOn(realRouter, 'navigateByUrl').mockResolvedValue(true);
+    router = realRouter as unknown as typeof router;
 
     fixture = TestBed.createComponent(Login);
     fixture.detectChanges();

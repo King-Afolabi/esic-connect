@@ -13,6 +13,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -33,6 +34,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -83,6 +85,11 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api/v1/auth/login",
+            // Mot de passe oublié : par nature accessible sans jeton. La
+            // route répond de façon neutre et est limitée en débit
+            // (EF-AUTH-005, EF-AUTH-012).
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/reset-password",
             // Parcours public d'activation (le jeton reçu par email fait foi).
             "/api/v1/account-invitations/validate",
             "/api/v1/account-invitations/activate"
@@ -213,12 +220,21 @@ public class SecurityConfig {
      * valide mais émis par un autre émetteur est refusé.
      */
     @Bean
-    public JwtDecoder jwtDecoder(SecretKey jwtSigningKey, @Value("${app.security.jwt.issuer}") String issuer) {
+    public JwtDecoder jwtDecoder(SecretKey jwtSigningKey,
+                                 @Value("${app.security.jwt.issuer}") String issuer,
+                                 List<OAuth2TokenValidator<Jwt>> additionalValidators) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSigningKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
-        OAuth2TokenValidator<Jwt> validator = JwtValidators.createDefaultWithIssuer(issuer);
-        decoder.setJwtValidator(validator);
+        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
+        validators.add(JwtValidators.createDefaultWithIssuer(issuer));
+        // Les modules métier peuvent contribuer des contrôles
+        // supplémentaires en publiant un bean OAuth2TokenValidator<Jwt> —
+        // c'est ainsi que `identity` branche la vérification de
+        // révocation (EF-AUTH-014) sans que `shared` ait à connaître
+        // `identity`, ce qui créerait un cycle entre modules.
+        validators.addAll(additionalValidators);
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
     }
 

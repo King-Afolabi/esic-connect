@@ -11,10 +11,9 @@
 ## Dernière mise à jour
 
 ```text
-3 septembre 2026 — refondation produit : passage du cadrage « preuve de
-concept trois jours » à un cahier des charges d'application complète
-(142 exigences). Purge des artefacts de soutenance et des rapports de
-tranches. Aucun code fonctionnel modifié par cette refondation.
+3 septembre 2026 — refondation produit (142 exigences) puis sprint 2,
+partie A : mot de passe oublié, révocation de session, limitation de
+débit. Backend 858 tests, frontend 617 tests, tout vert.
 ```
 
 ## Repère Git
@@ -33,20 +32,20 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 49 | 35 % |
+| `IMPLEMENTED_AND_TESTED` | 52 | 37 % |
 | `PARTIAL` | 11 | 8 % |
-| `NOT_IMPLEMENTED` | 82 | 58 % |
+| `NOT_IMPLEMENTED` | 79 | 56 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges vient d'élargir volontairement le périmètre à l'ensemble du
-produit cible. Les 82 exigences non implémentées ne sont pas des
+produit cible. Les 79 exigences non implémentées ne sont pas des
 régressions : ce sont les sprints 2 et 4 à 13 de la roadmap.
 
 ### 1.1 Par domaine
 
 | Domaine | Livré | Partiel | Absent |
 |---|---:|---:|---:|
-| Identité et accès (15) | 4 | 0 | 11 |
+| Identité et accès (15) | 7 | 0 | 8 |
 | Utilisateurs (9) | 3 | 1 | 5 |
 | Référentiels et organisation (13) | 9 | 0 | 4 |
 | Inscriptions et imports (10) | 5 | 0 | 5 |
@@ -82,8 +81,37 @@ régressions : ce sont les sprints 2 et 4 à 13 de la roadmap.
   et retrait de rôle, avec gardes fines côté serveur (protection
   `SUPER_ADMIN`, auto-action interdite, dernier rôle actif protégé).
   Écran `/administration` en lecture et écriture.
+- `EF-AUTH-005` **mot de passe oublié** : réponse strictement neutre —
+  adresse connue, inconnue, suspendue ou archivée produisent la même
+  réponse et le même corps ; jeton `SecureRandom` à usage unique, durée de
+  vie 30 minutes, empreinte SHA-256 seule stockée, une demande active par
+  compte garantie en base ; une nouvelle demande révoque la précédente ;
+  un mot de passe refusé par la politique ne consomme pas le jeton ; un
+  compte `PENDING_ACTIVATION` devient `ACTIVE` (contrôler l'adresse vaut
+  activation) ; un compte suspendu ne peut pas contourner la décision
+  administrative.
+- `EF-AUTH-012` **limitation de débit** : compteurs à fenêtre fixe dans
+  Redis sur la connexion (par identité **et** par origine réseau), la
+  demande de réinitialisation et la consommation d'un jeton. Les clés sont
+  des empreintes : ni adresse électronique ni adresse IP en clair
+  (RG-094). Une connexion réussie remet le seau d'identité à zéro, jamais
+  celui de l'origine. Réponse `429 RATE_LIMITED` + `Retry-After`, sans
+  rien révéler sur l'existence du compte. Repli permissif si Redis est
+  indisponible (`DEC-S2-001`).
+- `EF-AUTH-014` **déconnexion et révocation** : liste de refus Redis
+  indexée par `jti` pour une session, colonne
+  `user_account.credentials_invalidated_at` pour la révocation globale
+  (changement de mot de passe, `logout-all`). Validées à chaque requête
+  par un `OAuth2TokenValidator` contribué par le module `identity`, sans
+  créer de dépendance de `shared` vers `identity` (`DEC-S2-002`).
+- **Politique de mot de passe** : longueur minimale 12, liste de mots de
+  passe courants canonicalisée (casse et accents neutralisés), refus d'un
+  mot de passe contenant l'adresse, borne haute anti-déni de service.
+  Aucune exigence de composition, aucune expiration périodique.
 - `EF-AUD-001` piste d'audit `audit_event` alimentée par tous les flux
-  métier, **sans donnée personnelle, sans jeton, sans adresse IP**.
+  métier, **sans donnée personnelle, sans jeton, sans adresse IP** ;
+  `PASSWORD_CHANGED` et `SESSIONS_REVOKED` publiés **après commit**
+  (`DEC-S2-003`).
 
 ### 2.2 Référentiels et organisation
 
@@ -219,7 +247,6 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 
 | Bloc | Exigences | Sprint |
 |---|---|---|
-| Mot de passe oublié, déconnexion, révocation de session | `EF-AUTH-005`, `EF-AUTH-014` | 2 |
 | WebAuthn et passkeys | `EF-AUTH-006`, `EF-AUTH-007`, `EF-ATT-011` | 2 |
 | MFA TOTP, codes de récupération, authentification adaptative | `EF-AUTH-008..010`, `EF-AUTH-015` | 2 |
 | Anti-robot et limitation de débit | `EF-AUTH-011`, `EF-AUTH-012` | 2 |
@@ -256,7 +283,7 @@ module, aucun cycle.
 
 | Module | Rôle | Migrations |
 |---|---|---|
-| `identity` | comptes, rôles, JWT, invitation, administration | V1, V2, V3 |
+| `identity` | comptes, rôles, JWT, invitation, administration, mot de passe oublié, révocation | V1, V2, V3, V17 |
 | `organization` | site, bâtiment, salle, plage réseau | V4 |
 | `academic` | année, formation, niveau, promotion, classe, affectation | V5, V6 |
 | `enrollment` | profil apprenant, inscription, changement de classe | V7 |
@@ -274,10 +301,11 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V16
+### 5.2 Migrations Flyway — schéma en V17
 
-41 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
-par une migration.
+42 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+par une migration. `V17` ajoute `password_reset_token` et la colonne
+`user_account.credentials_invalidated_at`.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -300,8 +328,10 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **96 classes / 812 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V16 |
-| `cd frontend && npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **102 classes / 858 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V17 |
+| `cd frontend && npm test -- --watch=false` | **73 fichiers / 617 tests / 0 échec** |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 
 Les tests portant le tag `perf` sont exclus par défaut
 (`./mvnw test -Pperf` pour les exécuter).
@@ -349,7 +379,6 @@ pas.**
 | T-04 | balayage des fichiers orphelins absent | un fichier peut subsister après une suppression échouée |
 | T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
 | T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
-| — | `/auth/login` non limité en débit | dette de sécurité assumée jusqu'au sprint 2 |
 | T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
 | — | base `esic_connect` polluée par ~27 000 comptes de fixtures | `./scripts/db-reset.sh esic_connect` **non encore exécuté** |
 
@@ -371,9 +400,10 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas.
-2. **Sprint 2 — sécurité forte** : mot de passe oublié, WebAuthn, MFA
-   TOTP, anti-robot, limitation de débit, révocation de session. C'est
-   le prérequis de toute manipulation de données réelles.
+2. **Sprint 2, partie B** : WebAuthn et passkeys, MFA TOTP et codes de
+   récupération, anti-robot, appareils de confiance, authentification
+   adaptative. La partie A (mot de passe oublié, révocation, limitation de
+   débit) est livrée.
 3. **Sprint 4 — Excel et alternance appliquée**.
 4. **Sprint 6 — planning avancé** : calendrier interactif, retour
    arrière, conflit de salle.

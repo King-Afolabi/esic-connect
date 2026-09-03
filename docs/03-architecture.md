@@ -2037,32 +2037,128 @@ Spring Boot doit détecter les doublons.
 
 ---
 
-# 30. Décisions d’architecture
+# 30. Décisions d’architecture — ADR
 
-## ADR à créer
+Les décisions structurantes sont consignées ici, avec leur contexte,
+leurs conséquences et leur date. Les identifiants sont **stables** : ils
+sont cités dans le code et dans les migrations, et ne doivent jamais être
+réattribués.
 
-```text
-docs/adr/
-├── ADR-001-monolithe-modulaire.md
-├── ADR-002-mysql-source-verite.md
-├── ADR-003-redis-cache-jetons.md
-├── ADR-004-angular-pwa.md
-├── ADR-005-sse-temps-reel.md
-├── ADR-006-service-ia-fastapi.md
-├── ADR-007-mqtt-iot.md
-├── ADR-008-stockage-fichiers.md
-├── ADR-009-environnements.md
-└── ADR-010-strategie-cloud.md
-```
+> **Note de traçabilité.** Les migrations `V10` à `V16` citent en
+> commentaire l'ancien chemin `docs/reports/G1_ARCHITECTURE_DECISIONS.md`,
+> supprimé le 3 septembre 2026. Ces commentaires sont **volontairement
+> laissés intacts** : modifier une migration déjà appliquée invalide sa
+> somme de contrôle Flyway et casse toute base existante. Les décisions
+> `DEC-G1-*` qu'ils citent sont reprises ci-dessous sous les mêmes
+> identifiants.
 
-Chaque ADR contiendra :
+## DEC-G1-001 à DEC-G1-012 — module planning et pièces jointes
 
-- contexte ;
-- options ;
-- décision ;
-- conséquences ;
-- statut ;
-- date.
+| Réf | Décision |
+|---|---|
+| `DEC-G1-001` | L'identité d'un créneau de planning est stable et déterministe (`course_session.planning_slot_public_id`) : une republication retrouve la séance existante au lieu d'en créer une seconde. |
+| `DEC-G1-002` | `planning` ne partage aucune entité JPA avec `coursesession` : l'écriture passe par le port public `PlanningSessionWriter`. |
+| `DEC-G1-003` | La correction d'une ligne d'import se fait, dans un premier temps, par annulation du travail puis réimport. La correction ligne à ligne est planifiée (EF-PLAN-003, sprint 5). |
+| `DEC-G1-004` | Le cycle de vie d'une séance est strict et sans réouverture : `PLANNED → OPEN → CLOSED`, plus `CANCELLED` avec motif. |
+| `DEC-G1-006` | Un créneau tombant sur une période d'alternance en entreprise produit un **avertissement**, jamais un blocage. |
+| `DEC-G1-007` | Les notifications sont produites après commit et rendues idempotentes par une empreinte de déduplication. |
+| `DEC-G1-008` | Le contenu d'une pièce jointe est stocké hors base et hors répertoire public ; seule sa description est en base. |
+| `DEC-G1-009` | La séquence base ↔ fichier est compensée, et les lignes restées en attente de stockage sont réconciliées par une tâche planifiée. |
+| `DEC-G1-010` | Le coût SQL du tableau de bord manager reste linéaire en nombre de séances ; le chargement par lot est une dette identifiée (T-03). |
+| `DEC-G1-012` | Toute table métier porte un identifiant public UUID distinct de sa clé primaire. |
+| `DEC-G1-E-ANTIVIRUS` | Aucune analyse antivirus n'est en place : les contrôles sont **structurels** (extension, type déclaré, contenu réel, taille). Ne jamais écrire que les fichiers sont garantis sans logiciel malveillant. Levée prévue au sprint 9. |
+
+## DEC-S2-001 — la limitation de débit laisse passer si Redis est indisponible
+
+**Contexte.** La limitation de débit protège la connexion, la demande de
+réinitialisation et la consommation d'un jeton (EF-AUTH-012). Ses
+compteurs vivent dans Redis. Que faire lorsque Redis ne répond pas ?
+
+**Options.** Refuser toute requête limitée (*fail closed*) ; ou la laisser
+passer en journalisant l'incident (*fail open*).
+
+**Décision.** *Fail open*, avec journalisation en `WARN`.
+
+**Conséquences.** Refuser fermerait l'authentification à **tous** les
+utilisateurs légitimes dès qu'une dépendance de simple protection tombe :
+la panne d'un garde-fou deviendrait un déni de service complet,
+déclenchable de l'extérieur en s'attaquant à Redis. Pendant une telle
+panne, les contrôles de fond restent actifs — hachage BCrypt, réponse
+uniforme, audit de chaque tentative — et seule la borne de fréquence
+disparaît.
+
+Ce choix est **l'inverse** de celui retenu pour l'émargement, où
+l'indisponibilité de Redis produit un `503` : là, Redis porte
+l'**autorité** de la décision (le jeton n'existe nulle part ailleurs), et
+non une protection périphérique. La règle générale est donc : *fail open*
+pour une protection, *fail closed* pour une autorité.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-002 — révocation des jetons : deux mécanismes distincts
+
+**Contexte.** L'API est sans état. Un JWT reste cryptographiquement
+valide jusqu'à son expiration, y compris après une déconnexion ou un
+changement de mot de passe (EF-AUTH-014, RG-010).
+
+**Décision.** Deux mécanismes complémentaires, vérifiés à chaque requête
+par un `OAuth2TokenValidator` :
+
+1. **liste de refus Redis**, indexée par `jti`, avec une durée de vie
+   égale au temps restant du jeton — c'est la déconnexion d'**une**
+   session ;
+2. **colonne `user_account.credentials_invalidated_at`** — tout jeton
+   dont le claim `iat` est antérieur est refusé. C'est la révocation
+   **globale** : changement de mot de passe, suspension, incident. Elle
+   couvre les jetons dont l'identifiant est inconnu du serveur, ce que la
+   liste de refus ne peut pas faire.
+
+**Conséquences.** Le claim `iat` n'a qu'une précision à la seconde. La
+révocation globale est donc arrondie à la seconde **supérieure**, et
+l'émission d'un jeton date l'`iat` au plus tard entre l'instant courant et
+cette borne : sans cela, une reconnexion immédiate après une révocation
+produirait un jeton aussitôt rejeté pendant près d'une seconde.
+
+Une panne de Redis n'invalide pas les sessions en cours : la liste de
+refus répond « non révoqué », tandis que la révocation qui compte —
+celle qui suit un changement de mot de passe — repose sur MySQL et reste
+appliquée.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-003 — l'audit des changements de mot de passe est publié après commit
+
+**Contexte.** Huit écouteurs d'audit sont des `@EventListener` synchrones
+en `REQUIRES_NEW`. Ce motif suspend la transaction appelante pour écrire
+la trace dans une transaction dédiée.
+
+**Décision.** Les écouteurs d'audit ajoutés à partir du sprint 2 écoutent
+en `AFTER_COMMIT`.
+
+**Conséquences.** Une transaction qui change un mot de passe a déjà
+modifié — donc verrouillé — la ligne `user_account` concernée. Un
+écouteur synchrone en `REQUIRES_NEW` tenterait d'insérer un
+`audit_event` dont la clé étrangère `actor_user_id` pointe vers cette
+ligne : la nouvelle transaction attendrait un verrou que seule l'ancienne
+peut libérer, jusqu'au *lock wait timeout*. Le défaut a été observé
+(cinquante secondes d'attente puis échec) avant d'être corrigé.
+
+Publier après le commit supprime la situation et donne la bonne
+sémantique : une transaction annulée ne laisse aucune trace (RG-097). La
+migration des huit écouteurs restants vers une outbox est la dette T-01,
+planifiée au sprint 10.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## ADR à rédiger
+
+Décisions déjà prises mais pas encore formalisées ici : monolithe
+modulaire, MySQL source de vérité, Redis pour les données temporaires,
+Angular et PWA, service d'IA FastAPI, MQTT pour l'IoT, stockage des
+fichiers, environnements, stratégie cloud.
+
+Chaque ADR contient : contexte, options, décision, conséquences, statut,
+date.
 
 ---
 

@@ -67,6 +67,31 @@ app:
       # « un mois »). Configurable, doit rester strictement positive
       # (le démarrage échoue sinon, voir AccountInvitationService).
       token-ttl: ${INVITATION_TOKEN_TTL:P30D}
+    password:
+      # Longueur minimale (docs/02 §17.1). Le cahier impose une longueur
+      # minimale et le blocage des mots de passe courants, sans exigence
+      # de composition : celles-ci produisent des variantes prévisibles
+      # sans gain réel. Ne peut pas descendre sous 12 (PasswordPolicy).
+      min-length: ${PASSWORD_MIN_LENGTH:12}
+    password-reset:
+      # Durée de validité d'un lien de réinitialisation (EF-AUTH-005).
+      # Volontairement courte : contrairement à une invitation, la
+      # personne agit dans la foulée de sa demande.
+      token-ttl: ${PASSWORD_RESET_TOKEN_TTL:PT30M}
+      # Demandes de lien acceptées par adresse et par fenêtre.
+      request-limit: ${PASSWORD_RESET_REQUEST_LIMIT:5}
+      request-window: ${PASSWORD_RESET_REQUEST_WINDOW:PT1H}
+      # Tentatives de consommation d'un même jeton par fenêtre.
+      consume-limit: ${PASSWORD_RESET_CONSUME_LIMIT:10}
+      consume-window: ${PASSWORD_RESET_CONSUME_WINDOW:PT1H}
+    login:
+      # Limitation de débit de la connexion (EF-AUTH-012, RG-092). Deux
+      # seaux : par identité (borne les essais contre un compte) et par
+      # origine réseau (borne un balayage de nombreux comptes avec un mot
+      # de passe courant). Voir AuthenticationService.
+      identity-limit: ${LOGIN_IDENTITY_LIMIT:10}
+      origin-limit: ${LOGIN_ORIGIN_LIMIT:60}
+      window: ${LOGIN_WINDOW:PT15M}
     cors:
       # Origines autorisées à appeler l'API depuis un navigateur
       # (docs/07 §8 : « CORS restrictif »). Liste explicite séparée par
@@ -110,6 +135,9 @@ app:
   activation:
     # Base du lien d'activation inséré dans l'email (front Angular à venir).
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}
+  password-reset:
+    # Base du lien de réinitialisation inséré dans l'email.
+    base-url: ${APP_PASSWORD_RESET_BASE_URL:http://localhost:4200/reinitialisation}
   mail:
     from: ${APP_MAIL_FROM:no-reply@esic-connect.test}
   import:

@@ -2,6 +2,8 @@ package com.esic.connect.identity.internal;
 
 import com.esic.connect.identity.LoginFailedEvent;
 import com.esic.connect.identity.LoginSucceededEvent;
+import com.esic.connect.shared.ratelimit.RateLimitDecision;
+import com.esic.connect.shared.ratelimit.RateLimiter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -45,9 +47,28 @@ class AuthenticationServiceTests {
     @Mock
     private Jwt jwt;
 
+    /**
+     * Limiteur permissif : ces tests portent sur le comportement d'audit
+     * et d'authentification, pas sur la limitation de débit, qui a ses
+     * propres tests (RedisRateLimiterTests, AuthRateLimitIntegrationTests).
+     */
+    private final RateLimiter permissiveRateLimiter = new RateLimiter() {
+        @Override
+        public RateLimitDecision consume(String bucket, String identityHash, int limit,
+                                         java.time.Duration window) {
+            return RateLimitDecision.allowed(limit);
+        }
+
+        @Override
+        public void reset(String bucket, String identityHash) {
+            // Sans effet : aucun compteur n'est tenu ici.
+        }
+    };
+
     private AuthenticationService newService() {
         return new AuthenticationService(authenticationManager, userAccountRepository, jwtEncoder,
-                eventPublisher, "esic-connect-test", 900L);
+                eventPublisher, permissiveRateLimiter, "esic-connect-test", 900L,
+                10, 60, java.time.Duration.ofMinutes(15));
     }
 
     private UserAccount activeUser() {
@@ -67,7 +88,7 @@ class AuthenticationServiceTests {
         when(jwtEncoder.encode(any())).thenReturn(jwt);
         when(jwt.getTokenValue()).thenReturn("stub-token");
 
-        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant");
+        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant", "127.0.0.1");
 
         assertThat(response.accessToken()).isEqualTo("stub-token");
         assertThat(response.tokenType()).isEqualTo("Bearer");
@@ -85,7 +106,7 @@ class AuthenticationServiceTests {
         when(jwt.getTokenValue()).thenReturn("stub-token");
         doThrow(new RuntimeException("panne technique simulée")).when(eventPublisher).publishEvent(any());
 
-        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant");
+        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant", "127.0.0.1");
 
         assertThat(response.accessToken()).isEqualTo("stub-token");
     }
@@ -95,7 +116,7 @@ class AuthenticationServiceTests {
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("mauvais mot de passe"));
         when(userAccountRepository.findByEmail("unknown@esic-connect.test")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong"))
+        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong", "127.0.0.1"))
                 .isInstanceOf(BadCredentialsException.class);
 
         verify(eventPublisher).publishEvent(any(LoginFailedEvent.class));
@@ -110,7 +131,7 @@ class AuthenticationServiceTests {
         // L'échec d'audit ne doit jamais masquer la vraie cause ni exposer
         // une autre information : l'exception d'authentification d'origine
         // reste celle propagée à l'appelant.
-        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong"))
+        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong", "127.0.0.1"))
                 .isInstanceOf(BadCredentialsException.class);
     }
 }
