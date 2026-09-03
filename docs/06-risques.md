@@ -213,6 +213,28 @@ globale). Décisions d'atténuation détaillées dans
 
 ---
 
+# 7ter. Risques relevés par l'audit QA indépendant (3 septembre 2026)
+
+Source : `audit-report.md`. Cotation identique au §1
+(probabilité × impact). Ces cinq entrées ne remplacent aucun risque
+existant : elles constatent l'état vérifié en pilotant l'application.
+
+| Réf | Risque | P | I | C | État au 3 septembre 2026 |
+|---|---|:-:|:-:|:-:|---|
+| R-QA-01 | Base applicative `esic_connect` polluée par ~27 000 comptes de fixtures de test : aucune démonstration crédible, aucun identifiant connu | 5 | 4 | 20 | **Outillé, non exécuté.** `scripts/db-doctor.sh` (diagnostic, code 2) et `scripts/db-reset.sh` (sauvegarde → recréation → Flyway → contrôle) sont livrés. La base **reste polluée** tant que le script n'a pas été lancé. Cause probable traitée en amont : `MYSQL_TEST_DATABASE` désormais explicite (`.env.example`, `docs/13` §2) |
+| R-QA-02 | Contradiction documentaire sur le périmètre du planning : addendum « hors périmètre » du 31 août contre module livré le 1er septembre | 5 | 3 | 15 | **Fermé.** Tranché en faveur du périmètre livré ; `docs/01` §23.6 et `docs/02` §4.5.2 remplacent les addendums F2, marqués caducs. Aucune suppression d'historique |
+| R-QA-03 | Un paramètre de requête obligatoire absent produisait un `500` au lieu d'un `400` : fausse la supervision et trompe tout client de l'API documentée | 3 | 2 | 6 | **Fermé.** `GlobalExceptionHandler` traite désormais 4 familles d'erreurs d'appel client en `400 VALIDATION_ERROR`. Garde-fous : `PlanningImportIntegrationTests` + `tests/09-security-edge-cases.spec.ts` |
+| R-QA-04 | Lien d'évitement absent des pages publiques : repère `#main-content` inatteignable au clavier | 2 | 2 | 4 | **Fermé.** Composant partagé `core/a11y/skip-link` utilisé par la coquille **et** les 4 pages publiques ; garde-fou e2e |
+| R-QA-05 | Aucune persistance de session : tout rechargement de page déconnecte, y compris pendant une démonstration | 4 | 3 | 12 | **Ouvert — assumé.** Choix de sécurité du prototype (JWT en mémoire seule, RG-085) ; le rafraîchissement de jeton est classé `SOUHAITÉ` (`docs/02` §23.4). Atténuations : redirection `?redirect=` après reconnexion, avertissement explicite en tête du guide de démonstration (`docs/11` §11bis.1) |
+
+> **R-G1-38 est reclassé.** Le parcours prioritaire est désormais rejoué
+> de bout en bout dans un **vrai navigateur** (149 tests Playwright,
+> captures dans `captures/`). Ce qui reste ouvert dans R-G1-38 est
+> strictement la **manipulation humaine** consignée : un navigateur
+> piloté par script n'en est pas une.
+
+---
+
 # 8. Suivi
 
 Chaque risque possède un état :

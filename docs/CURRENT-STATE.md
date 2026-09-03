@@ -24,19 +24,20 @@
 ## Dernière mise à jour
 
 ```text
-2 septembre 2026 — préparation du chemin critique de démonstration
-(base `esic_connect_demo`, isolation test/démo, 6e compte SUPER_ADMIN)
+3 septembre 2026 — consolidation post-audit QA : recette e2e navigateur
+intégrée, périmètre planning tranché (F-DOC-1), F-SEC-1 et F-A11Y-1
+corrigés, outillage de remise à zéro de la base (F-ENV-1)
 ```
 
 ## Point de référence Git
 
 | Élément | Valeur observée |
 |---|---|
-| Branche de travail | `docs/g1-manual-demonstration` |
-| HEAD | `d3450e6` — `feat(g1): livrer la montée en gamme fonctionnelle du Groupe 1 (#40)` |
-| `main` | `d3450e6` (identique — G1 fusionné par la PR #40) |
-| Contenu vs `feature/master-level-product-expansion` | **identique** (`git diff` vide) |
-| Working tree | une seule modification locale : `frontend/angular.json` (identifiant d'analytics ajouté par la CLI Angular sur le poste — **non commité**, sans effet fonctionnel) |
+| Branche de travail | `chore/post-audit-consolidation` |
+| `main` | `fbc01b2` — `Merge pull request #42 from King-Afolabi/fix/demo-critical-path` |
+| Pull requests ouvertes | **aucune** (au 3 septembre 2026) |
+| Branches distantes fusionnées, non supprimées | `docs/update-current-state-after-pr20`, `feature/attendance-qr-demonstration`, `fix/demo-critical-path` + 5 branches Dependabot |
+| Branches distantes **non** fusionnées | `feature/attendance-management-and-reporting`, `feature/master-level-product-expansion` (contenu déjà sur `main` via la PR #40) + 7 Dependabot dont les PR ont été **fermées** |
 
 ## Modules Spring Modulith réels (14)
 
@@ -271,9 +272,9 @@ présenté comme livré.
 - Export Excel (EF-REP-004), export PDF.
 - Déploiement cloud AWS / staging / HTTPS / haute disponibilité ;
   sauvegarde / restauration outillée et testée.
-- Tests **e2e navigateur** (Playwright / Cypress) : `NOT_IMPLEMENTED`,
-  non retenus faute de rapport coût / bénéfice (`DEC-G1-011`). Repli
-  livré : la recette d'intégration API.
+> `DEC-G1-011` (« pas de suite e2e navigateur ») a été **révisée le
+> 3 septembre 2026** : la suite existe et est conservée. Voir « Recette
+> end-to-end navigateur » ci-dessous.
 
 ## Résultats de tests
 
@@ -305,6 +306,25 @@ Mesures de coût SQL du tableau de bord manager (compteur Hibernate) :
 Les tests portant le tag JUnit `perf` sont **exclus** du run par défaut
 (`./mvnw test -Pperf` pour les exécuter).
 
+### Recette end-to-end navigateur (3 septembre 2026)
+
+| Indicateur | Valeur |
+|---|---|
+| Commande | `npm run test:e2e` (pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté) |
+| Fichiers / tests | 10 / **149** |
+| Run livré (`test-results/html-report/`) | **145 / 149**, 41,7 min |
+| Taux de réussite **fonctionnel** | **149 / 149** — les 4 échecs du run livré sont des blocages d'environnement (charge système), chacun réussi en < 2 s sur ≥ 5 exécutions ; détail et historique : `audit-report.md` §4.2 |
+| Durée typique hors dégradation | 18 à 20 min (chromium, `workers: 1`) |
+| Navigateurs | chromium exécuté ; firefox / webkit / mobile-chrome configurés, non exécutés par défaut |
+| CI | `.github/workflows/e2e.yml`, **déclenchement manuel** (`workflow_dispatch`) |
+
+Ce que la suite **ne** couvre pas, faute d'écran réel : mot de passe
+oublié, MFA / WebAuthn / Turnstile, QR fixe de salle, scan caméra, export
+Excel / PDF, réclamations, écrans d'écriture `academic` / `enrollment`,
+dépôt de justificatif, CSRF (classe d'attaque non applicable à cette
+architecture). **Aucun test n'a été écrit contre un écran qui n'existe
+pas** (`audit-report.md` §0 et §4.3).
+
 ## Démonstration
 
 | Nature | Statut |
@@ -312,9 +332,11 @@ Les tests portant le tag JUnit `perf` sont **exclus** du run par défaut
 | Recette d'intégration **API** du parcours prioritaire (`PriorityPathRecetteIntegrationTests`) | `IMPLEMENTED_AND_TESTED` |
 | Parcours API relevé à la main (statuts HTTP, `docs/11-guide-demonstration.md` §11.8) | exécuté |
 | Jeu de démonstration **amorcé et vérifié par API** sur `esic_connect_demo` (6 connexions, import apprenants simulé + confirmé, planning publié v1, import conflictuel refusé `409`, présences, justificatifs, pièce jointe) — 2 septembre 2026 | exécuté |
-| Démonstration **UI** de bout en bout | **`NOT_PERFORMED`** — aucune manipulation d'interface consignée |
-| Tests **e2e navigateur** | **`NOT_IMPLEMENTED`** |
-| **Statut global du lot G1** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** |
+| Parcours prioritaire rejoué dans un **vrai navigateur** (Playwright, 2 apprenants réels : création de séance → ouverture → QR + code court → émargement → anti-rejeu → clôture → historique → isolation AC-017) | `IMPLEMENTED_AND_TESTED` — `tests/06-sessions-attendance.spec.ts`, captures dans `captures/success/` |
+| Tests **e2e navigateur** | **`IMPLEMENTED_AND_TESTED`** — 149 tests, 10 fichiers (`tests/`), `audit-report.md` §4 |
+| Démonstration **UI manuelle** de bout en bout | **`NOT_PERFORMED`** — aucune manipulation **humaine** consignée ; un navigateur piloté par script n'en est pas une |
+| Déploiement | **`NOT_PERFORMED`** — aucune instance, aucune URL (`docs/13-guide-deploiement.md`) |
+| **Statut global du lot G1** | **`IMPLEMENTED_AND_TESTED` (API + e2e navigateur) / `PARTIAL`** ; démonstration manuelle `NOT_PERFORMED` |
 
 ## Principaux risques et dettes
 
@@ -357,10 +379,54 @@ un `./mvnw test` lancé pendant une démonstration n'écrit donc pas dans
 complète lancée avec `MYSQL_DATABASE=esic_connect_demo` exporté). La CI
 impose `MYSQL_TEST_DATABASE: esic_connect_ci`.
 
+## Audit QA indépendant (3 septembre 2026)
+
+Un audit externe a piloté un vrai navigateur (Playwright) contre
+l'application réellement démarrée (profil `demo`, `esic_connect_demo`) —
+149 tests réels couvrant l'authentification, le RBAC (5 rôles × 12 routes),
+les référentiels, l'import apprenants, l'import/publication de planning et
+le **parcours prioritaire complet** (création de séance → ouverture →
+émargement par 2 apprenants réels → clôture → isolation AC-017), la
+sécurité et l'accessibilité de base. Détail complet, matrice
+fonctionnalité → implémentée → testée, et preuves :
+[`audit-report.md`](../audit-report.md) et
+[`TESTING-SUMMARY.txt`](../TESTING-SUMMARY.txt) (racine du dépôt),
+captures dans `captures/`, suite dans `tests/`.
+
+**Suite donnée le 3 septembre 2026 (cette consolidation)** :
+
+| Finding | Gravité | Traitement |
+|---|---|---|
+| **F-ENV-1** — base `esic_connect` polluée (27 105 comptes de fixtures) | CRITIQUE | **Outillé, pas encore exécuté** : `scripts/db-doctor.sh` (diagnostic, code 2 si polluée) et `scripts/db-reset.sh` (sauvegarde → `DROP`/`CREATE` → Flyway → contrôle). La base reste polluée tant que le script n'a pas été lancé |
+| **F-DOC-1** — contradiction sur le périmètre du planning | MAJEUR | **Tranché** : le planning est **dans le périmètre livré**. `docs/01-cadrage.md` §23.6 et `docs/02-cahier-des-charges.md` §4.5.2 remplacent les addendums F2, désormais marqués caducs |
+| **F-SEC-1** — `GET /planning/versions` sans paramètre → 500 | MINEUR | **Corrigé** : `GlobalExceptionHandler` traite `MissingServletRequestParameterException`, `MissingServletRequestPartException`, `MethodArgumentTypeMismatchException` et `HttpMessageNotReadableException` en `400 VALIDATION_ERROR`. Garde-fous : `PlanningImportIntegrationTests` et `tests/09-security-edge-cases.spec.ts` |
+| **F-A11Y-1** — lien d'évitement absent des pages publiques | MINEUR | **Corrigé** : composant partagé `core/a11y/skip-link`, utilisé par `AppShell` **et** par `/login`, `/activation`, `/forbidden`, `/not-found` |
+| **F-ENV-2** — aucune persistance de session | INFO | **Documenté**, non corrigé (choix assumé de prototype) : `docs/11-guide-demonstration.md` et `docs/13-guide-deploiement.md` §6 |
+
+Rappel des deux découvertes majeures :
+
+- **base `esic_connect` (profil `local`) polluée** par ~27 000 lignes de
+  comptes de test (motifs de fixtures backend, ex. `att-*`, `alt-*`,
+  `assign-*`) — aucun identifiant connu dessus, à nettoyer avant toute
+  démonstration sur cette base (`audit-report.md` finding F-ENV-1) ;
+- **contradiction documentaire non résolue** entre l'addendum « planning
+  hors périmètre assumé » de `docs/01-cadrage.md` §23.5 /
+  `docs/02-cahier-des-charges.md` §4.5.1 (31 août 2026) et le module
+  `planning` réellement livré et fonctionnel par le lot G1 (commit
+  `d3450e6`, 1er septembre 2026, **postérieur** à l'addendum) — confirmé
+  en pilotant l'écran réel (`audit-report.md` finding F-DOC-1). Cet audit
+  ne tranche pas laquelle des deux décisions doit prévaloir.
+
 ## Prochaines priorités produit
 
-1. Démonstration manuelle du parcours et captures d'écran (seul point
-   qui empêche de dépasser `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`).
+1. **Exécuter `./scripts/db-reset.sh esic_connect`** — seul point encore
+   ouvert du finding CRITIQUE F-ENV-1 ; l'outillage est livré, l'exécution
+   ne l'est pas.
+2. Démonstration **manuelle** du parcours et captures humaines : seul
+   point qui reste `NOT_PERFORMED` côté démonstration (la recette e2e
+   navigateur ne s'y substitue pas).
+3. Choisir une cible de déploiement et lever les verrous du
+   `docs/13-guide-deploiement.md` §6 (HTTPS et rate-limiting d'abord).
 2. Outbox transactionnelle (notifications **et** audit) — lève
    G1-D-OUTBOX et la dette des 8 listeners synchrones.
 3. Élargissement de l'audience des notifications (apprenants / RP).

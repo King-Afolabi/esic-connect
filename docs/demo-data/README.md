@@ -5,6 +5,15 @@ téléphone réel). À utiliser uniquement avec le profil `demo` et après
 `scripts/seed-demo.sh` (qui crée la formation `PRG-DEMO`, la classe
 `C-DEMO` et l'année `AY-DEMO` référencées ci-dessous).
 
+> **Après toute recréation de base** (`./scripts/db-reset.sh`), tous les
+> `publicId` sont régénérés : `public_id` est un `UUID.randomUUID()`
+> attribué au `@PrePersist`. Il faut donc **relancer**
+> `scripts/seed-demo.sh` puis `scripts/prepare-planning-demo.sh` — les
+> fichiers déjà produits dans `build/demo-data/` référencent un formateur
+> qui n'existe plus et l'import échouerait. La recette e2e, elle, résout
+> cet identifiant **à l'exécution** (`tests/support/api.ts`) et n'a rien à
+> régénérer.
+
 ## `apprenants-demo.csv`
 
 Fichier d'import CSV des apprenants (schéma minimal `docs/01` §8.1 :

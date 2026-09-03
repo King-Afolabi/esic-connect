@@ -66,6 +66,10 @@ Ciblent :
 
 Ciblent les parcours complets Angular → Spring Boot → données.
 
+**Réalisé depuis le 3 septembre 2026** : suite Playwright de 149 tests
+pilotant Chromium contre l'application réellement démarrée. Détail au
+§2bis.5.
+
 ## Tests de sécurité
 
 Ciblent :
@@ -156,10 +160,58 @@ Les tests marqués du tag JUnit `perf` (`AttendanceTokenPerfTests`,
 | **Tests d'intégration** | oui | `@SpringBootTest` / `@DataJpaTest` sur **MySQL réel** (pas H2) et **Redis réel** — contraintes SQL, migrations Flyway, transactions, concurrence |
 | **Tests d'API** | oui | `TestRestTemplate` / `MockMvc` : statuts HTTP, corps d'erreur, en-têtes |
 | **Recette de bout en bout (API)** | oui | `recette/PriorityPathRecetteIntegrationTests` — **une seule** classe rejouant le parcours prioritaire complet par appels HTTP réels, avec **un seul apprenant** créé par l'import puis activé et réutilisé jusqu'au justificatif |
-| **Tests e2e navigateur** | **NON — `NOT_IMPLEMENTED`** | aucune dépendance Playwright / Cypress / Puppeteer, aucun script `e2e`. Décision `DEC-G1-011`. **La recette API n'est pas un e2e** : elle ne pilote aucun navigateur, ne rend aucun composant Angular et ne valide aucune interaction utilisateur |
-| **Tests manuels / démonstration** | **NON consignés** | aucune manipulation UI enregistrée dans le dépôt. Seul le **parcours API** a été relevé à la main (`docs/11-guide-demonstration.md` §11.8, statuts HTTP) |
+| **Tests e2e navigateur** | **OUI depuis le 3/09/2026** | 149 tests Playwright / Chromium (`tests/`), pilotant un vrai navigateur contre la pile démarrée. `DEC-G1-011` révisée. **La recette API reste distincte** : elle ne rend aucun composant Angular et ne valide aucune interaction utilisateur — les deux niveaux coexistent |
+| **Tests manuels / démonstration** | **NON consignés** | aucune manipulation **humaine** enregistrée. Les captures de `captures/` sont produites par un navigateur **piloté par script** : ce n'est pas une démonstration manuelle. Seul le **parcours API** a été relevé à la main (`docs/11-guide-demonstration.md` §11.8) |
 | **Tests de performance** | partiels | 2 tests taggés `perf` + mesures indicatives ; **aucune** campagne de charge, objectif « < 100 ms » non validé sur l'ensemble des routes |
 | **Tests d'accessibilité** | partiels | 2 fichiers `*.a11y.spec.ts` avec `axe-core` ; pas d'audit outillé complet, pas de test lecteur d'écran |
+
+## 2bis.5 Recette end-to-end navigateur (Playwright)
+
+Ajoutée le 3 septembre 2026 à la suite de l'audit QA indépendant
+(`audit-report.md`). Elle **complète** la recette d'intégration API
+`PriorityPathRecetteIntegrationTests`, elle ne la remplace pas.
+
+| Élément | Valeur |
+|---|---|
+| Emplacement | `tests/01-*.spec.ts` … `tests/10-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
+| Commande | `npm run test:e2e` — pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté |
+| Volume | 10 fichiers, **149 tests** |
+| Résultat fonctionnel | **149 / 149** (le run livré affiche 145/149 ; les 4 écarts sont des blocages d'environnement, `audit-report.md` §4.2) |
+| Durée | 18-20 min en environnement sain |
+| CI | `.github/workflows/e2e.yml`, **manuel** (`workflow_dispatch`) |
+| Contrôle de type | `tsconfig.json` à la racine (`tsc -p tsconfig.json --noEmit`), intégré à `scripts/verify-all.sh` |
+
+Domaines couverts : authentification des 6 comptes et cumul de rôles ·
+matrice RBAC **5 rôles × 12 routes** (60 combinaisons, refus par URL
+directe) · référentiels académique et organisationnel (lecture, écriture,
+doublon refusé côté serveur, XSS neutralisé) · alternance · import CSV
+apprenants (simulation, erreurs, confirmation transactionnelle) · import
+et publication de planning · **parcours prioritaire complet avec deux
+apprenants réels** (séance → ouverture → code court + QR → émargement →
+anti-rejeu → présences en direct → clôture → historique → isolation
+AC-017) · assiduité et rapports · notifications et tableaux de bord ·
+sécurité (401, jeton falsifié, 403 jamais 500, validation cliente, double
+soumission) · responsive, navigation clavier, `role="alert"`.
+
+**Deux règles tenues, à ne pas relâcher :**
+
+1. aucun test n'est écrit contre un écran qui n'existe pas — les
+   domaines `HORS_PÉRIMÈTRE_ASSUMÉ` apparaissent comme écarts documentés
+   dans la matrice de `audit-report.md` §2, jamais comme tests fabriqués ;
+2. aucun identifiant technique n'est figé dans le dépôt : le `publicId`
+   du formateur de démonstration est **résolu à l'exécution**
+   (`tests/support/api.ts`), parce qu'il est régénéré à chaque recréation
+   de la base. Aucun mot de passe de repli n'existe non plus.
+
+### Limite de fiabilité constatée de l'environnement
+
+Sur 7 exécutions complètes, un test **aléatoire** (jamais le même) s'est
+bloqué 7 à 16 minutes avant d'échouer sur un timeout, corrélé à une
+charge système croissante (`load average` > 17), sans jamais se
+reproduire isolément. Ce n'est pas un défaut applicatif ni un défaut de
+test. Si la suite est intégrée à une CI récurrente, prévoir `retries: 1`
+(déjà actif quand `CI` est défini) et une machine sans charge
+concurrente. Détail : `audit-report.md` §4.2.
 
 ## 2bis.3 Ce qui est réellement couvert, par thème
 

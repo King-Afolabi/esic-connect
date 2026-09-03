@@ -596,6 +596,33 @@ par 475 tests Vitest ; le §11 est le mode opératoire pour le jour J.
 
 ### 11bis.1 Prérequis spécifiques
 
+> **À faire AVANT toute démonstration — deux points non négociables.**
+>
+> **1. Base propre.** L'audit QA du 3 septembre 2026 a trouvé la base
+> applicative `esic_connect` avec **27 105 comptes** issus des fixtures de
+> la suite back-end : aucun identifiant connu, volumétrie absurde à
+> l'écran (finding F-ENV-1). Contrôler, puis remettre à zéro si besoin :
+>
+> ```bash
+> ./scripts/db-doctor.sh                     # code 2 = base polluée
+> ./scripts/db-reset.sh esic_connect --yes   # sauvegarde → recréation → Flyway
+> ```
+>
+> Après **toute** recréation de base, relancer `scripts/seed-demo.sh`
+> **puis** `scripts/prepare-planning-demo.sh` : les `publicId` sont
+> régénérés, les fichiers de `build/demo-data/` deviennent obsolètes.
+>
+> **2. Ne jamais rafraîchir la page pendant la démonstration.** Le jeton
+> JWT vit **en mémoire du navigateur seulement** (aucun `localStorage`,
+> aucun cookie, aucun refresh token — finding F-ENV-2). Un `F5`, une URL
+> tapée dans la barre d'adresse ou un lien externe **déconnecte
+> immédiatement**, quel que soit le temps restant sur le jeton.
+> Ce n'est pas un bug : c'est la stratégie de sécurité assumée du
+> prototype (`docs/07-securite-rgpd.md` §6, RG-085). Atténuation réelle :
+> après reconnexion, le mécanisme `?redirect=` ramène exactement à
+> l'écran demandé — l'interruption est visible mais non fatale.
+> **Naviguer uniquement par les liens de l'application.**
+
 - back-end lancé **avec `JUSTIFICATION_STORAGE_PATH`** (§4.2) — sinon le
   dépôt de pièce jointe échoue en `503` ;
 - `scripts/seed-demo.sh` exécuté (site, formation, classe `C-DEMO`,
