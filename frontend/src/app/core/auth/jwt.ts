@@ -5,7 +5,7 @@ import { isRole, Role } from '../models/role';
  *
  * ⚠️ Aucune signature n'est contrôlée ici. Le résultat sert uniquement à
  * l'affichage et au filtrage de la navigation. Toute autorisation réelle
- * est décidée par le back-end (docs/07-securite-rgpd.md §7 ; consigne du
+ * est décidée par le back-end (docs/08-securite-rgpd.md §7 ; consigne du
  * lot : « ne pas décoder un JWT et traiter son contenu comme une
  * autorisation de confiance »).
  *

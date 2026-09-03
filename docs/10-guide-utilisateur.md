@@ -1,10 +1,10 @@
-# Guide d'utilisation — ESIC Connect (prototype)
+# Guide d'utilisation — ESIC Connect
 
 | Élément | Valeur |
 |---|---|
 | Version | Finalisation F6 — 31 août 2026 |
 | Périmètre | ce que chaque rôle peut réellement faire dans l'application livrée |
-| Référence | `docs/CURRENT-STATE.md`, `docs/reports/PROJECT_FINAL_AUDIT.md` |
+| Référence | `docs/CURRENT-STATE.md` |
 
 Ce guide décrit **l'application telle qu'elle est livrée**. Les
 fonctions non implémentées sont signalées comme telles et ne doivent pas
@@ -16,7 +16,7 @@ fonctions non implémentées sont signalées comme telles et ne doivent pas
   d'échec, message **générique** (aucune indication du motif).
 - **Session** : le jeton reste **en mémoire du navigateur**. Un
   rechargement de page **déconnecte** (pas de « rester connecté » :
-  choix de prototype, JWT sans refresh token).
+  choix assumé à ce stade, JWT sans jeton de renouvellement).
 - **Sélecteur de contexte de rôle** (en haut à droite) : visible
   **uniquement si le compte a au moins deux rôles**. Il **restreint**
   l'affichage au rôle choisi ; il **n'élargit jamais** les droits réels
@@ -175,7 +175,7 @@ visible.
 Fichier d'exemple fourni : `docs/demo-data/apprenants-demo.csv` (voir
 `docs/demo-data/README.md`).
 
-## 5. Séances et émargement (parcours prototype)
+## 5. Séances et émargement
 
 > **Il n'y a pas d'import de planning.** Les séances sont créées
 > **manuellement** comme séances **exceptionnelles** (motif obligatoire).
@@ -327,5 +327,4 @@ utilisées** pour contrôler l'émargement.
 
 Détail et justifications : `docs/CURRENT-STATE.md` (« Fonctionnalités
 partielles » et « Hors périmètre assumé ») ;
-`docs/reports/G1_FINAL_REPORT.md` §12 ;
-`docs/reports/G1_REQUIREMENTS_TRACEABILITY.md`.
+`docs/CURRENT-STATE.md`.

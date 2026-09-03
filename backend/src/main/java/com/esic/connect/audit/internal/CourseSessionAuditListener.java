@@ -28,7 +28,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <p>Ne migre <strong>pas</strong> les autres listeners d'audit du projet
  * (dette connue, documentée dans
- * {@code docs/reports/G1_ARCHITECTURE_DECISIONS.md} §Contexte) : seuls les
+ * {@code docs/03-architecture.md §ADR} §Contexte) : seuls les
  * listeners portant des événements du bloc G1-C sont corrigés ici.
  */
 @Component

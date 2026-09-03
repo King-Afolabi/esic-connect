@@ -1,1842 +1,298 @@
-# Product Backlog — ESIC Connect
+# Backlog produit — ESIC Connect
 
 ## Métadonnées
 
 | Élément | Valeur |
 |---|---|
-| Projet | ESIC Connect |
-| Document | Product Backlog |
-| Période de référence | Du 1er mars au 31 août 2026 |
-| Méthode | Scrum adapté avec tableau Kanban |
-| Durée d’un sprint | Deux semaines |
-| Product Owner | Monsieur BANKA |
-| Scrum Master | Monsieur INOUSSA Chaabane |
-| Architecte et développeur | Abubacar AFOLABI |
-| Version | 1.0 |
-| Date de mise à jour | 28 août 2026 |
-| Statut | Backlog initial à affiner |
+| Version | **2.0** |
+| Date | 3 septembre 2026 |
+| Périmètre | version 1.0 du produit |
+| Trajectoire | `docs/06-roadmap-six-mois.md` — 13 sprints de deux semaines |
+| Exigences | `docs/02-cahier-des-charges.md` §36 |
+| Total | **135 stories, 643 points** |
 
 ---
 
-# 1. Objet
+## 0. Conventions
 
-Ce document recense et priorise les besoins fonctionnels, techniques,
-documentaires et sécuritaires du projet **ESIC Connect**.
+**Format** : `US-NNN` — *En tant que* rôle, *je veux* capacité, *afin de*
+bénéfice.
 
-Il sert de référence pour :
+**Estimation** : suite de Fibonacci en points relatifs (1, 2, 3, 5, 8,
+13). Une story de plus de 13 points est découpée.
 
-- la planification des sprints ;
-- le suivi dans GitHub Projects ;
-- la création des issues ;
-- la mesure de l’avancement ;
-- la préparation des démonstrations ;
-- la traçabilité avec le cahier des charges ;
-- la couverture des blocs RNCP 39394.
+**Priorité** : `MUST`, `SHOULD`, `COULD` — reprise du cahier des
+charges. Aucune priorité ne signifie « abandonné ».
 
-Ce document représente une **trajectoire de projet sur six mois**.
+**Terminé** : la définition de terminé du cahier des charges §41
+s'applique à **toute** story, sans exception ni allègement.
 
-Il ne constitue pas, à lui seul, une preuve que toutes les
-fonctionnalités ont été réalisées.
-
-L’état réel de chaque élément doit être renseigné au moyen des statuts :
-
-- `À faire` ;
-- `Prêt` ;
-- `En cours` ;
-- `En revue` ;
-- `En test` ;
-- `Terminé`.
-
-Le niveau de livraison doit être renseigné séparément :
-
-- `À réaliser` ;
-- `Implémenté` ;
-- `Testé` ;
-- `Démontré` ;
-- `Simulé` ;
-- `Conçu` ;
-- `Reporté`.
+**Règle de découpage** : une story livre une capacité utilisable par un
+utilisateur. Une tâche purement technique est rattachée à la story
+qu'elle sert, jamais présentée comme un incrément.
 
 ---
 
-# 2. Vision produit
+## 1. Épopées
 
-## 2.1 Product Goal
+| Épopée | Domaine | Stories | Points |
+|---|---|---:|---:|
+| E01 | Identité et accès | 15 | 66 |
+| E02 | Utilisateurs et invitations | 9 | 37 |
+| E03 | Référentiels et organisation | 12 | 45 |
+| E04 | Population et imports | 10 | 52 |
+| E05 | Planning | 13 | 81 |
+| E06 | Séances et remplacements | 9 | 34 |
+| E07 | Émargement et assiduité | 16 | 85 |
+| E08 | Justificatifs et réclamations | 10 | 40 |
+| E09 | Notifications et mobilité | 9 | 47 |
+| E10 | Restitution et pilotage | 10 | 45 |
+| E11 | Intelligence artificielle | 5 | 27 |
+| E12 | Objets connectés | 5 | 24 |
+| E13 | Intégrations | 4 | 21 |
+| E14 | Exploitation et conformité | 8 | 39 |
+| **Total** | | **135** | **643** |
 
-> Mettre à disposition de l’ESIC une plateforme centralisée, sécurisée
-> et intelligente permettant de gérer les apprenants, les plannings,
-> les séances et l’assiduité, depuis l’importation des données jusqu’à
-> la production de rapports, en prenant en charge les cours
-> présentiels, distanciels et hybrides.
-
-## 2.2 Parcours de valeur principal
-
-```text
-Importation des apprenants
-→ Contrôle et confirmation
-→ Importation du planning
-→ Validation et publication
-→ Création automatique des séances
-→ Consultation par les acteurs
-→ Ouverture de l’émargement
-→ Validation des présences
-→ Traitement des exceptions
-→ Production des rapports
-```
-
----
-
-# 3. Gouvernance
-
-## 3.1 Équipe
-
-| Acteur | Responsabilités |
-|---|---|
-| Monsieur BANKA | Commanditaire, responsable pédagogique et Product Owner |
-| Monsieur INOUSSA Chaabane | Scrum Master, facilitation et suivi de la méthode |
-| Abubacar AFOLABI | Architecture, développement full-stack, données, IA, IoT et cybersécurité |
-
-## 3.2 Responsabilités du Product Owner
-
-Le Product Owner :
-
-- porte la vision ;
-- ordonne le Product Backlog ;
-- définit les priorités métier ;
-- clarifie les besoins ;
-- valide les résultats fonctionnels ;
-- accepte ou refuse les éléments présentés en revue.
-
-## 3.3 Responsabilités du Scrum Master
-
-Le Scrum Master :
-
-- facilite les événements ;
-- accompagne l’application de la méthode ;
-- aide à identifier les blocages ;
-- facilite l’amélioration continue ;
-- protège la clarté du processus.
-
-## 3.4 Responsabilités du développeur-architecte
-
-Le développeur-architecte :
-
-- analyse les besoins ;
-- propose l’architecture ;
-- développe les composants ;
-- sécurise la plateforme ;
-- crée les tests ;
-- maintient les documents ;
-- prépare les preuves ;
-- présente les résultats.
+Capacité retenue : **55 points par sprint**, soit 715 points sur 13
+sprints pour 643 planifiés — une marge de 10 % réservée aux correctifs,
+à la dette technique et aux imprévus. L'ordonnancement place les
+priorités `COULD` en fin de sprint : ce sont elles qui absorbent un
+dépassement, jamais la qualité ni les tests.
 
 ---
 
-# 4. Méthode d’estimation
+## 2. E01 — Identité et accès
 
-## 4.1 Story points
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-001 | En tant qu'utilisateur, je me connecte avec mon email et mon mot de passe afin d'accéder à mon espace. | MUST | 5 | 1 | EF-AUTH-001 |
+| US-002 | En tant qu'utilisateur multi-rôles, je choisis mon contexte d'usage afin de travailler avec les droits attendus. | MUST | 5 | 1 | EF-AUTH-002, 003 |
+| US-003 | En tant qu'invité, j'active mon compte depuis un lien afin de définir mon mot de passe. | MUST | 5 | 1 | EF-AUTH-004 |
+| US-004 | En tant qu'utilisateur, je réinitialise mon mot de passe oublié afin de retrouver l'accès sans assistance. | MUST | 5 | 2 | EF-AUTH-005 |
+| US-005 | En tant qu'utilisateur, j'enregistre une passkey afin de me connecter sans mot de passe. | MUST | 8 | 2 | EF-AUTH-006 |
+| US-006 | En tant qu'utilisateur, je me connecte par passkey afin d'aller plus vite et d'être protégé de l'hameçonnage. | MUST | 5 | 2 | EF-AUTH-007 |
+| US-007 | En tant qu'administrateur, j'active un second facteur TOTP afin de protéger mon compte privilégié. | MUST | 5 | 2 | EF-AUTH-008 |
+| US-008 | En tant qu'utilisateur, je conserve des codes de récupération afin de ne pas être bloqué si je perds mon appareil. | MUST | 3 | 2 | EF-AUTH-009 |
+| US-009 | En tant que responsable sécurité, j'exige un contrôle renforcé selon le risque afin de ne pas gêner l'usage courant. | SHOULD | 5 | 2 | EF-AUTH-010 |
+| US-010 | En tant que responsable sécurité, je protège les formulaires publics contre les robots. | MUST | 3 | 2 | EF-AUTH-011 |
+| US-011 | En tant que responsable sécurité, je limite les tentatives sur les routes sensibles. | MUST | 5 | 2 | EF-AUTH-012 |
+| US-012 | En tant qu'utilisateur, je consulte et révoque mes appareils de confiance. | SHOULD | 3 | 2 | EF-AUTH-013 |
+| US-013 | En tant qu'utilisateur, je me déconnecte et ma session est réellement révoquée. | MUST | 3 | 2 | EF-AUTH-014 |
+| US-014 | En tant que responsable sécurité, j'exige une réauthentification avant une action critique. | SHOULD | 3 | 2 | EF-AUTH-015 |
+| US-015 | En tant qu'auditeur, je retrouve chaque événement d'authentification dans la piste d'audit. | MUST | 3 | 1 | EF-AUD-001 |
 
-Les éléments sont estimés avec la suite suivante :
+## 3. E02 — Utilisateurs et invitations
 
-```text
-1, 2, 3, 5, 8, 13
-```
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-020 | En tant qu'administrateur, je crée un utilisateur en attente d'activation. | MUST | 3 | 1 | EF-USER-001 |
+| US-021 | En tant qu'administrateur, je suspends et réactive un compte. | MUST | 3 | 1 | EF-USER-002 |
+| US-022 | En tant qu'administrateur, j'archive et restaure un compte sans perdre l'historique. | MUST | 3 | 1 | EF-USER-003 |
+| US-023 | En tant qu'administrateur, j'attribue et retire un rôle avec des gardes qui m'empêchent de me verrouiller. | MUST | 5 | 1 | EF-USER-006 |
+| US-024 | En tant que responsable, j'émets une invitation depuis l'interface. | MUST | 5 | 3 | EF-USER-007 |
+| US-025 | En tant que responsable, je suis la délivrabilité d'une invitation et je corrige l'adresse. | SHOULD | 5 | 3 | EF-USER-008 |
+| US-026 | En tant que responsable, je réémets une invitation en révoquant l'ancien jeton. | MUST | 3 | 3 | EF-USER-007 |
+| US-027 | En tant qu'administrateur, j'exécute une opération de masse après prévisualisation. | SHOULD | 5 | 4 | EF-USER-004 |
+| US-028 | En tant qu'administrateur, je détecte et traite les doublons de comptes. | MUST | 5 | 4 | EF-USER-005 |
 
-Les points représentent une combinaison de :
+## 4. E03 — Référentiels et organisation
 
-- complexité ;
-- effort ;
-- incertitude ;
-- risques ;
-- volume de tests ;
-- dépendances.
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-030 | En tant qu'administrateur, je gère les années scolaires. | MUST | 3 | 1 | EF-ACA-005 |
+| US-031 | En tant qu'administrateur, je gère les formations et leurs responsables. | MUST | 5 | 1 | EF-ACA-001, 008 |
+| US-032 | En tant qu'administrateur, je gère les niveaux. | MUST | 2 | 1 | EF-ACA-002 |
+| US-033 | En tant que responsable, je gère les promotions de mon périmètre. | MUST | 3 | 1 | EF-ACA-003 |
+| US-034 | En tant que responsable, je gère les classes de mon périmètre. | MUST | 5 | 1 | EF-ACA-004 |
+| US-035 | En tant que responsable, je gère les matières. | MUST | 3 | 3 | EF-ACA-006 |
+| US-036 | En tant que responsable, je constitue un groupe temporaire pour une option ou une langue. | SHOULD | 5 | 3 | EF-ACA-007 |
+| US-037 | En tant qu'administrateur, je gère sites, bâtiments et salles. | MUST | 5 | 1 | EF-ORG-001 |
+| US-038 | En tant que super administrateur, je gère les plages réseau autorisées. | MUST | 3 | 1 | EF-ORG-002 |
+| US-039 | En tant que responsable, je vois les conflits et incohérences de salle. | MUST | 3 | 6 | EF-ORG-004 |
+| US-040 | En tant que responsable, je définis le rythme d'alternance d'une classe. | MUST | 5 | 4 | EF-ACA-009 |
+| US-041 | En tant que responsable, je pose une exception d'alternance individuelle ou collective. | MUST | 3 | 4 | EF-ACA-009 |
 
-## 4.2 Interprétation
+## 5. E04 — Population et imports
 
-| Points | Interprétation |
-|---:|---|
-| 1 | Très petite modification |
-| 2 | Petite fonctionnalité connue |
-| 3 | Fonctionnalité simple |
-| 5 | Fonctionnalité moyenne |
-| 8 | Fonctionnalité complexe |
-| 13 | Fonctionnalité trop importante ou incertaine à découper |
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-050 | En tant que responsable, je crée et consulte le profil d'un apprenant. | MUST | 3 | 3 | EF-ENR-001 |
+| US-051 | En tant que responsable, j'inscris un apprenant dans une classe. | MUST | 5 | 3 | EF-ENR-002 |
+| US-052 | En tant que responsable, je change un apprenant de classe en conservant son historique. | MUST | 5 | 3 | EF-ENR-003 |
+| US-053 | En tant que responsable, je simule un import CSV d'apprenants sans rien créer. | MUST | 8 | 3 | EF-IMP-001 |
+| US-054 | En tant que responsable, je confirme un import et tout est créé ou rien ne l'est. | MUST | 8 | 3 | EF-IMP-002 |
+| US-055 | En tant que responsable, j'importe un fichier Excel. | MUST | 5 | 4 | EF-IMP-003 |
+| US-056 | En tant que responsable, j'importe un classeur multifeuille et je confirme le rattachement des classes. | SHOULD | 5 | 4 | EF-IMP-004 |
+| US-057 | En tant que responsable, je corrige une ligne en anomalie sans recommencer l'import. | SHOULD | 5 | 4 | EF-IMP-006 |
+| US-058 | En tant que responsable, je crée un formateur externe et je l'invite. | MUST | 3 | 3 | EF-TEA-001 |
+| US-059 | En tant que responsable, j'affecte un formateur à une classe, une matière et une période. | MUST | 5 | 3 | EF-TEA-002 |
 
-Un élément estimé à 13 points doit normalement être découpé avant son
-intégration dans un sprint.
+## 6. E05 — Planning
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-070 | En tant que responsable, j'importe un planning CSV sans qu'il soit écrit sur disque. | MUST | 5 | 5 | EF-PLAN-001 |
+| US-071 | En tant que responsable, je prévisualise le planning sans créer de séance. | MUST | 8 | 5 | EF-PLAN-002 |
+| US-072 | En tant que responsable, je vois les conflits formateur, classe, salle et horaire. | MUST | 8 | 5 | EF-PLAN-009 |
+| US-073 | En tant que responsable, je corrige une ligne dans l'écran de revue. | MUST | 5 | 5 | EF-PLAN-003 |
+| US-074 | En tant que responsable, je publie le planning et les séances sont créées. | MUST | 8 | 5 | EF-PLAN-004, EF-SES-001 |
+| US-075 | En tant que responsable, je consulte l'historique des versions du planning. | MUST | 3 | 5 | EF-PLAN-005, 007 |
+| US-076 | En tant que responsable, je reviens à une version antérieure. | MUST | 5 | 6 | EF-PLAN-008 |
+| US-077 | En tant que responsable, je construis un planning dans un calendrier interactif. | MUST | 13 | 6 | EF-PLAN-006 |
+| US-078 | En tant que responsable, je duplique une semaine et j'applique un rythme. | SHOULD | 5 | 6 | EF-PLAN-006 |
+| US-079 | En tant que responsable, je suis averti d'un créneau tombant en période d'entreprise. | SHOULD | 3 | 6 | EF-PLAN-010 |
+| US-080 | En tant que responsable, j'importe un planning Excel. | SHOULD | 5 | 6 | EF-PLAN-011 |
+| US-081 | En tant que responsable, j'importe un planning PDF texte et je revois chaque ligne. | COULD | 8 | 12 | EF-PLAN-012 |
+| US-082 | En tant que responsable, l'assistant me propose la correspondance des colonnes avec un score. | SHOULD | 5 | 12 | EF-PLAN-013, EF-IMP-005 |
+
+## 7. E06 — Séances et remplacements
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-090 | En tant que formateur, je consulte mes séances et celles qui me sont déléguées. | MUST | 3 | 5 | EF-SES-001 |
+| US-091 | En tant que responsable, j'annule une séance avec motif et je notifie. | MUST | 5 | 6 | EF-SES-004 |
+| US-092 | En tant que responsable, je reporte une séance annulée à une nouvelle date. | SHOULD | 3 | 6 | EF-SES-007 |
+| US-093 | En tant que formateur, je demande l'annulation d'une séance sans pouvoir la décider. | SHOULD | 3 | 6 | EF-SES-008 |
+| US-094 | En tant que responsable, je crée une séance exceptionnelle avec motif. | MUST | 3 | 6 | EF-SES-006 |
+| US-095 | En tant que responsable, je désigne un remplaçant sur une séance ou une période. | MUST | 8 | 6 | EF-TEA-003, EF-SES-005 |
+| US-096 | En tant que formateur, je propose un remplaçant sans pouvoir valider moi-même. | MUST | 3 | 6 | EF-TEA-004 |
+| US-097 | En tant que remplaçant, je reçois les droits uniquement pendant ma période. | MUST | 3 | 6 | EF-TEA-003 |
+| US-098 | En tant que responsable, je rattache plusieurs classes ou un groupe à une séance. | SHOULD | 3 | 6 | EF-SES-009 |
+
+## 8. E07 — Émargement et assiduité
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-110 | En tant que formateur, j'ouvre ma séance. | MUST | 3 | 7 | EF-SES-002 |
+| US-111 | En tant que formateur, j'affiche un QR dynamique qui change périodiquement. | MUST | 8 | 7 | EF-ATT-001 |
+| US-112 | En tant que formateur, j'affiche un code court utilisable sans caméra. | MUST | 3 | 7 | EF-ATT-009 |
+| US-113 | En tant qu'apprenant, je scanne le QR et ma présence est enregistrée. | MUST | 8 | 7 | EF-ATT-002 |
+| US-114 | En tant qu'apprenant, je saisis le code court quand la caméra n'est pas utilisable. | MUST | 3 | 7 | EF-ATT-009 |
+| US-115 | En tant que formateur, je vois la liste des présents se mettre à jour en direct. | MUST | 5 | 7 | EF-ATT-015 |
+| US-116 | En tant que formateur, j'enregistre une présence manuelle avec motif. | MUST | 5 | 7 | EF-ATT-006 |
+| US-117 | En tant que formateur, je clôture la séance et les jetons sont purgés. | MUST | 3 | 7 | EF-SES-003 |
+| US-118 | En tant que responsable, je corrige une présence avec motif et l'historique est conservé. | MUST | 5 | 7 | EF-ATT-012 |
+| US-119 | En tant que responsable, j'autorise un apprenant à suivre une séance à distance. | MUST | 3 | 7 | EF-ENR-004 |
+| US-120 | En tant qu'établissement, je dispose de quatre points de contrôle nommés par journée. | MUST | 8 | 8 | EF-ATT-003 |
+| US-121 | En tant qu'administration, l'assiduité est calculée en demi-journées et en journées. | MUST | 8 | 8 | EF-ATT-004 |
+| US-122 | En tant qu'établissement, les retards suivent les paliers 15 et 30 minutes. | MUST | 5 | 8 | EF-ATT-005 |
+| US-123 | En tant qu'apprenant, j'émarge par le QR fixe de la salle avant le début du cours. | MUST | 8 | 8 | EF-ATT-010, EF-ORG-003 |
+| US-124 | En tant que responsable sécurité, le QR fixe n'est accepté que depuis le réseau autorisé. | MUST | 5 | 8 | EF-ATT-008 |
+| US-125 | En tant qu'apprenant, je confirme localement mon émargement par WebAuthn. | SHOULD | 5 | 8 | EF-ATT-011 |
+
+## 9. E08 — Justificatifs et réclamations
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-140 | En tant qu'apprenant, je dépose un justificatif pour une absence. | MUST | 5 | 9 | EF-JUS-001 |
+| US-141 | En tant qu'apprenant, je joins un fichier contrôlé et analysé. | MUST | 5 | 9 | EF-JUS-002 |
+| US-142 | En tant que responsable, j'examine et je décide avec motif. | MUST | 5 | 9 | EF-JUS-003 |
+| US-143 | En tant qu'administration, une acceptation transforme l'absence en absence excusée. | MUST | 3 | 9 | EF-JUS-004 |
+| US-144 | En tant qu'apprenant, j'ouvre une réclamation auprès du bon interlocuteur. | MUST | 5 | 9 | EF-CLAIM-001 |
+| US-145 | En tant qu'utilisateur, j'échange dans le fil de la réclamation. | MUST | 3 | 9 | EF-CLAIM-002 |
+| US-146 | En tant que formateur, je transfère une réclamation avec motif. | SHOULD | 3 | 9 | EF-CLAIM-003 |
+| US-147 | En tant qu'apprenant, je rouvre une réclamation clôturée. | SHOULD | 3 | 9 | EF-CLAIM-004 |
+| US-148 | En tant qu'apprenant, je signale un départ anticipé et il est tracé. | SHOULD | 5 | 9 | EF-ATT-013 |
+| US-149 | En tant qu'apprenant, je consulte le journal de transparence de mes présences. | SHOULD | 3 | 9 | EF-ATT-014 |
+
+## 10. E09 — Notifications et mobilité
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-160 | En tant qu'exploitant, tout effet de bord passe par une outbox et se rejoue. | MUST | 8 | 10 | EF-AUD-003, EF-OPS-005 |
+| US-161 | En tant qu'utilisateur, je consulte mon centre de notifications. | MUST | 5 | 10 | EF-NOTIF-001 |
+| US-162 | En tant qu'apprenant, je suis prévenu de la publication et des changements de planning. | MUST | 5 | 10 | EF-NOTIF-002, 003 |
+| US-163 | En tant qu'utilisateur, je reçois les notifications importantes par courriel. | MUST | 5 | 10 | EF-NOTIF-004 |
+| US-164 | En tant qu'apprenant, je reçois une notification push avant ma séance. | SHOULD | 5 | 10 | EF-NOTIF-005 |
+| US-165 | En tant qu'utilisateur, je règle mes préférences de notification. | SHOULD | 3 | 10 | EF-NOTIF-006 |
+| US-166 | En tant qu'apprenant, j'installe l'application sur mon téléphone. | MUST | 3 | 10 | EF-PWA-001 |
+| US-167 | En tant qu'apprenant, je consulte mon planning sans réseau. | SHOULD | 5 | 10 | EF-PWA-002 |
+| US-168 | En tant qu'apprenant, mon action hors ligne est rejouée à la reconnexion et signalée en attente. | SHOULD | 8 | 10 | EF-PWA-003 |
+
+## 11. E10 — Restitution et pilotage
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-180 | En tant que responsable, je dispose d'un tableau de bord de mon périmètre. | MUST | 8 | 11 | EF-REP-007 |
+| US-181 | En tant qu'utilisateur, chaque graphique dispose d'un tableau équivalent. | MUST | 3 | 11 | EF-REP-008 |
+| US-182 | En tant qu'administration, je produis un rapport de classe. | MUST | 5 | 11 | EF-REP-001 |
+| US-183 | En tant qu'administration, je produis un rapport individuel. | MUST | 5 | 11 | EF-REP-002 |
+| US-184 | En tant qu'administration, j'exporte en CSV. | MUST | 3 | 11 | EF-REP-003 |
+| US-185 | En tant qu'administration, j'exporte en Excel. | MUST | 3 | 11 | EF-REP-004 |
+| US-186 | En tant qu'administration, j'exporte en PDF avec l'identité visuelle. | MUST | 5 | 11 | EF-REP-005 |
+| US-187 | En tant qu'administration, je génère une attestation d'assiduité identifiable. | SHOULD | 5 | 11 | EF-REP-006 |
+| US-188 | En tant qu'utilisateur, je recherche globalement dans mon périmètre. | SHOULD | 5 | 11 | EF-USER-009 |
+| US-189 | En tant qu'auditeur, je consulte et j'exporte la piste d'audit. | SHOULD | 3 | 11 | EF-AUD-002 |
+
+## 12. E11 — Intelligence artificielle
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-200 | En tant que responsable, l'assistant me propose la correspondance des colonnes. | SHOULD | 8 | 12 | EF-AI-001, EF-IMP-005 |
+| US-201 | En tant que responsable, chaque proposition porte un score de confiance exploitable. | SHOULD | 3 | 12 | EF-AI-002 |
+| US-202 | En tant que responsable sécurité, les émargements suspects reçoivent un score d'anomalie. | SHOULD | 8 | 12 | EF-AI-003 |
+| US-203 | En tant que responsable, je suis alerté d'un risque de décrochage. | COULD | 5 | 12 | EF-AI-004 |
+| US-204 | En tant qu'utilisateur, aucune proposition de l'IA ne s'applique sans ma confirmation. | MUST | 3 | 12 | EF-AI-005 |
+
+## 13. E12 — Objets connectés
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-210 | En tant qu'exploitant, la borne s'authentifie et publie un signal de vie. | SHOULD | 5 | 12 | EF-IOT-002, 004 |
+| US-211 | En tant qu'apprenant, j'émarge depuis la borne de la salle. | SHOULD | 8 | 12 | EF-IOT-001, EF-ATT-016 |
+| US-212 | En tant qu'exploitant, un événement déjà traité est ignoré. | MUST | 3 | 12 | EF-IOT-003 |
+| US-213 | En tant qu'exploitant, la borne rejoue sa file locale après une coupure. | SHOULD | 5 | 12 | EF-IOT-005 |
+| US-214 | En tant que super administrateur, je révoque une borne compromise. | SHOULD | 3 | 12 | EF-IOT-002 |
+
+## 14. E13 — Intégrations
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-220 | En tant qu'utilisateur, je m'abonne à mon planning depuis mon agenda. | SHOULD | 5 | 11 | EF-INT-001 |
+| US-221 | En tant que responsable, une séance distancielle crée sa réunion Teams. | SHOULD | 8 | 11 | EF-INT-002 |
+| US-222 | En tant que formateur, mes séances apparaissent dans mon calendrier Microsoft. | COULD | 5 | 11 | EF-INT-003 |
+| US-223 | En tant qu'exploitant, les courriels partent par un fournisseur réel avec suivi. | MUST | 3 | 13 | EF-INT-004 |
+
+## 15. E14 — Exploitation et conformité
+
+| ID | Story | Prio | Pts | S | Exigences |
+|---|---|---|---:|---:|---|
+| US-230 | En tant qu'exploitant, je supervise santé, métriques et journaux structurés. | MUST | 5 | 13 | EF-OPS-001 |
+| US-231 | En tant qu'exploitant, je sauvegarde et je restaure, avec preuve. | MUST | 8 | 13 | EF-OPS-002 |
+| US-232 | En tant qu'exploitant, chaque fusion déclenche les contrôles et le déploiement. | MUST | 5 | 13 | EF-OPS-003 |
+| US-233 | En tant qu'intégrateur, je consomme une documentation OpenAPI versionnée. | MUST | 3 | 13 | EF-OPS-004 |
+| US-234 | En tant que personne concernée, j'obtiens l'export de mes données. | SHOULD | 5 | 13 | EF-RGPD-001 |
+| US-235 | En tant que personne concernée, je demande rectification ou limitation. | SHOULD | 3 | 13 | EF-RGPD-002 |
+| US-236 | En tant que responsable de traitement, les données échues sont purgées ou anonymisées. | MUST | 5 | 13 | EF-RGPD-003 |
+| US-237 | En tant qu'utilisateur, l'application est utilisable au clavier et par un lecteur d'écran. | MUST | 5 | 13 | WCAG AA |
 
 ---
 
-# 5. Priorisation MoSCoW
+## 16. Dette et travaux techniques
 
-| Priorité | Définition |
-|---|---|
-| `MUST` | Indispensable au parcours principal |
-| `SHOULD` | Important, mais le système peut fonctionner temporairement sans |
-| `COULD` | Apporte une valeur supplémentaire |
-| `WON'T` | Non retenu dans la version actuelle |
-| `FUTURE` | Prévu dans une évolution ultérieure |
+Ces éléments ne sont pas des stories utilisateur : ils sont rattachés au
+sprint qui les rend nécessaires et conditionnent sa clôture.
 
----
-
-# 6. Definition of Ready
-
-Une user story est `Prête` lorsque :
-
-- l’acteur est identifié ;
-- le besoin est compréhensible ;
-- la valeur métier est précisée ;
-- les critères d’acceptation existent ;
-- les dépendances principales sont connues ;
-- les données nécessaires sont identifiées ;
-- les questions bloquantes sont résolues ;
-- l’estimation est réalisée ;
-- la story peut raisonnablement être terminée dans un sprint.
-
----
-
-# 7. Definition of Done
-
-Une user story est `Terminée` lorsque :
-
-- le code compile ;
-- les migrations nécessaires existent ;
-- les tests prioritaires passent ;
-- les autorisations sont contrôlées ;
-- les erreurs sont gérées ;
-- l’API est documentée ;
-- la documentation reflète l’état réel ;
-- aucune donnée réelle n’est utilisée ;
-- aucun secret n’est présent dans Git ;
-- les preuves sont disponibles ;
-- le Product Owner peut vérifier le résultat.
-
----
-
-# 8. Epics
-
-| ID | Epic | Objectif |
+| Réf | Travail | Sprint |
 |---|---|---|
-| EP-01 | Pilotage et documentation | Cadrer, planifier et tracer le projet |
-| EP-02 | UX et accessibilité | Concevoir des parcours simples et accessibles |
-| EP-03 | Architecture et infrastructure | Construire une base technique portable |
-| EP-04 | Identité et sécurité | Gérer les comptes, rôles et authentifications |
-| EP-05 | Organisation pédagogique | Gérer les formations, promotions et classes |
-| EP-06 | Apprenants et inscriptions | Importer et historiser les apprenants |
-| EP-07 | Alternance | Gérer les rythmes école-entreprise |
-| EP-08 | Planning | Importer, construire, versionner et publier |
-| EP-09 | Séances et formateurs | Gérer les séances, salles et remplacements |
-| EP-10 | Émargement et assiduité | Enregistrer et calculer les présences |
-| EP-11 | Justificatifs et réclamations | Gérer les exceptions et échanges |
-| EP-12 | Notifications | Informer les acteurs |
-| EP-13 | Tableaux de bord et rapports | Produire les indicateurs d’assiduité |
-| EP-14 | Intelligence artificielle | Assister les imports et détecter les anomalies |
-| EP-15 | IoT | Intégrer une Raspberry Pi sécurisée |
-| EP-16 | Cybersécurité | Renforcer, superviser et auditer |
-| EP-17 | Qualité et tests | Valider le fonctionnement et les performances |
-| EP-18 | Déploiement et exploitation | Préparer staging, production et continuité |
-| EP-19 | Intégrations externes | Préparer BERRA et Microsoft 365 |
-| EP-20 | Soutenance | Produire le rapport, les preuves et la présentation |
+| T-01 | Outbox transactionnelle unique pour courriel, notification, audit, MQTT | 10 |
+| T-02 | Remplacement des listeners d'audit synchrones par l'outbox | 10 |
+| T-03 | Chargement par lot des séances du tableau de bord (coût SQL borné) | 11 |
+| T-04 | Antivirus sur les pièces jointes et balayage des fichiers orphelins | 9 |
+| T-05 | Politique de rétention des pièces jointes supprimées | 13 |
+| T-06 | Adaptateur de stockage objet pour les pièces jointes | 13 |
+| T-07 | Campagne de charge sur l'émargement | 13 |
+| T-08 | Publication de `openapi.json` versionné | 13 |
+| T-09 | Migration du hachage vers Argon2id | 13 |
+| T-10 | Externalisation complète des textes de l'interface | 13 |
 
 ---
 
-# 9. Backlog détaillé
+## 17. Règle de tenue
 
-## EP-01 — Pilotage et documentation
+Ce backlog décrit **ce qui doit être construit**. Il ne décrit jamais ce
+qui est construit : cette information est dans `docs/CURRENT-STATE.md`.
 
-### US-001 — Formaliser le cadrage
-
-**En tant que** porteur du projet,  
-**je souhaite** formaliser le contexte, les objectifs et le périmètre,  
-**afin de** disposer d’une référence commune.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S01 |
-| Bloc RNCP | BC01 |
-| Livrable | `docs/01-cadrage.md` |
-
-#### Critères d’acceptation
-
-- le contexte actuel est décrit ;
-- les acteurs sont identifiés ;
-- les objectifs sont définis ;
-- le périmètre et les exclusions sont distingués ;
-- les risques principaux sont recensés.
-
----
-
-### US-002 — Rédiger le cahier des charges
-
-**En tant que** Product Owner,  
-**je souhaite** disposer d’exigences détaillées,  
-**afin de** guider la conception, le développement et la recette.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S02-S03 |
-| Bloc RNCP | BC01/BC02/BC03/BC04 |
-| Livrable | `docs/02-cahier-des-charges.md` |
-
-#### Critères d’acceptation
-
-- les exigences fonctionnelles sont identifiées ;
-- les exigences non fonctionnelles sont décrites ;
-- les règles métier sont numérotées ;
-- les critères d’acceptation principaux existent ;
-- les priorités sont précisées.
-
----
-
-### US-003 — Définir l’architecture
-
-**En tant que** architecte,  
-**je souhaite** définir les composants et leurs interactions,  
-**afin de** construire une solution cohérente et évolutive.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S05 |
-| Bloc RNCP | BC02/BC03/BC04 |
-| Livrable | `docs/03-architecture.md` |
-
----
-
-### US-004 — Définir le modèle de données
-
-**En tant que** développeur,  
-**je souhaite** disposer d’un modèle relationnel historisé,  
-**afin de** préserver l’intégrité des données.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S05 |
-| Bloc RNCP | BC02/BC03 |
-| Livrable | `docs/04-modele-donnees.md` |
-
----
-
-### US-005 — Maintenir la matrice RNCP
-
-**En tant que** candidat,  
-**je souhaite** relier les réalisations aux blocs RNCP,  
-**afin de** démontrer la couverture des compétences.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S01-S13 |
-| Bloc RNCP | BC01/BC02/BC03/BC04 |
-
----
-
-### US-006 — Maintenir le journal d’utilisation de l’IA
-
-**En tant que** candidat,  
-**je souhaite** documenter l’usage des assistants IA,  
-**afin de** démontrer une utilisation contrôlée et vérifiée.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 3 |
-| Sprint cible | S01-S13 |
-| Bloc RNCP | BC01/BC02/BC03/BC04 |
-
----
-
-## EP-02 — UX et accessibilité
-
-### US-010 — Concevoir les personas
-
-**En tant que** concepteur,  
-**je souhaite** formaliser les profils des utilisateurs,  
-**afin de** concevoir des interfaces adaptées.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 3 |
-| Sprint cible | S04 |
-| Bloc RNCP | BC01/BC02 |
-
-Personas :
-
-- responsable pédagogique ;
-- formateur ;
-- apprenant ;
-- administration ;
-- administrateur technique.
-
----
-
-### US-011 — Produire les parcours utilisateurs
-
-**En tant que** concepteur,  
-**je souhaite** représenter les parcours principaux,  
-**afin de** réduire les ambiguïtés avant le développement.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S04 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-012 — Concevoir les maquettes
-
-**En tant que** utilisateur,  
-**je souhaite** disposer d’une interface simple et cohérente,  
-**afin de** réaliser rapidement mes tâches.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S04 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-013 — Garantir les alternatives accessibles
-
-**En tant que** personne ne pouvant pas utiliser la caméra ou WebAuthn,  
-**je souhaite** disposer d’une solution alternative,  
-**afin de** pouvoir utiliser les fonctions essentielles.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S04/S11 |
-| Bloc RNCP | BC01/BC02 |
-
----
-
-## EP-03 — Architecture et infrastructure
-
-### US-020 — Initialiser le dépôt
-
-**En tant que** développeur,  
-**je souhaite** disposer d’une arborescence structurée,  
-**afin de** centraliser le code et les documents.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 2 |
-| Sprint cible | S01 |
-| Bloc RNCP | BC01/BC02 |
-
----
-
-### US-021 — Conteneuriser l’infrastructure locale
-
-**En tant que** développeur,  
-**je souhaite** lancer MySQL, Redis, Mailpit et Mosquitto avec Docker,  
-**afin de** disposer d’un environnement reproductible.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S06 |
-| Bloc RNCP | BC03/BC04 |
-
----
-
-### US-022 — Initialiser Spring Boot
-
-**En tant que** développeur,  
-**je souhaite** disposer d’un back-end modulaire,  
-**afin de** implémenter les règles métier.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S06 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-023 — Initialiser Angular
-
-**En tant que** développeur,  
-**je souhaite** disposer d’une interface Angular Material,  
-**afin de** construire les écrans des utilisateurs.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S06 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-024 — Gérer les profils d’environnement
-
-**En tant que** exploitant,  
-**je souhaite** séparer local, test, staging et production,  
-**afin de** sécuriser et fiabiliser les déploiements.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S06/S13 |
-| Bloc RNCP | BC03 |
-
----
-
-### US-025 — Documenter l’API
-
-**En tant que** développeur,  
-**je souhaite** disposer d’une documentation OpenAPI,  
-**afin de** tester et comprendre les routes.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 3 |
-| Sprint cible | S06-S13 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-04 — Identité et sécurité
-
-### US-030 — Authentifier un utilisateur
-
-**En tant que** membre de l’ESIC,  
-**je souhaite** me connecter avec mon email et mon mot de passe,  
-**afin de** consulter mon espace.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S07 |
-| Bloc RNCP | BC02/BC03 |
-
-#### Critères d’acceptation
-
-- un compte actif peut se connecter ;
-- un compte suspendu est refusé ;
-- les mots de passe sont hachés ;
-- les erreurs restent neutres ;
-- la connexion est auditée.
-
----
-
-### US-031 — Gérer plusieurs rôles
-
-**En tant que** responsable également formateur,  
-**je souhaite** changer de contexte,  
-**afin de** réaliser mes différentes missions.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S07 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-032 — Appliquer le périmètre pédagogique
-
-**En tant que** responsable pédagogique,  
-**je souhaite** consulter uniquement mes formations,  
-**afin de** protéger les données des autres périmètres.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S07 |
-| Bloc RNCP | BC03 |
-
----
-
-### US-033 — Activer un compte par invitation
-
-**En tant que** nouvel utilisateur,  
-**je souhaite** recevoir un lien d’activation,  
-**afin de** créer mon accès à la plateforme.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S07 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-034 — Réinitialiser un mot de passe
-
-**En tant que** utilisateur,  
-**je souhaite** récupérer mon compte de manière sécurisée,  
-**afin de** retrouver l’accès à la plateforme.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S07 |
-| Bloc RNCP | BC03 |
-
----
-
-### US-035 — Utiliser WebAuthn
-
-**En tant que** utilisateur sur un terminal reconnu,  
-**je souhaite** utiliser une passkey ou une confirmation locale,  
-**afin de** simplifier et renforcer ma connexion.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 13 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02/BC03 |
-| Recommandation | Découper avant planification |
-
----
-
-### US-036 — Mettre en place le MFA adaptatif
-
-**En tant que** responsable de la sécurité,  
-**je souhaite** renforcer les connexions à risque,  
-**afin de** limiter les compromissions sans alourdir chaque connexion.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S11/S12 |
-| Bloc RNCP | BC03 |
-
----
-
-## EP-05 — Organisation pédagogique
-
-### US-040 — Gérer les formations
-
-**En tant que** responsable,  
-**je souhaite** créer et archiver les formations,  
-**afin de** structurer l’offre pédagogique.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 3 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-041 — Gérer les niveaux et promotions
-
-**En tant que** responsable,  
-**je souhaite** rattacher les niveaux à des promotions,  
-**afin de** représenter les parcours annuels.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-042 — Gérer les classes
-
-**En tant que** responsable pédagogique,  
-**je souhaite** créer une classe dans mon périmètre,  
-**afin de** y inscrire les apprenants.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-043 — Déléguer temporairement une formation
-
-**En tant que** responsable principal,  
-**je souhaite** déléguer temporairement une formation,  
-**afin de** garantir la continuité de gestion.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC01/BC02 |
-
----
-
-### US-044 — Gérer les matières
-
-**En tant que** responsable,  
-**je souhaite** gérer un référentiel de matières,  
-**afin de** les associer aux plannings et séances.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 3 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-06 — Apprenants et inscriptions
-
-### US-050 — Simuler l’import CSV des apprenants
-
-**En tant que** responsable pédagogique,  
-**je souhaite** analyser un fichier CSV avant de l’appliquer,  
-**afin de** détecter les erreurs et les doublons.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S09 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-051 — Confirmer l’import des apprenants
-
-**En tant que** responsable pédagogique,  
-**je souhaite** confirmer une simulation valide,  
-**afin de** créer ou mettre à jour les comptes et inscriptions.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S09 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-052 — Importer un fichier Excel multifeuille
-
-**En tant que** responsable pédagogique,  
-**je souhaite** importer plusieurs classes depuis un classeur,  
-**afin de** réduire le nombre d’opérations manuelles.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S09 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-053 — Conserver l’historique de classe
-
-**En tant que** responsable,  
-**je souhaite** déplacer un apprenant sans perdre son historique,  
-**afin de** suivre son évolution.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08/S09 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-054 — Réaliser des opérations de masse
-
-**En tant que** administration scolaire,  
-**je souhaite** suspendre ou archiver plusieurs comptes,  
-**afin de** traiter les départs efficacement.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S09 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-055 — Gérer un apprenant provisoire
-
-**En tant que** formateur,  
-**je souhaite** enregistrer provisoirement un nouvel apprenant,  
-**afin de** ne pas bloquer sa première séance.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-07 — Alternance
-
-### US-060 — Gérer le rythme trois jours/deux jours
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02 |
-
-### US-061 — Gérer une semaine sur quatre
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02 |
-
-### US-062 — Gérer deux semaines sur quatre
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08 |
-| Bloc RNCP | BC02 |
-
-### US-063 — Gérer les exceptions
-
-**En tant que** responsable,  
-**je souhaite** déclarer une présence exceptionnelle à l’école,  
-**afin de** adapter le calendrier sans produire une fausse absence.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08/S10 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-08 — Planning
-
-### US-070 — Simuler l’import CSV du planning
-
-**En tant que** responsable pédagogique,  
-**je souhaite** prévisualiser un planning,  
-**afin de** corriger les erreurs avant publication.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S09 |
-| Bloc RNCP | BC02 |
-
----
-
-### US-071 — Publier le planning
-
-**En tant que** responsable pédagogique,  
-**je souhaite** publier une version validée,  
-**afin de** créer les séances et informer les acteurs.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S09/S10 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-072 — Versionner le planning
-
-**En tant que** responsable,  
-**je souhaite** conserver les versions précédentes,  
-**afin de** comprendre les modifications et revenir en arrière.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02/BC03 |
-
----
-
-### US-073 — Créer le planning dans l’interface
-
-**En tant que** responsable,  
-**je souhaite** ajouter et modifier les créneaux dans un calendrier,  
-**afin de** ne pas dépendre uniquement des imports.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 13 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-| Recommandation | Découper |
-
----
-
-### US-074 — Détecter les conflits
-
-**En tant que** responsable,  
-**je souhaite** détecter les conflits de salle, classe et formateur,  
-**afin de** publier un planning cohérent.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-09 — Séances et formateurs
-
-### US-080 — Créer les séances depuis le planning
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-
-### US-081 — Consulter les séances du formateur
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-
-### US-082 — Réaffecter une séance
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-
-### US-083 — Demander et valider une annulation
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-
-### US-084 — Gérer les salles
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S08/S10 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-085 — Gérer le distanciel individuel
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S10 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-10 — Émargement et assiduité
-
-> **Avancement (tranche V10, branche `feature/attendance-management-and-reporting`,
-> non fusionnée).** Livré et testé : plusieurs points de contrôle par
-> séance et jeton d'émargement par point de contrôle (US-090/US-091
-> étendues) ; calcul des retards ; présence manuelle et correction avec
-> historique append-only et motif obligatoire ; justificatif **métier
-> sans fichier** (dépôt / modification / examen — `ABSENT →
-> EXCUSED_ABSENCE` à l'acceptation) ; calcul de demi-journées (contexte
-> d'alternance `COMPANY` exclu, `UNKNOWN` signalé) ; rapports séance /
-> classe / apprenant + synthèse et **export CSV** (neutralisation
-> d'injection de formule) ; écrans Angular `/sessions` enrichi,
-> `/my-attendance`, `/attendance-management`. Non livré ici : QR fixe de
-> salle (US-092), contrôle réseau, WebAuthn, scan caméra, mise en page
-> officielle des rapports, pièce jointe de justificatif.
-
-### US-090 — Ouvrir et clôturer une séance
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02 |
-
-### US-091 — Générer le QR dynamique
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-092 — Gérer le QR fixe de salle
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02/BC03/BC04 |
-
-### US-093 — Valider une présence
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-094 — Gérer les quatre points de contrôle
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02 |
-
-### US-095 — Calculer les demi-journées
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02 |
-
-### US-096 — Gérer les retards
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02 |
-
-### US-097 — Enregistrer une présence manuelle
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-098 — Actualiser les présences avec SSE
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-11 — Justificatifs et réclamations
-
-### US-100 — Déposer un justificatif
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-101 — Traiter un justificatif
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-102 — Créer une réclamation
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-103 — Échanger dans une réclamation
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-104 — Transférer ou rouvrir une réclamation
-
-| Champ | Valeur |
-|---|---|
-| Priorité | COULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-12 — Notifications
-
-### US-110 — Créer un centre de notifications
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-111 — Notifier les changements de planning
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S10/S12 |
-| Bloc RNCP | BC02 |
-
-### US-112 — Envoyer les invitations avec Mailpit
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S07/S12 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-113 — Mettre en place les notifications push
-
-| Champ | Valeur |
-|---|---|
-| Priorité | COULD |
-| Estimation | 8 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-13 — Tableaux de bord et rapports
-
-### US-120 — Afficher le tableau de bord du responsable
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-121 — Produire le rapport journalier d’une classe
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-122 — Produire le rapport mensuel
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-123 — Produire le rapport individuel
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-124 — Exporter en CSV
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 3 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-125 — Exporter en Excel
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-126 — Générer un PDF ESIC
-
-| Champ | Valeur |
-|---|---|
-| Priorité | COULD |
-| Estimation | 5 |
-| Sprint cible | S12/S13 |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-14 — Intelligence artificielle
-
-### US-130 — Proposer le mapping des colonnes
-
-**En tant que** responsable,  
-**je souhaite** recevoir une proposition de correspondance,  
-**afin de** faciliter l’import d’un fichier hétérogène.
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-131 — Afficher un score de confiance
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02 |
-
-### US-132 — Valider humainement une suggestion
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST pour l’usage IA |
-| Estimation | 3 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-133 — Détecter une anomalie de présence
-
-| Champ | Valeur |
-|---|---|
-| Priorité | COULD |
-| Estimation | 8 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC03 |
-
----
-
-## EP-15 — IoT
-
-### US-140 — Enregistrer une Raspberry Pi
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC04 |
-
-### US-141 — Publier un heartbeat MQTT
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 3 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC04 |
-
-### US-142 — Transmettre un événement d’émargement
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC04 |
-
-### US-143 — Détecter le rejeu d’un événement
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST pour la démonstration IoT sécurisée |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC03/BC04 |
-
-### US-144 — Mettre en file un événement hors ligne
-
-| Champ | Valeur |
-|---|---|
-| Priorité | COULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC04 |
-
----
-
-## EP-16 — Cybersécurité
-
-### US-150 — Auditer les actions critiques
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S07-S13 |
-| Bloc RNCP | BC03 |
-
-### US-151 — Limiter les tentatives avec Redis
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S11/S12 |
-| Bloc RNCP | BC03 |
-
-### US-152 — Protéger les fichiers
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC03 |
-
-### US-153 — Intégrer Turnstile
-
-| Champ | Valeur |
-|---|---|
-| Priorité | COULD |
-| Estimation | 5 |
-| Sprint cible | S12 |
-| Bloc RNCP | BC03 |
-
-### US-154 — Réaliser une analyse de risques
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S03/S06/S13 |
-| Bloc RNCP | BC01/BC03 |
-
-### US-155 — Documenter la réponse à incident
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S13 |
-| Bloc RNCP | BC03 |
-
----
-
-## EP-17 — Qualité et tests
-
-### US-160 — Tester le modèle de données
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S06-S13 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-161 — Tester les autorisations
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S07-S13 |
-| Bloc RNCP | BC03 |
-
-### US-162 — Tester les imports
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S09 |
-| Bloc RNCP | BC02 |
-
-### US-163 — Tester l’émargement concurrent
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S11 |
-| Bloc RNCP | BC02/BC03 |
-
-### US-164 — Mesurer les performances
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12/S13 |
-| Bloc RNCP | BC03 |
-
-### US-165 — Réaliser la recette
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S13 |
-| Bloc RNCP | BC01/BC02/BC03/BC04 |
-
----
-
-## EP-18 — Déploiement et exploitation
-
-### US-170 — Déployer localement avec Docker Compose
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S06/S13 |
-| Bloc RNCP | BC03 |
-
-### US-171 — Créer un environnement de staging
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 8 |
-| Sprint cible | S13 |
-| Bloc RNCP | BC03 |
-
-### US-172 — Sauvegarder et restaurer MySQL
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S13 |
-| Bloc RNCP | BC03 |
-
-### US-173 — Superviser les composants
-
-| Champ | Valeur |
-|---|---|
-| Priorité | SHOULD |
-| Estimation | 5 |
-| Sprint cible | S12/S13 |
-| Bloc RNCP | BC03 |
-
-### US-174 — Documenter l’architecture AWS cible
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S05/S13 |
-| Bloc RNCP | BC03/BC04 |
-
----
-
-## EP-19 — Intégrations externes
-
-### US-180 — Préparer le mapping BERRA
-
-| Champ | Valeur |
-|---|---|
-| Priorité | FUTURE |
-| Estimation | 8 |
-| Sprint cible | Après le MVP |
-| Bloc RNCP | BC02/BC03 |
-
-### US-181 — Préparer Microsoft Graph
-
-| Champ | Valeur |
-|---|---|
-| Priorité | FUTURE |
-| Estimation | 8 |
-| Sprint cible | Après le MVP |
-| Bloc RNCP | BC02 |
-
-### US-182 — Synchroniser les réunions Teams
-
-| Champ | Valeur |
-|---|---|
-| Priorité | FUTURE |
-| Estimation | 13 |
-| Sprint cible | Après le MVP |
-| Bloc RNCP | BC02 |
-
----
-
-## EP-20 — Soutenance
-
-### US-190 — Rédiger le rapport
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 13 |
-| Sprint cible | S01-S13 |
-| Bloc RNCP | Tous |
-| Recommandation | Remplissage progressif |
-
-### US-191 — Construire la présentation
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S04-S13 |
-| Bloc RNCP | Tous |
-
-### US-192 — Préparer la démonstration
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 8 |
-| Sprint cible | S13 |
-| Bloc RNCP | Tous |
-
-### US-193 — Enregistrer une vidéo de secours
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 3 |
-| Sprint cible | S13 |
-| Bloc RNCP | Tous |
-
-### US-194 — Préparer les questions du jury
-
-| Champ | Valeur |
-|---|---|
-| Priorité | MUST |
-| Estimation | 5 |
-| Sprint cible | S13 |
-| Bloc RNCP | Tous |
-
----
-
-# 9bis. Grand lot produit G1 — montée en gamme fonctionnelle (31 août 2026)
-
-> Items du **grand lot produit G1**. Ils font évoluer le prototype vers
-> une application métier riche. Traçabilité complète :
-> `docs/reports/G1_REQUIREMENTS_TRACEABILITY.md` ; décisions :
-> `docs/reports/G1_ARCHITECTURE_DECISIONS.md` ; plan :
-> `docs/reports/G1_IMPLEMENTATION_PLAN.md` ; avancement :
-> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`.
->
-> Statut initial (avant travaux) ci-dessous. Il est mis à jour **bloc par
-> bloc**, uniquement sur preuve (code présent + test exécuté + résultat
-> consigné).
->
-> **Avancement (1er septembre 2026).** **G1-A**, **G1-B**, **G1-C**
-> (C.1–C.3), **G1-D** (notifications persistantes, audience formateur),
-> **G1-E** (pièces jointes des justificatifs), **G1-F** (tableaux de bord
-> par rôle) et **G1-G** (recette API) sont livrés, avec les deux passes
-> correctives probatoires du 1er septembre 2026. Suites vertes : back
-> `./mvnw clean test` → **811 tests, 0 échec, 0 erreur, 0 ignoré**
-> (défaut, `TZ=UTC`, `TZ=Europe/Paris`) ; front `npm test` → **71
-> fichiers / 600 tests / 0 échec** ; `lint` / `build` / `audit` verts ;
-> `ModularityTests` vert (**14 modules**) ; Flyway **V1 → V16** validé sur
-> base fraîche à la passe précédente (aucune migration modifiée). HEAD
-> avant cette finalisation : `f4b128216d187519600633f6be25ae8a77d30ba1`.
-> Plusieurs blocs restent **`PARTIAL`** au sens produit (voir les statuts
-> finaux ci-dessous) : G1-E durcissement opérationnel, G1-F global (cartes
-> manager / administration), démonstration navigateur `NOT_IMPLEMENTED`,
-> démonstration manuelle `NOT_PERFORMED`. **Groupe 1 global :
-> `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** Détail par
-> checkpoint et commande :
-> `docs/reports/G1_IMPLEMENTATION_PROGRESS.md` ; rapport final :
-> `docs/reports/G1_FINAL_REPORT.md`.
-
-## G1-A — Interfaces Angular des API administratives existantes
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | EF-ROOM-001, EF-ACA-001..005, EF-USER-001..003, EF-AUTH-004 (CDC §44) |
-| Épics concernés | EP-03, EP-05, EP-06 |
-| Priorité | MUST |
-| Valeur métier | rendre utilisables les fonctions back-end déjà livrées mais absentes de l'IHM (organisation, référentiels académiques en écriture, affectations pédagogiques, profils / inscriptions / transferts, émission d'invitation) |
-| Risques | duplication de CRUD, dérive du périmètre de rôle par rapport au `@PreAuthorize` serveur, régression de navigation |
-| Critères d'acceptation | chaque écran reprend à l'identique les rôles du contrôleur ; états `400/401/403/404/409/5xx` gérés ; axe-core sur ≥ 1 formulaire ; aucune régression des 475 tests front |
-| Définition de fini | services + composants + routes + gardes testés ; `npm test` / `lint` / `build` / `audit` verts ; doc de traçabilité mise à jour |
-| Statut initial | `PARTIAL` (API livrées, écrans absents ou en lecture seule) |
-| **Statut (01/09/2026)** | **`IMPLEMENTED_AND_TESTED` pour `EF-ROOM-001`** (écrans `organization` livrés, +48 tests front) ; `EF-ACA-001..005` / `EF-USER-001` / `EF-AUTH-004` = **dette G1-A** (API prêtes, audit rôles figé au plan §3.1, aucune UI d'écriture) |
-| Preuves attendues | `frontend/src/app/features/organization/**`, formulaires `academic`, `*.spec.ts`, capture du parcours |
-
-## G1-B — Module `planning` (import CSV → simulation → publication versionnée → séances)
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | EF-PLAN-001, EF-PLAN-002, EF-PLAN-003, EF-PLAN-004, EF-PLAN-005, EF-PLAN-007, EF-SES-001 ; RG-016, RG-030..RG-035 ; AC-007, AC-008 (CDC §43–§45) ; US-070, US-071, US-072, US-074, US-080 |
-| Épics concernés | EP-08, EP-09 |
-| Priorité | MUST |
-| Valeur métier | livrer le chaînon principal du parcours prioritaire de `CLAUDE.md`, aujourd'hui `HORS_PÉRIMÈTRE_ASSUMÉ` (addendum F2) |
-| Risques | publication partielle, duplication de séances, conflit concurrent, migration défectueuse, couplage `planning` ↔ `coursesession` (cf. `docs/06-risques.md` R-G1-01..R-G1-06) |
-| Critères d'acceptation | AC-007 (séances uniquement après publication), AC-008 (modification ⇒ nouvelle version) ; simulation sans écriture métier ; publication transactionnelle tout-ou-rien, idempotente, `409` sur conflit métier, jamais `500` ; `ModularityTests` vert |
-| Définition de fini | migrations `V12` (tables planning) + `V13` (lien `course_session ↔ planning_entry`, discriminant d'origine, `exception_reason` nullable) ; module + port `coursesession.PlanningSessionWriter` (UUID publics, aucune clé SQL) ; identité de créneau = `slot_key` (DEC-G1-002, repli `REMOVED`+`ADDED`) ; publication atomique + `FAILED` en `REQUIRES_NEW` séparé (DEC-G1-003) ; endpoints terminés ; écrans `/planning/**` + `/my-planning` ; suite back (parseur, simulation, conflits, alternance, publication, rollback, idempotence, concurrence, versionnement, sécurité, audit) + front + axe-core ; docs |
-| Statut initial | `HORS_PÉRIMÈTRE_ASSUMÉ` → cible `IMPLEMENTED_AND_TESTED` |
-| **Statut (01/09/2026)** | **`IMPLEMENTED_AND_TESTED`** — module `com.esic.connect.planning`, `V12`+`V13`, simulation (T1), publication atomique + versionnement, port `PlanningSessionWriter`, écrans `/planning/**` ; back +20 tests (693→713), front +25 (523→548). `EF-PLAN-003` = `PARTIAL` (annulation + réimport, `DEC-G1-003`) ; `EF-PLAN-006` reste `HORS_PÉRIMÈTRE_ASSUMÉ` ; `DEC-G1-006` (alternance) + conflit vs séances déjà publiées = post-G1 |
-| Preuves attendues | `com.esic.connect.planning`, `V12`+`V13`, tests nommés, `docs/demo-data/planning-demo.csv` |
-
-## G1-C — Cycle de vie avancé des séances
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | EF-SES-004, EF-SES-005 ; CAD §24 RG-12 (« remplacement autorisé et audité »), CDC §43 RG-015, RG-017 ; CDC §15.1 (modification d'une séance exceptionnelle) — cf. note « deux numérotations RG » dans `G1_REQUIREMENTS_TRACEABILITY.md` §4 |
-| Épics concernés | EP-09 |
-| Priorité | SHOULD |
-| Valeur métier | modifier / annuler une séance exceptionnelle `PLANNED`, désigner un remplaçant, tracer l'historique |
-| Risques | modification d'une séance `OPEN`/`CLOSED`, absence dérivée d'une séance annulée, conflit concurrent |
-| Critères d'acceptation | `OPEN`/`CLOSED` non modifiables ; `CANCELLED` non ouvrable, sans jeton, sans absence dérivée ; motif obligatoire ; audité ; `409` métier ; séance issue d'un planning non modifiable structurellement (nouvelle version requise) |
-| Définition de fini | `V14` (`teacher_substitution` ; `session_cancellation_request` si workflow retenu) ; endpoints `PATCH`/`cancel`/`substitute`/`history` ; `PATCH` limité aux séances d'origine manuelle (`planning_entry_public_id IS NULL`) `PLANNED` ; suite back (transitions, concurrence, sécurité, audit, planning vs manuel) + front |
-| Statut initial | `NOT_IMPLEMENTED` |
-| Preuves attendues | `CourseSessionService.update/cancel`, `SubstitutionService`, tests |
-| **Statut (01/09/2026)** | **`IMPLEMENTED_AND_TESTED`** (`IMPLEMENTED_FULL_SUITE_GREEN` employé pendant le lot ne qualifie que la **couleur de la suite**, pas la complétude produit) — **G1-C.1** annulation (`V14`, `POST /sessions/{id}/cancel`), **G1-C.2** remplacements (`teacher_substitution`, `GET/POST …/substitutions`, `…/{id}/end`, `AccessGuard` étendu), **G1-C.3** audit correctif : séance `CANCELLED` **consultable** (`GET` historique, gardes `isHistoricallyReadable` vs `isOperational`), remplaçant `ACTIVE` **visible en liste** + `MANAGE`, période de remplacement devant **chevaucher la séance** (± 60 min, `422 SESSION_SUBSTITUTION_OUTSIDE_SESSION`), audit `coursesession` + purge Redis **`AFTER_COMMIT`** (rollback ⇒ 0 audit, testé). `EF-SES-004`, `EF-SES-005`, `CAD §24 RG-12`, `CDC §43 RG-015` → `IMPLEMENTED_AND_TESTED`. `PATCH /sessions/{id}` d'une séance manuelle `PLANNED` : **non livré** (non requis). Back +6 tests G1-C.3 (729→735, 3 fuseaux) ; front +2 (557→559). Détail : `G1_IMPLEMENTATION_PROGRESS.md` §§ G1-C.1/C.2/« Audit G1-C.3 » |
-
-## G1-D — Centre de notifications métier persistantes
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | EF-NOTIF-001, EF-NOTIF-002 ; RG-033 (CDC §43–§44) ; CDC §14, §23 |
-| Épics concernés | EP-12 |
-| Priorité | SHOULD |
-| Valeur métier | informer les acteurs des événements (planning publié, séance modifiée / annulée, remplaçant, invitation, justificatif, import appliqué) dans un centre consultable |
-| Risques | perte d'événement, notification dupliquée, contenu sensible en base, rollback métier provoqué par un échec de notification |
-| Critères d'acceptation | notifications persistées **après commit**, transaction indépendante, idempotentes (`dedup_key`) ; un échec de notification ne rollback pas le métier ; destinataires dérivés serveur ; aucun jeton / PII / IP / chemin / secret ; isolation (AC-017) |
-| Définition de fini | `V15` (`notification`) ; listener `AFTER_COMMIT` / `REQUIRES_NEW` (motif du seul `StudentImportAuditListener`) ; endpoints `/me/notifications*` ; cloche + badge front ; suite back (after-commit, rollback métier, idempotence, destinataires, sécurité) + front |
-| Statut initial | `PARTIAL` (email d'activation seul) |
-| Preuves attendues | `com.esic.connect.notification` étendu, `V15`, tests |
-| **Statut (01/09/2026)** | **`EF-NOTIF-001` `IMPLEMENTED_AND_TESTED` ; `EF-NOTIF-002` / `RG-033` `PARTIAL`** (`IMPLEMENTED_FULL_SUITE_GREEN` employé pendant le lot ne qualifie que la couleur de la suite) — `V15` (table `notification`, `dedup_key` UNIQUE) ; `NotificationListener` (`AFTER_COMMIT`) sur `PlanningPublishedEvent` + `CourseSessionChangeEvent(CANCELLED / SUBSTITUTION_ADDED / SUBSTITUTION_ENDED)` ; `NotificationWriter` → `NotificationRowWriter` (`REQUIRES_NEW` **par ligne**) ; idempotence `dedup_key` (SHA-256, `eventId` / `versionPublicId`) ; 4 endpoints `/api/v1/me/notifications` (liste paginée bornée, `unread-count`, `{id}/read` idempotent, `read-all`), isolation par destinataire (`404` sur une notif d'autrui), `NOTIF_*` ; front cloche `mat-badge` (`app-shell`) + centre `/notifications`. Destinataires = **formateurs** (principal + remplaçants `ACTIVE`) ; **apprenants / responsables pédagogiques = prolongement documenté** (nouveaux ports `enrollment` / `academic`). Pas de préférences, pas de push, pas de purge (dettes documentées). Back +8 tests (735→743, 3 fuseaux) ; front +11 (559→570). |
-| **Statut après audit G1-D.1 (01/09/2026)** | `EF-NOTIF-001` → **`IMPLEMENTED_AND_TESTED`** ; `EF-NOTIF-002` / `RG-033` → **`PARTIAL`** (audience formateur uniquement ; livraison « au mieux » sans reprise). **Corrigé** : `SESSION_SUBSTITUTION_ENDED` notifie désormais le remplaçant tout juste terminé (`CourseSessionChangeEvent.affectedUserPublicIds`) ; frontière transactionnelle par ligne durcie (plus d'`UnexpectedRollbackException` qui interrompait les destinataires suivants) ; liens front en **liste blanche par rôle** ; compteur non sondé hors session authentifiée. Back **743→749** (`Notification*` +6, 3 fuseaux) ; front **570→574** (+4). Dettes ouvertes : **G1-D-OUTBOX**, **G1-D-AUDIENCE**, rétention (`R-G1-30`). Détail : `G1_IMPLEMENTATION_PROGRESS.md` § « Audit G1-D.1 » |
-
-### Dettes ouvertes issues de G1-D.1
-
-| Dette | Description | Priorité | Critères de résolution |
-|---|---|---|---|
-| **G1-D-OUTBOX** | Livraison des notifications « au mieux » après commit : perte possible d'un événement si la JVM meurt entre le commit métier et l'écriture. Pas de reprise. | SHOULD (post-G1) | Table `notification_outbox` (`event_id` UNIQUE, `status`, `attempt_count`, `next_attempt_at`, `last_error_code` non sensible, index `(status, next_attempt_at)`) écrite **dans** la transaction métier ; worker `@Scheduled` idempotent (backoff borné) qui crée les notifications puis marque `PROCESSED` ; `dedup_key` empêche le doublon si panne entre création et `PROCESSED` ; `FAILED` observable sans bloquer le métier ; tests : rejeu, panne worker, panne DB. Ne pas ajouter `spring-modulith-starter-jpa` sans justification. |
-| **G1-D-AUDIENCE** | Notifications limitées aux formateurs. Une séance annulée / modifiée concerne aussi les apprenants de la classe (CDC §13.9, §23.2) et les responsables pédagogiques du périmètre. | SHOULD (post-G1) | Ports publics `enrollment.findActiveStudentUserPublicIdsForClasses(classes, date)` et `academic.findActiveManagerUserPublicIdsForClasses(classes, date)` (UUID publics, inscriptions / affectations actives à la date, comptes archivés exclus par `identity`, aucun repository internal importé dans `notification`) ; déduplication de destinataires testée ; `EF-NOTIF-002` / `RG-033` repassent `IMPLEMENTED_AND_TESTED`. |
-| **G1-D-RETENTION** | Table `notification` sans borne de croissance ; aucune durée documentaire. | COULD (post-G1) | Politique de conservation validée (direction / DPO) ; purge `@Scheduled` bornée (batch limité, `Clock` injectée, sans PII) des notifications terminales anciennes, non-lues conservées ; `docs/07` §14 passe de `À_DÉFINIR` à une durée justifiée. |
-
-## G1-F — Tableaux de bord par rôle
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | CDC §25.1–§25.4 (contenus par rôle) ; AC-017 (cloisonnement apprenant) |
-| Épics concernés | EP-13 |
-| Priorité | SHOULD |
-| Valeur métier | remplacer le tableau de bord générique par des vues métier utiles à la démonstration jury |
-| Risques | N+1 Hibernate, métrique non reliée à une donnée réelle, fuite de périmètre |
-| Critères d'acceptation | chaque carte reliée à une requête agrégat bornée nommée dans le plan ; `readOnly` ; périmètre serveur ; absence de N+1 vérifiée sur ≥ 1 endpoint ; `401/403` |
-| Définition de fini | `GET /api/v1/me/dashboard` typé par rôle ; front cartes + listes ; suite back (par rôle, périmètre, bornes, vide, N+1) + front + axe-core |
-| Statut initial | `PARTIAL` (dashboard générique unique) |
-| Preuves attendues | endpoint + repositories de projection, `features/dashboard/**`, tests |
-| **Statut final (01/09/2026)** | **Bloc global `PARTIAL`.** Module `dashboard` + `GET /api/v1/me/dashboard` typé par rôle, lecture seule, agrégats `COUNT`/`GROUP BY`/`Pageable`, DTO sans identifiant SQL ni e-mail, périmètre RP décidé serveur, **contexte de rôle multi-rôle vérifié côté serveur** (`403 DASHBOARD_CONTEXT_NOT_HELD` si le rôle n'est pas dans le JWT — passe corrective D). **Carte `STUDENT` : `IMPLEMENTED_AND_TESTED`** (ses seules données, AC-017). **Carte `TEACHER` : `IMPLEMENTED_AND_TESTED`** (séances à venir / à ouvrir, y compris comme remplaçant `ACTIVE` — passe corrective C). **Carte `PEDAGOGICAL_MANAGER` : `PARTIAL`** (classes du périmètre + séances à venir livrées ; manquent justificatifs en attente périmétrés, alternances `UNKNOWN`, planning actif, conflits récents — pas de port agrégé borné). **Carte `ADMINISTRATION` : `PARTIAL`** (comptes / justificatifs globaux / imports / séances du jour livrés ; dernières opérations d'audit non exposées). **Coût SQL :** anti-N+1 **selon le nombre de classes** corrigé (`ClassGroupDirectory.findByPublicIds`, 1 requête ; preuve `1 classe → 14 requêtes`, `15 classes → 14`) ; coût **selon le nombre de séances affichées linéaire** (≈ 2 requêtes/séance : `1 séance → 10 requêtes`, `10 séances → 28`), borné en pratique par la fenêtre 7 j + l'affichage à 10, **non regroupé** (`DEC-G1-010`, documenté, hors périmètre). Ne pas écrire « absence totale de N+1 ». Front `/dashboard` section « Mon activité ». Détail : `G1_FINAL_REPORT.md` §3 / §7. |
-
-## G1-E — Pièces jointes sécurisées des justificatifs
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | EF-JUS-001, EF-JUS-002 ; RG-071, RG-072, RG-073, RG-075, RG-076 (CDC §43) ; CDC §21.5 ; AC-014 |
-| Épics concernés | EP-11 |
-| Priorité | SHOULD |
-| Valeur métier | joindre une preuve (PDF/JPEG/PNG) à un justificatif métier, avec stockage sûr et téléchargement contrôlé |
-| Risques | traversal, fichier malveillant / polyglotte, stockage sensible, incohérence base / fichier, volume disque |
-| Critères d'acceptation | contrôle extension + MIME + magic bytes + taille (`413` > 5 Mo) ; nom neutralisé ; stockage **hors webroot** via port abstrait ; contenu jamais en base ; téléchargement `attachment` + `nosniff`, MIME re-dérivé ; accès = propriétaire / examinateur périmètre, sinon `403` ; compensation base ↔ fichier documentée et testée |
-| Définition de fini | `V16` (`justification_attachment`) ; port `JustificationFileStorage` + implémentation locale ; endpoints upload / liste / download / suppression logique ; suite back (formats, extension trompeuse, magic bytes, taille, traversal, accès croisé, en-têtes, rollback, nettoyage, audit) + front |
-| Statut initial | `PARTIAL` (justificatif métier sans fichier) |
-| Preuves attendues | `JustificationAttachment*`, `V16`, tests, `docs/demo-data/*` fictifs |
-| **Statut (01/09/2026)** | **`IN_PROGRESS` — checkpoint 1 « schéma + modèle + stockage » livré et testé** (commit `feat(justification): créer le stockage sécurisé des pièces jointes`). `V16` `justification_attachment` (métadonnées seules ; `storage_key` opaque, `content_type` re-dérivé des magic bytes, une pièce active par justificatif) ; port public `attendance.JustificationFileStorage` (le métier ne dépend jamais de `java.nio.file`) + adaptateur `LocalFilesystemJustificationFileStorage` (clé dispersée, déplacement atomique, taille pendant le flux, SHA-256, anti-traversal, hors webroot) ; `JustificationFileSafetyValidator` (pur : extension + type + magic bytes, rejet ZIP/OLE2, cohérence extension↔contenu, nom assaini). **Aucun endpoint / écran** à ce checkpoint. **Antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS` — jamais « garanti sans malware »). Back **+23** tests (749→772, Flyway `V1→V16`, `ModularityTests` vert) ; front inchangé. **Restent** : service de dépôt + compensation base/fichier (DEC-G1-009), tâche `@Scheduled` de réconciliation, endpoints multipart + téléchargement (`nosniff` + `Content-Disposition: attachment`), audit / notification, upload Angular. Détail : `G1_IMPLEMENTATION_PROGRESS.md` § « G1-E ». |
-| **Statut final (01/09/2026)** | **Parcours fonctionnel : `IMPLEMENTED_AND_TESTED`** (checkpoints 2-4, commits `1835532` + `5d5f451`). Dépôt multipart propriétaire (`POST/GET/DELETE /api/v1/me/attendance/justifications/{id}/attachment`), téléchargement propriétaire **et** examinateur périmétré (`Content-Disposition: attachment` + `nosniff` + type re-dérivé ; hors périmètre → `404`), séquence base↔fichier avec compensation (`JustificationAttachmentStore`), réconciliation `@Scheduled` bornée des `PENDING_STORAGE`, notification `AFTER_COMMIT` du propriétaire à l'examen. Échec d'audit **après** un stockage réussi : **isolé** (`201` rendu, pièce durable et téléchargeable, trace non rejouée — passe corrective A ; preuve directe unité Mockito ajoutée à la 2e passe). `EF-JUS-001` / `EF-JUS-002` / `RG-071` / `RG-072` / `CDC §21.5` → `IMPLEMENTED_AND_TESTED`. **Durcissement opérationnel : `PARTIAL`** — **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS`) ; **balayage des fichiers orphelins `NOT_IMPLEMENTED`** (la réconciliation ne traite QUE les lignes `PENDING_STORAGE` ; un fichier laissé par un retrait dont la suppression best-effort a échoué n'est pas balayé — passe corrective B, test de figure de portée) ; remplacement direct d'une pièce ; **rétention `DELETED` `À_DÉFINIR`** (`R-G1-30`). Détail : `G1_FINAL_REPORT.md` §3 / §4. |
-
-## G1-G — Recette globale, tests e2e et documentation finale
-
-| Champ | Valeur |
-|---|---|
-| Exigences liées | CDC §46, §47 ; AC-007, AC-008, AC-017 |
-| Épics concernés | EP-17 |
-| Priorité | MUST |
-| Valeur métier | prouver le parcours complet et aligner toute la documentation sur l'état réel |
-| Risques | e2e instable, dépendance e2e vulnérable, documentation en avance sur le code |
-| Critères d'acceptation | parcours bout en bout exécuté (e2e Playwright **ou** démonstration API automatisée, statut honnête) ; totaux de tests re-mesurés et consignés ; README / CURRENT-STATE / docs 01–12 / matrices alignés ; addendum daté aux rapports historiques **sans réécriture** |
-| Définition de fini | `docs/demo-data/planning-demo.csv` + `planning-conflicts-demo.csv` + fichiers justificatifs fictifs ; seed idempotent étendu ; `G1_FINAL_REPORT.md` ; commits `docs(demo)` puis `docs(g1)` rapport |
-| Statut initial | `PARTIAL` (recette API partielle, §11.8 du guide de démo) |
-| Preuves attendues | `frontend/e2e/**` ou script API, `docs/reports/G1_FINAL_REPORT.md` |
-| **Statut final (01/09/2026)** | **Recette API : `IMPLEMENTED_AND_TESTED`** — `PriorityPathRecetteIntegrationTests` (`@SpringBootTest`, `TestRestTemplate`) rejoue en continu référentiel → import apprenants → **activation d'un apprenant réellement importé** → import planning (simulation AC-007) → publication → **ce même apprenant** émarge → rapport + export CSV → annulation + notification → remplacement → justificatif + pièce jointe → acceptation + notification → tableaux de bord. **e2e navigateur : `IMPLEMENTED_AND_TESTED` depuis le 03/09/2026** — 149 tests Playwright / Chromium (`tests/`, `audit-report.md`) ; `DEC-G1-011` révisée : la suite est un **complément** de la recette API, pas son remplacement. Statut au 01/09/2026 : `NOT_IMPLEMENTED`. **Démonstration manuelle (UI navigateur) : `NOT_PERFORMED`** — aucune interaction navigateur consignée ; la recette API vaut **preuve automatisée uniquement**. Totaux : back **811 tests, 0 échec** (défaut / `TZ=UTC` / `TZ=Europe/Paris`), front **71 fichiers / 600 tests / 0 échec**, `ModularityTests` vert (**14 modules**), Flyway **V1 → V16**. **Groupe 1 global : `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`.** Détail : `G1_FINAL_REPORT.md`. |
-
-
-## Clôture du lot G1 — synthèse (2 septembre 2026)
-
-Fusionné sur `main` par la **PR #40** (commit `d3450e6`). Statuts finaux,
-avec les seuls statuts autorisés :
-
-| Bloc | Statut final | Reste ouvert |
-|---|---|---|
-| G1-A — écrans des API administratives | **`PARTIAL`** | écritures `academic` / `enrollment`, affectation d'un RP, **émission** d'invitation : API livrées, **aucun écran** |
-| G1-B — module `planning` | **`IMPLEMENTED_AND_TESTED`** | `EF-PLAN-003` `PARTIAL` (annulation + réimport) ; conflit **salle** contre les séances déjà publiées non détecté ; `EF-PLAN-006` `HORS_PÉRIMÈTRE_ASSUMÉ` ; avertissement d'alternance (`DEC-G1-006`) |
-| G1-C — cycle de vie des séances | **`IMPLEMENTED_AND_TESTED`** | `PATCH` d'une séance manuelle `PLANNED` (non requis) |
-| G1-D — notifications persistantes | **`EF-NOTIF-001 IMPLEMENTED_AND_TESTED` / `EF-NOTIF-002` + `RG-033` `PARTIAL`** | audience **formateur** seule (**G1-D-AUDIENCE**) ; livraison « au mieux » sans reprise (**G1-D-OUTBOX**) ; pas d'email métier, de push, de préférences, de purge |
-| G1-E — pièces jointes | **périmètre fonctionnel `IMPLEMENTED_AND_TESTED` ; durcissement opérationnel `PARTIAL`** | **antivirus `NOT_IMPLEMENTED`** ; **balayage des orphelins `NOT_IMPLEMENTED`** ; remplacement direct d'une pièce ; rétention `DELETED` `À_DÉFINIR` (`R-G1-30`) |
-| G1-F — tableaux de bord | **`PARTIAL`** | cartes manager (justificatifs périmétrés, alternance `UNKNOWN`, planning actif, conflits) et « audit récent » administration ; coût SQL linéaire par séance (`DEC-G1-010`) ; pas de cache Redis |
-| G1-G — recette et documentation | **recette API `IMPLEMENTED_AND_TESTED` ; e2e navigateur `IMPLEMENTED_AND_TESTED` (149 tests, 03/09/2026) ; démonstration manuelle `NOT_PERFORMED`** | manipulation **humaine** consignée et captures produites à la main — un navigateur piloté par script n'en est pas une |
-| **Groupe 1 global** | **`IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED / PARTIAL`** | — |
-
-**Prochaines actions produit**, dans l'ordre de valeur :
-
-1. démonstration manuelle du parcours + captures (seul point qui empêche
-   de dépasser `IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED`) ;
-2. **outbox transactionnelle** (notifications *et* audit) — lève
-   G1-D-OUTBOX et la dette des 8 listeners d'audit synchrones ;
-3. audience des notifications (apprenants / responsables pédagogiques) ;
-4. cartes de tableau de bord manquantes + chargement par lot des séances
-   (`DEC-G1-010`) ;
-5. politique de rétention (pièces `DELETED`, audit, invitations échues) ;
-6. écrans d'écriture `academic` / `enrollment` / émission d'invitation.
-
----
-
-# 10. Vue synthétique des priorités
-
-## MUST
-
-- cadrage ;
-- cahier des charges ;
-- architecture ;
-- modèle de données ;
-- authentification ;
-- rôles ;
-- périmètres ;
-- formations ;
-- classes ;
-- inscriptions historiques ;
-- trois rythmes d’alternance ;
-- import CSV des apprenants ;
-- import CSV du planning ;
-- publication ;
-- séances ;
-- QR dynamique ;
-- présences ;
-- quatre contrôles ;
-- calcul des demi-journées ;
-- rapports ;
-- export CSV ;
-- audit ;
-- tests ;
-- Docker Compose ;
-- documentation ;
-- démonstration.
-
-## SHOULD
-
-- Excel multifeuille ;
-- activation par email ;
-- récupération de compte ;
-- WebAuthn ;
-- délégations ;
-- remplacements ;
-- QR fixe ;
-- contrôle réseau ;
-- PWA ;
-- justificatifs ;
-- réclamations ;
-- notifications ;
-- export Excel ;
-- assistance IA ;
-- Raspberry Pi ;
-- staging.
-
-## COULD
-
-- notifications push ;
-- Turnstile ;
-- Isolation Forest ;
-- PDF ;
-- DLQ ;
-- fonctionnement IoT hors ligne ;
-- tableaux de bord avancés.
-
-## FUTURE
-
-- BERRA ;
-- Microsoft Graph ;
-- Teams ;
-- AWS complet ;
-- NFC ;
-- haute disponibilité.
-
----
-
-# 11. Règle de transparence
-
-Les états réels doivent toujours être distingués :
-
-| État | Signification |
-|---|---|
-| Conçu | Décrit dans les documents |
-| Implémenté | Code présent |
-| Testé | Tests exécutés avec succès |
-| Démontré | Vérification manuelle réussie |
-| Simulé | Comportement présenté sans intégration réelle |
-| Reporté | Non réalisé dans la version actuelle |
-
-Aucune date, réunion, validation ou mesure ne doit être présentée comme
-réelle sans preuve disponible.
+Une story n'est retirée du backlog que lorsqu'elle est terminée au sens
+du cahier des charges §41, ou lorsque son retrait est décidé et motivé
+par écrit.

@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * première itération, chaque appel est une <em>rotation</em> (le couple
  * précédent existe). Nettoie ses clés à la fin. Aucune assertion de
  * latence stricte — garde-fou large uniquement ; chiffres repris dans
- * {@code docs/reports/PERF_NOTES.md}.
+ * {@code docs/09-strategie-tests.md}.
  */
 @Tag("perf")
 @SpringBootTest
@@ -70,7 +70,7 @@ class AttendanceTokenPerfTests {
 
         // Garde-fou large : détecte une régression catastrophique, pas une
         // garantie contractuelle. La cible « < 100 ms » du cadrage est
-        // discutée dans docs/reports/PERF_NOTES.md.
+        // discutée dans docs/09-strategie-tests.md.
         assertThat(p50Ms).as("génération médiane d'un jeton d'émargement").isLessThan(1_000d);
     }
 }

@@ -2,7 +2,7 @@ package com.esic.connect.planning.internal;
 
 /**
  * Périmètres d'autorisation des routes du module {@code planning}
- * (docs/reports/G1_IMPLEMENTATION_PLAN.md §4.6). Expressions SpEL
+ * (docs/03-architecture.md). Expressions SpEL
  * réutilisées par {@code @PreAuthorize}.
  *
  * <ul>

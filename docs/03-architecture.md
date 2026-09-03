@@ -515,7 +515,7 @@ iot            → attendance, coursesession, shared
 > laisse **ni** notification **ni** trace d'audit de succès. **8 des 9
 > listeners d'audit** restent des `@EventListener` **synchrones** en
 > `REQUIRES_NEW` : dette assumée, décrite dans
-> `docs/reports/G1_FINAL_REPORT.md` §12.
+> `docs/CURRENT-STATE.md`.
 >
 > Les §6.2, §6.5 et §6.6 (listes de modules et règles de dépendance)
 > décrivent également le découpage cible et ne sont pas alignées sur les
@@ -570,7 +570,7 @@ Responsabilités :
 ### État d’implémentation (lot TR-021, migration V8)
 
 Module Spring Modulith `com.esic.connect.alternation` livré et testé
-(voir `docs/09-matrice-rncp.md` TR-021 et `docs/CURRENT-STATE.md`) :
+(voir `docs/CURRENT-STATE.md`) :
 
 - agrégat `work_study_pattern` (modèle réutilisable de rythme :
   `THREE_DAYS_SCHOOL_TWO_DAYS_COMPANY`, `ONE_WEEK_SCHOOL_OUT_OF_FOUR`,
@@ -720,7 +720,7 @@ responsables pédagogiques** (nouveaux ports `enrollment` / `academic`
 requis — dette **G1-D-AUDIENCE**), **préférences** par type (non
 exigées), **email métier**, **push PWA**, **file persistante / DLQ** et
 **purge / rétention** (`À_DÉFINIR`, `R-G1-30`) — dettes documentées dans
-`docs/CURRENT-STATE.md`, `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`
+`docs/CURRENT-STATE.md`
 (§ « Audit G1-D.1 ») et `docs/05-product-backlog.md` §9bis.
 
 ## 7.12 `reporting`
@@ -1375,7 +1375,7 @@ Spring Boot doit contrôler :
 
 ## 17.5 Absence de NFC
 
-Le prototype utilisera :
+Le produit utilise :
 
 - un bouton logiciel ;
 - une page locale ;
@@ -1753,19 +1753,19 @@ projet_final/
 │   ├── 02-cahier-des-charges.md
 │   ├── 03-architecture.md
 │   ├── 04-modele-donnees.md
-│   ├── 05-backlog.md
-│   ├── 06-risques.md
-│   ├── 07-securite-rgpd.md
-│   ├── 08-tests-recette.md
-│   ├── 09-matrice-rncp.md
-│   ├── 10-journal-ia.md
-│   ├── 11-guide-demonstration.md
+│   ├── 05-product-backlog.md
+│   ├── 06-roadmap-six-mois.md
+│   ├── 07-risques.md
+│   ├── 08-securite-rgpd.md
+│   ├── 09-strategie-tests.md
+│   ├── 10-guide-utilisateur.md
+│   ├── 11-guide-deploiement.md
+│   ├── 12-prerequis-externes.md
 │   ├── CURRENT-STATE.md
-│   └── adr/
+│   ├── demo-data/
+│   └── diagrams/
 │
-├── report/
-├── presentation/
-├── samples/
+├── tests/
 └── scripts/
 ```
 
@@ -1808,7 +1808,7 @@ Une offre gratuite peut avoir :
 - une suppression en cas d’inactivité ;
 - une architecture ARM.
 
-Le staging ne doit donc pas être l’unique support de la soutenance.
+L’environnement de recette ne doit donc pas être l’unique support d’une démonstration.
 
 Une démonstration locale et une vidéo de secours restent obligatoires.
 

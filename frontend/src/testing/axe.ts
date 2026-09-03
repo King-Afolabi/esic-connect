@@ -17,7 +17,7 @@ import axe, { type RunOptions, type Result } from 'axe-core';
  *
  * Ce n'est PAS un audit d'accessibilité complet : le contraste, le zoom,
  * le parcours lecteur d'écran réel et les tests manuels restent
- * nécessaires (voir `docs/08-tests-recette.md` §16).
+ * nécessaires (voir `docs/09-strategie-tests.md` §16).
  */
 const JSDOM_SAFE_OPTIONS: RunOptions = {
   runOnly: ['wcag2a', 'wcag2aa', 'best-practice'],

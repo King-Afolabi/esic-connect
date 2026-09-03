@@ -2,8 +2,7 @@ import { Page, expect } from '@playwright/test';
 import { DemoAccount } from './accounts';
 
 /**
- * IMPORTANT — architecture réelle observée (voir audit-report.md, finding
- * "F-ENV-2") : le jeton JWT vit uniquement dans un service Angular en
+ * IMPORTANT — architecture réelle observée : le jeton JWT vit uniquement dans un service Angular en
  * mémoire (`AuthService`, commentaire du fichier : « Ni localStorage ni
  * sessionStorage ni cookie écrit en JavaScript »), sans restauration au
  * démarrage. **Toute navigation "dure" (`page.goto`, un F5) efface donc la

@@ -229,7 +229,7 @@ systèmes sources.
 
 ## 3.5 Numéro étudiant
 
-Pour le prototype :
+Choix retenu :
 
 - le numéro étudiant peut être importé ;
 - il peut être généré localement s’il est absent ;
@@ -759,7 +759,7 @@ Représente un site ou campus ESIC.
 | `updated_at` | TIMESTAMP(6) | UTC |
 | `version` | BIGINT | Optimistic locking |
 
-Le prototype crée un site fictif initial.
+Le profil de démonstration crée un site fictif initial.
 
 Le modèle reste compatible avec plusieurs sites.
 
@@ -1040,7 +1040,7 @@ Aucun access token brut ne doit être conservé.
 | `updated_at` | TIMESTAMP(6) |
 | `version` | BIGINT |
 
-L’entreprise est conservée sous forme de texte dans le prototype.
+L’entreprise est conservée sous forme de texte à ce stade ; un référentiel dédié reste possible.
 
 Une table `company` pourra être ajoutée lors d’une future intégration
 avec BERRA.
@@ -1119,7 +1119,7 @@ Exemples de type :
 - `MASTER` ;
 - `OTHER`.
 
-Le code est généré ou saisi pour le prototype.
+Le code est généré ou saisi.
 
 ## 12.3 Table `program_level`
 
@@ -1214,7 +1214,7 @@ Représente une matière.
 | `updated_at` | TIMESTAMP(6) |
 | `version` | BIGINT |
 
-Aucun code officiel n’étant imposé au prototype, le code peut être
+Aucun code officiel n’étant imposé, le code peut être
 généré ou renseigné.
 
 Exemple :
@@ -1787,7 +1787,7 @@ Aucune suppression en cascade depuis la classe.
 > `ACCEPTED` / `REJECTED` ; un seul justificatif actif par absence via une
 > colonne générée). La table matérialisée `daily_attendance_summary`
 > (§19.5) n'est pas créée : le calcul des demi-journées est fait à la
-> volée. Détails et écarts : `docs/reports/ATTENDANCE_MANAGEMENT_DESIGN.md`.
+> volée. Détails et écarts : `docs/02-cahier-des-charges.md` §16.
 >
 > **V16** (bloc G1-E) ajoute **`justification_attachment`** : la
 > **pièce jointe** d'un justificatif — **métadonnées uniquement**
@@ -1803,7 +1803,7 @@ Aucune suppression en cascade depuis la classe.
 > anti-traversal). Un seul fichier actif (non `DELETED`) par justificatif
 > via la colonne générée `active_attachment_key`. FK `RESTRICT` vers
 > `attendance_justification` et `user_account`. Séquence base ↔ fichier
-> avec compensation (DEC-G1-009) — voir `docs/reports/G1_ARCHITECTURE_DECISIONS.md`.
+> avec compensation (DEC-G1-009) — voir `docs/03-architecture.md` §ADR.
 > Endpoints de dépôt / téléchargement et écran d'upload : checkpoints
 > G1-E suivants.
 
@@ -2808,7 +2808,7 @@ Deux options :
 1. `VARCHAR` validé par l’application ;
 2. table de référence pour les valeurs administrables.
 
-Pour le prototype, utiliser des chaînes contrôlées et des contraintes
+Utiliser des chaînes contrôlées et des contraintes
 `CHECK` lorsque cela apporte une valeur réelle.
 
 Éviter l’`ENUM` MySQL pour les valeurs susceptibles d’évoluer souvent,

@@ -16,7 +16,7 @@ import java.util.HexFormat;
  *   <li>jeton brut : 32 octets issus de {@link SecureRandom}, encodés en
  *       Base64 URL sans remplissage (~43 caractères) ;</li>
  *   <li>empreinte : SHA-256 du jeton brut, en hexadécimal minuscule
- *       (docs/07-securite-rgpd.md, cahier §16.1). Le jeton brut n'est
+ *       (docs/08-securite-rgpd.md, cahier §16.1). Le jeton brut n'est
  *       jamais stocké.</li>
  * </ul>
  *

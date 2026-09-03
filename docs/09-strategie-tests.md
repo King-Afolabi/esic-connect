@@ -150,7 +150,7 @@ Les tests marqués du tag JUnit `perf` (`AttendanceTokenPerfTests`,
 `StudentImportSimulationPerfTests`) sont **exclus** du run par défaut ;
 `./mvnw test -Pperf` les exécute. Ils produisent des mesures
 **indicatives**, pas une campagne de charge
-(`docs/reports/PERF_NOTES.md`).
+(§ mesures de performance du présent document).
 
 ## 2bis.2 Nature exacte de chaque niveau — ne pas confondre
 
@@ -161,14 +161,14 @@ Les tests marqués du tag JUnit `perf` (`AttendanceTokenPerfTests`,
 | **Tests d'API** | oui | `TestRestTemplate` / `MockMvc` : statuts HTTP, corps d'erreur, en-têtes |
 | **Recette de bout en bout (API)** | oui | `recette/PriorityPathRecetteIntegrationTests` — **une seule** classe rejouant le parcours prioritaire complet par appels HTTP réels, avec **un seul apprenant** créé par l'import puis activé et réutilisé jusqu'au justificatif |
 | **Tests e2e navigateur** | **OUI depuis le 3/09/2026** | 149 tests Playwright / Chromium (`tests/`), pilotant un vrai navigateur contre la pile démarrée. `DEC-G1-011` révisée. **La recette API reste distincte** : elle ne rend aucun composant Angular et ne valide aucune interaction utilisateur — les deux niveaux coexistent |
-| **Tests manuels / démonstration** | **NON consignés** | aucune manipulation **humaine** enregistrée. Les captures de `captures/` sont produites par un navigateur **piloté par script** : ce n'est pas une démonstration manuelle. Seul le **parcours API** a été relevé à la main (`docs/11-guide-demonstration.md` §11.8) |
+| **Tests manuels / démonstration** | **NON consignés** | aucune manipulation **humaine** enregistrée. Les captures produites par un navigateur **piloté par script** ne constituent pas une démonstration manuelle. Seul le **parcours API** a été relevé à la main |
 | **Tests de performance** | partiels | 2 tests taggés `perf` + mesures indicatives ; **aucune** campagne de charge, objectif « < 100 ms » non validé sur l'ensemble des routes |
 | **Tests d'accessibilité** | partiels | 2 fichiers `*.a11y.spec.ts` avec `axe-core` ; pas d'audit outillé complet, pas de test lecteur d'écran |
 
 ## 2bis.5 Recette end-to-end navigateur (Playwright)
 
 Ajoutée le 3 septembre 2026 à la suite de l'audit QA indépendant
-(`audit-report.md`). Elle **complète** la recette d'intégration API
+Elle **complète** la recette d'intégration API
 `PriorityPathRecetteIntegrationTests`, elle ne la remplace pas.
 
 | Élément | Valeur |
@@ -176,7 +176,7 @@ Ajoutée le 3 septembre 2026 à la suite de l'audit QA indépendant
 | Emplacement | `tests/01-*.spec.ts` … `tests/10-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
 | Commande | `npm run test:e2e` — pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté |
 | Volume | 10 fichiers, **149 tests** |
-| Résultat fonctionnel | **149 / 149** (le run livré affiche 145/149 ; les 4 écarts sont des blocages d'environnement, `audit-report.md` §4.2) |
+| Résultat fonctionnel | **149 / 149** (le run livré affiche 145/149 ; les 4 écarts sont des blocages d'environnement sous charge) |
 | Durée | 18-20 min en environnement sain |
 | CI | `.github/workflows/e2e.yml`, **manuel** (`workflow_dispatch`) |
 | Contrôle de type | `tsconfig.json` à la racine (`tsc -p tsconfig.json --noEmit`), intégré à `scripts/verify-all.sh` |
@@ -196,8 +196,8 @@ soumission) · responsive, navigation clavier, `role="alert"`.
 **Deux règles tenues, à ne pas relâcher :**
 
 1. aucun test n'est écrit contre un écran qui n'existe pas — les
-   domaines `HORS_PÉRIMÈTRE_ASSUMÉ` apparaissent comme écarts documentés
-   dans la matrice de `audit-report.md` §2, jamais comme tests fabriqués ;
+   domaines non implémentés apparaissent comme écarts documentés
+   dans `docs/CURRENT-STATE.md`, jamais comme tests fabriqués ;
 2. aucun identifiant technique n'est figé dans le dépôt : le `publicId`
    du formateur de démonstration est **résolu à l'exécution**
    (`tests/support/api.ts`), parce qu'il est régénéré à chaque recréation
@@ -211,7 +211,7 @@ charge système croissante (`load average` > 17), sans jamais se
 reproduire isolément. Ce n'est pas un défaut applicatif ni un défaut de
 test. Si la suite est intégrée à une CI récurrente, prévoir `retries: 1`
 (déjà actif quand `CI` est défini) et une machine sans charge
-concurrente. Détail : `audit-report.md` §4.2.
+concurrente.
 
 ## 2bis.3 Ce qui est réellement couvert, par thème
 
@@ -285,7 +285,7 @@ vers un package `.internal` d'un autre module, aucun cycle.
 - Un test d'intégration (`EnrollmentDirectoryTests`) a échoué **une
   fois** sous `TZ=UTC` pendant le lot G1 ; **non reproduit** en 5
   répétitions isolées ni sur les runs complets — **cause non
-  déterminée** (`docs/reports/TEST_ISOLATION_DECISION.md`).
+  déterminée**.
 
 ---
 
@@ -646,7 +646,7 @@ Le premier est traité, le second est identifié comme doublon.
 
 Branche `feature/attendance-management-and-reporting`. Exécuté en local
 (profil `demo`), statuts HTTP relevés — voir
-`docs/11-guide-demonstration.md` §10.
+`docs/10-guide-utilisateur.md`.
 
 1. Ouvrir une séance ; constater le point de contrôle `START` ouvert.
 2. Créer un second point de contrôle (`CUSTOM`), l'ouvrir, émettre son
@@ -696,7 +696,7 @@ contexte de rôle en mémoire seule côté front (aucun accès `localStorage`
 
 # 19. Critères de sortie
 
-Une version est candidate à la soutenance lorsque :
+Une version est candidate à la livraison lorsque :
 
 - le parcours principal fonctionne ;
 - aucune anomalie bloquante n’est ouverte ;

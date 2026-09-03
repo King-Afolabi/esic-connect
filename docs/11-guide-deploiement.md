@@ -5,7 +5,7 @@
 | Objet | Rendre le dépôt installable, vérifiable et déployable **sans étape manuelle devinée** |
 | Version | 1.0 — 3 septembre 2026 |
 | Statut du déploiement | **`NOT_PERFORMED`** — aucune instance n'est déployée, aucune URL n'existe |
-| Sources | `audit-report.md` (audit QA du 3 septembre 2026), `docs/CURRENT-STATE.md`, `compose.yaml`, `.github/workflows/**` |
+| Sources | `docs/CURRENT-STATE.md`, `compose.yaml`, `.github/workflows/**` |
 
 > **Ce que ce document ne fait pas.** Il ne déclare aucun déploiement
 > réalisé. Il décrit ce qui est **outillé et reproductible aujourd'hui**
@@ -186,7 +186,7 @@ qu'aucune décision de mise en service ne soit prise sans les connaître.
 | Verrou | État | Effet si ignoré |
 |---|---|---|
 | **HTTPS / TLS** | `NOT_IMPLEMENTED` | jetons JWT et mots de passe en clair sur le réseau. Bloquant absolu |
-| **Rate-limiting `/auth/login`** | `NOT_IMPLEMENTED` (`docs/07` §5) | attaque par force brute non freinée |
+| **Rate-limiting `/auth/login`** | `NOT_IMPLEMENTED` (`docs/08` §5) | attaque par force brute non freinée |
 | **Persistance de session** | `NOT_IMPLEMENTED` (finding F-ENV-2) | tout rechargement de page déconnecte l'utilisateur |
 | **Sauvegarde / restauration testée** | `NOT_PERFORMED` | `scripts/db-reset.sh` produit un dump, mais **aucune restauration n'a jamais été rejouée** |
 | **Antivirus sur les pièces jointes** | `NOT_IMPLEMENTED` (`DEC-G1-E-ANTIVIRUS`) | ne jamais écrire « garanti sans malware » |

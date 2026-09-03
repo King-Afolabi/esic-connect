@@ -16,7 +16,7 @@ export interface LoginResponse {
  * `subject` et `roles` proviennent des claims du JWT (`sub`, `roles`) et
  * ne servent QU'À l'affichage et au filtrage de la navigation. Ils ne
  * sont jamais traités comme une preuve d'autorisation : le back-end
- * revalide chaque appel (docs/07-securite-rgpd.md §7 ; consigne
+ * revalide chaque appel (docs/08-securite-rgpd.md §7 ; consigne
  * « ne pas décoder un JWT et le traiter comme une autorisation »).
  *
  * `email` est l'adresse saisie au formulaire de connexion, conservée en

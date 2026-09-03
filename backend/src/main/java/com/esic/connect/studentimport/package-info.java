@@ -1,7 +1,7 @@
 /**
  * Module « studentimport » — import CSV contrôlé des apprenants
  * (docs/02-cahier-des-charges.md §10 ; docs/04-modele-donnees.md §16 ;
- * docs/reports/STUDENT_CSV_IMPORT_DESIGN.md ; EF-IMP-001 / EF-IMP-002 ;
+ * docs/02-cahier-des-charges.md; EF-IMP-001 / EF-IMP-002 ;
  * US-050 / US-051 ; RG-020 à RG-024).
  *
  * <p><strong>État (checkpoint CP2)</strong> : schéma {@code V11} (quatre

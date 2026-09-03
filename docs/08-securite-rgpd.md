@@ -315,7 +315,7 @@ de base nominatifs ou spécifiques à l’application. ([cnil.fr](https://www.cn
 | **`Referrer-Policy`** | `IMPLEMENTED_AND_TESTED` (F5) | `no-referrer`. |
 | En-têtes par défaut Spring Security (`nosniff`, `X-Frame-Options: DENY`, anti-cache, HSTS sur HTTPS) | `IMPLEMENTED_AND_TESTED` | conservés (jamais désactivés) ; HSTS émis uniquement sur réponses HTTPS — non exigé sur HTTP local. |
 | Limitation de débit / rate-limiting | `NOT_IMPLEMENTED` | dette assumée — voir §5 « Anti-brute-force ». |
-| HTTPS hors local | `NOT_IMPLEMENTED` | pas de terminaison TLS dans le prototype (cible `docs/03` §37). |
+| HTTPS hors local | `NOT_IMPLEMENTED` | pas de terminaison TLS à ce stade ; prévu au sprint 13 (cible `docs/03` §37). |
 | OpenAPI sans secret | `IMPLEMENTED` | DTO sans `id` SQL / hash / jeton ; export runtime `scripts/dump-openapi.sh`. |
 
 ## Chaîne d’approvisionnement des dépendances (checkpoint F4 — 31 août 2026)
@@ -341,7 +341,7 @@ volumineuse ; sans stratégie de cache et de clé, le job serait
 fréquemment rouge pour des raisons d’indisponibilité réseau, ce qui
 nuirait à la CI. Le différentiel de PR (`dependency-review-action`,
 qui couvre Maven) + Dependabot (alertes de sécurité sur tout l’arbre)
-couvrent l’essentiel du risque pour un prototype. À planifier pour une
+couvrent l’essentiel du risque à ce stade. À planifier pour une
 mise en service réelle : `org.owasp:dependency-check-maven` en job
 planifié dédié, avec clé NVD en secret et cache de la base.
 
@@ -592,7 +592,7 @@ limitation de conservation.
 | Comptes archivés | **NON** | statut `ARCHIVED` (pas de connexion), historique conservé ; **pas** de séparation en archivage intermédiaire ni d’anonymisation. |
 | Logs techniques du serveur | **NON géré ici** | dépend de la configuration d’exploitation (rotation logback / plateforme). |
 
-Conséquence : les exigences `docs/07` §14 (conservation limitée), §18
+Conséquence : les exigences `docs/08` §14 (conservation limitée), §18
 (droits des personnes) et §39 du cahier des charges sont **partiellement
 couvertes** — une seule purge outillée. Pour une mise en service réelle,
 il faut : (1) une tâche `@Scheduled` de purge des invitations `PENDING`
@@ -604,7 +604,7 @@ les droits d’accès / rectification / effacement / export.
 
 # 15. Protection de l’IA
 
-- données synthétiques pour le prototype ;
+- données synthétiques exclusivement ;
 - aucune donnée réelle envoyée à un service public non approuvé ;
 - Spring Boot filtre les données ;
 - score de confiance ;

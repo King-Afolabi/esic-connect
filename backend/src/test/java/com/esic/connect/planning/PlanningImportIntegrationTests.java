@@ -229,7 +229,7 @@ class PlanningImportIntegrationTests {
     /**
      * Régression F-SEC-1 : un paramètre obligatoire absent doit produire un
      * {@code 400 VALIDATION_ERROR}, jamais un {@code 500 INTERNAL_ERROR}
-     * (audit-report.md §3, finding F-SEC-1).
+     * (régression couverte).
      */
     @Test
     void aMissingRequiredQueryParameterIsA400NotA500() {

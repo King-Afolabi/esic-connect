@@ -7,7 +7,7 @@
  *
  * Si un déploiement expose l'API sur une origine distincte, renseigner
  * ici l'URL absolue ET activer une configuration CORS restrictive côté
- * Spring Boot (docs/07-securite-rgpd.md §8) — non requis en local.
+ * Spring Boot (docs/08-securite-rgpd.md §8) — non requis en local.
  */
 export const environment = {
   production: true,

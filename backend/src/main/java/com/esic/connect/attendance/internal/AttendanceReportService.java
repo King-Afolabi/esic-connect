@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 /**
  * Calcul d'assiduité et rapports (V10). Unité de calcul : la
  * demi-journée (docs/02 §24.2), formule figée dans
- * {@code docs/reports/ATTENDANCE_MANAGEMENT_DESIGN.md} §4.C.
+ * {@code docs/02-cahier-des-charges.md} §4.C.
  *
  * <p>Décisions de comptage :
  * <ul>

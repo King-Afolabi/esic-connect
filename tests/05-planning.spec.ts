@@ -9,7 +9,7 @@ const FIXTURES = path.join(__dirname, 'fixtures');
 /**
  * DOMAINE 2 (suite) — Import et publication de planning.
  *
- * ATTENTION DOCUMENTAIRE (voir audit-report.md §2, finding "F-DOC-1") :
+ * ATTENTION DOCUMENTAIRE (voir docs/09-strategie-tests.md, finding "F-DOC-1") :
  * `docs/01-cadrage.md` §23.5 et `docs/02-cahier-des-charges.md` §4.5.1
  * portent un addendum daté du 31 août 2026 déclarant ce domaine entier
  * `HORS_PÉRIMÈTRE_ASSUMÉ` et demandant explicitement de ne « jamais »

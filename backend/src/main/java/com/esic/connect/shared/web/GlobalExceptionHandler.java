@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
     /**
      * Refus d'autorisation ({@code @PreAuthorize}, contrôle de périmètre).
      * Sans ce handler, le catch-all générique renverrait un 500 : la
-     * réponse doit être un 403 neutre (docs/07-securite-rgpd.md §7,
+     * réponse doit être un 403 neutre (docs/08-securite-rgpd.md §7,
      * docs/02 §29.2).
      */
     @ExceptionHandler(AccessDeniedException.class)
@@ -82,9 +82,8 @@ public class GlobalExceptionHandler {
      * <p>Sans ce handler, le catch-all générique transformait une erreur
      * d'appel du client en {@code 500 INTERNAL_ERROR} : c'est le défaut
      * F-SEC-1 relevé sur {@code GET /api/v1/planning/versions} sans
-     * {@code classGroupPublicId} (docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md
-     * §2, reconfirmé par l'audit QA du 3 septembre 2026, audit-report.md
-     * §3). Un 500 signale à tort une panne serveur, fausse la supervision
+     * {@code classGroupPublicId}. Un 500 signale à tort une panne serveur,
+     * fausse la supervision
      * et est trompeur pour tout client de l'API documentée (OpenAPI).
      *
      * <p>Seul le <strong>nom</strong> du paramètre est renvoyé : il fait

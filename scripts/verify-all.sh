@@ -11,7 +11,7 @@
 #   6. diagnostic de la base applicative (F-ENV-1).
 #
 # La suite e2e navigateur n'est PAS lancée ici : elle exige la pile
-# complète démarrée (back-end + ng serve). Voir docs/13-guide-deploiement.md
+# complète démarrée (back-end + ng serve). Voir docs/11-guide-deploiement.md
 # §5 et .github/workflows/e2e.yml.
 #
 #   ./scripts/verify-all.sh          # tout

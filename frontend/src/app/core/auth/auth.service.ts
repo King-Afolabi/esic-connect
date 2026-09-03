@@ -13,7 +13,7 @@ import { readExpiry, readRoles, readSubject } from './jwt';
  *
  * Stratégie de stockage du jeton : **en mémoire uniquement** (signal).
  * Ni `localStorage` ni `sessionStorage` ni cookie écrit en JavaScript.
- * Motivation : docs/07-securite-rgpd.md §6 (« aucun token sensible dans
+ * Motivation : docs/08-securite-rgpd.md §6 (« aucun token sensible dans
  * localStorage ») et RG-085. La stratégie cible documentée est un cookie
  * `HttpOnly` + refresh token rotatif (docs/03 §15.2, docs/07 §6), non
  * encore exposée par le back-end (seul `POST /api/v1/auth/login`

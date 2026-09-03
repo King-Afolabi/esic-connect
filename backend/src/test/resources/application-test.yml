@@ -1,7 +1,7 @@
 # Profil de test : pointe vers les mêmes conteneurs locaux (compose.yaml)
 # que le profil "local". La migration vers Testcontainers est
 # explicitement DIFFÉRÉE — motivation, contournement local et travail à
-# planifier dans docs/reports/TEST_ISOLATION_DECISION.md (FINAL-021).
+# planifier dans docs/09-strategie-tests.md.
 # En CI, l'isolation existe de fait : base éphémère `esic_connect_ci`
 # d'un service GitHub Actions jeté à chaque run.
 #

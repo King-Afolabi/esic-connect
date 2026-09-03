@@ -1,448 +1,396 @@
 # État courant — ESIC Connect
 
-> **But** : donner en une lecture courte l'état **réel** du dépôt — ce qui
-> est implémenté, testé, partiel ou hors périmètre — et les preuves
-> associées. Ce document ne contient **pas** la chronologie des tranches :
-> elle est archivée dans
-> [`docs/reports/PROJECT_HISTORY.md`](reports/PROJECT_HISTORY.md).
+> **But** : donner en une lecture l'état **réel** du dépôt — ce qui est
+> implémenté, testé, partiel ou absent — et les preuves associées.
 >
-> **Sources de vérité complémentaires** :
-> - [`docs/reports/G1_FINAL_REPORT.md`](reports/G1_FINAL_REPORT.md) —
->   rapport final du grand lot produit G1 (anomalies corrigées, garanties
->   transactionnelles, coûts SQL mesurés, dettes) ;
-> - [`docs/reports/G1_REQUIREMENTS_TRACEABILITY.md`](reports/G1_REQUIREMENTS_TRACEABILITY.md)
->   — matrice EF-* / RG-* / AC-* du lot G1 ;
-> - [`docs/reports/PROJECT_FINAL_AUDIT.md`](reports/PROJECT_FINAL_AUDIT.md)
->   — audit vérifiable de la finalisation F1 (**antérieur à G1** :
->   ses totaux « 12 modules / V11 / 682 tests » sont **périmés**) ;
-> - [`docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md`](reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md)
->   — ce qui bloquait le parcours de démonstration, le parcours vérifié
->   **par API** (statuts HTTP), les volumes du jeu `esic_connect_demo`, et
->   un défaut d'API **non corrigé** ;
-> - `git log` — le code et les tests font foi.
+> **Ce document est la seule source de vérité sur l'avancement.** En cas
+> de contradiction avec le cahier des charges, la roadmap, le backlog ou
+> le README, c'est ce document qui a raison, et l'autre qui doit être
+> corrigé.
 
 ## Dernière mise à jour
 
 ```text
-3 septembre 2026 — consolidation post-audit QA : recette e2e navigateur
-intégrée, périmètre planning tranché (F-DOC-1), F-SEC-1 et F-A11Y-1
-corrigés, outillage de remise à zéro de la base (F-ENV-1)
+3 septembre 2026 — refondation produit : passage du cadrage « preuve de
+concept trois jours » à un cahier des charges d'application complète
+(142 exigences). Purge des artefacts de soutenance et des rapports de
+tranches. Aucun code fonctionnel modifié par cette refondation.
 ```
 
-## Point de référence Git
+## Repère Git
 
-| Élément | Valeur observée |
+| Élément | Valeur |
 |---|---|
-| Branche de travail | `chore/post-audit-consolidation` |
-| `main` | `fbc01b2` — `Merge pull request #42 from King-Afolabi/fix/demo-critical-path` |
-| Pull requests ouvertes | **aucune** (au 3 septembre 2026) |
-| Branches distantes fusionnées, non supprimées | `docs/update-current-state-after-pr20`, `feature/attendance-qr-demonstration`, `fix/demo-critical-path` + 5 branches Dependabot |
-| Branches distantes **non** fusionnées | `feature/attendance-management-and-reporting`, `feature/master-level-product-expansion` (contenu déjà sur `main` via la PR #40) + 7 Dependabot dont les PR ont été **fermées** |
+| Branche de travail | `feature/produit-complet-v2` |
+| Base | `51ad58c` sur `main` |
+| Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
-## Modules Spring Modulith réels (14)
+---
 
-14 `package-info.java` sous `com.esic.connect.*` ; `ModularityTests`
-(Spring Modulith 1.4) **vert** : aucune dépendance vers un package
-`.internal` d'un autre module, aucun cycle.
+## 1. Couverture des exigences
 
-| Module | Rôle | Migration(s) |
-|---|---|---|
-| `identity` | comptes, rôles, authentification JWT, invitation / activation, administration des comptes | V1, V2, V3 |
-| `organization` | site / bâtiment / salle / plage réseau CIDR | V4 |
-| `academic` | année scolaire, formation, niveau, promotion, classe, affectation pédagogique + contrôle de périmètre | V5, V6 |
-| `enrollment` | profil apprenant, inscription, changement de classe historisé | V7 |
-| `alternation` | modèles de rythme, affectation historisée, exceptions individuelles, résolution `SCHOOL`/`COMPANY`/`UNKNOWN` | V8 |
-| `planning` | import CSV → simulation (0 séance, AC-007) → publication atomique versionnée (N/N+1, `SUPERSEDED`, AC-008) → séances via le port `coursesession.PlanningSessionWriter` ; conflits formateur / classe / salle | V12, V13 |
-| `coursesession` | séance manuelle **ou** issue d'un planning publié ; cycle `PLANNED → OPEN → CLOSED` / `CANCELLED` ; points de contrôle ; remplacements de formateur | V9, V10, V13, V14 |
-| `attendance` | jeton d'émargement (Redis), validation, retard, présence manuelle / correction, justificatif **+ pièces jointes**, rapports + export CSV | V9, V10, V16 |
-| `studentimport` | import CSV contrôlé des apprenants (lecture sécurisée, simulation, confirmation transactionnelle, purge) | V11 |
-| `notification` | email d'activation (Mailpit) **+ centre de notifications métier persistantes** (`AFTER_COMMIT`, idempotence `dedup_key`) | V15 |
-| `dashboard` | `GET /api/v1/me/dashboard` par rôle (lecture seule, agrégats bornés, contexte multi-rôle vérifié côté serveur) | — |
-| `audit` | piste d'audit `audit_event` alimentée par les événements métier | V1 |
-| `bootstrap` | amorçage `demo` (6 comptes fictifs dont `SUPER_ADMIN`, profil `demo` uniquement) | — |
-| `shared` | types transverses, `BaseEntity`, `ApiError`, `GlobalExceptionHandler`, `ClockConfig` | — |
+Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
-Modules décrits dans `docs/03-architecture.md` §7 comme **architecture
-cible non implémentée** : `room` (remplacé par `organization`),
-`justification` (fusionné dans `attendance`), `claim`, `reporting`
-(fusionné dans `attendance`), `ai`, `iot`.
+| Statut | Nombre | Part |
+|---|---:|---:|
+| `IMPLEMENTED_AND_TESTED` | 49 | 35 % |
+| `PARTIAL` | 11 | 8 % |
+| `NOT_IMPLEMENTED` | 82 | 58 % |
 
-## Migrations Flyway réelles — schéma en **V16**
+Cette répartition est **attendue** : la version 2.0 du cahier des
+charges vient d'élargir volontairement le périmètre à l'ensemble du
+produit cible. Les 82 exigences non implémentées ne sont pas des
+régressions : ce sont les sprints 2 et 4 à 13 de la roadmap.
 
-```text
-V1  identité + audit          V9  séances + émargement
-V2  seed des 6 rôles          V10 gestion d'assiduité + reporting
-V3  invitations               V11 import CSV apprenants
-V4  organisation              V12 module planning (7 tables)          [G1-B]
-V5  référentiel académique    V13 lien course_session ↔ créneau       [G1-B]
-V6  affectations pédagogiques V14 cycle de vie séances (CANCELLED,    [G1-C]
-V7  profils + inscriptions        teacher_substitution)
-V8  alternance                V15 table notification                  [G1-D]
-                              V16 justification_attachment            [G1-E]
-```
+### 1.1 Par domaine
 
-41 tables métier, `spring.jpa.hibernate.ddl-auto = validate`, aucune
-donnée métier insérée par une migration. V12/V13 ont été corrigées **en
-place** à l'audit G1-B.1 (jamais poussées) : une base ayant appliqué
-l'ancienne forme **ne se répare pas** par un simple `flyway repair`
-(recréation ou migration corrective explicite — voir l'en-tête de `V13`).
+| Domaine | Livré | Partiel | Absent |
+|---|---:|---:|---:|
+| Identité et accès (15) | 4 | 0 | 11 |
+| Utilisateurs (9) | 3 | 1 | 5 |
+| Référentiels et organisation (13) | 9 | 0 | 4 |
+| Inscriptions et imports (10) | 5 | 0 | 5 |
+| Corps enseignant (5) | 3 | 2 | 0 |
+| Planning (13) | 5 | 2 | 6 |
+| Séances (9) | 6 | 0 | 3 |
+| Émargement et assiduité (16) | 6 | 3 | 7 |
+| Justificatifs et réclamations (8) | 3 | 1 | 4 |
+| Notifications et mobilité (9) | 1 | 1 | 7 |
+| Restitution (10) | 3 | 1 | 6 |
+| IA et objets connectés (10) | 0 | 0 | 10 |
+| Intégrations (4) | 0 | 0 | 4 |
+| Transverse (11) | 1 | 0 | 10 |
 
-## Fonctionnalités livrées (`IMPLEMENTED_AND_TESTED`)
+---
 
-Sauf mention contraire, « testé » = tests automatisés passants
-(`./mvnw clean test` / `npm test`). **Aucune démonstration manuelle n'est
-enregistrée dans le dépôt.**
+## 2. Ce qui est livré et testé
 
-### Identité / accès
-- Connexion email + mot de passe → JWT HS256 stateless (signature +
-  `exp` + `iss` vérifiés, `401` nu). Réponse uniforme pour email
-  inconnu / mauvais mot de passe / compte inactif.
-- Multi-rôles ; autorités `ROLE_*` dans le JWT ; `@EnableMethodSecurity`
-  + `@PreAuthorize` sur toutes les routes non publiques.
-- Invitation + activation de compte (jeton `SecureRandom`, empreinte
-  SHA-256 seule stockée, TTL configurable, usage unique).
-- Administration des comptes : suspension / réactivation / archivage /
-  attribution / retrait de rôle, gardes fines côté serveur (protection
+### 2.1 Identité et accès
+
+- `EF-AUTH-001` connexion email + mot de passe → JWT HS256 stateless
+  (signature, `exp`, `iss` vérifiés). Réponse **uniforme** pour email
+  inconnu, mot de passe erroné et compte inactif.
+- `EF-AUTH-002` multi-rôles, autorités `ROLE_*` dans le jeton,
+  `@PreAuthorize` sur toute route non publique.
+- `EF-AUTH-003` sélecteur de contexte de rôle **transmis au serveur** et
+  vérifié contre les autorités du jeton
+  (`403 DASHBOARD_CONTEXT_NOT_HELD`). Le cumul n'élargit jamais le jeton.
+- `EF-AUTH-004` invitation et activation : jeton `SecureRandom`,
+  empreinte SHA-256 seule stockée, durée de vie configurable, usage
+  unique.
+- `EF-USER-002/003/006` suspension, réactivation, archivage, attribution
+  et retrait de rôle, avec gardes fines côté serveur (protection
   `SUPER_ADMIN`, auto-action interdite, dernier rôle actif protégé).
-  Front `/administration` en lecture **et** écriture.
-- Sélecteur de contexte de rôle côté front, **transmis au serveur** pour
-  le tableau de bord et vérifié contre les autorités du JWT
-  (`403 DASHBOARD_CONTEXT_NOT_HELD` si le rôle n'est pas détenu) ; le
-  cumul de rôles n'élargit **jamais** le JWT.
+  Écran `/administration` en lecture et écriture.
+- `EF-AUD-001` piste d'audit `audit_event` alimentée par tous les flux
+  métier, **sans donnée personnelle, sans jeton, sans adresse IP**.
 
-### Référentiels
-- `organization` : CRUD + archivage / restauration site / bâtiment /
-  salle, plages réseau CIDR IPv4/IPv6 validées (sans DNS). **Écrans
-  Angular livrés** (`/organization/sites…`, G1-A).
-- `academic` : CRUD + archivage année / formation / niveau / promotion /
-  classe ; affectation pédagogique + `AcademicScopeGuard` (périmètre RP
-  décidé côté serveur). Front `/academic` en **lecture seule**.
-- `enrollment` : profil apprenant, inscription, changement de classe
-  conservant l'historique ; une seule inscription active par apprenant et
-  par année (contrainte SQL + isolation de la concurrence). Front
-  `/students` en **lecture seule**.
-- `alternation` : 4 types de rythme, `configuration_json` validé et
-  canonicalisé ; affectation historisée ; exceptions individuelles ;
-  résolution `SCHOOL`/`COMPANY`/`UNKNOWN`. Front `/alternation` en R/W.
+### 2.2 Référentiels et organisation
 
-### Planning (G1-B)
-- Import CSV borné, **jamais écrit sur disque** (SHA-256 seul) →
-  **simulation** produisant lignes, anomalies et synthèse **sans créer
-  aucune séance** (invariant T1, AC-007).
-- Détection de conflits formateur / classe / salle et hors plage horaire
-  **intra-fichier**, plus conflits formateur / classe contre les séances
-  **déjà publiées**.
-- **Publication atomique** : verrou `FOR UPDATE`, re-validation, version
-  N/N+1 (ancienne `SUPERSEDED`, AC-008), séances créées / réutilisées /
-  supersédées via le **port public** `coursesession.PlanningSessionWriter`
-  (aucune entité JPA partagée entre modules). Publication concurrente
-  **strictement idempotente** (le perdant renvoie `alreadyPublished=true`).
-- Identité de créneau **stable et déterministe** :
-  `course_session.planning_slot_public_id`.
+- `EF-ORG-001/002` sites, bâtiments, salles, plages réseau CIDR IPv4 et
+  IPv6 validées sans résolution DNS. CRUD, archivage, restauration.
+  Écrans Angular livrés.
+- `EF-ACA-001..005, 008` années, formations, niveaux, promotions,
+  classes, affectations pédagogiques, avec contrôle de périmètre décidé
+  côté serveur (`AcademicScopeGuard`).
+- `EF-ACA-009` alternance : quatre types de rythme, configuration
+  validée et canonicalisée, affectation historisée, exceptions
+  individuelles, résolution `SCHOOL` / `COMPANY` / `UNKNOWN`. Écran en
+  lecture et écriture.
+
+### 2.3 Population et imports
+
+- `EF-ENR-001..003` profils apprenants, inscriptions, changement de
+  classe conservant l'historique. Une seule inscription active par
+  apprenant et par année, garantie par contrainte SQL et testée en
+  concurrence.
+- `EF-IMP-001` simulation d'import CSV **sans aucune écriture métier** :
+  extension contrôlée, rejet ZIP / OLE2 / PDF / octet nul, UTF-8 strict,
+  RFC 4180, séparateur auto-détecté, fichier **jamais écrit sur
+  disque**, plafond `2 MiB` → `413`.
+- `EF-IMP-002` confirmation transactionnelle unique : verrou
+  `SELECT … FOR UPDATE`, revalidation complète, idempotence, rollback
+  total sur toute exception, courriel émis **uniquement après commit**,
+  numéro `ESIC-{année}-{NNNNN}` alloué atomiquement.
+
+### 2.4 Planning
+
+- `EF-PLAN-001/002` import CSV borné, jamais écrit sur disque
+  (SHA-256 seul), simulation produisant lignes, anomalies et synthèse
+  **sans créer aucune séance**.
+- `EF-PLAN-004/005/007` publication **atomique** : verrou `FOR UPDATE`,
+  revalidation, version N/N+1, ancienne version `SUPERSEDED`, séances
+  créées ou réutilisées via le **port public**
+  `coursesession.PlanningSessionWriter`. Publication concurrente
+  strictement idempotente. Identité de créneau stable et déterministe.
 - Écrans `/planning/import`, `/planning/import/:jobId`,
   `/planning/versions`.
 
-### Séances & émargement
-- Séance créée manuellement (motif obligatoire) **ou** issue d'un
-  planning publié ; cycle strict `PLANNED → OPEN → CLOSED`, pas de
-  réouverture ; `PLANNED`/`OPEN → CANCELLED` avec motif ; remplacements
-  de formateur datés. Pas de `PATCH`.
-- Une séance supersédée est **inactive partout** (garde centralisée
-  `CourseSession.isOperational()`) ; une séance `CANCELLED` reste
-  **consultable** en historique (`isHistoricallyReadable()`).
-- Remplacement : formateur principal **jamais écrasé** ; une seule
-  substitution `ACTIVE` applicable ; le remplaçant obtient `MANAGE`
-  seulement pendant sa période ; `TEACHER` exclu de la création (« ne
-  valide pas lui-même son remplacement »).
-- Points de contrôle multiples (`START` / `END` / `CUSTOM`), transitions
-  concurrentes → `409`, jamais `500`.
-- Jeton d'émargement **opaque** + **code court** dans Redis (TTL,
-  rotation, purge à la fermeture **après commit**) ; le QR n'encode que
-  le jeton opaque, aucune donnée personnelle. Redis indisponible →
-  `503 ATT_TOKEN_BACKEND_UNAVAILABLE`, jamais de validation dégradée.
-- Validation par un `STUDENT` inscrit ; anti-double présence par
-  contrainte SQL (concurrence → `200` / `409` / `0×500`).
-- Classement `PRESENT` / `LATE` (seuil unique `PT10M`).
-- Présence manuelle / correction / annulation logique, motif obligatoire,
-  historique append-only, verrou optimiste → `409`.
+### 2.5 Séances et remplacements
 
-### Assiduité / reporting / justificatifs
-- Justificatif : dépôt / modification tant que `PENDING` / examen ;
-  `ACCEPTED` → `ABSENT → EXCUSED_ABSENCE` ; `TEACHER` exclu de l'examen.
-- **Pièce jointe (G1-E)** : dépôt multipart propriétaire, validation
+- `EF-SES-001..006` séance issue d'un planning publié ou créée
+  manuellement avec motif ; cycle strict `PLANNED → OPEN → CLOSED` sans
+  réouverture ; `CANCELLED` avec motif, la séance restant consultable en
+  historique ; séance supersédée inactive partout.
+- `EF-TEA-003..005` remplacements datés : formateur principal jamais
+  écrasé, une seule substitution active applicable, droits accordés au
+  remplaçant **uniquement** pendant sa période, `TEACHER` exclu de la
+  création.
+
+### 2.6 Émargement
+
+- `EF-ATT-001/009` jeton d'émargement **opaque** et code court dans
+  Redis : durée de vie, rotation, purge à la fermeture **après commit**.
+  Le QR n'encode que le jeton opaque, aucune donnée personnelle.
+- `EF-ATT-002` validation par un `STUDENT` inscrit, anti-double présence
+  par contrainte SQL ; concurrence → `200` / `409`, jamais `500`.
+- `EF-ATT-006/012` présence manuelle, correction, annulation logique,
+  motif obligatoire, historique append-only, verrou optimiste → `409`.
+- `EF-ATT-015` suivi des présences en direct.
+- Redis indisponible → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` : **aucune
+  validation dégradée**.
+
+### 2.7 Justificatifs et restitution
+
+- `EF-JUS-001/003/004` dépôt, modification tant que `PENDING`, examen,
+  décision motivée, `ACCEPTED` → `ABSENT` devient `EXCUSED_ABSENCE` ;
+  `TEACHER` exclu de l'examen.
+- `EF-JUS-002` pièce jointe : dépôt multipart propriétaire, validation
   extension + type déclaré + **magic bytes** (type re-dérivé du contenu,
-  rejet ZIP/OLE2), contenu **hors base et hors webroot**, séquence
-  base↔fichier avec **compensation**, réconciliation `@Scheduled` des
-  lignes `PENDING_STORAGE`, téléchargement `Content-Disposition:
-  attachment` + `nosniff` (propriétaire **et** examinateur périmétré ;
-  hors périmètre → `404`), notification `AFTER_COMMIT` du propriétaire à
-  l'examen.
+  rejet ZIP/OLE2), stockage **hors base et hors webroot**, séquence
+  base ↔ fichier avec compensation, réconciliation planifiée des lignes
+  `PENDING_STORAGE`, téléchargement forcé en pièce jointe avec
+  `nosniff`, accès propriétaire et examinateur périmétré uniquement.
+- `EF-REP-001..003` rapports séance / classe / apprenant / synthèse en
+  JSON paginé avec tri serveur borné, export CSV UTF-8 + BOM, séparateur
+  `;`, neutralisation d'injection de formule.
 - Espace apprenant `/me/attendance*` : absences **dérivées** d'un point
-  de contrôle fermé, jamais persistées ; aucun accès croisé (AC-017).
-- Calcul de demi-journées : contexte d'alternance `COMPANY` exclu du
-  dénominateur, `UNKNOWN` non satisfait compté à part.
-- Rapports séance / classe / apprenant / synthèse (JSON paginé, tri
-  serveur borné → `400 ATT_REPORT_INVALID_SORT`) ; export CSV (UTF-8 +
-  BOM, `;`, neutralisation d'injection de formule).
-- Front `/attendance-management` (4 sous-rapports + file des
-  justificatifs), `/my-attendance`.
+  de contrôle fermé, jamais persistées ; aucun accès croisé (`AC-017`).
 
-### Import CSV des apprenants
-- Lecture sécurisée : extension `.csv`, rejet ZIP/OLE2/PDF/octet nul,
-  UTF-8 strict, RFC 4180 maison, séparateur `,`/`;` auto-détecté ;
-  fichier **jamais écrit sur disque** ; `2 MiB` max →
-  `413 IMP_FILE_TOO_LARGE`.
-- **Simulation** sans aucune écriture métier (T1).
-- **Confirmation** transactionnelle unique : verrou `SELECT … FOR
-  UPDATE`, re-validation complète, idempotence `APPLIED`, rollback total
-  sur toute exception (T3), e-mail seulement `AFTER_COMMIT` (T4),
-  numéro `ESIC-{annéeDébut}-{NNNNN}` alloué atomiquement.
-- Audit `AFTER_COMMIT` + `REQUIRES_NEW` (aucune trace si rollback, T5) ;
-  purge `@Scheduled`. Front `/students/import` (R/W).
+### 2.8 Notifications
 
-### Notifications (EF-NOTIF-001)
-- Centre in-app **persistant** : planning publié / séance annulée /
-  remplaçant affecté / remplacement terminé → notifications produites
-  `AFTER_COMMIT` (rollback métier ⇒ **0** notification), **idempotentes**
-  (`dedup_key` SHA-256), **isolées par destinataire** (notification
-  d'autrui → `404`, pas `403`).
-- Frontière par destinataire durcie : l'échec d'un destinataire
-  n'interrompt pas les autres.
-- API `/api/v1/me/notifications` (liste paginée, `unread-count`,
-  `{id}/read`, `read-all`), cloche `mat-badge` + centre Angular ; liens
-  en **liste blanche par rôle** (aucun `targetPath` serveur).
+- `EF-NOTIF-001` centre in-app persistant : planning publié, séance
+  annulée, remplaçant affecté, remplacement terminé. Notifications
+  produites **après commit** (rollback ⇒ zéro notification),
+  **idempotentes** (`dedup_key` SHA-256), **isolées par destinataire**
+  (notification d'autrui → `404`). Cloche `mat-badge` et centre Angular ;
+  liens en liste blanche par rôle, aucun chemin d'interface transmis par
+  le serveur.
 
-### Transverse
-- Audit `audit_event` alimenté par tous les flux métier ; **sans PII,
-  sans jeton, sans adresse IP**.
-- Matrices de sécurité `*SecurityTests` (`401` / `403` / `200`) par
-  module ; concurrence testée (inscriptions, affectations, émargement,
-  corrections, confirmations d'import, publications de planning) ;
-  invariants transactionnels T1–T6 de l'import.
-- En-têtes HTTP durcis : `nosniff`, `X-Frame-Options: DENY`, anti-cache,
-  **CSP**, `Referrer-Policy: no-referrer` ; **CORS restrictif** piloté par
-  `APP_ALLOWED_ORIGINS`, jamais `*`, `allowCredentials=false`.
-- Front Angular 21.2 zoneless / standalone / Material ; JWT et contexte
-  de rôle **en mémoire seule** (aucun `localStorage` / `sessionStorage`,
-  asserté par test) ; build de production sous le budget de 500 kB.
+### 2.9 Transverse
 
-## Fonctionnalités partielles (`PARTIAL`)
+- En-têtes durcis : `nosniff`, `X-Frame-Options: DENY`, anti-cache,
+  CSP, `Referrer-Policy: no-referrer`.
+- CORS restrictif piloté par `APP_ALLOWED_ORIGINS`, jamais `*`,
+  `allowCredentials=false`.
+- Erreur d'appel client → `400 VALIDATION_ERROR`, jamais `500`.
+- Front Angular 21 zoneless / standalone / Material ; jeton et contexte
+  de rôle **en mémoire seule**, aucun `localStorage` ni
+  `sessionStorage`, asserté par test.
+- Lien d'évitement présent sur les pages applicatives **et** publiques.
+- Matrices `*SecurityTests` (`401` / `403` / `200`) par module ;
+  concurrence testée sur inscriptions, affectations, émargement,
+  corrections, confirmations d'import, publications de planning.
 
-| Sujet | Ce qui existe | Ce qui manque |
+---
+
+## 3. Partiels
+
+| Exigence | Ce qui existe | Ce qui manque |
 |---|---|---|
-| Points de contrôle (EF-ATT-003) | N points de contrôle par séance (`START`/`END`/`CUSTOM`) | les 4 types nommés (`MORNING_ARRIVAL`…) et le calcul journée / demi-journée strict du cahier ne sont pas modélisés tels quels |
-| Retards (EF-ATT-005) | seuil unique `PT10M` → `LATE` | paliers 15 / 30 min, validation manuelle automatique après 30 min |
-| Correction de lignes de planning (EF-PLAN-003) | annulation du job + réimport (`DEC-G1-003`) | pas de correction ligne à ligne dans l'écran de revue |
-| Versionnement du planning (EF-PLAN-007, RG-032..035) | versions N/N+1, `SUPERSEDED`, aucune purge | conflit **salle** contre les séances déjà publiées non détecté (`coursesession` ne porte pas `room_code`) ; pas de retour à une version antérieure |
-| Alternance ↔ assiduité | contexte résolu, consommé par le reporting | pas d'avertissement d'alternance sur un créneau jour-entreprise à la publication (`DEC-G1-006`) ; « demi-journées attendues » ne croise pas systématiquement le rythme |
-| Pièces jointes — **durcissement opérationnel** (le périmètre fonctionnel est `IMPLEMENTED_AND_TESTED`) | validation structurelle, stockage hors webroot, compensation, réconciliation, téléchargement forcé | **antivirus `NOT_IMPLEMENTED`** (`DEC-G1-E-ANTIVIRUS` — ne jamais écrire « garanti sans malware ») ; **balayage des fichiers orphelins `NOT_IMPLEMENTED`** (la réconciliation ne traite QUE les `PENDING_STORAGE`) ; pas de remplacement direct d'une pièce ; rétention `DELETED` **`À_DÉFINIR`** (`R-G1-30`) |
-| Notifications (EF-NOTIF-002 / RG-033) | voir « livrées » ci-dessus | audience **formateur uniquement** — apprenants / responsables pédagogiques non notifiés (dette **G1-D-AUDIENCE**) ; livraison « au mieux » après commit **sans reprise** (dette **G1-D-OUTBOX**) ; pas d'email métier, de push PWA, de préférences, de purge |
-| Tableau de bord par rôle (G1-F, CDC §25) — **bloc global `PARTIAL`** | endpoint typé par rôle, périmètre serveur, contexte multi-rôle vérifié ; cartes `STUDENT` et `TEACHER` `IMPLEMENTED_AND_TESTED` (formateur **avec remplaçants actifs**) | cartes `PEDAGOGICAL_MANAGER` `PARTIAL` (justificatifs périmétrés, alternance `UNKNOWN`, planning actif, conflits récents : **pas de port agrégé borné**) ; carte `ADMINISTRATION` `PARTIAL` (dernières opérations d'audit non exposées) ; coût SQL **linéaire selon le nombre de séances** (≈ 2 requêtes/séance, non regroupé) ; pas de cache Redis |
-| Audit transactionnel | `coursesession` et `studentimport` publient `AFTER_COMMIT` | **8 des 9 listeners d'audit** restent des `@EventListener` synchrones `REQUIRES_NEW` ; l'échec d'audit après stockage d'une pièce est **isolé** mais **non rejoué** (pas d'outbox) |
-| Écrans d'écriture (dette G1-A) | `organization`, `alternation`, `administration`, imports, séances, émargement en R/W | écritures `academic` / `enrollment`, affectation d'un responsable pédagogique, **émission** d'invitation : API livrées, **aucun écran** |
-| Rapports « officiels » (docs/02 §24.5) | calcul demi-journées + export CSV | mise en page (logo, PDF, identifiant de document), export Excel |
-| OpenAPI | `/v3/api-docs` + `/swagger-ui` au runtime | pas d'`openapi.json` versionné (`scripts/dump-openapi.sh` à la demande) |
-| Redis | jetons d'émargement uniquement | cache de planning, rate-limiting, droits calculés |
-| Actuator / supervision | `/actuator/health` (`show-details: never`) | métriques, logs structurés JSON |
-| Rétention / purge | purge planifiée de l'import CSV et des jobs de planning | audit, invitations `PENDING` échues, présences, pièces jointes `DELETED` |
-| Performance | mesures indicatives (`docs/reports/PERF_NOTES.md`), concurrence testée | pas de campagne de charge ; objectif « < 100 ms » non validé sur l'ensemble des routes |
-| Accessibilité | structure sémantique, labels, `role="alert"`, clavier ; 2 fichiers `*.a11y.spec.ts` (`axe-core`) | audit outillé complet, test lecteur d'écran |
-| EF-USER-001 | création via invitation / fixtures | pas d'endpoint `POST /users` de création `PENDING_ACTIVATION` |
-| Anti-brute-force `/auth/login` | refus uniforme + BCrypt | **rate-limiting `NOT_IMPLEMENTED`** — dette assumée (`docs/07` §5) |
+| `EF-USER-001` | création via invitation et fixtures | pas d'endpoint `POST /users` créant un compte `PENDING_ACTIVATION` |
+| `EF-TEA-001/002` | API d'affectation pédagogique livrée | aucun écran de création de formateur externe ni d'affectation |
+| `EF-PLAN-003` | annulation du travail d'import puis réimport | pas de correction ligne à ligne dans l'écran de revue |
+| `EF-PLAN-009` | conflits formateur / classe / salle **intra-fichier**, formateur / classe contre les séances publiées | conflit **salle** contre les séances déjà publiées non détecté (`coursesession` ne porte pas `room_code`) |
+| `EF-ATT-003` | N points de contrôle par séance (`START` / `END` / `CUSTOM`) | les quatre types nommés (`MORNING_ARRIVAL`…) ne sont pas modélisés |
+| `EF-ATT-004` | calcul de demi-journées, alternance `COMPANY` exclue du dénominateur | pas de calcul journalier strict fondé sur les quatre points nommés |
+| `EF-ATT-005` | seuil unique `PT10M` → `LATE` | paliers 15 et 30 minutes, validation manuelle automatique au-delà de 30 min |
+| `EF-JUS-002` | contrôle structurel complet, stockage sécurisé, compensation, réconciliation | **antivirus absent** — ne jamais écrire « garanti sans logiciel malveillant » ; balayage des fichiers orphelins absent |
+| `EF-NOTIF-002` | notifications produites pour les événements de planning et de séance | audience **formateur uniquement** ; apprenants et responsables non notifiés |
+| `EF-REP-007` | endpoint typé par rôle, périmètre serveur, contexte multi-rôle vérifié ; cartes `STUDENT` et `TEACHER` complètes | cartes `PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes ; coût SQL linéaire par séance |
+| Audit transactionnel | `coursesession` et `studentimport` publient après commit | 8 des 9 écouteurs restent synchrones `REQUIRES_NEW` ; pas d'outbox |
 
-## Hors périmètre assumé (`HORS_PÉRIMÈTRE_ASSUMÉ`)
+---
 
-Décidé pour cette livraison de prototype, assumé et documenté — jamais
-présenté comme livré.
+## 4. Non implémenté
 
-- `EF-PLAN-006` — création manuelle d'un planning plein calendrier
-  (la création manuelle d'une **séance exceptionnelle** existe).
-- QR fixe de salle + contrôle réseau CIDR (référentiel
-  `site_network_range` présent, **non consommé**) — EF-ROOM-002,
-  EF-ATT-008 ; scan caméra mobile (code court uniquement).
-- WebAuthn / passkeys, MFA TOTP, Cloudflare Turnstile / anti-bot.
-- Réclamations / messagerie (EF-CLAIM-001/002), départ anticipé,
-  import Excel `.xlsx` / multifeuille, groupes temporaires.
-- Service IA (FastAPI, mapping de colonnes, score d'anomalie) —
-  EF-AI-001..003 ; IoT / MQTT / Raspberry Pi (broker Mosquitto démarré
-  par `compose.yaml`, **aucun code back-end**) — EF-IOT-001/002.
-- PWA installable / offline / push.
-- Mot de passe oublié / réinitialisation (EF-AUTH-005) ;
-  `/auth/logout` + révocation de session (JWT stateless assumé).
-- Export Excel (EF-REP-004), export PDF.
-- Déploiement cloud AWS / staging / HTTPS / haute disponibilité ;
-  sauvegarde / restauration outillée et testée.
-> `DEC-G1-011` (« pas de suite e2e navigateur ») a été **révisée le
-> 3 septembre 2026** : la suite existe et est conservée. Voir « Recette
-> end-to-end navigateur » ci-dessous.
+Aucune ligne de code. Ce sont les sprints à venir — voir
+`docs/06-roadmap-six-mois.md`.
 
-## Résultats de tests
+| Bloc | Exigences | Sprint |
+|---|---|---|
+| Mot de passe oublié, déconnexion, révocation de session | `EF-AUTH-005`, `EF-AUTH-014` | 2 |
+| WebAuthn et passkeys | `EF-AUTH-006`, `EF-AUTH-007`, `EF-ATT-011` | 2 |
+| MFA TOTP, codes de récupération, authentification adaptative | `EF-AUTH-008..010`, `EF-AUTH-015` | 2 |
+| Anti-robot et limitation de débit | `EF-AUTH-011`, `EF-AUTH-012` | 2 |
+| Appareils de confiance | `EF-AUTH-013` | 2 |
+| Opérations de masse, doublons, invitations pilotées, délivrabilité, recherche globale | `EF-USER-004`, `005`, `007`, `008`, `009` | 3–4, 11 |
+| Matières, groupes temporaires | `EF-ACA-006`, `007` | 3 |
+| QR fixe de salle, conflits de salle | `EF-ORG-003`, `004` | 6, 8 |
+| Import Excel, multifeuille, correction de ligne | `EF-IMP-003`, `004`, `006` | 4 |
+| Suivi à distance individuel | `EF-ENR-004` | 7 |
+| Calendrier de planning, retour arrière, alternance, Excel, PDF, IA | `EF-PLAN-006`, `008`, `010..013` | 6, 12 |
+| Report, demande d'annulation, séance multi-classes | `EF-SES-007`, `008`, `009` | 6 |
+| Points de contrôle nommés, contrôle réseau, QR salle, apprenant provisoire, départ anticipé, transparence, borne | `EF-ATT-007`, `008`, `010`, `013`, `014`, `016` | 8–9, 12 |
+| Réclamations | `EF-CLAIM-001..004` | 9 |
+| Audience élargie, courriel, push, préférences, PWA | `EF-NOTIF-003..006`, `EF-PWA-001..003` | 10 |
+| Excel, PDF, attestations, tableaux alternatifs, rapports d'anomalies et d'invitations | `EF-REP-004`, `005`, `006`, `008`, `009`, `010` | 11–12 |
+| Service d'IA complet | `EF-AI-001..005` | 12 |
+| Objets connectés | `EF-IOT-001..005` | 12 |
+| Intégrations Microsoft, iCalendar, fournisseur de courriel | `EF-INT-001..004` | 11, 13 |
+| Consultation d'audit, outbox, RGPD, exploitation | `EF-AUD-002`, `003`, `EF-RGPD-001..003`, `EF-OPS-001..005` | 10, 13 |
 
-Mesurés sur **ce dépôt**, HEAD `d3450e6` (2 septembre 2026).
-Environnement : OpenJDK 21, MySQL 8 + Redis 7 (Docker Compose local),
-Node 24.13, npm 11.6.2.
+**Vérifications de terrain** (3 septembre 2026) : aucune occurrence de
+`forgot-password`, `TOTP`, `Turnstile`, `rate-limit`, `MQTT`, `outbox`,
+`service-worker`, Apache POI ni bibliothèque PDF dans `backend/src/main`
+ou `frontend/src`. Aucun module `claim`, `ai` ou `iot`.
+
+---
+
+## 5. Architecture réelle
+
+### 5.1 Modules Spring Modulith — 14
+
+`ModularityTests` **vert** : aucune dépendance vers l'interne d'un autre
+module, aucun cycle.
+
+| Module | Rôle | Migrations |
+|---|---|---|
+| `identity` | comptes, rôles, JWT, invitation, administration | V1, V2, V3 |
+| `organization` | site, bâtiment, salle, plage réseau | V4 |
+| `academic` | année, formation, niveau, promotion, classe, affectation | V5, V6 |
+| `enrollment` | profil apprenant, inscription, changement de classe | V7 |
+| `alternation` | rythmes, affectations, exceptions, résolution | V8 |
+| `planning` | import, simulation, conflits, publication versionnée | V12, V13 |
+| `coursesession` | séances, cycle de vie, points de contrôle, remplacements | V9, V10, V13, V14 |
+| `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
+| `studentimport` | import CSV des apprenants | V11 |
+| `notification` | centre de notifications persistant | V15 |
+| `dashboard` | tableau de bord par rôle | — |
+| `audit` | piste d'audit | V1 |
+| `bootstrap` | amorçage du profil `demo` | — |
+| `shared` | types transverses, gestion d'erreurs, horloge | — |
+
+Modules du cahier des charges **non encore créés** : `claim`,
+`reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
+
+### 5.2 Migrations Flyway — schéma en V16
+
+41 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+par une migration.
+
+> **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
+> pas même un commentaire — cela invalide sa somme de contrôle et casse
+> toute base existante. Les corrections passent par une nouvelle
+> migration.
+>
+> Les migrations V10 à V16 citent en commentaire des chemins de rapports
+> supprimés le 3 septembre 2026 (`docs/reports/…`). Ces références sont
+> **conservées telles quelles** pour cette raison. Les décisions
+> correspondantes sont reprises dans `docs/03-architecture.md` sous les
+> mêmes identifiants `DEC-G1-*`.
+
+---
+
+## 6. Résultats de tests
+
+Mesurés sur ce dépôt, branche `feature/produit-complet-v2`,
+3 septembre 2026. Environnement : OpenJDK 21.0.12, Node 24.13.0,
+npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — 96 classes, `ModularityTests` **vert** (14 modules), schéma **V16** |
-| `cd frontend && npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** (Vitest + jsdom) |
-| `npm run lint` | « All files pass linting » |
-| `npm run build` | initial **484,52 kB** brut — 0 alerte de budget |
-| `npm audit --audit-level=high` | **passe** (0 haute, 0 critique) — 1 vulnérabilité **modérée** sur `qs`, tirée par `@angular/cli` (outillage de développement, absent du bundle servi) ; suivie dans l'issue de migrations majeures |
+| `cd backend && ./mvnw clean test` | **96 classes / 812 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V16 |
+| `cd frontend && npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** |
 
-Preuves complémentaires du lot G1 (relevées à la passe corrective,
-`G1_FINAL_REPORT.md` §11) : suite back **809 → 811** verte sous les trois
-fuseaux (défaut / `TZ=UTC` / `TZ=Europe/Paris`) ; Flyway `V1 → V16`
-rejoué sur une base `esic_test` recréée vierge suivi de
-`ddl-auto=validate` OK.
-
-Mesures de coût SQL du tableau de bord manager (compteur Hibernate) :
-
-| Dimension | Mesure | Conclusion |
-|---|---|---|
-| Nombre de **classes** | 1 classe → 14 requêtes ; 15 classes → 14 | N+1 **corrigé**, croissance **nulle** |
-| Nombre de **séances** | 1 séance → 10 ; 10 séances → 28 | **linéaire ≈ 2 requêtes/séance**, non regroupé — borné *en pratique* par la fenêtre 7 jours et l'affichage à 10, **pas** en requêtes au-delà (`DEC-G1-010`) |
-
-Les tests portant le tag JUnit `perf` sont **exclus** du run par défaut
+Les tests portant le tag `perf` sont exclus par défaut
 (`./mvnw test -Pperf` pour les exécuter).
 
-### Recette end-to-end navigateur (3 septembre 2026)
+**Piège d'exécution** : la suite back-end exige les variables du `.env`.
+Sans `set -a && source ../.env && set +a`, Flyway échoue avec
+`Access denied for user '${MYSQL_USER}'` et les 812 tests tombent en
+erreur. Ce n'est pas un défaut du produit.
+
+### 6.1 Recette navigateur
 
 | Indicateur | Valeur |
 |---|---|
-| Commande | `npm run test:e2e` (pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté) |
-| Fichiers / tests | 10 / **149** |
-| Run livré (`test-results/html-report/`) | **145 / 149**, 41,7 min |
-| Taux de réussite **fonctionnel** | **149 / 149** — les 4 échecs du run livré sont des blocages d'environnement (charge système), chacun réussi en < 2 s sur ≥ 5 exécutions ; détail et historique : `audit-report.md` §4.2 |
-| Durée typique hors dégradation | 18 à 20 min (chromium, `workers: 1`) |
-| Navigateurs | chromium exécuté ; firefox / webkit / mobile-chrome configurés, non exécutés par défaut |
-| CI | `.github/workflows/e2e.yml`, **déclenchement manuel** (`workflow_dispatch`) |
+| Commande | `npm run test:e2e` (pile démarrée, `ESIC_DEMO_PASSWORD` exporté) |
+| Fichiers / tests | 10 / 149 |
+| Navigateurs | chromium exécuté ; firefox, webkit et mobile configurés, non exécutés par défaut |
+| Intégration continue | `.github/workflows/e2e.yml`, déclenchement manuel |
 
-Ce que la suite **ne** couvre pas, faute d'écran réel : mot de passe
-oublié, MFA / WebAuthn / Turnstile, QR fixe de salle, scan caméra, export
-Excel / PDF, réclamations, écrans d'écriture `academic` / `enrollment`,
-dépôt de justificatif, CSRF (classe d'attaque non applicable à cette
-architecture). **Aucun test n'a été écrit contre un écran qui n'existe
-pas** (`audit-report.md` §0 et §4.3).
+La suite ne couvre pas les fonctions qui n'ont pas d'écran : mot de
+passe oublié, MFA, WebAuthn, anti-robot, QR fixe de salle, scan caméra,
+exports Excel et PDF, réclamations, écrans d'écriture `academic` et
+`enrollment`. **Aucun test n'est écrit contre un écran qui n'existe
+pas.**
 
-## Démonstration
+---
+
+## 7. Démonstration
 
 | Nature | Statut |
 |---|---|
-| Recette d'intégration **API** du parcours prioritaire (`PriorityPathRecetteIntegrationTests`) | `IMPLEMENTED_AND_TESTED` |
-| Parcours API relevé à la main (statuts HTTP, `docs/11-guide-demonstration.md` §11.8) | exécuté |
-| Jeu de démonstration **amorcé et vérifié par API** sur `esic_connect_demo` (6 connexions, import apprenants simulé + confirmé, planning publié v1, import conflictuel refusé `409`, présences, justificatifs, pièce jointe) — 2 septembre 2026 | exécuté |
-| Parcours prioritaire rejoué dans un **vrai navigateur** (Playwright, 2 apprenants réels : création de séance → ouverture → QR + code court → émargement → anti-rejeu → clôture → historique → isolation AC-017) | `IMPLEMENTED_AND_TESTED` — `tests/06-sessions-attendance.spec.ts`, captures dans `captures/success/` |
-| Tests **e2e navigateur** | **`IMPLEMENTED_AND_TESTED`** — 149 tests, 10 fichiers (`tests/`), `audit-report.md` §4 |
-| Démonstration **UI manuelle** de bout en bout | **`NOT_PERFORMED`** — aucune manipulation **humaine** consignée ; un navigateur piloté par script n'en est pas une |
-| Déploiement | **`NOT_PERFORMED`** — aucune instance, aucune URL (`docs/13-guide-deploiement.md`) |
-| **Statut global du lot G1** | **`IMPLEMENTED_AND_TESTED` (API + e2e navigateur) / `PARTIAL`** ; démonstration manuelle `NOT_PERFORMED` |
+| Recette d'intégration API du parcours prioritaire | `IMPLEMENTED_AND_TESTED` |
+| Parcours prioritaire rejoué dans un vrai navigateur (2 apprenants, création → ouverture → QR et code court → émargement → anti-rejeu → clôture → isolation `AC-017`) | `IMPLEMENTED_AND_TESTED` |
+| Démonstration **manuelle** de bout en bout par un humain | **`NOT_PERFORMED`** — un navigateur piloté par script n'en est pas une |
+| Déploiement | **`NOT_PERFORMED`** — aucune instance, aucune URL |
 
-## Principaux risques et dettes
+---
 
-| Réf | Dette / risque | Effet |
+## 8. Dettes et risques
+
+| Réf | Dette | Effet |
 |---|---|---|
-| G1-D-OUTBOX | notifications produites après commit **sans reprise** | une panne du writer perd la notification (métier non bloqué) |
-| G1-D-AUDIENCE | audience notification = **formateurs** | apprenants et RP ne sont pas notifiés (RG-033 `PARTIAL`) |
-| Audit synchrone | 8 listeners `@EventListener` + `REQUIRES_NEW` | une trace peut manquer sans annuler l'action ; pas d'outbox d'audit |
-| `DEC-G1-E-ANTIVIRUS` | aucun antivirus | contrôle **structurel** seul ; ne jamais garantir l'absence de malware |
-| Orphelins de fichiers | balayage `NOT_IMPLEMENTED` | un fichier peut subsister après une suppression best-effort échouée |
-| `DEC-G1-010` | coût SQL linéaire par séance sur le dashboard | dégradation si la fenêtre contient beaucoup de séances |
-| `R-G1-30` | rétention des pièces `DELETED` **`À_DÉFINIR`** | politique RGPD à arrêter avant tout usage réel |
-| Rate-limiting | `/auth/login` non limité | dette de sécurité assumée (`docs/07` §5) |
-| Stockage local | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère ; port `JustificationFileStorage` prêt pour un adaptateur objet |
-| Isolation des tests | `EnrollmentDirectoryTests` a échoué **une fois** sous `TZ=UTC` (1re passe G1) | **non reproduit** en 5 répétitions isolées ni sur les runs complets ; **cause non déterminée** (`TEST_ISOLATION_DECISION.md`) |
+| T-01 | pas d'outbox : notifications produites après commit sans reprise | une panne du diffuseur perd la notification |
+| T-02 | 8 écouteurs d'audit synchrones | une trace peut manquer sans annuler l'action |
+| T-04 | aucun antivirus sur les pièces jointes | contrôle structurel seul |
+| T-04 | balayage des fichiers orphelins absent | un fichier peut subsister après une suppression échouée |
+| T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
+| T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
+| — | `/auth/login` non limité en débit | dette de sécurité assumée jusqu'au sprint 2 |
+| T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
+| — | base `esic_connect` polluée par ~27 000 comptes de fixtures | `./scripts/db-reset.sh esic_connect` **non encore exécuté** |
 
-## Infrastructure
+---
 
-`docker compose up -d` démarre `mysql` (8.4), `redis` (7.4), `mailpit`,
-`mosquitto`. Les trois premiers passent `healthy` ; Mosquitto n'a pas de
-sonde et **aucun code back-end ne le consomme**. Nécessite un `.env`
-local non versionné (`cp .env.example .env`, puis renseigner au minimum
-`MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`
-≥ 32 octets et, pour le profil `demo`, `ESIC_DEMO_PASSWORD` ≥ 12
-caractères). Hors Docker, exporter aussi `JUSTIFICATION_STORAGE_PATH`
-vers un répertoire local inscriptible — le défaut `/data/uploads/...`
-n'est pas accessible en écriture. Voir `README.md`.
+## 9. Infrastructure
 
-**Trois bases MySQL distinctes**, jamais confondues :
+`docker compose up -d` démarre `mysql` (8.4), `redis` (7.4), `mailpit`
+et `mosquitto`. Les trois premiers passent `healthy` ; **Mosquitto n'a
+pas de sonde et aucun code back-end ne le consomme.**
 
-| Base | Usage | Variable |
-|---|---|---|
-| `esic_connect` | runtime `local` (base applicative) | `MYSQL_DATABASE` |
-| `esic_connect_demo` | runtime `demo` (démonstration, Flyway V16) | `MYSQL_DATABASE=esic_connect_demo` |
-| `esic_test` | suite de tests back-end (profil `test`) | `MYSQL_TEST_DATABASE` (défaut `esic_test`) |
+Quatre bases distinctes : `esic_connect` (local), `esic_connect_demo`
+(démonstration), `esic_test` (tests), `esic_connect_ci` (intégration
+continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 
-Le profil `test` lit **`MYSQL_TEST_DATABASE`** et non `MYSQL_DATABASE` :
-un `./mvnw test` lancé pendant une démonstration n'écrit donc pas dans
-`esic_connect_demo` (vérifié par relevé de volumes avant/après, suite
-complète lancée avec `MYSQL_DATABASE=esic_connect_demo` exporté). La CI
-impose `MYSQL_TEST_DATABASE: esic_connect_ci`.
+---
 
-## Audit QA indépendant (3 septembre 2026)
+## 10. Prochaines priorités
 
-Un audit externe a piloté un vrai navigateur (Playwright) contre
-l'application réellement démarrée (profil `demo`, `esic_connect_demo`) —
-149 tests réels couvrant l'authentification, le RBAC (5 rôles × 12 routes),
-les référentiels, l'import apprenants, l'import/publication de planning et
-le **parcours prioritaire complet** (création de séance → ouverture →
-émargement par 2 apprenants réels → clôture → isolation AC-017), la
-sécurité et l'accessibilité de base. Détail complet, matrice
-fonctionnalité → implémentée → testée, et preuves :
-[`audit-report.md`](../audit-report.md) et
-[`TESTING-SUMMARY.txt`](../TESTING-SUMMARY.txt) (racine du dépôt),
-captures dans `captures/`, suite dans `tests/`.
+1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
+   livré, l'exécution ne l'est pas.
+2. **Sprint 2 — sécurité forte** : mot de passe oublié, WebAuthn, MFA
+   TOTP, anti-robot, limitation de débit, révocation de session. C'est
+   le prérequis de toute manipulation de données réelles.
+3. **Sprint 4 — Excel et alternance appliquée**.
+4. **Sprint 6 — planning avancé** : calendrier interactif, retour
+   arrière, conflit de salle.
+5. **Sprint 8 — assiduité conforme** : quatre points de contrôle nommés,
+   paliers de retard, QR fixe et contrôle réseau.
+6. **Sprint 10 — outbox** : lève les dettes T-01 et T-02 d'un coup.
 
-**Suite donnée le 3 septembre 2026 (cette consolidation)** :
+---
 
-| Finding | Gravité | Traitement |
-|---|---|---|
-| **F-ENV-1** — base `esic_connect` polluée (27 105 comptes de fixtures) | CRITIQUE | **Outillé, pas encore exécuté** : `scripts/db-doctor.sh` (diagnostic, code 2 si polluée) et `scripts/db-reset.sh` (sauvegarde → `DROP`/`CREATE` → Flyway → contrôle). La base reste polluée tant que le script n'a pas été lancé |
-| **F-DOC-1** — contradiction sur le périmètre du planning | MAJEUR | **Tranché** : le planning est **dans le périmètre livré**. `docs/01-cadrage.md` §23.6 et `docs/02-cahier-des-charges.md` §4.5.2 remplacent les addendums F2, désormais marqués caducs |
-| **F-SEC-1** — `GET /planning/versions` sans paramètre → 500 | MINEUR | **Corrigé** : `GlobalExceptionHandler` traite `MissingServletRequestParameterException`, `MissingServletRequestPartException`, `MethodArgumentTypeMismatchException` et `HttpMessageNotReadableException` en `400 VALIDATION_ERROR`. Garde-fous : `PlanningImportIntegrationTests` et `tests/09-security-edge-cases.spec.ts` |
-| **F-A11Y-1** — lien d'évitement absent des pages publiques | MINEUR | **Corrigé** : composant partagé `core/a11y/skip-link`, utilisé par `AppShell` **et** par `/login`, `/activation`, `/forbidden`, `/not-found` |
-| **F-ENV-2** — aucune persistance de session | INFO | **Documenté**, non corrigé (choix assumé de prototype) : `docs/11-guide-demonstration.md` et `docs/13-guide-deploiement.md` §6 |
+## 11. Règle de mise à jour
 
-Rappel des deux découvertes majeures :
+Ne jamais déclarer :
 
-- **base `esic_connect` (profil `local`) polluée** par ~27 000 lignes de
-  comptes de test (motifs de fixtures backend, ex. `att-*`, `alt-*`,
-  `assign-*`) — aucun identifiant connu dessus, à nettoyer avant toute
-  démonstration sur cette base (`audit-report.md` finding F-ENV-1) ;
-- **contradiction documentaire non résolue** entre l'addendum « planning
-  hors périmètre assumé » de `docs/01-cadrage.md` §23.5 /
-  `docs/02-cahier-des-charges.md` §4.5.1 (31 août 2026) et le module
-  `planning` réellement livré et fonctionnel par le lot G1 (commit
-  `d3450e6`, 1er septembre 2026, **postérieur** à l'addendum) — confirmé
-  en pilotant l'écran réel (`audit-report.md` finding F-DOC-1). Cet audit
-  ne tranche pas laquelle des deux décisions doit prévaloir.
+- `IMPLEMENTED_AND_TESTED` sans commande exécutée et reproductible ;
+- démontré sans vérification manuelle enregistrée ;
+- déployé sans URL ni preuve ;
+- fonctionnel au seul motif que le code existe.
 
-## Prochaines priorités produit
-
-1. **Exécuter `./scripts/db-reset.sh esic_connect`** — seul point encore
-   ouvert du finding CRITIQUE F-ENV-1 ; l'outillage est livré, l'exécution
-   ne l'est pas.
-2. Démonstration **manuelle** du parcours et captures humaines : seul
-   point qui reste `NOT_PERFORMED` côté démonstration (la recette e2e
-   navigateur ne s'y substitue pas).
-3. Choisir une cible de déploiement et lever les verrous du
-   `docs/13-guide-deploiement.md` §6 (HTTPS et rate-limiting d'abord).
-2. Outbox transactionnelle (notifications **et** audit) — lève
-   G1-D-OUTBOX et la dette des 8 listeners synchrones.
-3. Élargissement de l'audience des notifications (apprenants / RP).
-4. Cartes de tableau de bord manquantes + chargement par lot des séances
-   (`DEC-G1-010`).
-5. Politique de rétention des pièces jointes et des audits (`R-G1-30`).
-6. Écrans d'écriture `academic` / `enrollment` / émission d'invitation.
-
-## Règle de mise à jour
-
-Ce document doit rester **court** et refléter le dépôt. Ne jamais
-déclarer :
-
-- `TESTED` sans commande exécutée ;
-- `DEMONSTRATED` / démontré sans vérification manuelle enregistrée ;
-- `DEPLOYED` sans URL ou preuve ;
-- `FONCTIONNEL` seulement parce que le code existe.
-
-La chronologie détaillée va dans `docs/reports/PROJECT_HISTORY.md`.
+Ce document est mis à jour **à chaque livraison**, dans le même commit
+que le code qu'il décrit.
