@@ -70,10 +70,14 @@ export class Dashboard {
 
   protected readonly quickLinks = computed(() =>
     visibleNavItems(NAV_ITEMS, this.roleContext.effectiveRoles()).filter(
-      // Le tableau de bord lui-même et les Notifications (toujours
-      // accessibles via la cloche de l'en-tête) ne sont pas des « accès
-      // rapides » de contenu métier.
-      (item) => item.path !== '/dashboard' && item.path !== '/notifications',
+      // Le tableau de bord lui-même, les Notifications (toujours
+      // accessibles via la cloche de l'en-tête) et la sécurité du compte
+      // (toujours accessible, quel que soit le rôle) ne sont pas des
+      // « accès rapides » de contenu métier.
+      (item) =>
+        item.path !== '/dashboard' &&
+        item.path !== '/notifications' &&
+        item.path !== '/mon-compte/securite',
     ),
   );
 

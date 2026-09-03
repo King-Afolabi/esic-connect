@@ -2,6 +2,8 @@ package com.esic.connect.identity.internal;
 
 import com.esic.connect.identity.LoginFailedEvent;
 import com.esic.connect.identity.LoginSucceededEvent;
+import com.esic.connect.shared.captcha.CaptchaGuard;
+import com.esic.connect.shared.captcha.LocalCaptchaVerifier;
 import com.esic.connect.shared.ratelimit.RateLimitDecision;
 import com.esic.connect.shared.ratelimit.RateLimiter;
 import org.junit.jupiter.api.Test;
@@ -24,7 +26,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +47,10 @@ class AuthenticationServiceTests {
     @Mock
     private JwtEncoder jwtEncoder;
     @Mock
+    private MfaService mfaService;
+    @Mock
+    private TrustedDeviceService trustedDeviceService;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private Jwt jwt;
@@ -60,15 +68,33 @@ class AuthenticationServiceTests {
         }
 
         @Override
+        public long currentCount(String bucket, String identityHash) {
+            // Aucun échec observé : le contrôle anti-robot ne se déclenche pas.
+            return 0L;
+        }
+
+        @Override
+        public void observe(String bucket, String identityHash, java.time.Duration window) {
+            // Sans effet : aucun compteur n'est tenu ici.
+        }
+
+        @Override
         public void reset(String bucket, String identityHash) {
             // Sans effet : aucun compteur n'est tenu ici.
         }
     };
 
     private AuthenticationService newService() {
-        return new AuthenticationService(authenticationManager, userAccountRepository, jwtEncoder,
-                eventPublisher, permissiveRateLimiter, "esic-connect-test", 900L,
-                10, 60, java.time.Duration.ofMinutes(15));
+        // Aucun second facteur exigé : ces tests portent sur l'audit et sur
+        // la propagation d'exception, pas sur la politique MFA, qui a ses
+        // propres tests (MfaIntegrationTests).
+        lenient().when(mfaService.challengeFor(any(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
+        AccessTokenIssuer issuer = new AccessTokenIssuer(jwtEncoder, "esic-connect-test", 900L);
+        return new AuthenticationService(authenticationManager, userAccountRepository, issuer,
+                mfaService, trustedDeviceService, eventPublisher, permissiveRateLimiter,
+                new CaptchaGuard(new LocalCaptchaVerifier()),
+                10, 60, java.time.Duration.ofMinutes(15), 3);
     }
 
     private UserAccount activeUser() {
@@ -88,7 +114,7 @@ class AuthenticationServiceTests {
         when(jwtEncoder.encode(any())).thenReturn(jwt);
         when(jwt.getTokenValue()).thenReturn("stub-token");
 
-        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant", "127.0.0.1");
+        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant", "127.0.0.1", null, null);
 
         assertThat(response.accessToken()).isEqualTo("stub-token");
         assertThat(response.tokenType()).isEqualTo("Bearer");
@@ -106,7 +132,7 @@ class AuthenticationServiceTests {
         when(jwt.getTokenValue()).thenReturn("stub-token");
         doThrow(new RuntimeException("panne technique simulée")).when(eventPublisher).publishEvent(any());
 
-        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant", "127.0.0.1");
+        LoginResponse response = newService().login("user@esic-connect.test", "irrelevant", "127.0.0.1", null, null);
 
         assertThat(response.accessToken()).isEqualTo("stub-token");
     }
@@ -116,7 +142,7 @@ class AuthenticationServiceTests {
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("mauvais mot de passe"));
         when(userAccountRepository.findByEmail("unknown@esic-connect.test")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong", "127.0.0.1"))
+        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong", "127.0.0.1", null, null))
                 .isInstanceOf(BadCredentialsException.class);
 
         verify(eventPublisher).publishEvent(any(LoginFailedEvent.class));
@@ -131,7 +157,7 @@ class AuthenticationServiceTests {
         // L'échec d'audit ne doit jamais masquer la vraie cause ni exposer
         // une autre information : l'exception d'authentification d'origine
         // reste celle propagée à l'appelant.
-        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong", "127.0.0.1"))
+        assertThatThrownBy(() -> newService().login("unknown@esic-connect.test", "wrong", "127.0.0.1", null, null))
                 .isInstanceOf(BadCredentialsException.class);
     }
 }

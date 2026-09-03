@@ -3,11 +3,14 @@ package com.esic.connect.identity;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.UserAccount;
 import com.esic.connect.identity.internal.UserAccountRepository;
+import com.esic.connect.shared.ratelimit.IdentityHashing;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -55,6 +58,27 @@ class AuthRateLimitIntegrationTests {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private StringRedisTemplate redis;
+
+    /**
+     * Remet à zéro les compteurs indexés sur l'ORIGINE avant chaque test.
+     *
+     * <p>Toute la suite se connecte depuis 127.0.0.1 : ces seaux-là sont
+     * partagés par toutes les classes de test, et un compteur hérité d'une
+     * autre classe ferait échouer ceux-ci pour une raison sans rapport
+     * avec ce qu'ils vérifient. Les seaux d'IDENTITÉ, eux, sont neufs à
+     * chaque test — chaque cas crée une adresse unique — et ne sont pas
+     * touchés ici : c'est précisément eux que ces tests mettent à
+     * l'épreuve.
+     */
+    @BeforeEach
+    void resetSharedOriginCounters() {
+        String origin = IdentityHashing.of("127.0.0.1");
+        redis.delete("esic:rate-limit:login-origin:" + origin);
+        redis.delete("esic:rate-limit:login-failures:" + origin);
+    }
 
     @Test
     void repeatedFailedLoginsOnTheSameAccountEndUpRateLimited() {

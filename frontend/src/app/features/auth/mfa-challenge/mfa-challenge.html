@@ -1,0 +1,92 @@
+<app-skip-link />
+<main class="auth-page" id="main-content">
+  <section class="auth-page__card" aria-labelledby="mfa-title">
+    <header class="auth-page__header">
+      <h1 id="mfa-title" class="auth-page__title">
+        {{ mustEnroll() ? 'Ajoutez votre second facteur' : 'Vérification en deux étapes' }}
+      </h1>
+      <p class="auth-page__subtitle">
+        @if (mustEnroll()) {
+          Vos rôles imposent un second facteur d'authentification. Enregistrez-le maintenant pour
+          accéder à votre espace.
+        } @else {
+          Saisissez le code à six chiffres affiché par votre application d'authentification, ou
+          l'un de vos codes de récupération.
+        }
+      </p>
+    </header>
+
+    @if (submitting() || loadingEnrollment()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Vérification en cours"></mat-progress-bar>
+    }
+
+    @if (recoveryCodes(); as codes) {
+      <div class="mfa__recovery" role="status">
+        <h2 class="mfa__recovery-title">Vos codes de récupération</h2>
+        <p>
+          Conservez-les hors de cet appareil. Chacun ne sert qu'une fois et permet de vous
+          connecter si vous perdez votre téléphone. Ils ne seront plus jamais affichés.
+        </p>
+        <ul class="mfa__recovery-list">
+          @for (code of codes; track code) {
+            <li><code>{{ code }}</code></li>
+          }
+        </ul>
+        <button mat-flat-button color="primary" type="button" class="auth-page__submit"
+                (click)="finish()">
+          J'ai noté mes codes, continuer
+        </button>
+      </div>
+    } @else {
+      @if (mustEnroll() && enrollment(); as setup) {
+        <div class="mfa__setup">
+          <p>
+            Ajoutez ce compte dans votre application d'authentification en saisissant la clé
+            ci-dessous, puis reportez le code qu'elle affiche.
+          </p>
+          <p class="mfa__secret"><code>{{ setup.secret }}</code></p>
+          <p class="mfa__hint">Le code change toutes les {{ setup.periodSeconds }} secondes.</p>
+        </div>
+      }
+
+      <form class="auth-page__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Code de vérification</mat-label>
+          <input
+            matInput
+            formControlName="code"
+            autocomplete="one-time-code"
+            inputmode="text"
+            autocapitalize="characters"
+            required
+          />
+          @if (form.controls.code.touched && form.controls.code.invalid) {
+            <mat-error>Saisissez le code affiché, ou un code de récupération.</mat-error>
+          }
+        </mat-form-field>
+
+        <p class="auth-page__error" role="alert" aria-live="assertive">
+          @if (errorMessage()) {
+            <mat-icon aria-hidden="true">error</mat-icon>
+            <span>{{ errorMessage() }}</span>
+          }
+        </p>
+
+        <button
+          mat-flat-button
+          color="primary"
+          type="submit"
+          class="auth-page__submit"
+          [disabled]="submitting()"
+          [attr.aria-busy]="submitting()"
+        >
+          {{ submitting() ? 'Vérification…' : 'Valider' }}
+        </button>
+
+        <button mat-button type="button" class="auth-page__link" (click)="cancel()">
+          Annuler et revenir à la connexion
+        </button>
+      </form>
+    }
+  </section>
+</main>

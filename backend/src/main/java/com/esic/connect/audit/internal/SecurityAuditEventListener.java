@@ -2,8 +2,11 @@ package com.esic.connect.audit.internal;
 
 import com.esic.connect.identity.LoginFailedEvent;
 import com.esic.connect.identity.LoginSucceededEvent;
+import com.esic.connect.identity.MfaChangedEvent;
 import com.esic.connect.identity.PasswordChangedEvent;
 import com.esic.connect.identity.SessionsRevokedEvent;
+import com.esic.connect.identity.TrustedDeviceChangedEvent;
+import com.esic.connect.identity.WebAuthnCredentialChangedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -85,6 +88,48 @@ public class SecurityAuditEventListener {
         auditEvent.setActorDisplaySnapshot(event.displaySnapshot());
         auditEvent.setResourcePublicId(event.userPublicId());
         auditEvent.setReason(event.reason());
+        auditEventRepository.save(auditEvent);
+    }
+
+    /**
+     * Changement de second facteur (docs/02 §23.1 : « ajout ou
+     * suppression d'un facteur ou d'une passkey »). Aucun secret partagé,
+     * aucun code : seule la nature du changement est conservée.
+     *
+     * <p>Écoute après commit pour la même raison que
+     * {@link #onPasswordChanged} : la transaction appelante a déjà
+     * verrouillé la ligne {@code user_account} vers laquelle pointe la
+     * clé étrangère de l'audit.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onMfaChanged(MfaChangedEvent event) {
+        save(event.userId(), event.userPublicId(), "MFA_" + event.action().name());
+    }
+
+    /** Ajout ou révocation d'une passkey (EF-AUTH-006, RG-008). */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onWebAuthnCredentialChanged(WebAuthnCredentialChangedEvent event) {
+        save(event.userId(), event.userPublicId(), "PASSKEY_" + event.action().name());
+    }
+
+    /**
+     * Ajout ou révocation d'un appareil de confiance (EF-AUTH-013).
+     * Aucune empreinte d'appareil ni adresse réseau n'est écrite : elles
+     * n'ont pas leur place dans l'audit métier (RG-094).
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onTrustedDeviceChanged(TrustedDeviceChangedEvent event) {
+        save(event.userId(), event.userPublicId(), "TRUSTED_DEVICE_" + event.action().name());
+    }
+
+    private void save(Long userId, java.util.UUID userPublicId, String action) {
+        AuditEvent auditEvent = new AuditEvent(Instant.now(), userId, action,
+                "SECURITY", "USER_ACCOUNT", "SUCCESS");
+        auditEvent.setActorPublicIdSnapshot(userPublicId);
+        auditEvent.setResourcePublicId(userPublicId);
         auditEventRepository.save(auditEvent);
     }
 

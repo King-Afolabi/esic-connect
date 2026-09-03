@@ -28,6 +28,24 @@ public interface RateLimiter {
     RateLimitDecision consume(String bucket, String identityHash, int limit, Duration window);
 
     /**
+     * Nombre d'unités déjà consommées dans la fenêtre courante, sans rien
+     * consommer. Sert à déclencher un contrôle renforcé au-delà d'un seuil
+     * (RG-092, AC-022) sans compter cette lecture comme une tentative.
+     *
+     * @return le compte courant, ou {@code 0} si la fenêtre est vide ou si
+     *         le magasin est injoignable — la lecture ne doit jamais faire
+     *         échouer l'appel qui l'utilise
+     */
+    long currentCount(String bucket, String identityHash);
+
+    /**
+     * Incrémente un compteur d'observation sans limite associée. Utilisé
+     * pour compter les échecs de connexion, qui déclenchent le contrôle
+     * renforcé mais ne bloquent pas à eux seuls.
+     */
+    void observe(String bucket, String identityHash, Duration window);
+
+    /**
      * Efface le compteur d'un seau pour une identité. Appelé après une
      * opération réussie qui doit remettre le compteur à zéro — une
      * connexion réussie, par exemple.

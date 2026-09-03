@@ -35,9 +35,11 @@ class UserAccountController {
     private static final String ADMIN_ROLES = "hasAnyRole('ADMIN','SUPER_ADMIN')";
 
     private final UserManagementService userManagementService;
+    private final StepUpGuard stepUpGuard;
 
-    UserAccountController(UserManagementService userManagementService) {
+    UserAccountController(UserManagementService userManagementService, StepUpGuard stepUpGuard) {
         this.userManagementService = userManagementService;
+        this.stepUpGuard = stepUpGuard;
     }
 
     @GetMapping
@@ -93,6 +95,10 @@ class UserAccountController {
     void assignRole(@PathVariable String publicId,
                     @Valid @RequestBody AssignRoleRequest request,
                     @AuthenticationPrincipal Jwt caller) {
+        // Modifier les droits d'autrui est une action critique : le jeton
+        // doit attester d'un facteur fort, pas seulement d'un mot de passe
+        // (EF-AUTH-015, RG-009).
+        stepUpGuard.requireStrongAuthentication(caller);
         userManagementService.assignRole(parseUuid(publicId), request.role(), request.reason().trim(),
                 subject(caller), roles(caller));
     }
@@ -104,6 +110,7 @@ class UserAccountController {
                     @PathVariable String roleCode,
                     @Valid @RequestBody AccountActionRequest request,
                     @AuthenticationPrincipal Jwt caller) {
+        stepUpGuard.requireStrongAuthentication(caller);
         userManagementService.revokeRole(parseUuid(publicId), roleCode, request.reason().trim(),
                 subject(caller), roles(caller));
     }

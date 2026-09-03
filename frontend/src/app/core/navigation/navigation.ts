@@ -148,6 +148,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/notifications',
     icon: 'notifications',
   },
+  {
+    // Écran livré (sprint 2) : sécurité du compte de l'appelant — second
+    // facteur, clés d'accès, appareils reconnus. Visible par tout rôle :
+    // chacun gère ses propres moyens d'authentification, et le serveur
+    // déduit le périmètre du sujet du jeton.
+    label: 'Sécurité de mon compte',
+    path: '/mon-compte/securite',
+    icon: 'security',
+  },
 ];
 
 /**

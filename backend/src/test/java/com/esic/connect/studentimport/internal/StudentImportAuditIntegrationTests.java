@@ -1,5 +1,6 @@
 package com.esic.connect.studentimport.internal;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.RoleCode;
 import com.esic.connect.identity.internal.RoleRepository;
@@ -256,11 +257,6 @@ class StudentImportAuditIntegrationTests {
     }
 
     private String login(String email) {
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", email, "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, email, PASSWORD);
     }
 }

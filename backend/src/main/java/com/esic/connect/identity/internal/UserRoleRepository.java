@@ -27,6 +27,15 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     List<UserRole> findActiveWithRoleByUserIds(@Param("userIds") Collection<Long> userIds);
 
     /**
+     * Codes des rôles ACTIFS d'un compte. Requête projetée : la décision
+     * de politique de second facteur (RG-007) n'a besoin que des codes,
+     * pas des entités d'affectation.
+     */
+    @Query("select r.code from UserRole ur join ur.role r "
+            + "where ur.user.id = :userId and ur.active = true")
+    List<RoleCode> findActiveRoleCodesByUserId(@Param("userId") Long userId);
+
+    /**
      * Affectations actives d'un rôle donné dont le compte porteur est
      * dans le statut demandé. Utilisé par {@code DefaultTeacherDirectory}
      * pour lister les formateurs éligibles à une séance sans exposer

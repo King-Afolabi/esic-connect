@@ -66,7 +66,9 @@ import java.util.List;
  * {@code Content-Security-Policy} et une {@code Referrer-Policy} (docs/07
  * §8). La CSP autorise {@code style-src 'unsafe-inline'} et
  * {@code img-src data:} car Swagger UI (springdoc) en a besoin ; aucun
- * {@code script-src 'unsafe-inline'} ni {@code 'unsafe-eval'}.
+ * {@code script-src 'unsafe-inline'} ni {@code 'unsafe-eval'}. Une seule
+ * origine externe est autorisée — celle du widget anti-robot Cloudflare
+ * Turnstile (EF-AUTH-011), pour son script et son iframe.
  *
  * <p><strong>CORS</strong> : origines lues dans
  * {@code app.security.cors.allowed-origins} (jamais {@code *}),
@@ -90,6 +92,20 @@ public class SecurityConfig {
             // (EF-AUTH-005, EF-AUTH-012).
             "/api/v1/auth/forgot-password",
             "/api/v1/auth/reset-password",
+            // Configuration publique du widget anti-robot : la clé de site
+            // est publique par construction (EF-AUTH-011).
+            "/api/v1/auth/captcha",
+            // Second facteur pendant une connexion suspendue : aucun jeton
+            // n'a encore été délivré. Ces routes sont inexploitables sans
+            // un identifiant de défi valide, lui-même délivré contre un mot
+            // de passe correct (EF-AUTH-008, AC-021).
+            "/api/v1/auth/mfa/verify",
+            "/api/v1/auth/mfa/enroll",
+            "/api/v1/auth/mfa/enroll/confirm",
+            // Connexion par passkey : les options d'assertion et leur
+            // vérification précèdent par nature toute session (EF-AUTH-007).
+            "/api/v1/auth/webauthn/login/options",
+            "/api/v1/auth/webauthn/login",
             // Parcours public d'activation (le jeton reçu par email fait foi).
             "/api/v1/account-invitations/validate",
             "/api/v1/account-invitations/activate"
@@ -103,9 +119,17 @@ public class SecurityConfig {
      * même origin). {@code frame-ancestors 'none'} double
      * {@code X-Frame-Options: DENY}.
      */
+    /** Origine du widget anti-robot (EF-AUTH-011) ; rien d'autre n'est autorisé. */
+    private static final String TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+
     private static final String CONTENT_SECURITY_POLICY = String.join("; ",
             "default-src 'self'",
-            "script-src 'self'",
+            // Turnstile charge son script depuis Cloudflare et s'affiche
+            // dans une iframe servie par le même origin : les deux
+            // directives sont nécessaires, et strictement limitées à
+            // cette origine.
+            "script-src 'self' " + TURNSTILE_ORIGIN,
+            "frame-src " + TURNSTILE_ORIGIN,
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:",
             "font-src 'self'",

@@ -1,0 +1,164 @@
+<section class="security" aria-labelledby="security-title">
+  <h1 id="security-title" class="security__title">Sécurité de mon compte</h1>
+
+  @if (busy()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Opération en cours"></mat-progress-bar>
+  }
+
+  <p class="security__message security__message--error" role="alert" aria-live="assertive">
+    @if (errorMessage()) {
+      <mat-icon aria-hidden="true">error</mat-icon>
+      <span>{{ errorMessage() }}</span>
+    }
+  </p>
+  <p class="security__message" role="status" aria-live="polite">
+    @if (infoMessage()) {
+      <span>{{ infoMessage() }}</span>
+    }
+  </p>
+
+  <mat-card class="security__card">
+    <mat-card-header>
+      <mat-card-title>Second facteur (application d'authentification)</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      @if (status(); as state) {
+        @if (state.enabled) {
+          <p>
+            Actif depuis le {{ state.confirmedAt | date: 'longDate' }}.
+            {{ state.activeRecoveryCodes }} code(s) de récupération restant(s).
+          </p>
+          @if (state.requiredByRole) {
+            <p class="security__hint">
+              Vos rôles imposent ce second facteur : il ne peut pas être retiré.
+            </p>
+          }
+        } @else {
+          <p>
+            Aucun second facteur n'est actif.
+            @if (state.requiredByRole) {
+              Vos rôles l'imposent : votre prochaine connexion vous demandera de l'ajouter.
+            }
+          </p>
+          @if (enrollment(); as setup) {
+            <p>
+              Saisissez cette clé dans votre application d'authentification, puis reportez le code
+              affiché.
+            </p>
+            <p class="security__secret"><code>{{ setup.secret }}</code></p>
+            <form [formGroup]="enrollForm" (ngSubmit)="confirmEnrollment()" novalidate>
+              <mat-form-field appearance="outline">
+                <mat-label>Code affiché</mat-label>
+                <input matInput formControlName="code" autocomplete="one-time-code" required />
+              </mat-form-field>
+              <button mat-flat-button color="primary" type="submit" [disabled]="busy()">
+                Activer
+              </button>
+            </form>
+          } @else {
+            <button mat-flat-button color="primary" type="button" (click)="startEnrollment()"
+                    [disabled]="busy()">
+              Ajouter un second facteur
+            </button>
+          }
+        }
+      }
+
+      @if (recoveryCodes(); as codes) {
+        <div class="security__recovery" role="status">
+          <h2 class="security__subtitle">Codes de récupération</h2>
+          <p>Conservez-les hors de cet appareil. Ils ne seront plus jamais affichés.</p>
+          <ul class="security__recovery-list">
+            @for (code of codes; track code) {
+              <li><code>{{ code }}</code></li>
+            }
+          </ul>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  @if (passkeysSupported) {
+    <mat-card class="security__card">
+      <mat-card-header>
+        <mat-card-title>Clés d'accès</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="security__hint">
+          Une clé d'accès permet de se connecter sans mot de passe. Votre appareil vous vérifie
+          localement ; ESIC Connect ne reçoit ni empreinte ni image de votre visage, seulement une
+          preuve cryptographique.
+        </p>
+        @if (passkeys().length === 0) {
+          <p>Aucune clé d'accès enregistrée.</p>
+        } @else {
+          <ul class="security__list">
+            @for (passkey of passkeys(); track passkey.id) {
+              <li class="security__list-item">
+                <span>
+                  <strong>{{ passkey.label }}</strong>
+                  <span class="security__hint">
+                    Ajoutée le {{ passkey.createdAt | date: 'longDate' }}
+                    @if (passkey.lastUsedAt) {
+                      · dernière utilisation le {{ passkey.lastUsedAt | date: 'longDate' }}
+                    }
+                  </span>
+                </span>
+                <button mat-stroked-button type="button" (click)="revokePasskey(passkey.id)"
+                        [disabled]="busy()"
+                        [attr.aria-label]="'Révoquer la clé d\'accès ' + passkey.label">
+                  Révoquer
+                </button>
+              </li>
+            }
+          </ul>
+        }
+
+        <form [formGroup]="passkeyForm" (ngSubmit)="registerPasskey()" novalidate
+              class="security__inline-form">
+          <mat-form-field appearance="outline">
+            <mat-label>Nom de cette clé (facultatif)</mat-label>
+            <input matInput formControlName="label" maxlength="120" />
+          </mat-form-field>
+          <button mat-flat-button color="primary" type="submit" [disabled]="busy()">
+            Ajouter une clé d'accès
+          </button>
+        </form>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <mat-card class="security__card">
+    <mat-card-header>
+      <mat-card-title>Appareils reconnus</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="security__hint">
+        Sur un appareil reconnu, la vérification en deux étapes n'est pas redemandée à chaque
+        connexion. Le mot de passe ou la clé d'accès reste toujours exigé.
+      </p>
+      @if (devices().length === 0) {
+        <p>Aucun appareil reconnu.</p>
+      } @else {
+        <ul class="security__list">
+          @for (device of devices(); track device.id) {
+            <li class="security__list-item">
+              <span>
+                <strong>{{ device.label }}</strong>
+                <span class="security__hint">
+                  Vu pour la dernière fois le {{ device.lastSeenAt | date: 'longDate' }} ·
+                  reconnu jusqu'au {{ device.expiresAt | date: 'longDate' }}
+                </span>
+              </span>
+              <button mat-stroked-button type="button" (click)="revokeDevice(device.id)"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'Révoquer l\'appareil ' + device.label">
+                Révoquer
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </mat-card-content>
+  </mat-card>
+</section>

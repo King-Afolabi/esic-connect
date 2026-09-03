@@ -1,5 +1,6 @@
 package com.esic.connect.identity;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -165,7 +166,7 @@ class UserManagementSecurityTests {
     @Test
     void adminCannotSuspendItsOwnAccount() {
         UserAccount admin = persistUser(AccountStatus.ACTIVE, RoleCode.ADMIN);
-        String token = (String) login(admin.getEmail()).getBody().get("accessToken");
+        String token = AuthTestSupport.accessToken(restTemplate, admin.getEmail(), PASSWORD);
 
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 RequestEntity.post("/api/v1/users/" + admin.getPublicId() + "/suspend")
@@ -190,7 +191,7 @@ class UserManagementSecurityTests {
 
     private String tokenFor(AccountStatus status, RoleCode role) {
         UserAccount account = persistUser(status, role);
-        return (String) login(account.getEmail()).getBody().get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, account.getEmail(), PASSWORD);
     }
 
     private ResponseEntity<Map<String, Object>> login(String email) {

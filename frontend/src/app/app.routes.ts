@@ -124,6 +124,19 @@ export const routes: Routes = [
       import('./features/auth/login/login').then((m) => m.Login),
   },
   {
+    // Deuxième étape de connexion (EF-AUTH-008, AC-021). Sous
+    // `guestGuard` : une session déjà ouverte n'a rien à vérifier. Le
+    // défi n'est pas dans l'URL — il vaut preuve de la première étape et
+    // ne doit pas entrer dans l'historique du navigateur ; il transite
+    // par `PendingChallengeStore`, en mémoire. Une arrivée directe sur
+    // cette route renvoie donc vers la connexion.
+    path: 'connexion/verification',
+    canActivate: [guestGuard],
+    title: `Vérification en deux étapes — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/auth/mfa-challenge/mfa-challenge').then((m) => m.MfaChallenge),
+  },
+  {
     // Parcours PUBLIC : demander un lien de réinitialisation
     // (EF-AUTH-005). Sous `guestGuard` — un utilisateur déjà connecté n'a
     // rien à y faire, il change son mot de passe depuis son profil.
@@ -164,6 +177,16 @@ export const routes: Routes = [
         title: `Tableau de bord — ${APP_NAME}`,
         loadComponent: () =>
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+      },
+      {
+        // Sécurité du compte de l'appelant : second facteur, clés d'accès,
+        // appareils reconnus (EF-AUTH-006, 008, 009, 013). Aucune garde de
+        // rôle — chacun gère ses propres moyens d'authentification, et le
+        // serveur déduit le périmètre du sujet du jeton.
+        path: 'mon-compte/securite',
+        title: `Sécurité de mon compte — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/account/security/account-security').then((m) => m.AccountSecurity),
       },
       {
         // Centre de notifications de l'appelant (G1-D). Aucune garde de

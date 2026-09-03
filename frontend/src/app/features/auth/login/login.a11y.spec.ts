@@ -1,10 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Router } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
-import { Session } from '../../../core/models/session';
+import { LoginOutcome } from '../../../core/models/session';
 import { expectNoAxeViolations } from '../../../../testing/axe';
 import { Login } from './login';
 
@@ -15,7 +15,13 @@ import { Login } from './login';
  */
 describe('Login — accessibilité (axe-core)', () => {
   let fixture: ComponentFixture<Login>;
-  const auth = { login: vi.fn().mockReturnValue(new Subject<Session>().asObservable()) };
+  // Le widget anti-robot interroge `GET /auth/captcha` à la construction :
+  // sans ce double, l'écran ne se rend pas du tout.
+  const auth = {
+    login: vi.fn().mockReturnValue(new Subject<LoginOutcome>().asObservable()),
+    captchaConfig: vi.fn().mockReturnValue(of({ enforced: false, siteKey: '' })),
+    loginWithPasskey: vi.fn(),
+  };
 
   beforeEach(async () => {
     // Routeur de test réel : l'écran porte un `routerLink` vers « mot de

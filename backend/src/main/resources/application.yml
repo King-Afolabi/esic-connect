@@ -92,6 +92,56 @@ app:
       identity-limit: ${LOGIN_IDENTITY_LIMIT:10}
       origin-limit: ${LOGIN_ORIGIN_LIMIT:60}
       window: ${LOGIN_WINDOW:PT15M}
+      # Nombre d'échecs au-delà duquel un contrôle anti-robot devient
+      # obligatoire (RG-092, AC-022 : « après trois échecs, les contrôles
+      # sont renforcés »). Compté par identité ET par origine réseau.
+      captcha-after-failures: ${LOGIN_CAPTCHA_AFTER_FAILURES:3}
+    mfa:
+      # Rôles pour lesquels le second facteur est obligatoire (RG-007,
+      # AC-021). Un rôle inconnu fait échouer le démarrage plutôt que
+      # d'affaiblir silencieusement la politique.
+      required-roles: ${MFA_REQUIRED_ROLES:SUPER_ADMIN,ADMIN}
+      # Chiffrement AES-GCM du secret TOTP au repos. Sans valeur, la clé
+      # est dérivée du secret JWT avec une séparation de domaine — le
+      # produit démarre en local sans configuration supplémentaire, et un
+      # avertissement est journalisé (voir SecretCipher).
+      encryption-key: ${MFA_ENCRYPTION_KEY:}
+      # Durée de vie d'un défi émis entre le mot de passe et le code.
+      challenge-ttl: ${MFA_CHALLENGE_TTL:PT5M}
+      # Tolérance de dérive d'horloge, exprimée en pas de 30 secondes.
+      step-tolerance: ${MFA_STEP_TOLERANCE:1}
+      # Nom affiché dans l'application d'authentification.
+      issuer-label: ${MFA_ISSUER_LABEL:ESIC Connect}
+      # Bornes anti-force brute sur la vérification d'un code à 6 chiffres.
+      verify-limit: ${MFA_VERIFY_LIMIT:10}
+      verify-window: ${MFA_VERIFY_WINDOW:PT15M}
+    trusted-device:
+      # Durée pendant laquelle un appareil reste reconnu (EF-AUTH-013).
+      # La reconnaissance n'ouvre jamais de session à elle seule et ne
+      # dispense jamais un compte privilégié de son second facteur.
+      duration: ${TRUSTED_DEVICE_DURATION:P30D}
+    webauthn:
+      # Partie de confiance des clés d'accès (EF-AUTH-006, EF-AUTH-007).
+      #
+      # CONTRAINTE DU STANDARD : `rp-id` doit être le domaine de
+      # l'application, et l'origine doit être servie en HTTPS — sauf
+      # `localhost`, contexte sûr par exception. Un déploiement hors du
+      # poste de développement exige donc un nom de domaine et HTTPS.
+      rp-id: ${WEBAUTHN_RP_ID:localhost}
+      rp-name: ${WEBAUTHN_RP_NAME:ESIC Connect}
+      origins: ${WEBAUTHN_ORIGINS:http://localhost:4200}
+      timeout: ${WEBAUTHN_TIMEOUT:PT2M}
+    captcha:
+      # Anti-robot Cloudflare Turnstile (EF-AUTH-011, docs/02 §17.9).
+      #
+      # La clé de SITE est publique par construction : elle s'affiche dans
+      # le HTML du widget, et le front la lit via GET /api/v1/auth/captcha.
+      # La clé SECRÈTE ne vit que dans l'environnement, jamais dans le
+      # dépôt. Sans elle, l'adaptateur local prend le relais et le produit
+      # DÉCLARE qu'aucun contrôle n'est actif — il n'en simule pas un.
+      site-key: ${APP_SECURITY_CAPTCHA_SITE_KEY:}
+      secret-key: ${APP_SECURITY_CAPTCHA_SECRET_KEY:}
+      timeout: ${CAPTCHA_TIMEOUT:PT5S}
     cors:
       # Origines autorisées à appeler l'API depuis un navigateur
       # (docs/07 §8 : « CORS restrictif »). Liste explicite séparée par

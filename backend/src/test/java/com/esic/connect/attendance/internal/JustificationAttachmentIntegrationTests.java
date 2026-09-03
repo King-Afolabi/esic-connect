@@ -1,5 +1,6 @@
 package com.esic.connect.attendance.internal;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.attendance.JustificationFileStorage;
 import com.esic.connect.attendance.JustificationFileStorageException;
 import com.esic.connect.identity.internal.AccountStatus;
@@ -718,12 +719,7 @@ class JustificationAttachmentIntegrationTests {
     }
 
     private String tokenFor(Account account) {
-        Map<String, Object> body = rest.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.email, "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(rest, account.email, PASSWORD);
     }
 
     private static String code() {

@@ -85,4 +85,18 @@ class UserManagementExceptionHandler {
                 request.getRequestURI(), UUID.randomUUID().toString(), List.of());
         return ResponseEntity.status(status).body(body);
     }
+
+    /**
+     * Action critique demandée avec un jeton obtenu par mot de passe
+     * seul (EF-AUTH-015). Code stable pour que l'interface propose la
+     * réauthentification au lieu d'un refus définitif.
+     */
+    @ExceptionHandler(StepUpRequiredException.class)
+    ResponseEntity<ApiError> handleStepUp(StepUpRequiredException exception,
+                                          HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError(
+                Instant.now(), HttpStatus.FORBIDDEN.value(), "AUTH_STEP_UP_REQUIRED",
+                exception.getMessage(), request.getRequestURI(),
+                UUID.randomUUID().toString(), List.of()));
+    }
 }

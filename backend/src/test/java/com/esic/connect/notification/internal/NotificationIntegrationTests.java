@@ -1,5 +1,6 @@
 package com.esic.connect.notification.internal;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -511,12 +512,7 @@ class NotificationIntegrationTests {
     }
 
     private String tokenFor(Account account) {
-        Map<String, Object> body = rest.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(rest, account.email(), PASSWORD);
     }
 
     private static String code() {
