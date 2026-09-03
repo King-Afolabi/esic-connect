@@ -93,7 +93,11 @@ describe('NAV_ITEMS', () => {
 
 describe('visibleNavItems', () => {
   it('exposes the always-visible items (dashboard, notifications) when no role is held', () => {
-    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard', '/notifications']);
+    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual([
+      '/dashboard',
+      '/notifications',
+      '/mon-compte/securite',
+    ]);
   });
 
   it('shows /administration for the roles that back UserAccountController READ_ROLES, and hides it otherwise', () => {

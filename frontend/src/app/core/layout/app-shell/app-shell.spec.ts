@@ -63,6 +63,7 @@ describe('AppShell', () => {
       '/sessions',
       '/attendance-management',
       '/notifications',
+      '/mon-compte/securite',
     ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
@@ -92,6 +93,7 @@ describe('AppShell', () => {
       '/dashboard',
       '/sessions',
       '/notifications',
+      '/mon-compte/securite',
     ]);
   });
 
@@ -103,6 +105,7 @@ describe('AppShell', () => {
       '/attendance',
       '/my-attendance',
       '/notifications',
+      '/mon-compte/securite',
     ]);
   });
 

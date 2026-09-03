@@ -2150,6 +2150,87 @@ planifiée au sprint 10.
 
 **Statut.** Adoptée le 3 septembre 2026.
 
+## DEC-S2-004 — le contrôle anti-robot laisse passer si Cloudflare est injoignable
+
+**Contexte.** `EF-AUTH-011` protège la connexion (après échecs répétés),
+la demande de réinitialisation et l'activation de compte par Cloudflare
+Turnstile. La vérification du jeton exige un appel sortant vers
+Cloudflare. Que faire quand cet appel échoue ?
+
+**Décision.** Un fournisseur injoignable produit un verdict
+`providerUnavailable` qui **laisse passer**, avec journalisation en
+`WARN`. Un jeton explicitement refusé par Cloudflare, lui, bloque.
+
+**Conséquences.** Refuser en cas de panne du tiers transformerait
+l'indisponibilité d'un service externe en panne totale de la connexion et
+de la réinitialisation de mot de passe — un déni de service déclenchable
+depuis l'extérieur, contre un produit dont la disponibilité est une
+exigence. Les protections propres au produit restent actives pendant ce
+temps : limitation par identité et par origine, réponse uniforme, audit
+de chaque tentative, verrouillage progressif.
+
+C'est le même arbitrage que `DEC-S2-001` : la panne d'un garde-fou ne
+doit pas devenir une porte fermée sur les utilisateurs légitimes. Il est
+l'inverse de celui retenu pour l'émargement (`503` si Redis tombe), où
+Redis porte l'**autorité** de la décision et non une simple protection.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-005 — un compte privilégié sans second facteur est enrôlé pendant sa connexion
+
+**Contexte.** `RG-007` et `AC-021` imposent un second facteur à tout
+compte `SUPER_ADMIN` ou `ADMIN`. Or la politique doit pouvoir entrer en
+vigueur sur une base existante, où aucun compte n'en possède : si la
+connexion était simplement refusée, plus aucun administrateur ne pourrait
+se connecter — ni, donc, enrôler quoi que ce soit.
+
+**Décision.** `POST /auth/login` ne renvoie plus systématiquement un
+jeton. Lorsque la politique l'exige, il renvoie un **défi** :
+- `VERIFY` si un facteur actif existe ;
+- `ENROLL` sinon — le compte enrôle dans la foulée, et la session s'ouvre
+  à la confirmation, sans redemander le mot de passe.
+
+Le défi vit dans Redis, à usage unique, avec une durée de vie courte. Il
+vaut preuve de la première étape : il ne transite ni par l'URL, ni par un
+stockage persistant côté client.
+
+**Conséquences.** Aucun compte privilégié n'obtient de jeton contre son
+seul mot de passe, y compris à la toute première connexion — `AC-021` est
+satisfait sans exception ni période de grâce. En contrepartie, tout code
+appelant `/auth/login` doit gérer les deux issues ; c'est le rôle de
+`AuthTestSupport` côté tests et de `PendingChallengeStore` côté interface.
+
+Redis portant ici l'autorité de la décision, son indisponibilité produit
+un `503` et non un contournement — à l'inverse de `DEC-S2-001`.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-006 — l'appareil de confiance allège la connexion, il ne l'autorise jamais
+
+**Contexte.** `EF-AUTH-010` demande une authentification adaptative et
+`EF-AUTH-013` des appareils de confiance. La tentation est d'en faire un
+facteur d'authentification à part entière.
+
+**Décision.** L'appareil est identifié par une **empreinte** d'un
+identifiant aléatoire que le client conserve localement. Il n'ouvre
+jamais de session à lui seul : le mot de passe ou la passkey reste exigé.
+Sur un compte ordinaire déjà enrôlé, un appareil reconnu évite de
+redemander le code à chaque connexion. Sur un compte privilégié, il
+n'accorde **aucune** dispense.
+
+**Conséquences.** Le confort d'usage progresse sans que la surface
+d'attaque s'élargisse : voler l'identifiant d'appareil ne donne rien sans
+le mot de passe. L'identifiant brut n'est jamais stocké côté serveur
+(`RG-094`), et l'appareil n'est mémorisé qu'après une authentification
+**complète** — jamais après une tentative refusée.
+
+Le stockage local de cet identifiant côté navigateur n'est pas une
+entorse à « aucun jeton sensible dans `localStorage` » : ce n'est pas un
+justificatif d'identité, et il doit survivre au rechargement pour que la
+fonction existe.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

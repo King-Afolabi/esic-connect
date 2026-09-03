@@ -7,8 +7,12 @@ import jakarta.validation.constraints.Size;
  * Activation d'un compte : jeton reçu par email + mot de passe choisi.
  * Longueur minimale alignée sur le cahier §16.1 ; le mot de passe est
  * encodé par {@code PasswordEncoder} avant persistance, jamais journalisé.
+ *
+ * @param captchaToken jeton anti-robot (EF-AUTH-011, docs/02 §17.9 :
+ *                     « l'activation de compte » est un formulaire exposé)
  */
 record ActivateAccountRequest(
         @NotBlank String token,
-        @NotBlank @Size(min = 12, max = 200) String password) {
+        @NotBlank @Size(min = 12, max = 200) String password,
+        String captchaToken) {
 }

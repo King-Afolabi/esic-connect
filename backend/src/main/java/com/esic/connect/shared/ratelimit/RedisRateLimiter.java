@@ -79,6 +79,32 @@ public class RedisRateLimiter implements RateLimiter {
     }
 
     @Override
+    public long currentCount(String bucket, String identityHash) {
+        try {
+            String raw = redisTemplate.opsForValue().get(key(bucket, identityHash));
+            return raw == null ? 0L : Long.parseLong(raw);
+        } catch (DataAccessException | NumberFormatException unreadable) {
+            // Une lecture impossible ne doit pas bloquer l'appel : on
+            // considère qu'aucun comportement suspect n'est constaté.
+            return 0L;
+        }
+    }
+
+    @Override
+    public void observe(String bucket, String identityHash, Duration window) {
+        String key = key(bucket, identityHash);
+        try {
+            Long count = redisTemplate.opsForValue().increment(key);
+            if (count != null && count == 1L) {
+                redisTemplate.expire(key, window);
+            }
+        } catch (DataAccessException redisFailure) {
+            log.warn("Compteur d'observation indisponible (seau {}) : {}.",
+                    bucket, redisFailure.getClass().getSimpleName());
+        }
+    }
+
+    @Override
     public void reset(String bucket, String identityHash) {
         try {
             redisTemplate.delete(key(bucket, identityHash));

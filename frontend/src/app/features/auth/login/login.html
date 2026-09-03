@@ -63,6 +63,8 @@
         }
       </p>
 
+      <app-turnstile (token)="onCaptchaToken($event)" />
+
       <button
         mat-flat-button
         color="primary"
@@ -73,6 +75,18 @@
       >
         {{ submitting() ? 'Connexion…' : 'Se connecter' }}
       </button>
+
+      @if (passkeysSupported) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="login__submit"
+          [disabled]="submitting()"
+          (click)="loginWithPasskey()"
+        >
+          Se connecter avec une clé d'accès
+        </button>
+      }
 
       <a routerLink="/mot-de-passe-oublie" class="login__link">Mot de passe oublié ?</a>
     </form>

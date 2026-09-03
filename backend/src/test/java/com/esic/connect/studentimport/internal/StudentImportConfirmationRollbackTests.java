@@ -1,5 +1,6 @@
 package com.esic.connect.studentimport.internal;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -280,11 +281,6 @@ class StudentImportConfirmationRollbackTests {
         account = userAccountRepository.saveAndFlush(account);
         Role role = roleRepository.findByCode(RoleCode.ADMIN).orElseThrow();
         userRoleRepository.saveAndFlush(new UserRole(account, role, Instant.now(), true));
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", email, "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return new Actor(account.getPublicId().toString(), account.getId(), (String) body.get("accessToken"));
+        return new Actor(account.getPublicId().toString(), account.getId(), AuthTestSupport.accessToken(restTemplate, email, PASSWORD));
     }
 }

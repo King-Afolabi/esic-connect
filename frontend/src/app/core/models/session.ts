@@ -1,14 +1,28 @@
+import { MfaChallenge } from './mfa';
 import { Role } from './role';
 
 /**
  * Réponse de `POST /api/v1/auth/login`
  * (`com.esic.connect.identity.internal.LoginResponse`).
+ *
+ * Deux issues possibles depuis le sprint 2 : soit un jeton, soit un défi
+ * de second facteur (`mfa`) — jamais les deux. Les champs absents sont
+ * omis du JSON, d'où leur caractère optionnel ici.
  */
 export interface LoginResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresInSeconds: number;
+  accessToken?: string;
+  tokenType?: string;
+  expiresInSeconds?: number;
+  mfa?: MfaChallenge;
 }
+
+/**
+ * Résultat d'une tentative de connexion, tel que le voit un composant :
+ * soit la session est ouverte, soit elle attend un second facteur.
+ */
+export type LoginOutcome =
+  | { readonly kind: 'session'; readonly session: Session }
+  | { readonly kind: 'challenge'; readonly challenge: MfaChallenge; readonly email: string };
 
 /**
  * Session authentifiée telle que connue du client.

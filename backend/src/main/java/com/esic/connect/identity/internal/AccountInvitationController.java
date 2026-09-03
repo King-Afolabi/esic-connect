@@ -29,9 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 class AccountInvitationController {
 
     private final AccountInvitationService invitationService;
+    private final com.esic.connect.shared.captcha.CaptchaGuard captchaGuard;
 
-    AccountInvitationController(AccountInvitationService invitationService) {
+    AccountInvitationController(AccountInvitationService invitationService,
+                                com.esic.connect.shared.captcha.CaptchaGuard captchaGuard) {
         this.invitationService = invitationService;
+        this.captchaGuard = captchaGuard;
     }
 
     @PostMapping
@@ -50,7 +53,11 @@ class AccountInvitationController {
 
     @PostMapping("/activate")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void activate(@Valid @RequestBody ActivateAccountRequest request) {
+    void activate(@Valid @RequestBody ActivateAccountRequest request,
+                  jakarta.servlet.http.HttpServletRequest httpRequest) {
+        // Formulaire public exposé : contrôle anti-robot serveur
+        // avant toute consommation de jeton (EF-AUTH-011, docs/02 §17.9).
+        captchaGuard.require(request.captchaToken(), httpRequest.getRemoteAddr());
         invitationService.activate(request.token(), request.password());
     }
 }

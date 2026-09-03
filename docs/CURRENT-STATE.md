@@ -11,17 +11,19 @@
 ## Dernière mise à jour
 
 ```text
-3 septembre 2026 — refondation produit (142 exigences) puis sprint 2,
-partie A : mot de passe oublié, révocation de session, limitation de
-débit. Backend 858 tests, frontend 617 tests, tout vert.
+3 septembre 2026 — sprint 2 terminé : passkeys WebAuthn, second facteur
+TOTP et codes de récupération, authentification adaptative, anti-robot
+Turnstile, appareils de confiance, réauthentification avant action
+critique. Backend 921 tests, frontend 637 tests, tout vert.
 ```
 
 ## Repère Git
 
 | Élément | Valeur |
 |---|---|
-| Branche de travail | `feature/produit-complet-v2` |
-| Base | `51ad58c` sur `main` |
+| Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
+| Base | `f0d02d4` sur `feature/produit-complet-v2` |
+| Jalons posés | `v0.2` (sprint 2) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -32,20 +34,24 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 52 | 37 % |
+| `IMPLEMENTED_AND_TESTED` | 60 | 42 % |
 | `PARTIAL` | 11 | 8 % |
-| `NOT_IMPLEMENTED` | 79 | 56 % |
+| `NOT_IMPLEMENTED` | 71 | 50 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
-charges vient d'élargir volontairement le périmètre à l'ensemble du
-produit cible. Les 79 exigences non implémentées ne sont pas des
-régressions : ce sont les sprints 2 et 4 à 13 de la roadmap.
+charges a volontairement élargi le périmètre à l'ensemble du produit
+cible. Les 71 exigences non implémentées ne sont pas des régressions :
+ce sont les sprints 3 à 13 de la roadmap.
+
+Le sprint 2 a fait passer huit exigences de `NOT_IMPLEMENTED` à
+`IMPLEMENTED_AND_TESTED` : `EF-AUTH-006` à `EF-AUTH-011`, `EF-AUTH-013`
+et `EF-AUTH-015`.
 
 ### 1.1 Par domaine
 
 | Domaine | Livré | Partiel | Absent |
 |---|---:|---:|---:|
-| Identité et accès (15) | 7 | 0 | 8 |
+| Identité et accès (15) | 15 | 0 | 0 |
 | Utilisateurs (9) | 3 | 1 | 5 |
 | Référentiels et organisation (13) | 9 | 0 | 4 |
 | Inscriptions et imports (10) | 5 | 0 | 5 |
@@ -108,10 +114,49 @@ régressions : ce sont les sprints 2 et 4 à 13 de la roadmap.
   passe courants canonicalisée (casse et accents neutralisés), refus d'un
   mot de passe contenant l'adresse, borne haute anti-déni de service.
   Aucune exigence de composition, aucune expiration périodique.
+- `EF-AUTH-006`/`007` **passkeys WebAuthn** : options d'enregistrement
+  avec défi aléatoire à usage unique (Redis), vérification d'attestation
+  et d'assertion par `webauthn4j`, compteur de signature contrôlé et mis
+  à jour, connexion sans mot de passe, liste et révocation individuelle
+  (RG-008). Le serveur ne reçoit **qu'une clé publique et une signature** :
+  aucune structure de ce module ne peut porter de donnée biométrique
+  (`AC-020`). Les options d'assertion ne renvoient aucune liste de
+  justificatifs — elle révélerait l'existence d'un compte.
+- `EF-AUTH-008` **second facteur TOTP** (RFC 6238, HMAC-SHA1, 6 chiffres,
+  pas de 30 s), vérifié contre les vecteurs officiels de la RFC. Secret
+  partagé **chiffré au repos** en AES-256-GCM, jamais renvoyé après
+  l'écran d'enrôlement. Anti-rejeu : le dernier pas consommé est mémorisé,
+  un même code ne sert pas deux fois. Limitation de débit dédiée.
+- `EF-AUTH-009` **dix codes de récupération** à usage unique, empreinte
+  SHA-256 seule stockée, affichés une seule fois, régénérables — la
+  régénération invalide toute la série précédente.
+- `EF-AUTH-010` **authentification adaptative** : un appareil inconnu
+  déclenche le second facteur ; un appareil reconnu allège la reconnexion
+  d'un compte ordinaire et n'accorde **aucune dispense** à un compte
+  privilégié (`DEC-S2-006`).
+- `EF-AUTH-011` **anti-robot** : port `CaptchaVerifier`, adaptateur
+  Cloudflare Turnstile et adaptateur local. Vérification **côté serveur**,
+  systématique sur la demande de réinitialisation et l'activation,
+  déclenchée après trois échecs sur la connexion (`AC-022`). Sans clé
+  secrète configurée, le produit **déclare** qu'aucun contrôle n'est actif
+  (`GET /api/v1/auth/captcha`) — il n'en simule pas un. Politique de repli
+  `DEC-S2-004`.
+- `EF-AUTH-013` **appareils de confiance** : empreinte seule en base (ni
+  user-agent, ni adresse IP), confiance bornée dans le temps, liste et
+  révocation par le propriétaire, `404` sur l'appareil d'autrui. Mémorisé
+  **uniquement** après une authentification complète.
+- `EF-AUTH-015` **réauthentification avant action critique** : le claim
+  `amr` du jeton porte les moyens réellement employés ; un changement de
+  rôle exige un jeton obtenu avec un facteur fort, jamais un mot de passe
+  seul.
+- **Politique de second facteur** (RG-007, `AC-021`) : un compte
+  `SUPER_ADMIN` ou `ADMIN` n'obtient **jamais** de jeton contre son seul
+  mot de passe. La connexion renvoie un défi — `VERIFY` s'il a un facteur,
+  `ENROLL` sinon, l'enrôlement se faisant dans la foulée (`DEC-S2-005`).
 - `EF-AUD-001` piste d'audit `audit_event` alimentée par tous les flux
   métier, **sans donnée personnelle, sans jeton, sans adresse IP** ;
-  `PASSWORD_CHANGED` et `SESSIONS_REVOKED` publiés **après commit**
-  (`DEC-S2-003`).
+  `PASSWORD_CHANGED`, `SESSIONS_REVOKED`, `MFA_*`, `PASSKEY_*` et
+  `TRUSTED_DEVICE_*` publiés **après commit** (`DEC-S2-003`).
 
 ### 2.2 Référentiels et organisation
 
@@ -247,10 +292,7 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 
 | Bloc | Exigences | Sprint |
 |---|---|---|
-| WebAuthn et passkeys | `EF-AUTH-006`, `EF-AUTH-007`, `EF-ATT-011` | 2 |
-| MFA TOTP, codes de récupération, authentification adaptative | `EF-AUTH-008..010`, `EF-AUTH-015` | 2 |
-| Anti-robot et limitation de débit | `EF-AUTH-011`, `EF-AUTH-012` | 2 |
-| Appareils de confiance | `EF-AUTH-013` | 2 |
+| Confirmation locale d'un émargement par WebAuthn | `EF-ATT-011` | 8 |
 | Opérations de masse, doublons, invitations pilotées, délivrabilité, recherche globale | `EF-USER-004`, `005`, `007`, `008`, `009` | 3–4, 11 |
 | Matières, groupes temporaires | `EF-ACA-006`, `007` | 3 |
 | QR fixe de salle, conflits de salle | `EF-ORG-003`, `004` | 6, 8 |
@@ -267,10 +309,10 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 | Intégrations Microsoft, iCalendar, fournisseur de courriel | `EF-INT-001..004` | 11, 13 |
 | Consultation d'audit, outbox, RGPD, exploitation | `EF-AUD-002`, `003`, `EF-RGPD-001..003`, `EF-OPS-001..005` | 10, 13 |
 
-**Vérifications de terrain** (3 septembre 2026) : aucune occurrence de
-`forgot-password`, `TOTP`, `Turnstile`, `rate-limit`, `MQTT`, `outbox`,
-`service-worker`, Apache POI ni bibliothèque PDF dans `backend/src/main`
-ou `frontend/src`. Aucun module `claim`, `ai` ou `iot`.
+**Vérifications de terrain** (3 septembre 2026, après sprint 2) : aucune
+occurrence de `MQTT`, `outbox`, `service-worker`, Apache POI ni
+bibliothèque PDF dans `backend/src/main` ou `frontend/src`. Aucun module
+`claim`, `ai` ou `iot`.
 
 ---
 
@@ -283,7 +325,7 @@ module, aucun cycle.
 
 | Module | Rôle | Migrations |
 |---|---|---|
-| `identity` | comptes, rôles, JWT, invitation, administration, mot de passe oublié, révocation | V1, V2, V3, V17 |
+| `identity` | comptes, rôles, JWT, invitation, administration, mot de passe oublié, révocation, second facteur, passkeys, appareils de confiance | V1, V2, V3, V17, V18 |
 | `organization` | site, bâtiment, salle, plage réseau | V4 |
 | `academic` | année, formation, niveau, promotion, classe, affectation | V5, V6 |
 | `enrollment` | profil apprenant, inscription, changement de classe | V7 |
@@ -301,11 +343,13 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V17
+### 5.2 Migrations Flyway — schéma en V18
 
-42 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+46 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
-`user_account.credentials_invalidated_at`.
+`user_account.credentials_invalidated_at` ; `V18` ajoute
+`mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
+`trusted_device`.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -328,8 +372,8 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **102 classes / 858 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V17 |
-| `cd frontend && npm test -- --watch=false` | **73 fichiers / 617 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **108 classes / 921 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V18 |
+| `cd frontend && npm test -- --watch=false` | **76 fichiers / 637 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 
@@ -338,8 +382,16 @@ Les tests portant le tag `perf` sont exclus par défaut
 
 **Piège d'exécution** : la suite back-end exige les variables du `.env`.
 Sans `set -a && source ../.env && set +a`, Flyway échoue avec
-`Access denied for user '${MYSQL_USER}'` et les 812 tests tombent en
+`Access denied for user '${MYSQL_USER}'` et toute la suite tombe en
 erreur. Ce n'est pas un défaut du produit.
+
+**Couplage connu entre classes de test** : les compteurs de limitation
+indexés sur l'*origine* réseau vivent dans Redis et sont partagés par
+toute la suite — toutes les classes se connectent depuis `127.0.0.1`.
+`AuthRateLimitIntegrationTests` et `CaptchaIntegrationTests` les remettent
+donc à zéro dans un `@BeforeEach`. Sans cela, elles échoueraient pour une
+raison sans rapport avec ce qu'elles vérifient, dès que le nombre total de
+connexions de la suite augmente.
 
 ### 6.1 Recette navigateur
 
@@ -350,11 +402,14 @@ erreur. Ce n'est pas un défaut du produit.
 | Navigateurs | chromium exécuté ; firefox, webkit et mobile configurés, non exécutés par défaut |
 | Intégration continue | `.github/workflows/e2e.yml`, déclenchement manuel |
 
-La suite ne couvre pas les fonctions qui n'ont pas d'écran : mot de
-passe oublié, MFA, WebAuthn, anti-robot, QR fixe de salle, scan caméra,
-exports Excel et PDF, réclamations, écrans d'écriture `academic` et
-`enrollment`. **Aucun test n'est écrit contre un écran qui n'existe
-pas.**
+La suite ne couvre pas les fonctions qui n'ont pas d'écran : QR fixe de
+salle, scan caméra, exports Excel et PDF, réclamations, écrans d'écriture
+`academic` et `enrollment`. **Aucun test n'est écrit contre un écran qui
+n'existe pas.**
+
+Les écrans livrés au sprint 2 — vérification en deux étapes, sécurité du
+compte — sont couverts par des tests de composant Angular, **pas encore**
+par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 
 ---
 
@@ -380,6 +435,9 @@ pas.**
 | T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
 | T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
 | T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
+| T-07 | cérémonie WebAuthn complète non rejouée en test | la vérification cryptographique repose sur la bibliothèque ; les tests couvrent contrat, défi, isolation et absence de donnée biométrique |
+| T-08 | Turnstile jamais vérifié contre le service réel | aucune clé secrète dans le dépôt ; sans clé, le produit **déclare** qu'aucun contrôle n'est actif |
+| T-09 | passkeys inutilisables hors `localhost` sans domaine ni HTTPS | contrainte du standard WebAuthn, pas du produit |
 | — | base `esic_connect` polluée par ~27 000 comptes de fixtures | `./scripts/db-reset.sh esic_connect` **non encore exécuté** |
 
 ---
@@ -400,10 +458,9 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas.
-2. **Sprint 2, partie B** : WebAuthn et passkeys, MFA TOTP et codes de
-   récupération, anti-robot, appareils de confiance, authentification
-   adaptative. La partie A (mot de passe oublié, révocation, limitation de
-   débit) est livrée.
+2. **Sprint 3 — population et invitations** : matières, groupes
+   temporaires, formateurs externes, invitations pilotées depuis
+   l'interface, suivi de délivrabilité.
 3. **Sprint 4 — Excel et alternance appliquée**.
 4. **Sprint 6 — planning avancé** : calendrier interactif, retour
    arrière, conflit de salle.

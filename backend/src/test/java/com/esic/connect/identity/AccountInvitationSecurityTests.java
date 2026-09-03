@@ -1,5 +1,6 @@
 package com.esic.connect.identity;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -128,13 +129,9 @@ class AccountInvitationSecurityTests {
     }
 
     private String bearerToken(String email) {
-        ResponseEntity<Map<String, Object>> login = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", email, "password", PASSWORD)),
-                mapType());
-        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return (String) login.getBody().get("accessToken");
+        // Passe par le support de test : un compte privilégié doit franchir
+        // son second facteur avant d'obtenir un jeton (RG-007, AC-021).
+        return AuthTestSupport.accessToken(restTemplate, email, PASSWORD);
     }
 
     private UserAccount persistUser(AccountStatus status, RoleCode roleCode) {

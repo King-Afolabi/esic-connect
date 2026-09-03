@@ -1,5 +1,6 @@
 package com.esic.connect.identity;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.audit.internal.AuditEvent;
 import com.esic.connect.audit.internal.AuditEventRepository;
 import com.esic.connect.identity.internal.AccountStatus;
@@ -196,13 +197,7 @@ class AccountInvitationIntegrationTests {
 
     private String adminBearerToken() {
         UserAccount admin = persistUser(uniqueEmail(), AccountStatus.ACTIVE, RoleCode.ADMIN);
-        ResponseEntity<Map<String, Object>> login = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", admin.getEmail(), "password", ADMIN_PASSWORD)),
-                mapType());
-        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return (String) login.getBody().get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, admin.getEmail(), ADMIN_PASSWORD);
     }
 
     private UserAccount persistUser(String email, AccountStatus status, RoleCode roleCode) {

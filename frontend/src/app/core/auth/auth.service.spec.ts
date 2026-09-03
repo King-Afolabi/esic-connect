@@ -42,15 +42,85 @@ describe('AuthService', () => {
 
     const req = http.expectOne('/api/v1/auth/login');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ email: 'manager@esic.test', password: 'secret' });
+    expect(req.request.body).toEqual({
+      email: 'manager@esic.test',
+      password: 'secret',
+      captchaToken: null,
+    });
     req.flush({ accessToken: token, tokenType: 'Bearer', expiresInSeconds: 900 });
 
-    const session = await promise;
+    const outcome = await promise;
+    expect(outcome.kind).toBe('session');
     expect(service.isAuthenticated()).toBe(true);
     expect(service.accessToken).toBe(token);
-    expect(session.subject).toBe('public-42');
+    expect(outcome.kind === 'session' && outcome.session.subject).toBe('public-42');
     expect(service.roles()).toEqual(['PEDAGOGICAL_MANAGER', 'TEACHER']);
     expect(service.currentUserEmail()).toBe('manager@esic.test');
+  });
+
+  it('rend le défi de second facteur sans ouvrir de session', async () => {
+    const promise = firstValueFrom(service.login('admin@esic.test', 'secret'));
+
+    http.expectOne('/api/v1/auth/login').flush({
+      mfa: { challengeId: 'defi-1', purpose: 'ENROLL', expiresInSeconds: 300 },
+    });
+
+    const outcome = await promise;
+    expect(outcome.kind).toBe('challenge');
+    // Le mot de passe est bon, mais aucun jeton n'est posé : la connexion
+    // n'est pas terminée (RG-007, AC-021).
+    expect(service.isAuthenticated()).toBe(false);
+    expect(service.accessToken).toBeNull();
+  });
+
+  it("transmet l'identifiant d'appareil à la connexion", async () => {
+    const promise = firstValueFrom(service.login('user@esic.test', 'pw'));
+
+    const request = http.expectOne('/api/v1/auth/login');
+    expect(request.request.headers.get('X-Device-Id')).toMatch(/^[0-9a-f]{64}$/);
+    request.flush({
+      accessToken: makeJwt({ sub: 's', roles: [], exp: futureExp }),
+      tokenType: 'Bearer',
+      expiresInSeconds: 900,
+    });
+    await promise;
+  });
+
+  it('ouvre la session une fois le second facteur vérifié', async () => {
+    const token = makeJwt({ sub: 'public-7', roles: ['ADMIN'], exp: futureExp });
+    const promise = firstValueFrom(service.verifyMfa('defi-1', '123456', 'admin@esic.test'));
+
+    const request = http.expectOne('/api/v1/auth/mfa/verify');
+    expect(request.request.body).toEqual({ challengeId: 'defi-1', code: '123456' });
+    request.flush({ accessToken: token, tokenType: 'Bearer', expiresInSeconds: 900 });
+
+    await promise;
+    expect(service.isAuthenticated()).toBe(true);
+    expect(service.roles()).toEqual(['ADMIN']);
+  });
+
+  it("ouvre la session à la confirmation d'un enrôlement imposé", async () => {
+    const token = makeJwt({ sub: 'public-8', roles: ['ADMIN'], exp: futureExp });
+    const promise = firstValueFrom(service.confirmMfaEnrollment('123456', 'defi-1', 'a@esic.test'));
+
+    http.expectOne('/api/v1/auth/mfa/enroll/confirm').flush({
+      recoveryCodes: ['ABCDE-12345'],
+      session: { accessToken: token, tokenType: 'Bearer', expiresInSeconds: 900 },
+    });
+
+    const result = await promise;
+    expect(result.recoveryCodes).toHaveLength(1);
+    expect(service.isAuthenticated()).toBe(true);
+  });
+
+  it("n'ouvre aucune session quand l'enrôlement vient d'une session déjà établie", async () => {
+    const promise = firstValueFrom(service.confirmMfaEnrollment('123456', undefined, ''));
+
+    const request = http.expectOne('/api/v1/auth/mfa/enroll/confirm');
+    expect(request.request.body).toEqual({ code: '123456' });
+    request.flush({ recoveryCodes: ['ABCDE-12345'] });
+
+    expect((await promise).session).toBeNull();
   });
 
   it('does not establish a session when login fails', async () => {
