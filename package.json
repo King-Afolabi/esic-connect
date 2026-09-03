@@ -1,0 +1,29 @@
+{
+  "name": "projet_final",
+  "version": "1.0.0",
+  "description": "Preuve de concept d'une plateforme web de **planification pédagogique, d'émargement intelligent et de suivi de l'assiduité** pour l'ESIC (certification RNCP 39394). Monolithe modulaire Spring Boot + front-end Angular, infrastructure locale conteneurisée.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:report": "playwright show-report test-results/html-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/King-Afolabi/esic-connect.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/King-Afolabi/esic-connect/issues"
+  },
+  "homepage": "https://github.com/King-Afolabi/esic-connect#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.4.1"
+  }
+}

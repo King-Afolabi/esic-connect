@@ -1,0 +1,2 @@
+Ceci n'est pas un fichier CSV. Utilisé pour vérifier le rejet des fichiers
+au mauvais format (extension renommée en .csv dans le test).

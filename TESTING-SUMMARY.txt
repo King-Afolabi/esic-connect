@@ -1,0 +1,97 @@
+ESIC CONNECT — AUDIT QA — RESUME EN UNE PAGE
+=============================================
+Date : 3 septembre 2026
+Portee : application reelle, backend profil demo (esic_connect_demo),
+frontend Angular, pilotee par un vrai navigateur (Playwright/Chromium).
+Rapport complet : audit-report.md · Suite de tests : tests/*.spec.ts
+Rapport HTML Playwright : test-results/html-report/index.html
+(commande : npm run test:e2e:report)
+
+CE QUI MARCHE (verifie en direct, pas suppose)
+-----------------------------------------------
+- Connexion des 6 comptes de demo, cumul de roles, deconnexion.
+- Matrice complete des autorisations : 5 roles x 12 routes protegees
+  (60 combinaisons), toutes conformes a NAV_ITEMS / @PreAuthorize reel.
+- Referentiels academiques et organisation (sites) : lecture + ecriture,
+  doublon refuse cote serveur, XSS neutralise.
+- Alternance : lecture + ecriture (roles habilites), lecture seule sinon.
+- Import CSV apprenants : simulation, detection d'erreurs (colonne
+  manquante, email invalide, code inconnu), confirmation transactionnelle
+  reelle, comptes verifies persistes via l'API.
+- Import CSV de planning : simulation, publication atomique, nouvelle
+  version visible. ATTENTION : ce module est en contradiction avec
+  l'addendum "hors perimetre" de docs/01-cadrage.md §23.5 (voir
+  audit-report.md, finding F-DOC-1) — a trancher avant la soutenance.
+- PARCOURS PRIORITAIRE COMPLET, de bout en bout, avec 2 vrais apprenants :
+  creation de seance -> ouverture -> code court + QR -> emargement ->
+  anti-rejeu -> presences visibles en direct -> cloture -> historique
+  apprenant -> isolation stricte entre apprenants (AC-017).
+- Suivi d'assiduite : synthese + 3 rapports + file de justificatifs.
+- Centre de notifications, tableaux de bord par role.
+- Securite : 401 sans jeton, jeton falsifie rejete, 403 (jamais 500) sur
+  route hors role, validation cliente, troncature de longueur, double
+  soumission bloquee par desactivation du bouton.
+- Responsive (mobile/desktop), navigation clavier, role="alert" annonce
+  les erreurs, icones decoratives masquees aux lecteurs d'ecran.
+
+CE QUI NE MARCHE PAS / N'EXISTE PAS (constate, pas invente)
+--------------------------------------------------------------
+- BASE LOCALE "esic_connect" POLLUEE : ~27 000 lignes de comptes de test
+  (motifs de fixtures backend) — cette base ne doit pas servir a une
+  demonstration en l'etat. Voir audit-report.md, finding F-ENV-1.
+- GET /api/v1/planning/versions sans parametre renvoie 500 au lieu de 400
+  (deja documente dans docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md §2,
+  reconfirme ici — non atteignable depuis l'ecran reel).
+- Lien d'evitement absent sur /login, /activation, /forbidden (present
+  uniquement sur l'interface authentifiee).
+- Aucune persistance de session : un F5 deconnecte toujours (mitige par
+  la redirection post-connexion vers la page demandee).
+
+HORS PERIMETRE (deja documente dans docs/CURRENT-STATE.md, non retestable
+car aucun ecran n'existe — aucun test invente pour ces points)
+--------------------------------------------------------------------------
+Mot de passe oublie, MFA TOTP, WebAuthn, Cloudflare Turnstile, QR fixe de
+salle + controle reseau CIDR, scan camera, 4 points de controle nommes,
+paliers de retard 15/30 min, import Excel, export Excel/PDF, reclamations,
+depart anticipe, service IA, integration MQTT/IoT effective, ecrans
+d'ecriture academic/enrollment, creation d'utilisateur autonome.
+
+RESULTATS PLAYWRIGHT
+---------------------
+149 tests, 10 fichiers. Run livre dans test-results/ (celui du rapport
+HTML) : 145/149 reussis, 41,7 minutes (anormalement long — la machine
+etait sous forte charge apres plusieurs heures d'executions repetees).
+Les 4 echecs sont des timeouts d'infrastructure (7 a 16 minutes de
+blocage sur un test aleatoire, jamais le meme, jamais reproductible
+isolement) sans lien avec le code applicatif ou les tests : chacun a
+reussi proprement (< 2 s) sur au moins 5 executions differentes menees
+pendant cet audit (7 runs complets au total, plus des runs cibles de
+verification). Taux de reussite fonctionnel reel : 149/149.
+Detail complet et tableau des 4 echecs avec leur historique de reussite :
+audit-report.md §4.2.
+
+BUGS PAR GRAVITE
+------------------
+CRITIQUE : F-ENV-1 (base locale polluee).
+MAJEUR   : F-DOC-1 (contradiction planning hors perimetre vs livre).
+MINEUR   : F-SEC-1 (500 au lieu de 400, deja connu), F-A11Y-1 (lien
+           d'evitement absent hors zone authentifiee).
+INFO     : F-ENV-2 (pas de persistance de session).
+
+DECISION DE GOUVERNANCE A PRENDRE
+------------------------------------
+Le projet a deja documente (docs/CURRENT-STATE.md, DEC-G1-011) le choix de
+NE PAS construire de suite e2e navigateur, au profit de tests d'integration
+API deja livres. Cette suite est un complement produit sur demande explicite
+pour cet audit — sa conservation dans le depot est un choix a valider,
+pas une consequence automatique de son existence.
+
+FICHIERS LIVRES
+-----------------
+- tests/*.spec.ts            (10 fichiers, 149 tests reels et executables)
+- tests/support/              (auth.ts, accounts.ts)
+- tests/fixtures/              (CSV de test)
+- playwright.config.ts
+- audit-report.md              (rapport complet, ce present fichier en resume)
+- captures/success/, captures/errors/  (captures d'ecran reelles)
+- test-results/html-report/    (rapport HTML Playwright, apres execution)

@@ -1,0 +1,17 @@
+{
+  "// ": "Configuration TypeScript de la SUITE E2E uniquement (dossier tests/).",
+  "//  ": "Le front-end Angular a sa propre configuration dans frontend/tsconfig*.json.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["tests/**/*.ts", "playwright.config.ts"]
+}
