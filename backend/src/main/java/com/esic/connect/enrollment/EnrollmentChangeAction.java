@@ -9,11 +9,16 @@ package com.esic.connect.enrollment;
  *   <li>{@link #CREATED} : profil apprenant créé, ou inscription créée ;</li>
  *   <li>{@link #TRANSFERRED} : inscription clôturée à la suite d'un
  *       changement de classe (docs/04 §13.2) ;</li>
- *   <li>{@link #CLOSED} : inscription clôturée (fin de cursus / départ).</li>
+ *   <li>{@link #CLOSED} : inscription clôturée (fin de cursus / départ) ;</li>
+ *   <li>{@link #UPDATED}, {@link #ARCHIVED}, {@link #RESTORED} : cycle de
+ *       vie d'un groupe temporaire (EF-ACA-007).</li>
  * </ul>
  */
 public enum EnrollmentChangeAction {
     CREATED,
     TRANSFERRED,
-    CLOSED
+    CLOSED,
+    UPDATED,
+    ARCHIVED,
+    RESTORED
 }

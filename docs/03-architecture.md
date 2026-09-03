@@ -2231,6 +2231,55 @@ fonction existe.
 
 **Statut.** Adoptée le 3 septembre 2026.
 
+## DEC-S3-001 — les groupes temporaires vivent dans `enrollment`, pas dans `academic`
+
+**Contexte.** `EF-ACA-007` demande des groupes rassemblant des apprenants
+issus de plusieurs classes. Le réflexe est de les loger dans
+`academic`, avec les classes.
+
+**Décision.** `student_group` et `student_group_member` appartiennent au
+module `enrollment`.
+
+**Conséquences.** Un membre de groupe est une **inscription**, pas un
+profil : c'est ce qui permet à un apprenant changeant de classe en cours
+d'année de garder la trace de son appartenance pour la période concernée
+(`RG-006`). Or `enrollment → academic` existe déjà. Loger le groupe dans
+`academic` imposerait la dépendance inverse, donc un **cycle** — que
+`ModularityTests` refuse à juste titre.
+
+Deux ports publics ont été ajoutés à `academic` pour que `enrollment`
+résolve ce dont il a besoin sans importer d'interne :
+`AcademicReferenceDirectory` (formation, année scolaire) et
+`SubjectDirectory` (matière). `AcademicScopeDirectory` a été étendu au
+périmètre **formation** — un groupe est rattaché à une formation sans
+passer par une classe.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S3-002 — le journal de délivrabilité ne stocke aucune adresse en clair
+
+**Contexte.** `EF-USER-008` demande de suivre la délivrabilité des
+courriels, en particulier pour repérer une adresse erronée. La façon
+évidente est de stocker l'adresse.
+
+**Décision.** `email_delivery` conserve une **empreinte** de l'adresse —
+pour rapprocher les envois d'une même adresse — et une **forme masquée**
+destinée à l'affichage (`c…e@e…c.test`). Jamais l'adresse complète.
+
+**Conséquences.** Un responsable reconnaît l'adresse qu'il vient de
+saisir et repère une faute de frappe ; un export de cette table ne
+constitue pas pour autant un annuaire exploitable. La table porte par
+ailleurs **deux statuts distincts** — ce que le produit a fait, ce que le
+fournisseur a constaté — parce que les confondre ferait croire qu'une
+invitation est arrivée alors que l'adresse est fausse, ce que le cahier
+demande explicitement d'éviter (docs/02 §11.3).
+
+En développement, Mailpit ne remonte rien : le statut fournisseur reste
+`UNKNOWN`, et l'interface l'affiche comme tel plutôt que d'inventer un
+« délivré ».
+
+**Statut.** Adoptée le 3 septembre 2026.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

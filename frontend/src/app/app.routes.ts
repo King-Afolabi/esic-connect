@@ -109,6 +109,30 @@ const academicList = () =>
   import('./features/academic/academic-reference-list/academic-reference-list').then(
     (m) => m.AcademicReferenceList,
   );
+/**
+ * Lecture du catalogue des matières, repris de
+ * `SubjectController.SUBJECT_READ_ROLES` : un formateur doit pouvoir
+ * qualifier une séance. L'écriture reste fermée côté serveur.
+ */
+const SUBJECT_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+
+/**
+ * Suivi des invitations et de la délivrabilité, repris de
+ * `AccountInvitationController` et `EmailDeliveryController`.
+ */
+const INVITATION_TRACKING_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
 const academicDetail = () =>
   import('./features/academic/academic-reference-detail/academic-reference-detail').then(
     (m) => m.AcademicReferenceDetail,
@@ -177,6 +201,30 @@ export const routes: Routes = [
         title: `Tableau de bord — ${APP_NAME}`,
         loadComponent: () =>
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+      },
+      {
+        // Écran livré (sprint 3) : référentiel des matières (EF-ACA-006).
+        // Périmètre repris de `SubjectController` — lecture ouverte aux
+        // formateurs, écriture aux rôles de gestion, le serveur restant
+        // l'autorité (un `403` est rendu « accès refusé »).
+        path: 'subjects',
+        canActivate: [roleGuard],
+        data: { roles: SUBJECT_READ_ROLES },
+        title: `Matières — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/subjects/subject-list/subject-list').then((m) => m.SubjectList),
+      },
+      {
+        // Écran livré (sprint 3) : suivi des invitations et de leur
+        // délivrabilité (EF-USER-007, EF-USER-008).
+        path: 'invitations',
+        canActivate: [roleGuard],
+        data: { roles: INVITATION_TRACKING_ROLES },
+        title: `Invitations — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/invitations/invitation-list/invitation-list').then(
+            (m) => m.InvitationList,
+          ),
       },
       {
         // Sécurité du compte de l'appelant : second facteur, clés d'accès,

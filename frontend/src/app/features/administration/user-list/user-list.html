@@ -6,6 +6,56 @@
   l'historique de ses rôles.
 </p>
 
+<!--
+  Création d'un compte (EF-USER-001) et, par la même route, d'un
+  formateur externe (EF-TEA-001) : le domaine de l'adresse est libre et
+  n'est jamais un critère de confiance.
+-->
+<form class="users__create" [formGroup]="createForm" (ngSubmit)="submitCreate()" novalidate>
+  <h2 class="users__create-title">Créer un compte</h2>
+  <p class="users__create-hint">
+    Le compte est créé en attente d'activation. Aucun mot de passe n'est défini ici : la personne
+    choisira le sien via le lien d'invitation qu'elle recevra.
+  </p>
+  <mat-form-field appearance="outline">
+    <mat-label>Adresse électronique</mat-label>
+    <input matInput type="email" formControlName="email" autocomplete="off" required />
+    @if (createForm.controls.email.touched && createForm.controls.email.invalid) {
+      <mat-error>Saisissez une adresse électronique valide.</mat-error>
+    }
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Prénom</mat-label>
+    <input matInput formControlName="firstName" maxlength="120" required />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Nom</mat-label>
+    <input matInput formControlName="lastName" maxlength="120" required />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Rôle</mat-label>
+    <mat-select formControlName="role">
+      @for (option of roleOptions; track option) {
+        <mat-option [value]="option">{{ roleLabel(option) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+  <button mat-flat-button color="primary" type="submit" [disabled]="creating()">
+    Créer et inviter
+  </button>
+  <p class="users__create-error" role="alert" aria-live="assertive">
+    @if (createError()) {
+      <mat-icon aria-hidden="true">error</mat-icon>
+      <span>{{ createError() }}</span>
+    }
+  </p>
+  <p role="status" aria-live="polite">
+    @if (createInfo()) {
+      <span>{{ createInfo() }}</span>
+    }
+  </p>
+</form>
+
 <form class="users__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="users__filter">
     <mat-label>Nom ou adresse électronique</mat-label>

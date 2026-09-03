@@ -7,5 +7,7 @@ public enum AcademicResourceType {
     PROGRAM_LEVEL,
     PROMOTION,
     CLASS_GROUP,
-    PEDAGOGICAL_ASSIGNMENT
+    PEDAGOGICAL_ASSIGNMENT,
+    /** Matière (EF-ACA-006). */
+    SUBJECT
 }

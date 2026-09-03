@@ -162,3 +162,21 @@ export interface UserListQuery {
   page?: number;
   size?: number;
 }
+
+/**
+ * Création d'un compte (EF-USER-001).
+ *
+ * <p>Aucun champ de mot de passe, et il ne doit jamais y en avoir : le
+ * compte naît en `PENDING_ACTIVATION` et la personne choisit son mot de
+ * passe via son lien d'invitation (docs/02 §11.2).
+ *
+ * <p>`sendInvitation` vaut `true` par défaut côté serveur : un compte créé
+ * sans invitation reste un compte fantôme que personne ne peut activer.
+ */
+export interface CreateUserRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  sendInvitation?: boolean;
+}

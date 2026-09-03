@@ -1,6 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -98,6 +98,25 @@ export class UserList {
   ] as const;
 
   /** Filtres appliqués (recherche + statut + rôle). */
+  /**
+   * Création d'un compte (EF-USER-001, EF-TEA-001).
+   *
+   * <p>Pas de champ mot de passe, et il ne faut jamais en ajouter : la
+   * personne le choisit via son lien d'invitation. Le domaine de
+   * l'adresse est libre — c'est ainsi qu'on crée un formateur externe,
+   * le domaine n'étant jamais un critère de confiance (docs/02 §12.1).
+   */
+  protected readonly createForm = this.formBuilder.group({
+    email: this.formBuilder.control('', [Validators.required, Validators.email]),
+    firstName: this.formBuilder.control('', [Validators.required, Validators.maxLength(120)]),
+    lastName: this.formBuilder.control('', [Validators.required, Validators.maxLength(120)]),
+    role: this.formBuilder.control('STUDENT', [Validators.required]),
+  });
+
+  protected readonly creating = signal(false);
+  protected readonly createError = signal<string | null>(null);
+  protected readonly createInfo = signal<string | null>(null);
+
   protected readonly filters = this.formBuilder.group({
     q: this.formBuilder.control(''),
     status: this.formBuilder.control<AccountStatus | ''>(''),
@@ -130,6 +149,44 @@ export class UserList {
 
   constructor() {
     this.load();
+  }
+
+  /** Crée le compte et déclenche l'invitation (le serveur s'en charge). */
+  protected submitCreate(): void {
+    if (this.createForm.invalid || this.creating()) {
+      this.createForm.markAllAsTouched();
+      return;
+    }
+    this.creating.set(true);
+    this.createError.set(null);
+    this.createInfo.set(null);
+    const value = this.createForm.getRawValue();
+    this.api
+      .createUser({
+        email: value.email.trim(),
+        firstName: value.firstName.trim(),
+        lastName: value.lastName.trim(),
+        role: value.role,
+      })
+      .subscribe({
+        next: () => {
+          this.creating.set(false);
+          this.createForm.reset({ role: 'STUDENT' });
+          this.createInfo.set(
+            "Le compte est créé en attente d'activation ; l'invitation vient de partir.",
+          );
+          this.load();
+        },
+        error: (error: unknown) => {
+          this.creating.set(false);
+          const normalized = normalizeHttpError(error);
+          this.createError.set(
+            normalized.code === 'USER_EMAIL_ALREADY_USED'
+              ? 'Un compte existe déjà pour cette adresse électronique.'
+              : normalized.message,
+          );
+        },
+      });
   }
 
   protected applyFilters(): void {

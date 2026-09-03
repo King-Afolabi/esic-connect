@@ -19,7 +19,10 @@ import java.util.UUID;
  * module. Aucun message ne divulgue de donnée personnelle.
  */
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = NotificationController.class)
+@RestControllerAdvice(assignableTypes = {
+        NotificationController.class,
+        EmailDeliveryController.class
+})
 class NotificationExceptionHandler {
 
     @ExceptionHandler(NotificationException.class)

@@ -5,6 +5,10 @@ import com.esic.connect.identity.AccountLifecycleAction;
 import com.esic.connect.identity.AccountLifecycleEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -143,6 +149,77 @@ public class AccountInvitationService {
 
         eventPublisher.publishEvent(new AccountLifecycleEvent(
                 account.getId(), account.getPublicId(), null, AccountLifecycleAction.ACCOUNT_ACTIVATED, null));
+    }
+
+    /**
+     * Journal des invitations, filtrable par statut (EF-USER-007).
+     *
+     * <p>Une invitation {@code PENDING} dont la date d'expiration est
+     * passée est présentée comme <strong>expirée</strong>, sans que son
+     * statut stocké change : l'expiration se déduit de {@code expires_at}
+     * (docs/04 §10.4), et une tâche de balayage n'apporterait rien.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<InvitationSummaryResponse> list(String statusFilter, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Instant now = Instant.now();
+        Page<AccountInvitation> result = parseStatus(statusFilter)
+                .map(status -> invitationRepository.findByStatus(status, pageable))
+                .orElseGet(() -> invitationRepository.findAll(pageable));
+        return PageResponse.of(result, invitation -> InvitationSummaryResponse.from(invitation, now));
+    }
+
+    /**
+     * Réémet l'invitation d'un compte : la précédente est révoquée, un
+     * nouveau jeton est produit, et un nouveau courriel part
+     * (EF-USER-007, docs/02 §11.3 : « révoquer l'ancien jeton, en générer
+     * un nouveau, relancer l'envoi »).
+     *
+     * <p>Réémettre est la seule réponse correcte à une adresse corrigée :
+     * renvoyer l'ancien jeton à la nouvelle adresse laisserait le premier
+     * lien valide dans une boîte qui n'est pas la bonne.
+     */
+    @Transactional
+    public IssueInvitationResponse resend(UUID invitationPublicId, String issuerSubject) {
+        AccountInvitation invitation = invitationRepository.findByPublicId(invitationPublicId)
+                .orElseThrow(() -> new InvitationException(InvitationException.Kind.TARGET_NOT_FOUND));
+        UserAccount account = invitation.getUser();
+        if (account.getStatus() != AccountStatus.PENDING_ACTIVATION) {
+            // Compte déjà activé, suspendu ou archivé : réémettre n'aurait
+            // aucun sens et rouvrirait un chemin d'activation.
+            throw new InvitationException(InvitationException.Kind.TARGET_NOT_PENDING);
+        }
+
+        Long issuerId = resolveIssuerId(issuerSubject);
+        Instant now = Instant.now();
+        int revoked = revokePendingInvitations(account.getId(), now);
+
+        String rawToken = tokenService.generateRawToken();
+        Instant expiresAt = now.plus(tokenTtl);
+        AccountInvitation reissued = invitationRepository.save(
+                new AccountInvitation(account, tokenService.hash(rawToken), expiresAt, issuerId));
+
+        eventPublisher.publishEvent(new AccountInvitationIssuedEvent(
+                account.getId(), account.getPublicId(), account.getEmail(), account.getFirstName(),
+                rawToken, expiresAt));
+        eventPublisher.publishEvent(new AccountLifecycleEvent(
+                account.getId(), account.getPublicId(), issuerId,
+                AccountLifecycleAction.INVITATION_ISSUED,
+                "Reemission" + (revoked > 0 ? " (" + revoked + " revoquee(s))" : "")));
+
+        return new IssueInvitationResponse(reissued.getPublicId(), expiresAt);
+    }
+
+    private Optional<AccountInvitationStatus> parseStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(AccountInvitationStatus.valueOf(raw.trim().toUpperCase(Locale.ROOT)));
+        } catch (IllegalArgumentException unknown) {
+            throw new InvitationException(InvitationException.Kind.ROLE_INVALID);
+        }
     }
 
     private void assignRoleIfAbsent(UserAccount account, Role role, Long issuerId, Instant now) {
