@@ -70,6 +70,11 @@ class UserManagementExceptionHandler {
                 code = "USER_ROLE_UNKNOWN";
                 message = "Code de rôle inconnu.";
             }
+            case EMAIL_ALREADY_USED -> {
+                status = HttpStatus.CONFLICT;
+                code = "USER_EMAIL_ALREADY_USED";
+                message = "Un compte existe déjà pour cette adresse électronique.";
+            }
             case INVALID_SORT -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "USER_INVALID_SORT";

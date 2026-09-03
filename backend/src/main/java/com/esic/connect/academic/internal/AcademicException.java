@@ -18,6 +18,8 @@ class AcademicException extends RuntimeException {
         PROMOTION_NOT_FOUND,
         /** Aucune classe/groupe pour ce {@code public_id}. */
         CLASS_GROUP_NOT_FOUND,
+        /** Aucune matière pour ce {@code public_id} (EF-ACA-006). */
+        SUBJECT_NOT_FOUND,
         /** Aucun site actif ne correspond au {@code public_id} fourni. */
         SITE_NOT_FOUND,
         /** Code déjà utilisé dans le périmètre concerné. */

@@ -35,6 +35,7 @@ public class AccountLifecycleAuditListener {
         boolean selfService = event.action() == AccountLifecycleAction.ACCOUNT_ACTIVATED;
         Long actorUserId = selfService ? event.userId() : event.actorUserId();
         String action = switch (event.action()) {
+            case ACCOUNT_CREATED -> "ACCOUNT_CREATED";
             case INVITATION_ISSUED -> "ACCOUNT_INVITATION_ISSUED";
             case ACCOUNT_ACTIVATED -> "ACCOUNT_ACTIVATED";
             case ACCOUNT_SUSPENDED -> "ACCOUNT_SUSPENDED";

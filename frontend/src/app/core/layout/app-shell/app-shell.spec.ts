@@ -50,7 +50,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Administration / Apprenants / Import / Référentiels / Organisation / Planning / Alternance / Séances screens for an ADMIN', () => {
+  it('renders the dashboard and every delivered screen for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/administration',
@@ -63,6 +63,8 @@ describe('AppShell', () => {
       '/sessions',
       '/attendance-management',
       '/notifications',
+      '/subjects',
+      '/invitations',
       '/mon-compte/securite',
     ]);
     expect(text()).toContain('Tableau de bord');
@@ -93,6 +95,9 @@ describe('AppShell', () => {
       '/dashboard',
       '/sessions',
       '/notifications',
+      // Le catalogue des matières est ouvert en lecture au formateur :
+      // il en a besoin pour qualifier une séance (EF-ACA-006).
+      '/subjects',
       '/mon-compte/securite',
     ]);
   });

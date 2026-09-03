@@ -22,7 +22,8 @@ import java.util.UUID;
         ProgramLevelController.class,
         PromotionController.class,
         ClassGroupController.class,
-        PedagogicalAssignmentController.class
+        PedagogicalAssignmentController.class,
+        SubjectController.class
 })
 class AcademicExceptionHandler {
 
@@ -56,6 +57,11 @@ class AcademicExceptionHandler {
                 status = HttpStatus.NOT_FOUND;
                 code = "CLASS_GROUP_NOT_FOUND";
                 message = "Aucune classe ne correspond à cet identifiant.";
+            }
+            case SUBJECT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SUBJECT_NOT_FOUND";
+                message = "Aucune matière ne correspond à cet identifiant.";
             }
             case SITE_NOT_FOUND -> {
                 status = HttpStatus.BAD_REQUEST;

@@ -11,10 +11,9 @@
 ## Dernière mise à jour
 
 ```text
-3 septembre 2026 — sprint 2 terminé : passkeys WebAuthn, second facteur
-TOTP et codes de récupération, authentification adaptative, anti-robot
-Turnstile, appareils de confiance, réauthentification avant action
-critique. Backend 921 tests, frontend 637 tests, tout vert.
+3 septembre 2026 — sprint 3 terminé : matières, groupes temporaires,
+création de compte, suivi et réémission des invitations, journal de
+délivrabilité. Backend 959 tests, frontend 645 tests, tout vert.
 ```
 
 ## Repère Git
@@ -23,7 +22,7 @@ critique. Backend 921 tests, frontend 637 tests, tout vert.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (sprint 2) |
+| Jalons posés | `v0.2` (sprint 2), `v0.3` (sprint 3) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -34,9 +33,9 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 60 | 42 % |
-| `PARTIAL` | 11 | 8 % |
-| `NOT_IMPLEMENTED` | 71 | 50 % |
+| `IMPLEMENTED_AND_TESTED` | 66 | 46 % |
+| `PARTIAL` | 8 | 6 % |
+| `NOT_IMPLEMENTED` | 68 | 48 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
@@ -47,15 +46,20 @@ Le sprint 2 a fait passer huit exigences de `NOT_IMPLEMENTED` à
 `IMPLEMENTED_AND_TESTED` : `EF-AUTH-006` à `EF-AUTH-011`, `EF-AUTH-013`
 et `EF-AUTH-015`.
 
+Le sprint 3 en a fait passer six de plus : `EF-ACA-006` (matières),
+`EF-ACA-007` (groupes temporaires), `EF-USER-001` (création de compte),
+`EF-USER-007` (suivi et réémission des invitations), `EF-USER-008`
+(délivrabilité) et `EF-TEA-001` (formateur externe).
+
 ### 1.1 Par domaine
 
 | Domaine | Livré | Partiel | Absent |
 |---|---:|---:|---:|
 | Identité et accès (15) | 15 | 0 | 0 |
-| Utilisateurs (9) | 3 | 1 | 5 |
-| Référentiels et organisation (13) | 9 | 0 | 4 |
+| Utilisateurs (9) | 6 | 0 | 3 |
+| Référentiels et organisation (13) | 11 | 0 | 2 |
 | Inscriptions et imports (10) | 5 | 0 | 5 |
-| Corps enseignant (5) | 3 | 2 | 0 |
+| Corps enseignant (5) | 4 | 1 | 0 |
 | Planning (13) | 5 | 2 | 6 |
 | Séances (9) | 6 | 0 | 3 |
 | Émargement et assiduité (16) | 6 | 3 | 7 |
@@ -171,7 +175,44 @@ et `EF-AUTH-015`.
   individuelles, résolution `SCHOOL` / `COMPANY` / `UNKNOWN`. Écran en
   lecture et écriture.
 
-### 2.3 Population et imports
+### 2.3 Population, matières et groupes
+
+- `EF-ACA-006` **matières** : CRUD, archivage et restauration,
+  rattachement à une ou plusieurs formations contrôlé formation par
+  formation (`AcademicScopeGuard`), code immuable après création — il sert
+  de référence dans les fichiers de planning. **Aucun champ formateur**,
+  ni en base, ni dans l'API, ni dans l'écran : le cahier réserve
+  l'affectation à la séance, à une période ou à une association
+  classe–matière–période (docs/02 §6.4). Écran `/subjects`, lecture
+  ouverte aux formateurs.
+- `EF-ACA-007` **groupes temporaires** : un groupe rassemble des
+  apprenants issus de **classes différentes** pour une période, sans
+  jamais toucher à leur classe principale (RG-022). Membres rattachés à
+  l'**inscription** et non au profil, retrait logique, périmètre
+  pédagogique contrôlé côté serveur. Hébergé dans `enrollment` et non
+  `academic` : l'inverse créerait un cycle entre modules (`DEC-S3-001`).
+- `EF-USER-001` **création de compte** : `POST /api/v1/users` crée un
+  compte `PENDING_ACTIVATION` et émet son invitation dans la foulée.
+  **Aucun champ de mot de passe** — la personne choisit le sien via son
+  lien (docs/02 §11.2). Adresse déjà utilisée → `409`, jamais de doublon
+  (RG-001). Formulaire dans `/administration`.
+- `EF-TEA-001` **formateur externe** : créé par la même route, avec une
+  adresse de n'importe quel domaine. Le domaine n'est jamais un critère
+  de confiance (docs/02 §12.1).
+- `EF-USER-007` **suivi et réémission des invitations** :
+  `GET /api/v1/account-invitations` (statut, expiration déduite de
+  `expires_at`) et `POST /{id}/resend`, qui **révoque le jeton
+  précédent** — sans quoi une adresse corrigée laisserait un lien valide
+  dans la mauvaise boîte. Écran `/invitations`.
+- `EF-USER-008` **délivrabilité** : table `email_delivery` tenant
+  **deux axes distincts** — ce que le produit a fait
+  (`QUEUED` / `SENT_TO_PROVIDER` / `PROCESSING_FAILED`) et ce que le
+  fournisseur a constaté (`UNKNOWN` par défaut). « Remis au serveur de
+  messagerie » n'est jamais présenté comme « délivré » (docs/02 §11.3).
+  L'adresse n'est stockée ni exposée en clair : empreinte + forme masquée
+  (`c…e@e…c.test`).
+
+### 2.4 Imports
 
 - `EF-ENR-001..003` profils apprenants, inscriptions, changement de
   classe conservant l'historique. Une seule inscription active par
@@ -186,7 +227,7 @@ et `EF-AUTH-015`.
   total sur toute exception, courriel émis **uniquement après commit**,
   numéro `ESIC-{année}-{NNNNN}` alloué atomiquement.
 
-### 2.4 Planning
+### 2.5 Planning
 
 - `EF-PLAN-001/002` import CSV borné, jamais écrit sur disque
   (SHA-256 seul), simulation produisant lignes, anomalies et synthèse
@@ -199,7 +240,7 @@ et `EF-AUTH-015`.
 - Écrans `/planning/import`, `/planning/import/:jobId`,
   `/planning/versions`.
 
-### 2.5 Séances et remplacements
+### 2.6 Séances et remplacements
 
 - `EF-SES-001..006` séance issue d'un planning publié ou créée
   manuellement avec motif ; cycle strict `PLANNED → OPEN → CLOSED` sans
@@ -210,7 +251,7 @@ et `EF-AUTH-015`.
   remplaçant **uniquement** pendant sa période, `TEACHER` exclu de la
   création.
 
-### 2.6 Émargement
+### 2.7 Émargement
 
 - `EF-ATT-001/009` jeton d'émargement **opaque** et code court dans
   Redis : durée de vie, rotation, purge à la fermeture **après commit**.
@@ -223,7 +264,7 @@ et `EF-AUTH-015`.
 - Redis indisponible → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` : **aucune
   validation dégradée**.
 
-### 2.7 Justificatifs et restitution
+### 2.8 Justificatifs et restitution
 
 - `EF-JUS-001/003/004` dépôt, modification tant que `PENDING`, examen,
   décision motivée, `ACCEPTED` → `ABSENT` devient `EXCUSED_ABSENCE` ;
@@ -240,7 +281,7 @@ et `EF-AUTH-015`.
 - Espace apprenant `/me/attendance*` : absences **dérivées** d'un point
   de contrôle fermé, jamais persistées ; aucun accès croisé (`AC-017`).
 
-### 2.8 Notifications
+### 2.9 Notifications
 
 - `EF-NOTIF-001` centre in-app persistant : planning publié, séance
   annulée, remplaçant affecté, remplacement terminé. Notifications
@@ -250,7 +291,7 @@ et `EF-AUTH-015`.
   liens en liste blanche par rôle, aucun chemin d'interface transmis par
   le serveur.
 
-### 2.9 Transverse
+### 2.10 Transverse
 
 - En-têtes durcis : `nosniff`, `X-Frame-Options: DENY`, anti-cache,
   CSP, `Referrer-Policy: no-referrer`.
@@ -271,8 +312,7 @@ et `EF-AUTH-015`.
 
 | Exigence | Ce qui existe | Ce qui manque |
 |---|---|---|
-| `EF-USER-001` | création via invitation et fixtures | pas d'endpoint `POST /users` créant un compte `PENDING_ACTIVATION` |
-| `EF-TEA-001/002` | API d'affectation pédagogique livrée | aucun écran de création de formateur externe ni d'affectation |
+| `EF-TEA-002` | API d'affectation pédagogique livrée | aucun écran d'affectation classe–matière–période |
 | `EF-PLAN-003` | annulation du travail d'import puis réimport | pas de correction ligne à ligne dans l'écran de revue |
 | `EF-PLAN-009` | conflits formateur / classe / salle **intra-fichier**, formateur / classe contre les séances publiées | conflit **salle** contre les séances déjà publiées non détecté (`coursesession` ne porte pas `room_code`) |
 | `EF-ATT-003` | N points de contrôle par séance (`START` / `END` / `CUSTOM`) | les quatre types nommés (`MORNING_ARRIVAL`…) ne sont pas modélisés |
@@ -327,14 +367,14 @@ module, aucun cycle.
 |---|---|---|
 | `identity` | comptes, rôles, JWT, invitation, administration, mot de passe oublié, révocation, second facteur, passkeys, appareils de confiance | V1, V2, V3, V17, V18 |
 | `organization` | site, bâtiment, salle, plage réseau | V4 |
-| `academic` | année, formation, niveau, promotion, classe, affectation | V5, V6 |
-| `enrollment` | profil apprenant, inscription, changement de classe | V7 |
+| `academic` | année, formation, niveau, promotion, classe, affectation, matières | V5, V6, V19 |
+| `enrollment` | profil apprenant, inscription, changement de classe, groupes temporaires | V7, V19 |
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
 | `planning` | import, simulation, conflits, publication versionnée | V12, V13 |
 | `coursesession` | séances, cycle de vie, points de contrôle, remplacements | V9, V10, V13, V14 |
 | `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
 | `studentimport` | import CSV des apprenants | V11 |
-| `notification` | centre de notifications persistant | V15 |
+| `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
 | `dashboard` | tableau de bord par rôle | — |
 | `audit` | piste d'audit | V1 |
 | `bootstrap` | amorçage du profil `demo` | — |
@@ -343,13 +383,14 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V18
+### 5.2 Migrations Flyway — schéma en V19
 
-46 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+51 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
-`trusted_device`.
+`trusted_device` ; `V19` ajoute `subject`, `subject_program`,
+`student_group`, `student_group_member` et `email_delivery`.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -372,8 +413,8 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **108 classes / 921 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V18 |
-| `cd frontend && npm test -- --watch=false` | **76 fichiers / 637 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **112 classes / 959 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V19 |
+| `cd frontend && npm test -- --watch=false` | **78 fichiers / 645 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 
@@ -458,10 +499,9 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas.
-2. **Sprint 3 — population et invitations** : matières, groupes
-   temporaires, formateurs externes, invitations pilotées depuis
-   l'interface, suivi de délivrabilité.
-3. **Sprint 4 — Excel et alternance appliquée**.
+2. **Sprint 4 — Excel et alternance appliquée** : import `.xlsx`,
+   classeur multifeuille, correction de ligne avant confirmation,
+   opérations de masse, doublons.
 4. **Sprint 6 — planning avancé** : calendrier interactif, retour
    arrière, conflit de salle.
 5. **Sprint 8 — assiduité conforme** : quatre points de contrôle nommés,

@@ -149,6 +149,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'notifications',
   },
   {
+    // Écran livré (sprint 3) : référentiel des matières (EF-ACA-006).
+    // Lecture ouverte aux formateurs — ils qualifient leurs séances.
+    label: 'Matières',
+    path: '/subjects',
+    icon: 'menu_book',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER', 'TEACHER'],
+  },
+  {
+    // Écran livré (sprint 3) : suivi des invitations et de la
+    // délivrabilité des courriels (EF-USER-007, EF-USER-008).
+    label: 'Invitations',
+    path: '/invitations',
+    icon: 'mark_email_read',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
     // Écran livré (sprint 2) : sécurité du compte de l'appelant — second
     // facteur, clés d'accès, appareils reconnus. Visible par tout rôle :
     // chacun gère ses propres moyens d'authentification, et le serveur

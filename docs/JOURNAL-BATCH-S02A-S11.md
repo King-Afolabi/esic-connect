@@ -89,3 +89,73 @@ connexions augmentait.
 - Les passkeys exigent un contexte sûr : elles fonctionnent sur
   `localhost`, et exigeront **un domaine et HTTPS** hors du poste de
   développement.
+
+---
+
+## S3 — Population et invitations (`sprint/S03-population`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+`EF-ENR-001..003` profils, inscriptions et changement de classe
+historisé ; `EF-IMP-001/002` simulation et confirmation atomique de
+l'import CSV. Rien de tout cela n'a été réécrit.
+
+### Ce qui a été livré
+
+| Exigence | Contenu |
+|---|---|
+| `EF-ACA-006` | matières : CRUD, archivage, rattachement multi-formations contrôlé par périmètre, code immuable |
+| `EF-ACA-007` | groupes temporaires : membres issus de classes différentes, rattachés à l'inscription, retrait logique |
+| `EF-USER-001` | `POST /api/v1/users` — compte `PENDING_ACTIVATION` + invitation, sans aucun champ de mot de passe |
+| `EF-TEA-001` | formateur externe : même route, adresse de n'importe quel domaine, jamais critère de confiance |
+| `EF-USER-007` | suivi des invitations et réémission révoquant le jeton précédent |
+| `EF-USER-008` | journal de délivrabilité séparant strictement « remis au serveur » et « délivré » |
+
+### Critères d'acceptation
+
+`AC-004` à `AC-006` étaient déjà couverts par la suite d'import livrée
+avant ce lot (`StudentImportRecetteTests`,
+`EnrollmentIntegrationTests`) : ils n'ont pas été réécrits, et le sprint
+n'a rien modifié qui les remette en cause.
+
+### Migration
+
+`V19__create_subjects_groups_and_email_delivery.sql` — `subject`,
+`subject_program`, `student_group`, `student_group_member`,
+`email_delivery`.
+
+### Décisions
+
+`DEC-S3-001` — les groupes temporaires vivent dans `enrollment`, pas dans
+`academic` : un membre de groupe est une inscription, et loger le groupe
+dans `academic` créerait un cycle `academic → enrollment` alors que
+l'inverse existe déjà. Les ports publics `AcademicReferenceDirectory` et
+`SubjectDirectory` ont été ajoutés pour que `enrollment` résolve
+formation, année et matière sans importer l'interne d'`academic`.
+
+`DEC-S3-002` — le journal de délivrabilité ne stocke pas l'adresse en
+clair : empreinte pour le rapprochement, forme masquée pour l'affichage.
+Un responsable doit pouvoir repérer une faute de frappe ; la table ne
+doit pas constituer un annuaire exploitable en cas de fuite.
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw test` | 112 classes / **959 tests** / 0 échec |
+| `cd frontend && npm test -- --watch=false` | 78 fichiers / **645 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+### Limites restantes, explicitement assumées
+
+- `EF-TEA-002` reste **partiel** : l'API d'affectation pédagogique existe
+  depuis le sprint 1, mais aucun écran ne permet encore de composer une
+  association classe–matière–période. Le sprint 6 en a besoin ; il est
+  logé là.
+- Mailpit ne remonte **aucun** retour de délivrabilité : le statut
+  fournisseur reste `UNKNOWN` en développement, et l'interface le dit
+  franchement plutôt que d'afficher un « délivré » sans preuve. Le
+  raccordement à un fournisseur réel est `EF-INT-004`, sprint 13.
+- Les écrans livrés ici ne sont pas encore couverts par la recette
+  navigateur : `NOT_PERFORMED` pour ces parcours.

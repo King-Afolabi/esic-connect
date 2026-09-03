@@ -35,10 +35,14 @@ class UserAccountController {
     private static final String ADMIN_ROLES = "hasAnyRole('ADMIN','SUPER_ADMIN')";
 
     private final UserManagementService userManagementService;
+    private final AccountInvitationService invitationService;
     private final StepUpGuard stepUpGuard;
 
-    UserAccountController(UserManagementService userManagementService, StepUpGuard stepUpGuard) {
+    UserAccountController(UserManagementService userManagementService,
+                          AccountInvitationService invitationService,
+                          StepUpGuard stepUpGuard) {
         this.userManagementService = userManagementService;
+        this.invitationService = invitationService;
         this.stepUpGuard = stepUpGuard;
     }
 
@@ -57,6 +61,30 @@ class UserAccountController {
     @PreAuthorize(READ_ROLES)
     UserDetailResponse get(@PathVariable String publicId) {
         return userManagementService.getUser(parseUuid(publicId));
+    }
+
+    /**
+     * Crée un compte en attente d'activation et, sauf demande contraire,
+     * lui émet immédiatement son invitation (EF-USER-001, EF-USER-007).
+     *
+     * <p>La création et l'invitation sont deux transactions distinctes et
+     * assumées comme telles : le compte existe même si le courriel
+     * échoue, et le journal de délivrabilité (EF-USER-008) montre alors
+     * qu'il faut corriger l'adresse et réémettre. L'inverse — perdre le
+     * compte parce que le serveur SMTP est tombé — serait pire.
+     */
+    @PostMapping
+    @PreAuthorize(ADMIN_ROLES)
+    @ResponseStatus(HttpStatus.CREATED)
+    UserDetailResponse create(@Valid @RequestBody CreateUserRequest request,
+                              @AuthenticationPrincipal Jwt caller) {
+        UserDetailResponse created = userManagementService.createUser(request,
+                subject(caller), roles(caller));
+        if (request.shouldSendInvitation()) {
+            invitationService.issue(request.email(), RoleCode.valueOf(request.role().toUpperCase(
+                    java.util.Locale.ROOT)), subject(caller));
+        }
+        return created;
     }
 
     @PostMapping("/{publicId}/suspend")

@@ -84,6 +84,10 @@ public class AccountInvitation extends BaseEntity {
         return usedAt;
     }
 
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
     public Instant getRevokedAt() {
         return revokedAt;
     }

@@ -30,7 +30,9 @@ class UserManagementException extends RuntimeException {
         /** Champ de tri hors liste blanche. */
         INVALID_SORT,
         /** Valeur de filtre invalide (statut ou rôle). */
-        INVALID_FILTER
+        INVALID_FILTER,
+        /** Adresse électronique déjà utilisée par un compte (RG-001). */
+        EMAIL_ALREADY_USED
     }
 
     private final Kind kind;
