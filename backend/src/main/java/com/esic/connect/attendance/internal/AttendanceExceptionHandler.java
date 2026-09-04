@@ -51,6 +51,13 @@ class AttendanceExceptionHandler {
                 code = "ATT_NOT_ENROLLED";
                 message = "Vous n'êtes pas inscrit à une classe de cette séance.";
             }
+            case REMOTE_NOT_AUTHORIZED -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ATT_REMOTE_NOT_AUTHORIZED";
+                message = "Cette séance se tient en présentiel et vous n'êtes pas autorisé "
+                        + "à la suivre à distance. Demandez l'autorisation à votre responsable "
+                        + "pédagogique.";
+            }
             case ENROLLMENT_AMBIGUOUS -> {
                 status = HttpStatus.CONFLICT;
                 code = "ATT_ENROLLMENT_AMBIGUOUS";

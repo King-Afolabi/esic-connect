@@ -22,7 +22,8 @@ import java.util.UUID;
 @RestControllerAdvice(assignableTypes = {
         StudentProfileController.class,
         EnrollmentController.class,
-        StudentGroupController.class
+        StudentGroupController.class,
+        RemoteAttendanceController.class
 })
 class EnrollmentExceptionHandler {
 
@@ -97,6 +98,16 @@ class EnrollmentExceptionHandler {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ENR_INVALID_CLOSE_STATUS";
                 message = "Statut de clôture invalide (COMPLETED ou WITHDRAWN attendu).";
+            }
+            case INVALID_REMOTE_PERIOD -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ENR_INVALID_REMOTE_PERIOD";
+                message = "La fin de l'autorisation précède son début.";
+            }
+            case AUTHORIZATION_NOT_ACTIVE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ENR_AUTHORIZATION_NOT_ACTIVE";
+                message = "Cette autorisation n'est plus active.";
             }
             case INVALID_SORT -> {
                 status = HttpStatus.BAD_REQUEST;

@@ -93,7 +93,11 @@ public class SessionLifecycleExtensionService {
                 request.reason(),
                 request.title() != null && !request.title().isBlank()
                         ? request.title()
-                        : original.getTitle()), callerSubject);
+                        : original.getTitle(),
+                // La séance reportée conserve la modalité de l'originale :
+                // un cours distanciel reporté reste distanciel, sauf
+                // décision explicite prise ensuite.
+                original.getAttendanceMode(), original.getRemoteLink()), callerSubject);
 
         Long actorId = changePublisher.actorId(callerSubject);
         CourseSession created = sessionRepository.findByPublicId(replacement.publicId()).orElseThrow();

@@ -265,7 +265,8 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                 .toList();
         return new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
                 session.getStatus(), session.getTeacherUserId(), checkpoints, classPublicIds,
-                session.getTimeZoneId(), session.getStartsAt(), session.getEndsAt());
+                session.getTimeZoneId(), session.getStartsAt(), session.getEndsAt(),
+                session.getAttendanceMode());
     }
 
     private Set<UUID> classPublicIds(CourseSession session) {

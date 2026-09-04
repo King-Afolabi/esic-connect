@@ -159,3 +159,49 @@ export function enrollmentStatusLabel(status: string): string {
 export function enrollmentSourceLabel(source: string): string {
   return (ENROLLMENT_SOURCE_LABELS as Record<string, string>)[source] ?? source;
 }
+
+// ---------------------------------------------------------------------
+// Suivi à distance individuel (EF-ENR-004 ; docs/02 §15.3)
+// ---------------------------------------------------------------------
+
+export type RemoteAuthorizationStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+
+export const REMOTE_AUTHORIZATION_STATUS_LABELS: Record<RemoteAuthorizationStatus, string> = {
+  ACTIVE: 'Active',
+  REVOKED: 'Révoquée',
+  EXPIRED: 'Expirée',
+};
+
+export function remoteAuthorizationStatusLabel(value: string): string {
+  return (REMOTE_AUTHORIZATION_STATUS_LABELS as Record<string, string>)[value] ?? value;
+}
+
+/**
+ * `enrollment.internal.RemoteAttendanceResponse`.
+ *
+ * `classGroupPublicId` nul = autorisation **générale** (toutes les classes
+ * de l'apprenant). Une autorisation révoquée n'est jamais supprimée : la
+ * décision reste au dossier.
+ */
+export interface RemoteAttendanceAuthorizationResponse {
+  publicId: string;
+  studentUserPublicId: string;
+  classGroupPublicId: string | null;
+  status: RemoteAuthorizationStatus;
+  reason: string;
+  validFrom: string;
+  validUntil: string | null;
+  decidedAt: string;
+  revokedAt: string | null;
+  revocationReason: string | null;
+  createdAt: string;
+}
+
+/** Corps de `POST /api/v1/remote-attendance-authorizations`. */
+export interface RemoteAttendanceAuthorizeRequest {
+  studentUserPublicId: string;
+  classGroupPublicId?: string | null;
+  reason: string;
+  validFrom: string;
+  validUntil?: string | null;
+}

@@ -227,7 +227,13 @@ public interface CourseSessionDirectory {
             Set<UUID> classGroupPublicIds,
             String timeZoneId,
             Instant startsAt,
-            Instant endsAt) {
+            Instant endsAt,
+            /**
+             * Modalité d'enseignement (docs/02 §15). Le module
+             * {@code attendance} en a besoin pour décider si un canal
+             * distant est recevable sans autorisation individuelle.
+             */
+            SessionAttendanceMode attendanceMode) {
 
         /** Point de contrôle {@code publicId} de la séance, s'il existe. */
         public Optional<CheckpointRef> checkpoint(UUID checkpointPublicId) {

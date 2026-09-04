@@ -164,6 +164,7 @@ class CourseSessionService {
         CourseSession session = new CourseSession(teacher.internalId(), trimToNull(request.title()),
                 request.startsAt(), request.endsAt(), timeZoneId, request.reason().trim());
         session.markCreatedBy(actorId);
+        session.applyModality(request.attendanceMode(), trimToNull(request.remoteLink()));
         classInternalIds.forEach(session::addClass);
         CourseSession saved = sessionRepository.save(session);
         checkpointRepository.save(new AttendanceCheckpoint(saved));
@@ -445,7 +446,8 @@ class CourseSessionService {
 
         return new CourseSessionResponse(session.getPublicId(), session.getStatus(), session.getTitle(),
                 session.getExceptionReason(), teacherView, classViews, session.getStartsAt(), session.getEndsAt(),
-                session.getTimeZoneId(), session.getOpenedAt(), session.getClosedAt(),
+                session.getTimeZoneId(), session.getAttendanceMode(), session.getRemoteLink(),
+                session.getOpenedAt(), session.getClosedAt(),
                 session.getCancellationReason(), session.getCancelledAt(), postponedTo,
                 checkpointPublicId, checkpointOpen, checkpointViews,
                 session.getCreatedAt(), session.getUpdatedAt());

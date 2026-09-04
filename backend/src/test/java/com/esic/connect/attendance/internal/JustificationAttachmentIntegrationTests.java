@@ -184,6 +184,27 @@ class JustificationAttachmentIntegrationTests {
     void setUp() {
         rest.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
         FlakyStorageConfig.reset();
+        clearAgedPendingRows();
+    }
+
+    /**
+     * Isole les tests de réconciliation des résidus des exécutions
+     * précédentes.
+     *
+     * <p>La base de test n'est pas remise à zéro entre deux exécutions, et
+     * {@code reconcile()} ne traite qu'un <strong>lot borné</strong> de
+     * lignes {@code PENDING_STORAGE} vieillies, les plus anciennes d'abord.
+     * Passé une centaine de résidus accumulés, la ligne créée par le test
+     * tombe hors du lot et n'est jamais finalisée : l'échec porte alors sur
+     * une limite d'environnement, pas sur le comportement vérifié.
+     *
+     * <p>Même raison que la remise à zéro des compteurs Redis dans
+     * {@code AuthRateLimitIntegrationTests} : un test doit échouer pour ce
+     * qu'il mesure, jamais pour ce que d'autres ont laissé derrière eux.
+     */
+    private void clearAgedPendingRows() {
+        jdbc.update("delete from justification_attachment where status = 'PENDING_STORAGE' "
+                + "and created_at < (now(6) - interval 15 minute)");
     }
 
     @AfterEach

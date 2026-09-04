@@ -70,3 +70,26 @@
 .profile__reason {
   color: var(--mat-sys-on-surface-variant);
 }
+
+/* Suivi à distance individuel (EF-ENR-004). */
+.profile__hint {
+  max-width: 60ch;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.profile__empty {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.profile__error {
+  color: var(--mat-sys-error);
+}
+
+.profile__remote-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}

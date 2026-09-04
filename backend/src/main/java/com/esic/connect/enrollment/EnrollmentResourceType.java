@@ -4,6 +4,8 @@ package com.esic.connect.enrollment;
 public enum EnrollmentResourceType {
     STUDENT_PROFILE,
     ENROLLMENT,
+    /** Autorisation de suivi à distance individuel (EF-ENR-004). */
+    REMOTE_ATTENDANCE_AUTHORIZATION,
     /** Groupe temporaire d'apprenants (EF-ACA-007). */
     STUDENT_GROUP
 }

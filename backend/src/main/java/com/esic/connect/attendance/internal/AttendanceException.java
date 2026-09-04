@@ -21,6 +21,11 @@ class AttendanceException extends RuntimeException {
         SESSION_CLOSED,
         /** L'apprenant n'a pas d'inscription active dans une classe de la séance. */
         NOT_ENROLLED,
+        /**
+         * Canal distant demandé sur une séance présentielle, sans
+         * autorisation individuelle active (EF-ENR-004 ; docs/02 §15.3).
+         */
+        REMOTE_NOT_AUTHORIZED,
         /** Plusieurs inscriptions actives correspondent : impossible de trancher sans risque. */
         ENROLLMENT_AMBIGUOUS,
         /** Une présence existe déjà pour cet apprenant et ce point de contrôle. */

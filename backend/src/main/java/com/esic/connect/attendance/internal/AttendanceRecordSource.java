@@ -1,8 +1,15 @@
 package com.esic.connect.attendance.internal;
 
 /**
- * Canal d'enregistrement d'une présence (docs/02 §16.4, réduit ; étendu
- * par V10).
+ * Canal d'enregistrement d'une présence (docs/02 §15.4 et §16.4 ; étendu
+ * par V10 puis par le sprint 7).
+ *
+ * <p>Les variantes {@code REMOTE_*} ne sont pas une preuve de
+ * localisation : elles enregistrent ce que l'apprenant a <em>déclaré</em>.
+ * Le contrôle réel de la présence sur site est le QR fixe de salle associé
+ * à la plage réseau de l'établissement (EF-ATT-008/010, sprint 8). Ce que
+ * la distinction garantit, c'est qu'un suivi à distance sur une séance
+ * présentielle exige une autorisation et laisse une trace.
  *
  * <ul>
  *   <li>{@link #DYNAMIC_QR} : jeton opaque du QR dynamique du formateur ;</li>
@@ -20,5 +27,9 @@ public enum AttendanceRecordSource {
     DYNAMIC_QR,
     SHORT_CODE,
     MANUAL,
-    CORRECTION
+    CORRECTION,
+    /** QR dynamique scanné à distance (docs/02 §15.4 — {@code REMOTE_QR}). */
+    REMOTE_QR,
+    /** Code court saisi à distance (docs/02 §15.4 — {@code REMOTE_CODE}). */
+    REMOTE_CODE
 }
