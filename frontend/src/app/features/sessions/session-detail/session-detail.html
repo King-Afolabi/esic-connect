@@ -561,7 +561,10 @@
                     @if (entry.previousStatus || entry.newStatus) {
                       · {{ entry.previousStatus || '—' }} → {{ entry.newStatus || '—' }}
                     }
-                    <br /><span class="sessions__meta">Motif : {{ entry.reason }}</span>
+                    <br /><span class="sessions__meta">
+                      Motif : {{ entry.reason }} · Auteur :
+                      {{ entry.actorDisplayName || correctionActorLabel(entry.actorRole) }}
+                    </span>
                   </li>
                 }
               </ul>
@@ -570,6 +573,20 @@
           </div>
         }
       </section>
+
+      @if (canManageAttendance()) {
+        <section class="sessions__section" aria-label="Départs anticipés">
+          <h2 class="sessions__subtitle">Départs anticipés</h2>
+          <p class="sessions__meta">
+            Un départ signalé par un apprenant n'excuse rien tant qu'il n'a pas été
+            tranché : la journée reste « à confirmer ».
+          </p>
+          <app-early-departure-panel
+            [sessionId]="publicIdForPanel"
+            [canDecideForwarded]="canDecideForwardedDeparture()"
+          />
+        </section>
+      }
     }
   }
 }

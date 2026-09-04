@@ -193,6 +193,34 @@ app:
     justification-reconciliation-batch: ${JUSTIFICATION_RECONCILIATION_BATCH:100}
     # Fréquence du passage de réconciliation (cron Spring, 6 champs).
     justification-reconciliation-cron: ${JUSTIFICATION_RECONCILIATION_CRON:0 */10 * * * *}
+    # Balayage des fichiers ORPHELINS du stockage — un contenu qu'aucune
+    # ligne active ne référence plus (docs/02 §19.5 ; EF-JUS-002). À
+    # désactiver si le répertoire est partagé avec un autre système : ce
+    # balayage supprimerait ses fichiers.
+    orphan-sweep-enabled: ${JUSTIFICATION_ORPHAN_SWEEP_ENABLED:true}
+    # Nombre de clés examinées par passage (borne). > 0.
+    orphan-sweep-batch: ${JUSTIFICATION_ORPHAN_SWEEP_BATCH:500}
+    orphan-sweep-interval-ms: ${JUSTIFICATION_ORPHAN_SWEEP_INTERVAL_MS:3600000}
+    orphan-sweep-initial-delay-ms: ${JUSTIFICATION_ORPHAN_SWEEP_INITIAL_DELAY_MS:600000}
+    antivirus:
+      # Analyse antivirus des pièces jointes (EF-JUS-002 ; docs/02 §19.2).
+      #
+      # DÉSACTIVÉE PAR DÉFAUT, et le produit le DIT : chaque pièce déposée
+      # est marquée NOT_SCANNED et l'API expose ce verdict. Jamais une
+      # pièce non analysée n'est présentée comme saine.
+      #
+      # `enabled: true` active l'adaptateur ClamAV (clamd, protocole
+      # INSTREAM sur TCP). Voir le service `clamav` du profil `antivirus`
+      # dans compose.yaml.
+      enabled: ${ANTIVIRUS_ENABLED:false}
+      host: ${ANTIVIRUS_HOST:localhost}
+      port: ${ANTIVIRUS_PORT:3310}
+      timeout-millis: ${ANTIVIRUS_TIMEOUT_MILLIS:10000}
+      # `required: true` place en QUARANTAINE toute pièce sans verdict
+      # exploitable : elle n'est pas téléchargeable tant que l'analyse
+      # n'a pas conclu. À activer avec un analyseur réellement en service,
+      # sans quoi plus aucune pièce ne serait téléchargeable.
+      required: ${ANTIVIRUS_REQUIRED:false}
   activation:
     # Base du lien d'activation inséré dans l'email (front Angular à venir).
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}

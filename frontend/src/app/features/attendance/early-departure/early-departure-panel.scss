@@ -1,0 +1,44 @@
+:host {
+  display: block;
+}
+
+.ed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ed__item {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--mat-sys-outline-variant, #dadce0);
+  border-radius: 8px;
+}
+
+.ed__meta {
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+  font-size: 0.85rem;
+}
+
+.ed__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.ed__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.ed__error {
+  color: var(--mat-sys-error, #b3261e);
+  margin: 0.5rem 0 0;
+}
+
+.ed__empty {
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+}

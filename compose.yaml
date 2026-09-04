@@ -67,6 +67,33 @@ services:
     networks:
       - backend-network
 
+  # Analyse antivirus des pièces jointes (EF-JUS-002 ; docs/02 §19.2).
+  # Profil OPTIONNEL : `docker compose --profile antivirus up -d`.
+  # Hors de ce profil, l'application marque chaque pièce NOT_SCANNED et
+  # le déclare — elle ne simule pas un contrôle.
+  # La première signature met plusieurs minutes à se télécharger : la
+  # sonde attend donc longuement avant de déclarer le service sain.
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: esic-connect-clamav
+    profiles:
+      - antivirus
+    restart: unless-stopped
+    ports:
+      - "${ANTIVIRUS_PORT:-3310}:3310"
+    volumes:
+      - clamav-db:/var/lib/clamav
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - clamdscan --ping 1 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+    networks:
+      - backend-network
+
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: esic-connect-mosquitto
@@ -84,6 +111,7 @@ services:
 
 volumes:
   mysql-data:
+  clamav-db:
   redis-data:
   mosquitto-data:
   mosquitto-log:

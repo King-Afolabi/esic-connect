@@ -2513,6 +2513,134 @@ entrée provisoire est *déclarée* par le formateur, pas vérifiée : la
 confondre avec une présence enregistrée reviendrait à traiter une
 affirmation comme un fait.
 
+### DEC-S9-001 — L'effet d'un départ anticipé est dérivé, jamais stocké
+
+**Contexte.** `EF-ATT-013` et docs/02 §16.13 : « L'effet est `PARTIAL`,
+`EXCUSED_PARTIAL` ou `TO_CONFIRM` ». Le dossier porte par ailleurs
+apprenant, séance, heure, motif, avis, décision, auteur et commentaire.
+
+**Décision.** `early_departure` (V29) ne porte **aucune** colonne
+d'effet : celui-ci se déduit du statut — accepté ⇒ `EXCUSED_PARTIAL`,
+refusé ⇒ `PARTIAL`, ouvert ⇒ `TO_CONFIRM`. Le résultat journalier
+consomme cette déduction et ne module que les journées `PARTIAL`.
+
+**Raison.** Une colonne d'effet serait une seconde vérité à tenir
+cohérente avec la décision, et divergerait à la première décision
+révisée. Et l'effet n'agit que sur une journée incomplète : une journée
+complète ne redevient pas incomplète parce qu'un dossier existe, et une
+absence totale n'est pas excusée par un départ — on ne part pas d'un
+endroit où l'on n'est jamais venu.
+
+**Conséquence.** `DailyAttendanceResult` gagne `EXCUSED_PARTIAL`, absent
+de la table de §16.3 : sans lui, une journée écourtée **avec** l'accord du
+responsable serait indistinguable d'une journée écourtée sans
+autorisation.
+
+### DEC-S9-002 — Transmettre n'est pas décider
+
+**Contexte.** docs/02 §16.13 donne quatre gestes au formateur : accepter,
+refuser, recommander favorablement, transmettre au responsable.
+
+**Décision.** « Recommander favorablement » et « transmettre » aboutissent
+au **même statut** `FORWARDED` et se distinguent par l'avis joint
+(`FAVOURABLE` / `UNFAVOURABLE` / aucun). Une fois le dossier transmis, le
+formateur ne peut plus trancher : la décision est réservée au responsable
+et au-dessus (`403 ATT_EARLY_DEPARTURE_DECISION_RESERVED`).
+
+**Raison.** Deux statuts distincts pour un même état obligeraient à
+décider deux fois la même chose. Et laisser le formateur reprendre la main
+après avoir transmis viderait la transmission de son sens : le dossier
+serait « chez le responsable » sans l'être.
+
+### DEC-S9-003 — Le journal de transparence nomme la fonction, jamais l'agent
+
+**Contexte.** `EF-ATT-014` (docs/02 §5.7) donne à l'apprenant le droit de
+consulter le journal de ses présences. `AC-018` exige qu'une correction
+affiche « l'ancienne valeur, la nouvelle, **l'auteur**, la date et le
+motif ».
+
+**Décision.** Deux niveaux de restitution. L'écran du **personnel** reçoit
+l'identité civile de l'auteur (`actorDisplayName`) — c'est le sens de
+« l'auteur » dans AC-018, et l'établissement doit pouvoir remonter à la
+personne. L'**apprenant** reçoit la seule fonction (`TEACHER`,
+`SCHOOL_ADMINISTRATION`…), et `SELF` pour ses propres gestes.
+
+**Raison.** Savoir qu'une correction vient du secrétariat plutôt que d'un
+formateur est un droit ; obtenir le nom d'un agent n'en est pas un et
+ajoute une donnée personnelle sans ajouter de droit (docs/02 §14).
+
+**Conséquence.** `AttendanceCorrectionResponse` gagne `actorRole` et
+`actorDisplayName`. Avant ce sprint, l'auteur n'était **pas exposé du
+tout** : AC-018 n'était donc pas satisfait, y compris côté personnel.
+
+### DEC-S9-004 — Le journal de transparence est dérivé, pas persisté
+
+**Décision.** `GET /api/v1/me/attendance/transparency` compose sa réponse
+à la lecture depuis `attendance_record`, l'historique append-only
+`attendance_correction` et `early_departure`. Aucune table de journal.
+
+**Raison.** Une table de journal serait une seconde vérité à maintenir
+cohérente avec un historique append-only qui existe déjà et qui, lui, est
+la source. L'apprenant est résolu depuis le **seul JWT** : aucun
+identifiant n'est accepté du client, sans quoi la route deviendrait un
+moyen de lire le journal d'autrui (`AC-017`).
+
+### DEC-S9-005 — Sans antivirus, le produit le déclare ; il ne le simule pas
+
+**Contexte.** docs/02 §19.2 : « Une analyse antivirus est appliquée avant
+mise à disposition. Tant qu'elle n'a pas rendu son verdict, la pièce est
+en quarantaine et n'est pas téléchargeable. »
+
+**Décision.** Port `AttachmentMalwareScanner` avec deux adaptateurs :
+`ClamAvMalwareScanner` (protocole `INSTREAM` de `clamd`, activé par
+`app.attendance.antivirus.enabled`) et `InactiveMalwareScanner`, qui
+n'analyse rien **et le déclare**. Le verdict est persisté (V30) parmi
+`NOT_SCANNED` / `CLEAN` / `INFECTED` / `UNAVAILABLE` et exposé par l'API.
+L'analyse a lieu **avant toute écriture** : un contenu reconnu malveillant
+ne touche jamais le disque (`422 ATT_ATTACHMENT_INFECTED`).
+
+La quarantaine est gouvernée par `app.attendance.antivirus.required` :
+à `true`, une pièce sans verdict exploitable n'est pas téléchargeable
+(`409 ATT_ATTACHMENT_QUARANTINED`) ; à `false` — le défaut — elle l'est,
+en portant explicitement `NOT_SCANNED`.
+
+**Raison.** Trois situations sont distinctes de « sain » : aucun
+analyseur, analyseur muet, signature détectée. Les confondre ferait
+passer une absence de contrôle pour un contrôle réussi. Un défaut à
+`required: true` rendrait par ailleurs le produit inutilisable en local
+sans ClamAV, ce qui pousserait à désactiver le mécanisme entier plutôt
+qu'à l'exploiter.
+
+**Limite assumée.** Sans ClamAV actif, **aucune pièce n'est analysée**.
+Ne jamais écrire « garanti sans logiciel malveillant » : le seul contrôle
+alors appliqué est structurel (extension, type déclaré, *magic bytes*,
+taille). Un antivirus reconnaît d'ailleurs ce qu'il connaît ; il ne rend
+pas un format dangereux inoffensif.
+
+### DEC-S9-006 — Une réclamation s'adresse à un guichet, pas à une personne
+
+**Contexte.** docs/02 §20 : la réclamation est adressée « au formateur, au
+responsable pédagogique ou à l'administration scolaire », et peut être
+transférée.
+
+**Décision.** `ClaimAudience` désigne une **fonction** — `TEACHER`,
+`PEDAGOGICAL_MANAGER`, `SCHOOL_ADMINISTRATION` — jamais un compte. Les
+messages (`claim_message`) et les décisions (`claim_event`) sont deux
+tables distinctes ; `author_role` est figé à l'écriture.
+
+**Raison.** Un destinataire nominatif rendrait le transfert impossible à
+définir proprement, et une réclamation deviendrait caduque au départ de la
+personne visée. Séparer messages et décisions garde lisible l'historique
+d'un dossier transféré puis rouvert (RG-088) — mélangés, ils formeraient
+un fil où l'on ne distinguerait plus ce qui a été dit de ce qui a été
+décidé.
+
+**Conséquence.** Une réclamation d'un apprenant **sans classe active** et
+adressée à un guichet à périmètre serait invisible de tous : elle est
+refusée à la création (`409 CLAIM_NO_SCOPE_FOR_AUDIENCE`) avec une
+orientation vers l'administration scolaire, plutôt qu'acceptée puis
+perdue.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

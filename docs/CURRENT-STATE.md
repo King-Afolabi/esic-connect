@@ -11,11 +11,13 @@
 ## Dernière mise à jour
 
 ```text
-4 septembre 2026 — sprint 8 terminé : quatre points de contrôle nommés,
-résultat journalier, paliers de retard, QR fixe de salle sous contrôle de
-plage réseau, apprenant provisoire.
-Backend 1064 tests, frontend 663 tests, tout vert.
-Base `esic_test` **recréée** : la pollution par les fixtures est levée.
+4 septembre 2026 — sprint 9 terminé : réclamations, départ anticipé,
+journal de transparence, analyse antivirus des pièces jointes et balayage
+des fichiers orphelins.
+Backend 1112 tests, frontend 695 tests, tout vert. Schéma en V30.
+Aucun antivirus n'est actif par défaut : chaque pièce est marquée
+`NOT_SCANNED` et l'API le dit — jamais « garanti sans logiciel
+malveillant ».
 ```
 
 ## Repère Git
@@ -24,7 +26,7 @@ Base `esic_test` **recréée** : la pollution par les fixtures est levée.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8), `v0.9` (S9) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -35,14 +37,27 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 88 | 62 % |
+| `IMPLEMENTED_AND_TESTED` | 95 | 67 % |
 | `PARTIAL` | 3 | 2 % |
-| `NOT_IMPLEMENTED` | 51 | 36 % |
+| `NOT_IMPLEMENTED` | 44 | 31 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
-cible. Les 51 exigences non implémentées ne sont pas des régressions :
-ce sont les sprints 9 à 13 de la roadmap.
+cible. Les 44 exigences non implémentées ne sont pas des régressions :
+ce sont les sprints 10 à 13 de la roadmap.
+
+Le sprint 9 en ajoute sept et clôt un partiel : `EF-CLAIM-001` à
+`EF-CLAIM-004` (réclamations), `EF-ATT-013` (départ anticipé),
+`EF-ATT-014` (journal de transparence) et `EF-JUS-002`, qui passe de
+`PARTIAL` à `IMPLEMENTED_AND_TESTED` — sous la réserve explicite qu'aucun
+analyseur antivirus n'est actif par défaut (§3 et §8).
+
+> **Correction de comptage.** Le tableau §1.1 et ces totaux divergeaient
+> depuis plusieurs sprints : la ligne « émargement et assiduité » portait
+> un partiel qui n'existait pas et sous-comptait ses absents. Les chiffres
+> ci-dessus sont désormais la **somme exacte** du tableau §1.1, elle-même
+> alignée sur les listes §2, §3 et §4. Le dépôt a raison, le compteur
+> avait tort.
 
 Le sprint 2 a fait passer huit exigences de `NOT_IMPLEMENTED` à
 `IMPLEMENTED_AND_TESTED` : `EF-AUTH-006` à `EF-AUTH-011`, `EF-AUTH-013`
@@ -94,8 +109,8 @@ raison, le document avait tort.
 | Corps enseignant (5) | 4 | 1 | 0 |
 | Planning (13) | 11 | 0 | 2 |
 | Séances (9) | 9 | 0 | 0 |
-| Émargement et assiduité (16) | 13 | 1 | 2 |
-| Justificatifs et réclamations (8) | 3 | 1 | 4 |
+| Émargement et assiduité (16) | 14 | 0 | 2 |
+| Justificatifs et réclamations (8) | 8 | 0 | 0 |
 | Notifications et mobilité (9) | 1 | 1 | 7 |
 | Restitution (10) | 3 | 1 | 6 |
 | IA et objets connectés (10) | 0 | 0 | 10 |
@@ -433,6 +448,42 @@ raison, le document avait tort.
   base ↔ fichier avec compensation, réconciliation planifiée des lignes
   `PENDING_STORAGE`, téléchargement forcé en pièce jointe avec
   `nosniff`, accès propriétaire et examinateur périmétré uniquement.
+  **Analyse antivirus** : port `AttachmentMalwareScanner`, adaptateur
+  ClamAV (`INSTREAM`) activable par configuration, adaptateur inactif par
+  défaut qui **déclare** n'analyser rien. Verdict persisté (V30) parmi
+  `NOT_SCANNED` / `CLEAN` / `INFECTED` / `UNAVAILABLE` et exposé par
+  l'API : une pièce non analysée n'est **jamais** présentée comme saine.
+  L'analyse a lieu avant toute écriture — un contenu reconnu malveillant
+  ne touche pas le disque (`422`). Quarantaine gouvernée par
+  `app.attendance.antivirus.required` (`409` sans verdict exploitable).
+  **Balayage des orphelins** : passage planifié et borné qui supprime les
+  contenus qu'aucune ligne active ne référence plus (`DEC-S9-005`).
+- `EF-CLAIM-001..004` **réclamations** : une réclamation s'adresse à un
+  **guichet** (formateur, responsable pédagogique, administration
+  scolaire), jamais à une personne — c'est ce qui rend le transfert
+  possible. Fil de messages append-only avec le rôle figé à l'écriture,
+  décisions tenues dans une table **distincte** de la conversation
+  (RG-088), transfert et refus motivés, réouverture d'un dossier clos.
+  Une réclamation d'autrui répond `404`, jamais `403`. Une réclamation
+  d'un apprenant sans classe active adressée à un guichet à périmètre est
+  refusée à la création plutôt qu'acceptée puis invisible de tous
+  (`DEC-S9-006`).
+- `EF-ATT-013` **départ anticipé** : l'apprenant signale, le formateur
+  accepte, refuse, ou transmet au responsable avec un avis facultatif.
+  Une fois transmis, le formateur ne reprend pas la main (`403`).
+  L'effet — `PARTIAL` / `EXCUSED_PARTIAL` / `TO_CONFIRM` — est **dérivé**
+  du statut, jamais stocké, et ne module que les journées `PARTIAL` :
+  une journée complète ne redevient pas incomplète, une absence totale
+  n'est pas excusée (`DEC-S9-001`, `DEC-S9-002`).
+- `EF-ATT-014` **journal de transparence** : `GET /me/attendance/transparency`
+  compose à la lecture l'émargement, l'historique append-only des
+  corrections, le cycle des justificatifs et celui des départs anticipés.
+  Rien n'est persisté. L'apprenant est résolu depuis le **seul JWT** ; les
+  acteurs y sont désignés par leur **fonction**, jamais par leur nom
+  (`DEC-S9-003`, `DEC-S9-004`).
+- `AC-018` **l'auteur d'une correction est exposé** — il ne l'était pas :
+  la colonne existait depuis V10 sans jamais atteindre l'API. Nom et
+  fonction pour le personnel, fonction seule pour l'apprenant.
 - `EF-REP-001..003` rapports séance / classe / apprenant / synthèse en
   JSON paginé avec tri serveur borné, export CSV UTF-8 + BOM, séparateur
   `;`, neutralisation d'injection de formule.
@@ -471,7 +522,6 @@ raison, le document avait tort.
 | Exigence | Ce qui existe | Ce qui manque |
 |---|---|---|
 | `EF-TEA-002` | API d'affectation pédagogique livrée | aucun écran d'affectation classe–matière–période |
-| `EF-JUS-002` | contrôle structurel complet, stockage sécurisé, compensation, réconciliation | **antivirus absent** — ne jamais écrire « garanti sans logiciel malveillant » ; balayage des fichiers orphelins absent |
 | `EF-NOTIF-002` | notifications produites pour les événements de planning et de séance | audience **formateur uniquement** ; apprenants et responsables non notifiés |
 | `EF-REP-007` | endpoint typé par rôle, périmètre serveur, contexte multi-rôle vérifié ; cartes `STUDENT` et `TEACHER` complètes | cartes `PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes ; coût SQL linéaire par séance |
 | Audit transactionnel | `coursesession` et `studentimport` publient après commit | 8 des 9 écouteurs restent synchrones `REQUIRES_NEW` ; pas d'outbox |
@@ -483,32 +533,36 @@ raison, le document avait tort.
 Aucune ligne de code. Ce sont les sprints à venir — voir
 `docs/06-roadmap-six-mois.md`.
 
-| Bloc | Exigences | Sprint |
-|---|---|---|
-| Confirmation locale d'un émargement par WebAuthn | `EF-ATT-011` | 8 |
-| Opérations de masse, doublons, invitations pilotées, délivrabilité, recherche globale | `EF-USER-004`, `005`, `007`, `008`, `009` | 3–4, 11 |
-| Matières, groupes temporaires | `EF-ACA-006`, `007` | 3 |
-| Import Excel, multifeuille, correction de ligne | `EF-IMP-003`, `004`, `006` | 4 |
-| Planning PDF texte et assistance IA au mapping | `EF-PLAN-012`, `013` | 12 |
-| Départ anticipé, transparence, borne connectée | `EF-ATT-013`, `014`, `016` | 9, 12 |
-| Réclamations | `EF-CLAIM-001..004` | 9 |
-| Audience élargie, courriel, push, préférences, PWA | `EF-NOTIF-003..006`, `EF-PWA-001..003` | 10 |
-| Excel, PDF, attestations, tableaux alternatifs, rapports d'anomalies et d'invitations | `EF-REP-004`, `005`, `006`, `008`, `009`, `010` | 11–12 |
-| Service d'IA complet | `EF-AI-001..005` | 12 |
-| Objets connectés | `EF-IOT-001..005` | 12 |
-| Intégrations Microsoft, iCalendar, fournisseur de courriel | `EF-INT-001..004` | 11, 13 |
-| Consultation d'audit, outbox, RGPD, exploitation | `EF-AUD-002`, `003`, `EF-RGPD-001..003`, `EF-OPS-001..005` | 10, 13 |
+> Ce tableau était **périmé** : il listait encore comme absentes des
+> exigences livrées aux sprints 3, 4 et 9. Il est refait ici et compte
+> exactement les 44 exigences de §1.
 
-**Vérifications de terrain** (3 septembre 2026, après sprint 2) : aucune
-occurrence de `MQTT`, `outbox`, `service-worker`, Apache POI ni
-bibliothèque PDF dans `backend/src/main` ou `frontend/src`. Aucun module
-`claim`, `ai` ou `iot`.
+| Bloc | Exigences | Nombre | Sprint |
+|---|---|---:|---|
+| Recherche globale dans son périmètre | `EF-USER-009` | 1 | 11 |
+| Détection des conflits et incohérences de salle hors planning | `EF-ORG-004` | 1 | 6 |
+| Mapping d'import assisté par l'IA | `EF-IMP-005` | 1 | 12 |
+| Planning PDF texte et mapping assisté par l'IA | `EF-PLAN-012`, `013` | 2 | 12 |
+| Confirmation locale d'un émargement par WebAuthn ; borne connectée | `EF-ATT-011`, `016` | 2 | 8, 12 |
+| Audience élargie, courriel, push, préférences, PWA | `EF-NOTIF-003..006`, `EF-PWA-001..003` | 7 | 10 |
+| Excel, PDF, attestations, tableaux alternatifs, rapports d'anomalies et d'invitations | `EF-REP-004`, `005`, `006`, `008`, `009`, `010` | 6 | 11–12 |
+| Service d'IA complet | `EF-AI-001..005` | 5 | 12 |
+| Objets connectés | `EF-IOT-001..005` | 5 | 12 |
+| Intégrations Microsoft, iCalendar, fournisseur de courriel | `EF-INT-001..004` | 4 | 11, 13 |
+| Consultation d'audit, outbox, RGPD, exploitation | `EF-AUD-002`, `003`, `EF-RGPD-001..003`, `EF-OPS-001..005` | 10 | 10, 13 |
+
+**Vérifications de terrain** (4 septembre 2026, après sprint 9) : aucune
+occurrence de `MQTT`, `outbox`, `service-worker` ni bibliothèque PDF dans
+`backend/src/main` ou `frontend/src`. Aucun module `ai` ni `iot`. Le
+module `claim` **existe** depuis ce sprint. Aucun analyseur antivirus
+n'est joignable par défaut : `clamav` est un service de profil optionnel
+de `compose.yaml`, **jamais démarré ni vérifié** dans ce dépôt.
 
 ---
 
 ## 5. Architecture réelle
 
-### 5.1 Modules Spring Modulith — 14
+### 5.1 Modules Spring Modulith — 15
 
 `ModularityTests` **vert** : aucune dépendance vers l'interne d'un autre
 module, aucun cycle.
@@ -522,20 +576,21 @@ module, aucun cycle.
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
 | `planning` | import CSV et Excel, simulation, conflits, correction de ligne, calendrier interactif, publication versionnée, retour arrière | V12, V13, V23 |
 | `coursesession` | séances, cycle de vie, points de contrôle nommés, remplacements, salle, modalité, report, demandes d'annulation | V9, V10, V13, V14, V21, V22, V24, V25 |
-| `attendance` | jetons, validation, QR de salle, corrections, apprenants provisoires, justificatifs, rapports, résultat journalier | V9, V10, V16, V26, V27 |
+| `attendance` | jetons, validation, QR de salle, corrections, apprenants provisoires, justificatifs et leur analyse antivirus, départ anticipé, journal de transparence, rapports, résultat journalier | V9, V10, V16, V26, V27, V29, V30 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
 | `dashboard` | tableau de bord par rôle | — |
+| `claim` | réclamations : guichets, fil de messages, transfert, décision, réouverture | V28 |
 | `audit` | piste d'audit | V1 |
 | `bootstrap` | amorçage du profil `demo` | — |
 | `shared` | types transverses, gestion d'erreurs, horloge | — |
 
-Modules du cahier des charges **non encore créés** : `claim`,
+Modules du cahier des charges **non encore créés** :
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V27
+### 5.2 Migrations Flyway — schéma en V30
 
-54 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+58 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
@@ -554,7 +609,14 @@ distants ; `V25` ajoute les quatre types de point de contrôle nommés,
 élargit `checkpoint_type` (`AFTERNOON_BREAK_RETURN` fait 21 caractères) et
 impose l'unicité d'un type nommé par séance ; `V26` transforme
 `room.static_qr_reference` en jeton serveur unique et daté et ajoute le
-canal `ROOM_STATIC_QR` ; `V27` crée `session_guest_attendance`.
+canal `ROOM_STATIC_QR` ; `V27` crée `session_guest_attendance` ; `V28`
+crée `claim`, `claim_message` et `claim_event` — messages et décisions
+dans deux tables distinctes, l'historique d'un dossier transféré devant
+rester lisible ; `V29` crée `early_departure`, **sans** colonne d'effet
+(il se déduit du statut) ; `V30` ajoute à `justification_attachment` le
+verdict d'analyse antivirus, sa date et sa signature, par défaut
+`NOT_SCANNED` — marquer `CLEAN` rétroactivement des pièces jamais
+analysées serait une affirmation que rien ne fonde.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -576,8 +638,8 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **121 classes / 1064 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V27 |
-| `cd frontend && npm test` | **79 fichiers / 663 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **124 classes / 1112 tests / 0 échec / 0 erreur** — `ModularityTests` vert (15 modules), schéma V30 |
+| `cd frontend && npm test` | **84 fichiers / 695 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 
@@ -588,6 +650,14 @@ Les tests portant le tag `perf` sont exclus par défaut
 Sans `set -a && source ../.env && set +a`, Flyway échoue avec
 `Access denied for user '${MYSQL_USER}'` et toute la suite tombe en
 erreur. Ce n'est pas un défaut du produit.
+
+**Piège de compilation** : `./mvnw -o test-compile` peut répondre
+« BUILD SUCCESS » alors que `./mvnw -o clean test-compile` échoue — le
+plugin ne recompile pas les tests quand seules les sources principales ont
+changé. L'extension Java de l'éditeur peut en outre laisser dans
+`target/` une classe portant `Unresolved compilation problem`, qui se
+manifeste au moment de l'exécution et non de la compilation. **Ne jamais
+conclure d'un `test-compile` incrémental** : seul `clean` fait foi.
 
 **Couplage connu entre classes de test** : les compteurs de limitation
 indexés sur l'*origine* réseau vivent dans Redis et sont partagés par
@@ -606,10 +676,14 @@ connexions de la suite augmente.
 | Navigateurs | chromium exécuté ; firefox, webkit et mobile configurés, non exécutés par défaut |
 | Intégration continue | `.github/workflows/e2e.yml`, déclenchement manuel |
 
-La suite ne couvre pas les fonctions qui n'ont pas d'écran : QR fixe de
-salle, scan caméra, exports Excel et PDF, réclamations, écrans d'écriture
-`academic` et `enrollment`. **Aucun test n'est écrit contre un écran qui
-n'existe pas.**
+La suite ne couvre pas les fonctions qui n'ont pas d'écran : scan caméra,
+exports Excel et PDF, écrans d'écriture `academic` et `enrollment`.
+**Aucun test n'est écrit contre un écran qui n'existe pas.**
+
+Les écrans livrés au sprint 9 — réclamations, départ anticipé, journal de
+transparence — ont un écran mais **ne sont pas** dans la recette
+navigateur : ils sont couverts par des tests de composant Angular.
+`NOT_PERFORMED` pour ces parcours.
 
 Les écrans livrés au sprint 2 — vérification en deux étapes, sécurité du
 compte — sont couverts par des tests de composant Angular, **pas encore**
@@ -633,9 +707,10 @@ par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 | Réf | Dette | Effet |
 |---|---|---|
 | T-01 | pas d'outbox : notifications produites après commit sans reprise | une panne du diffuseur perd la notification |
+| T-12 | les réclamations n'émettent aucune notification | un destinataire ne sait qu'un dossier l'attend qu'en ouvrant l'écran (sprint 10) |
 | T-02 | 8 écouteurs d'audit synchrones | une trace peut manquer sans annuler l'action |
-| T-04 | aucun antivirus sur les pièces jointes | contrôle structurel seul |
-| T-04 | balayage des fichiers orphelins absent | un fichier peut subsister après une suppression échouée |
+| T-04 | **aucun antivirus actif par défaut** : le port et l'adaptateur ClamAV existent, `clamav` est un service de profil optionnel jamais démarré ici | seul le contrôle structurel s'applique ; l'API marque `NOT_SCANNED` et l'écran l'affiche — ne jamais écrire « garanti sans logiciel malveillant » |
+| T-11 | adaptateur ClamAV jamais éprouvé contre un `clamd` réel | les tests couvrent le contrat du port et le traitement de chaque verdict, avec un double piloté ; la conformité au protocole `INSTREAM` reste à vérifier |
 | T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
 | T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
 | T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
@@ -662,15 +737,20 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 ## 10. Prochaines priorités
 
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
-   livré, l'exécution ne l'est pas.
-2. **Sprint 6 — planning avancé** : calendrier interactif, retour à une
-   version antérieure, avertissement d'alternance, import Excel du
-   planning, report et demande d'annulation, séance multi-classes.
-4. **Sprint 6 — planning avancé** : calendrier interactif, retour
-   arrière, conflit de salle.
-5. **Sprint 8 — assiduité conforme** : quatre points de contrôle nommés,
-   paliers de retard, QR fixe et contrôle réseau.
-6. **Sprint 10 — outbox** : lève les dettes T-01 et T-02 d'un coup.
+   livré, l'exécution ne l'est pas. `esic_test` a été recréée au sprint 8 ;
+   la base locale ne l'est toujours pas.
+2. **Sprint 10 — notifications et outbox** : lève les dettes T-01, T-02 et
+   T-12 d'un coup, et donne aux réclamations et aux départs anticipés la
+   notification qui leur manque.
+3. **Sprint 10 — PWA** : installable, consultation hors ligne, file
+   d'actions différées.
+4. **Sprint 11 — pilotage et restitution** : tableaux de bord complets,
+   exports Excel et PDF, attestations, recherche globale, écran du
+   résultat journalier et écrans manquants des opérations de masse et des
+   doublons (T-10).
+5. **Éprouver ClamAV** (T-11) : démarrer `docker compose --profile
+   antivirus up -d` et vérifier l'adaptateur contre un `clamd` réel avant
+   de présenter l'analyse comme opérationnelle.
 
 ---
 

@@ -1,0 +1,109 @@
+<nav class="att__crumbs" aria-label="Fil d'Ariane">
+  <a routerLink="/my-attendance">← Retour à mes présences</a>
+</nav>
+
+<h1 class="att__title">Journal de transparence</h1>
+<p class="att__intro">
+  Tout ce qui a touché vos présences : votre émargement, les saisies et
+  corrections effectuées, les décisions sur vos justificatifs et vos départs
+  anticipés. Les intervenants y sont désignés par leur fonction.
+</p>
+
+<form class="att__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+  <mat-form-field appearance="outline">
+    <mat-label>Depuis</mat-label>
+    <input matInput type="date" formControlName="from" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Jusqu'au</mat-label>
+    <input matInput type="date" formControlName="to" />
+  </mat-form-field>
+  <div class="att__filter-actions">
+    <button mat-flat-button type="submit">Filtrer</button>
+    <button mat-stroked-button type="button" (click)="resetFilters()">Réinitialiser</button>
+  </div>
+</form>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    <p class="att__status" role="status">Chargement…</p>
+  }
+  @case ('forbidden') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Accès refusé.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="att__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ $any(state()).message }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if ($any(state()).entries.length === 0) {
+      <div class="att__panel">
+        <mat-icon aria-hidden="true">history</mat-icon>
+        <p>Aucun événement sur la période demandée.</p>
+      </div>
+    } @else {
+      <div class="att__table-wrapper">
+        <table mat-table [dataSource]="$any(state()).entries">
+          <ng-container matColumnDef="occurredAt">
+            <th mat-header-cell *matHeaderCellDef scope="col">Date</th>
+            <td mat-cell *matCellDef="let e">{{ formatInstantUtc(e.occurredAt) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="event">
+            <th mat-header-cell *matHeaderCellDef scope="col">Événement</th>
+            <td mat-cell *matCellDef="let e">
+              {{ eventLabel(e.event) }}
+              @if (e.channel) {
+                <span class="att__meta"> — {{ channelLabel(e.channel) }}</span>
+              }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="actor">
+            <th mat-header-cell *matHeaderCellDef scope="col">À l'initiative de</th>
+            <td mat-cell *matCellDef="let e">{{ actorLabel(e.actorRole) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="session">
+            <th mat-header-cell *matHeaderCellDef scope="col">Séance</th>
+            <td mat-cell *matCellDef="let e">
+              {{ e.sessionTitle || '—' }}
+              @if (e.checkpointLabel) {
+                <span class="att__meta"> — {{ e.checkpointLabel }}</span>
+              }
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="change">
+            <th mat-header-cell *matHeaderCellDef scope="col">Changement</th>
+            <td mat-cell *matCellDef="let e">{{ change(e) || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="reason">
+            <th mat-header-cell *matHeaderCellDef scope="col">Motif</th>
+            <td mat-cell *matCellDef="let e">{{ e.reason || '—' }}</td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+      </div>
+
+      <div class="att__pager">
+        <button mat-stroked-button type="button" [disabled]="page() === 0" (click)="previous()">
+          Page précédente
+        </button>
+        <span class="att__meta">Page {{ page() + 1 }} sur {{ totalPages() }}</span>
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="page() + 1 >= totalPages()"
+          (click)="next()"
+        >
+          Page suivante
+        </button>
+      </div>
+    }
+  }
+}

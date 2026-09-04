@@ -42,6 +42,7 @@ class AttendanceManagementService {
     private final AttendanceRecordPersister recordPersister;
     private final AttendanceCorrectionRepository correctionRepository;
     private final AttendanceChangePublisher changePublisher;
+    private final AttendanceActorResolver actorResolver;
     private final Clock clock;
 
     AttendanceManagementService(CourseSessionDirectory courseSessionDirectory,
@@ -51,6 +52,7 @@ class AttendanceManagementService {
                                 AttendanceRecordPersister recordPersister,
                                 AttendanceCorrectionRepository correctionRepository,
                                 AttendanceChangePublisher changePublisher,
+                                AttendanceActorResolver actorResolver,
                                 Clock clock) {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
@@ -59,6 +61,7 @@ class AttendanceManagementService {
         this.recordPersister = recordPersister;
         this.correctionRepository = correctionRepository;
         this.changePublisher = changePublisher;
+        this.actorResolver = actorResolver;
         this.clock = clock;
     }
 
@@ -200,8 +203,13 @@ class AttendanceManagementService {
                                                String callerSubject) {
         CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
         AttendanceRecord record = requireRecord(session, attendancePublicId);
+        // L'écran du personnel doit pouvoir remonter à la personne :
+        // c'est le sens de « l'auteur » dans AC-018.
+        AttendanceActorResolver.Lookup actors = actorResolver.lookup();
         return correctionRepository.findByAttendanceRecordIdOrderByOccurredAtAscIdAsc(record.getId()).stream()
-                .map(AttendanceCorrectionResponse::from)
+                .map(correction -> AttendanceCorrectionResponse.from(correction,
+                        actors.role(correction.getActorUserId()),
+                        actors.displayName(correction.getActorUserId())))
                 .toList();
     }
 

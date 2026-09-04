@@ -6,6 +6,10 @@ import { environment } from '../../../environments/environment';
 import { PageResponse } from '../sessions/sessions.models';
 import {
   AmendJustificationRequest,
+  DecideEarlyDepartureRequest,
+  DeclareEarlyDepartureRequest,
+  EarlyDeparture,
+  ForwardEarlyDepartureRequest,
   ClassReportRow,
   JustificationAttachmentMeta,
   JustificationResponse,
@@ -19,6 +23,7 @@ import {
   StudentReportRow,
   SubmitJustificationRequest,
   SummaryResponse,
+  TransparencyEntry,
 } from './attendance.models';
 
 /**
@@ -54,6 +59,69 @@ export class AttendanceApiService {
   getMyAttendance(attendanceId: string): Observable<MyAttendanceDetail> {
     return this.http.get<MyAttendanceDetail>(
       `${this.base}/me/attendance/${encodeURIComponent(attendanceId)}`,
+    );
+  }
+
+  /**
+   * `GET /api/v1/me/attendance/transparency` (EF-ATT-014). Le serveur
+   * bâtit le journal depuis le seul JWT : aucun identifiant d'apprenant
+   * n'est transmis, et il n'en accepterait pas.
+   */
+  transparencyJournal(query: {
+    from?: string | null;
+    to?: string | null;
+    page?: number;
+    size?: number;
+  }): Observable<PageResponse<TransparencyEntry>> {
+    return this.http.get<PageResponse<TransparencyEntry>>(
+      `${this.base}/me/attendance/transparency`,
+      {
+        params: toParams({
+          from: query.from,
+          to: query.to,
+          page: query.page,
+          size: query.size,
+        }),
+      },
+    );
+  }
+
+  /** `GET /api/v1/me/attendance/early-departures` (EF-ATT-013). */
+  listMyEarlyDepartures(): Observable<EarlyDeparture[]> {
+    return this.http.get<EarlyDeparture[]>(`${this.base}/me/attendance/early-departures`);
+  }
+
+  /** `POST /api/v1/attendance/early-departure` → 201 (EF-ATT-013). */
+  declareEarlyDeparture(body: DeclareEarlyDepartureRequest): Observable<EarlyDeparture> {
+    return this.http.post<EarlyDeparture>(`${this.base}/attendance/early-departure`, body);
+  }
+
+  /** `GET /api/v1/sessions/{id}/attendance/early-departures` (gestion). */
+  listSessionEarlyDepartures(sessionPublicId: string): Observable<EarlyDeparture[]> {
+    return this.http.get<EarlyDeparture[]>(
+      `${this.base}/sessions/${encodeURIComponent(sessionPublicId)}/attendance/early-departures`,
+    );
+  }
+
+  /** `POST /api/v1/attendance/early-departures/{id}/forward`. */
+  forwardEarlyDeparture(
+    publicId: string,
+    body: ForwardEarlyDepartureRequest,
+  ): Observable<EarlyDeparture> {
+    return this.http.post<EarlyDeparture>(
+      `${this.base}/attendance/early-departures/${encodeURIComponent(publicId)}/forward`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/attendance/early-departures/{id}/decision`. */
+  decideEarlyDeparture(
+    publicId: string,
+    body: DecideEarlyDepartureRequest,
+  ): Observable<EarlyDeparture> {
+    return this.http.post<EarlyDeparture>(
+      `${this.base}/attendance/early-departures/${encodeURIComponent(publicId)}/decision`,
+      body,
     );
   }
 

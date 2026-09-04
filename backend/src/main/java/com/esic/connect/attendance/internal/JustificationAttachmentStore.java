@@ -1,5 +1,6 @@
 package com.esic.connect.attendance.internal;
 
+import com.esic.connect.attendance.AttachmentMalwareScanner;
 import com.esic.connect.attendance.JustificationFileStorage;
 import com.esic.connect.attendance.JustificationFileStorage.PendingUpload;
 import com.esic.connect.attendance.JustificationFileStorage.StoredRef;
@@ -59,16 +60,20 @@ class JustificationAttachmentStore {
     private final JustificationAttachmentPreparer preparer;
     private final JustificationAttachmentFinalizer finalizer;
     private final JustificationFileStorage storage;
+    private final AttachmentMalwareScanner malwareScanner;
     private final Clock clock;
     private final long maxFileBytes;
+    private final boolean scanRequired;
     private final Duration reconciliationAfter;
 
     JustificationAttachmentStore(JustificationAttachmentRepository repository,
                                  JustificationAttachmentPreparer preparer,
                                  JustificationAttachmentFinalizer finalizer,
                                  JustificationFileStorage storage,
+                                 AttachmentMalwareScanner malwareScanner,
                                  Clock clock,
                                  @Value("${app.attendance.justification-max-file-bytes:5242880}") long maxFileBytes,
+                                 @Value("${app.attendance.antivirus.required:false}") boolean scanRequired,
                                  @Value("${app.attendance.justification-reconciliation-after:PT15M}")
                                  Duration reconciliationAfter) {
         if (maxFileBytes <= 0) {
@@ -82,8 +87,10 @@ class JustificationAttachmentStore {
         this.preparer = preparer;
         this.finalizer = finalizer;
         this.storage = storage;
+        this.malwareScanner = malwareScanner;
         this.clock = clock;
         this.maxFileBytes = maxFileBytes;
+        this.scanRequired = scanRequired;
         this.reconciliationAfter = reconciliationAfter;
     }
 
@@ -103,12 +110,24 @@ class JustificationAttachmentStore {
         JustificationFileSafetyValidator.Validated validated =
                 JustificationFileSafetyValidator.validate(fileName, declaredType, content, maxFileBytes);
         String expectedSha = sha256Hex(content);
+
+        // Analyse AVANT toute écriture : un contenu reconnu malveillant ne
+        // touche jamais le disque, et aucune ligne ne le référence
+        // (docs/02 §19.2). L'analyse porte sur le contenu déjà en mémoire —
+        // le même que celui qui sera écrit, pas une relecture qui pourrait
+        // diverger.
+        Scan scan = scan(content);
+        if (scan.status() == JustificationAttachmentScanStatus.INFECTED) {
+            throw new AttendanceException(AttendanceException.Kind.ATTACHMENT_INFECTED);
+        }
+
         String key = storage.newStorageKey();
 
         JustificationAttachment pending;
         try {
             pending = preparer.insertPending(justificationId, validated.safeFileName(), key,
-                    validated.contentType(), validated.sizeBytes(), expectedSha, createdById, clock.instant());
+                    validated.contentType(), validated.sizeBytes(), expectedSha, createdById, clock.instant(),
+                    scan.status(), scan.at(), scan.signature());
         } catch (DataIntegrityViolationException duplicate) {
             if (mentionsActiveConstraint(duplicate)) {
                 throw new AttendanceException(AttendanceException.Kind.ATTACHMENT_ALREADY_EXISTS);
@@ -158,6 +177,11 @@ class JustificationAttachmentStore {
 
     Download open(long justificationId) {
         JustificationAttachment attachment = requireStored(justificationId);
+        if (!attachment.getScanStatus().allowsDownload(scanRequired)) {
+            // Quarantaine : soit une signature a été détectée, soit
+            // l'établissement exige une analyse qui n'a pas eu lieu.
+            throw new AttendanceException(AttendanceException.Kind.ATTACHMENT_QUARANTINED);
+        }
         InputStream content = storage.open(attachment.getStorageKey());
         return new Download(attachment.getOriginalFileName(), attachment.getContentType(),
                 attachment.getSizeBytes(), content);
@@ -266,7 +290,31 @@ class JustificationAttachmentStore {
     private static Meta toMeta(JustificationAttachment attachment) {
         return new Meta(attachment.getPublicId(), attachment.getOriginalFileName(), attachment.getContentType(),
                 attachment.getSizeBytes(), attachment.getSha256(),
-                attachment.getStoredAt() != null ? attachment.getStoredAt() : attachment.getCreatedAt());
+                attachment.getStoredAt() != null ? attachment.getStoredAt() : attachment.getCreatedAt(),
+                attachment.getScanStatus().name(), attachment.getScannedAt());
+    }
+
+    /** Verdict d'analyse ramené aux valeurs persistées. */
+    private record Scan(JustificationAttachmentScanStatus status, Instant at, String signature) {
+    }
+
+    private Scan scan(byte[] content) {
+        if (!malwareScanner.isActive()) {
+            // Aucun analyseur : le produit le DIT, il ne l'invente pas.
+            return new Scan(JustificationAttachmentScanStatus.NOT_SCANNED, null, null);
+        }
+        AttachmentMalwareScanner.Result result =
+                malwareScanner.scan(new ByteArrayInputStream(content));
+        Instant now = clock.instant();
+        return switch (result.verdict()) {
+            case CLEAN -> new Scan(JustificationAttachmentScanStatus.CLEAN, now, null);
+            case INFECTED ->
+                    new Scan(JustificationAttachmentScanStatus.INFECTED, now, result.signature());
+            // Un analyseur configuré mais muet ne vaut pas un analyseur
+            // absent : la distinction guide l'exploitant vers la panne.
+            case UNAVAILABLE -> new Scan(JustificationAttachmentScanStatus.UNAVAILABLE, now, null);
+            case NOT_SCANNED -> new Scan(JustificationAttachmentScanStatus.NOT_SCANNED, null, null);
+        };
     }
 
     private static boolean mentionsActiveConstraint(Throwable error) {

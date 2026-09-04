@@ -632,12 +632,54 @@ export const routes: Routes = [
               ),
           },
           {
+            // Journal de transparence (EF-ATT-014). Déclaré AVANT `:id` :
+            // le chemin littéral l'emporte, mais l'ordre le rend évident
+            // à la lecture.
+            path: 'transparency',
+            title: `Journal de transparence — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/my-attendance/my-transparency').then(
+                (m) => m.MyTransparency,
+              ),
+          },
+          {
+            // Départ anticipé côté apprenant (EF-ATT-013).
+            path: 'early-departures',
+            title: `Départs anticipés — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/my-attendance/my-early-departures').then(
+                (m) => m.MyEarlyDepartures,
+              ),
+          },
+          {
             path: ':id',
             title: `Présence — ${APP_NAME}`,
             loadComponent: () =>
               import('./features/attendance/my-attendance/my-attendance-detail').then(
                 (m) => m.MyAttendanceDetail,
               ),
+          },
+        ],
+      },
+      {
+        // Réclamations (EF-CLAIM-001..004 ; docs/02 §20). Aucune garde de
+        // rôle : la route est ouverte à tout compte authentifié, comme
+        // `POST /api/v1/claims`. Le serveur décide seul de ce que chacun
+        // voit — un apprenant ses propres réclamations, un intervenant
+        // celles de son guichet et de son périmètre.
+        path: 'claims',
+        title: `Réclamations — ${APP_NAME}`,
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/claims/claim-list/claim-list').then((m) => m.ClaimList),
+          },
+          {
+            path: ':publicId',
+            title: `Réclamation — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/claims/claim-thread/claim-thread').then((m) => m.ClaimThread),
           },
         ],
       },

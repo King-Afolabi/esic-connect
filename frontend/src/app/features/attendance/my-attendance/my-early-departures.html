@@ -1,0 +1,111 @@
+<nav class="att__crumbs" aria-label="Fil d'Ariane">
+  <a routerLink="/my-attendance">← Retour à mes présences</a>
+</nav>
+
+<h1 class="att__title">Départs anticipés</h1>
+<p class="att__intro">
+  Signalez à votre formateur que vous devez quitter une séance avant la fin.
+  Un signalement n'est pas une autorisation : tant que votre formateur ou
+  votre responsable pédagogique n'a pas tranché, la journée reste
+  <strong>à confirmer</strong>.
+</p>
+
+<mat-card appearance="outlined">
+  <mat-card-content>
+    <h2 class="att__subtitle">Signaler un départ</h2>
+    <form [formGroup]="form" (ngSubmit)="declare()">
+      <mat-form-field appearance="outline" class="att__field">
+        <mat-label>Identifiant de la séance</mat-label>
+        <input matInput formControlName="sessionPublicId" autocomplete="off" />
+        <mat-hint>Visible sur votre planning.</mat-hint>
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="att__field">
+        <mat-label>Heure de départ</mat-label>
+        <input matInput type="datetime-local" formControlName="departureAt" />
+        <mat-hint>Doit être comprise dans les horaires de la séance.</mat-hint>
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="att__field">
+        <mat-label>Motif</mat-label>
+        <textarea matInput rows="3" formControlName="reason" maxlength="500"></textarea>
+      </mat-form-field>
+
+      @if (formError(); as message) {
+        <p class="att__inline-error" role="alert">{{ message }}</p>
+      }
+      <button mat-flat-button type="submit" [disabled]="submitting()">
+        Signaler mon départ
+      </button>
+    </form>
+  </mat-card-content>
+</mat-card>
+
+<section class="att__section" aria-label="Mes signalements">
+  <h2 class="att__subtitle">Mes signalements</h2>
+  @switch (state().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+      <p class="att__status" role="status">Chargement…</p>
+    }
+    @case ('forbidden') {
+      <div class="att__panel" role="alert">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p>Accès refusé.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="att__panel" role="alert">
+        <mat-icon aria-hidden="true">error_outline</mat-icon>
+        <p>{{ $any(state()).message }}</p>
+        <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (!hasRows()) {
+        <div class="att__panel">
+          <mat-icon aria-hidden="true">logout</mat-icon>
+          <p>Aucun départ anticipé signalé.</p>
+        </div>
+      } @else {
+        <div class="att__table-wrapper">
+          <table mat-table [dataSource]="$any(state()).rows">
+            <ng-container matColumnDef="session">
+              <th mat-header-cell *matHeaderCellDef scope="col">Séance</th>
+              <td mat-cell *matCellDef="let r">
+                {{ r.sessionTitle || '—' }}
+                <span class="att__meta">{{ formatInstantUtc(r.sessionStartsAt) }}</span>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="departureAt">
+              <th mat-header-cell *matHeaderCellDef scope="col">Départ annoncé</th>
+              <td mat-cell *matCellDef="let r">{{ formatInstantUtc(r.departureAt) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef scope="col">État</th>
+              <td mat-cell *matCellDef="let r">
+                {{ statusLabel(r.status) }}
+                @if (r.teacherOpinion) {
+                  <span class="att__meta"> — {{ opinionLabel(r.teacherOpinion) }}</span>
+                }
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="effect">
+              <th mat-header-cell *matHeaderCellDef scope="col">Effet sur la journée</th>
+              <td mat-cell *matCellDef="let r">{{ effectLabel(r.effect) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="decision">
+              <th mat-header-cell *matHeaderCellDef scope="col">Décision</th>
+              <td mat-cell *matCellDef="let r">
+                {{ r.decisionComment || '—' }}
+                @if (r.decidedAt) {
+                  <span class="att__meta">{{ formatInstantUtc(r.decidedAt) }}</span>
+                }
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="columns"></tr>
+            <tr mat-row *matRowDef="let row; columns: columns"></tr>
+          </table>
+        </div>
+      }
+    }
+  }
+</section>

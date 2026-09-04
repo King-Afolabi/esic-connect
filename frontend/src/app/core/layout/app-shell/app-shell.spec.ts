@@ -61,6 +61,9 @@ describe('AppShell', () => {
       '/planning',
       '/alternation',
       '/sessions',
+      // Réclamations livrées au sprint 9 (EF-CLAIM-001..004) : visibles
+      // de tous les rôles, chacun n'y voyant que son propre périmètre.
+      '/claims',
       '/attendance-management',
       '/notifications',
       '/subjects',
@@ -94,6 +97,7 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/sessions',
+      '/claims',
       '/notifications',
       // Le catalogue des matières est ouvert en lecture au formateur :
       // il en a besoin pour qualifier une séance (EF-ACA-006).
@@ -109,6 +113,11 @@ describe('AppShell', () => {
       '/dashboard',
       '/attendance',
       '/my-attendance',
+      // Livrés au sprint 9 : journal de transparence (EF-ATT-014) et
+      // départ anticipé (EF-ATT-013), réservés à l'apprenant.
+      '/my-attendance/transparency',
+      '/my-attendance/early-departures',
+      '/claims',
       '/notifications',
       '/mon-compte/securite',
     ]);

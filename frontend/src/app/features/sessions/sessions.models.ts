@@ -223,7 +223,32 @@ export interface AttendanceCorrectionEntry {
   previousComment: string | null;
   newComment: string | null;
   reason: string;
+  /** Fonction de l'auteur (AC-018) — toujours renseignée si résolue. */
+  actorRole: string | null;
+  /**
+   * Identité civile de l'auteur. Servie aux écrans du personnel ;
+   * `null` dans l'espace apprenant, qui n'a besoin que de la fonction.
+   */
+  actorDisplayName: string | null;
   occurredAt: string;
+}
+
+const CORRECTION_ACTOR_ROLE_LABELS: Record<string, string> = {
+  STUDENT: 'Apprenant',
+  TEACHER: 'Formateur',
+  PEDAGOGICAL_MANAGER: 'Responsable pédagogique',
+  SCHOOL_ADMINISTRATION: 'Administration scolaire',
+  ADMIN: 'Administration',
+  SUPER_ADMIN: 'Administration technique',
+};
+
+/**
+ * Repli lorsque l'identité civile de l'auteur n'est pas résolue : sa
+ * fonction reste affichée, jamais un blanc — AC-018 exige que l'auteur
+ * d'une correction soit visible.
+ */
+export function correctionActorLabel(role: string | null): string {
+  return role ? (CORRECTION_ACTOR_ROLE_LABELS[role] ?? role) : 'Non résolu';
 }
 
 export const CORRECTION_ACTION_LABELS: Record<string, string> = {

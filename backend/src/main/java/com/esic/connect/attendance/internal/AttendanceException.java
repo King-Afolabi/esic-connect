@@ -85,6 +85,31 @@ class AttendanceException extends RuntimeException {
         ATTACHMENT_ALREADY_EXISTS,
         /** Le stockage de la pièce a échoué (le justificatif est intact). */
         ATTACHMENT_STORAGE_FAILED,
+        /**
+         * Signature de logiciel malveillant détectée à l'analyse : le
+         * contenu n'est ni écrit, ni référencé, ni servi (EF-JUS-002).
+         */
+        ATTACHMENT_INFECTED,
+        /**
+         * Pièce en quarantaine : l'établissement exige une analyse
+         * antivirus et celle-ci n'a pas rendu de verdict exploitable
+         * (docs/02 §19.2).
+         */
+        ATTACHMENT_QUARANTINED,
+        // --- Départ anticipé (V29 ; EF-ATT-013) ---
+        /** Aucun dossier de départ anticipé pour cet identifiant. */
+        EARLY_DEPARTURE_NOT_FOUND,
+        /** Dossier déjà tranché, ou transmission d'un dossier déjà transmis. */
+        EARLY_DEPARTURE_INVALID_STATE,
+        /** Un dossier est déjà ouvert pour cet apprenant sur cette séance. */
+        EARLY_DEPARTURE_ALREADY_OPEN,
+        /**
+         * Dossier transmis au responsable : le formateur qui a transmis ne
+         * peut plus trancher lui-même (docs/02 §16.13).
+         */
+        EARLY_DEPARTURE_DECISION_RESERVED,
+        /** Heure de départ hors des bornes de la séance. */
+        EARLY_DEPARTURE_TIME_OUTSIDE_SESSION,
         // --- Rapports (V10) ---
         /** Filtre de rapport invalide. */
         REPORT_INVALID_FILTER,

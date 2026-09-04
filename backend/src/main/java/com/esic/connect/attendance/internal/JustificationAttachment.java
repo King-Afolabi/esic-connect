@@ -50,6 +50,16 @@ class JustificationAttachment extends BaseEntity {
     @Column(name = "status", nullable = false)
     private JustificationAttachmentStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scan_status", nullable = false, length = 16)
+    private JustificationAttachmentScanStatus scanStatus;
+
+    @Column(name = "scanned_at")
+    private Instant scannedAt;
+
+    @Column(name = "scan_signature", length = 255)
+    private String scanSignature;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -68,7 +78,8 @@ class JustificationAttachment extends BaseEntity {
 
     JustificationAttachment(Long justificationId, String originalFileName, String storageKey,
                             String contentType, long sizeBytes, String sha256, Long createdById,
-                            Instant createdAt) {
+                            Instant createdAt, JustificationAttachmentScanStatus scanStatus,
+                            Instant scannedAt, String scanSignature) {
         this.justificationId = justificationId;
         this.originalFileName = originalFileName;
         this.storageKey = storageKey;
@@ -78,6 +89,9 @@ class JustificationAttachment extends BaseEntity {
         this.createdById = createdById;
         this.createdAt = createdAt;
         this.status = JustificationAttachmentStatus.PENDING_STORAGE;
+        this.scanStatus = scanStatus;
+        this.scannedAt = scannedAt;
+        this.scanSignature = scanSignature;
     }
 
     /** Le fichier a été déplacé avec succès dans sa zone définitive. */
@@ -126,6 +140,18 @@ class JustificationAttachment extends BaseEntity {
 
     JustificationAttachmentStatus getStatus() {
         return status;
+    }
+
+    JustificationAttachmentScanStatus getScanStatus() {
+        return scanStatus;
+    }
+
+    Instant getScannedAt() {
+        return scannedAt;
+    }
+
+    String getScanSignature() {
+        return scanSignature;
     }
 
     Instant getCreatedAt() {

@@ -21,7 +21,8 @@ import java.util.UUID;
         AttendanceManagementController.class,
         StudentAttendanceController.class,
         AttendanceJustificationController.class,
-        AttendanceReportController.class})
+        AttendanceReportController.class,
+        EarlyDepartureController.class})
 class AttendanceExceptionHandler {
 
     @ExceptionHandler(AttendanceException.class)
@@ -169,6 +170,43 @@ class AttendanceExceptionHandler {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ATT_REPORT_INVALID_SORT";
                 message = "Champ ou direction de tri de rapport non autorisé.";
+            }
+            case ATTACHMENT_INFECTED -> {
+                status = HttpStatus.UNPROCESSABLE_ENTITY;
+                code = "ATT_ATTACHMENT_INFECTED";
+                message = "Ce fichier a été refusé par l'analyse antivirus.";
+            }
+            case ATTACHMENT_QUARANTINED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ATTACHMENT_QUARANTINED";
+                message = "Cette pièce jointe est en attente du verdict de l'analyse antivirus "
+                        + "et n'est pas encore téléchargeable.";
+            }
+            case EARLY_DEPARTURE_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_EARLY_DEPARTURE_NOT_FOUND";
+                message = "Ce dossier de départ anticipé est introuvable.";
+            }
+            case EARLY_DEPARTURE_INVALID_STATE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_EARLY_DEPARTURE_INVALID_STATE";
+                message = "Ce dossier de départ anticipé a déjà été traité.";
+            }
+            case EARLY_DEPARTURE_ALREADY_OPEN -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_EARLY_DEPARTURE_ALREADY_OPEN";
+                message = "Un départ anticipé est déjà en cours d'examen pour cette séance.";
+            }
+            case EARLY_DEPARTURE_DECISION_RESERVED -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ATT_EARLY_DEPARTURE_DECISION_RESERVED";
+                message = "Ce dossier a été transmis au responsable pédagogique : "
+                        + "la décision lui revient.";
+            }
+            case EARLY_DEPARTURE_TIME_OUTSIDE_SESSION -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_EARLY_DEPARTURE_TIME_OUTSIDE_SESSION";
+                message = "L'heure de départ doit être comprise dans les horaires de la séance.";
             }
             default -> {
                 status = HttpStatus.FORBIDDEN;
