@@ -29,6 +29,25 @@ public interface AlternationDirectory {
      */
     EnrollmentContextView resolveEnrollmentContext(UUID enrollmentPublicId, LocalDate date);
 
+    /**
+     * Contexte d'alternance d'une <strong>classe</strong> à une date.
+     *
+     * <p>Consommé par le module {@code planning} pour avertir qu'un
+     * créneau tombe sur une période résolue en entreprise (EF-PLAN-010,
+     * docs/02 §8.3 : « la publication avertit lorsqu'un créneau tombe sur
+     * une période résolue en entreprise pour la classe visée »).
+     *
+     * <p>L'avertissement porte sur la classe et non sur chaque apprenant :
+     * une exception individuelle ne remet pas en cause la cohérence du
+     * planning, et parcourir tout l'effectif à chaque ligne de fichier
+     * coûterait cher pour un simple avertissement.
+     *
+     * @return {@link Axis#UNKNOWN} si la classe est inconnue ou si aucun
+     *         rythme ne s'applique — l'absence de règle n'est pas un
+     *         avertissement
+     */
+    Axis resolveClassAxis(UUID classGroupPublicId, LocalDate date);
+
     /** Axe école / entreprise d'une inscription à une date. */
     enum Axis {
         SCHOOL,

@@ -139,6 +139,16 @@ class AlternationContextService {
 
     // ------------------------------------------------------------------
 
+    /**
+     * Résolution du rythme d'une classe <strong>sans</strong> contrôle de
+     * périmètre — le module appelant l'a déjà fait. Exposée pour le port
+     * public, comme {@link #resolveEnrollmentContextUnchecked}.
+     */
+    AlternationContextResponse resolvePatternUnchecked(UUID classGroupPublicId, long classInternalId,
+                                                       LocalDate date) {
+        return resolvePattern(classGroupPublicId, classInternalId, date);
+    }
+
     private AlternationContextResponse resolvePattern(UUID classGroupPublicId, long classInternalId, LocalDate date) {
         List<ClassWorkStudyPattern> covering = assignmentRepository.findActiveCovering(classInternalId, date);
         String dayOfWeek = date.getDayOfWeek().name();

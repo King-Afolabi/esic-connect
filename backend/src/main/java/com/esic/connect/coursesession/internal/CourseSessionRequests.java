@@ -56,4 +56,40 @@ final class CourseSessionRequests {
             @NotNull Instant validFrom,
             @NotNull Instant validUntil) {
     }
+
+    /**
+     * Report d'une séance annulée (EF-SES-007 ; docs/02 §14.4).
+     *
+     * <p>Le report crée une séance <strong>nouvelle</strong>, liée à
+     * l'originale. Celle-ci reste annulée et consultable : le cahier
+     * interdit un report automatique, la nouvelle date est une décision.
+     *
+     * @param classPublicIds classes de la séance reportée ; permet de
+     *                       reporter sur un périmètre réduit si la
+     *                       situation l'exige
+     */
+    record Postpone(
+            @NotNull Instant startsAt,
+            @NotNull Instant endsAt,
+            @NotBlank @Size(max = 64) String timeZoneId,
+            @NotBlank @Size(max = 500) String reason,
+            String teacherPublicId,
+            List<@NotBlank String> classPublicIds,
+            @Size(max = 191) String title) {
+    }
+
+    /**
+     * Demande d'annulation déposée par le formateur (EF-SES-008).
+     *
+     * <p>Le formateur demande, il ne décide pas : la validation revient au
+     * responsable pédagogique ou à l'administration (docs/02 §14.4).
+     */
+    record RequestCancellation(@NotBlank @Size(max = 500) String reason) {
+    }
+
+    /** Décision sur une demande d'annulation (EF-SES-008). */
+    record DecideCancellation(
+            @NotNull Boolean approved,
+            @Size(max = 500) String comment) {
+    }
 }

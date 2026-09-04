@@ -33,6 +33,12 @@ class PlanningException extends RuntimeException {
         INVALID_JOB_STATE,
         /** Job expiré : nouvel import requis. */
         JOB_EXPIRED,
+
+        /** Fenêtre ou répétition calendaire incohérente (EF-PLAN-006). */
+        CALENDAR_INVALID_RANGE,
+
+        /** Duplication d'une semaine vide : rien à copier (EF-PLAN-006). */
+        CALENDAR_NOTHING_TO_COPY,
         /** Échec inattendu de la publication après re-validation (DEC-G1-003) : job passé FAILED. */
         PUBLICATION_FAILED,
         /** Champ ou direction de tri hors liste blanche. */
@@ -43,6 +49,14 @@ class PlanningException extends RuntimeException {
         JOB_NOT_SIMULATED,
         /** Champ de correction inconnu — la liste est fermée, jamais devinée. */
         CORRECTION_UNKNOWN_FIELD,
+        /** Version sans aucun créneau : il n'y a rien à restaurer (EF-PLAN-008). */
+        VERSION_HAS_NO_ENTRY,
+        /**
+         * Un formateur de la version à restaurer n'est plus éligible.
+         * Restaurer produirait des séances sans titulaire : refus explicite
+         * plutôt que remplacement silencieux.
+         */
+        ROLLBACK_TEACHER_UNAVAILABLE,
         /** Valeur de filtre invalide. */
         INVALID_FILTER
     }

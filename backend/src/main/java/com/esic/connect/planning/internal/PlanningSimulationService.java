@@ -1,5 +1,6 @@
 package com.esic.connect.planning.internal;
 
+import com.esic.connect.alternation.AlternationDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory.ExistingSessionWindow;
 import com.esic.connect.identity.TeacherDirectory;
@@ -44,33 +45,39 @@ class PlanningSimulationService {
     private final PlanningImportJobRepository jobRepository;
     private final PlanningImportRowRepository rowRepository;
     private final PlanningImportRowIssueRepository rowIssueRepository;
+    private final PlanningImportJobIssueRepository jobIssueRepository;
     private final PlanningScheduleRepository scheduleRepository;
     private final PlanningVersionRepository versionRepository;
     private final PlanningEntryRepository entryRepository;
     private final PlanningReferenceResolver referenceResolver;
     private final CourseSessionDirectory courseSessionDirectory;
     private final PlanningProperties properties;
+    private final AlternationDirectory alternationDirectory;
     private final Clock clock;
 
     PlanningSimulationService(PlanningImportJobRepository jobRepository,
                               PlanningImportRowRepository rowRepository,
                               PlanningImportRowIssueRepository rowIssueRepository,
+                              PlanningImportJobIssueRepository jobIssueRepository,
                               PlanningScheduleRepository scheduleRepository,
                               PlanningVersionRepository versionRepository,
                               PlanningEntryRepository entryRepository,
                               PlanningReferenceResolver referenceResolver,
                               CourseSessionDirectory courseSessionDirectory,
                               PlanningProperties properties,
+                              AlternationDirectory alternationDirectory,
                               Clock clock) {
         this.jobRepository = jobRepository;
         this.rowRepository = rowRepository;
         this.rowIssueRepository = rowIssueRepository;
+        this.jobIssueRepository = jobIssueRepository;
         this.scheduleRepository = scheduleRepository;
         this.versionRepository = versionRepository;
         this.entryRepository = entryRepository;
         this.referenceResolver = referenceResolver;
         this.courseSessionDirectory = courseSessionDirectory;
         this.properties = properties;
+        this.alternationDirectory = alternationDirectory;
         this.clock = clock;
     }
 
@@ -91,14 +98,29 @@ class PlanningSimulationService {
 
     @Transactional
     PlanningImportJob simulate(SimulationCommand command) {
-        String csvText = PlanningCsvGuard.decodeAndValidate(command.originalFileName(),
-                command.contentType(), command.content(), properties.maxFileBytes());
         String sha256 = PlanningCsvValues.sha256Hex(command.content());
 
         PlanningReferenceResolver.ResolvedTarget target =
                 referenceResolver.resolveTarget(command.classGroupPublicId());
 
-        ParsedPlanningCsv parsed = PlanningCsvParser.parse(csvText, properties.maxRows());
+        // Le FORMAT est choisi sur l'extension puis confirmé par le contenu
+        // réel dans le garde correspondant. Les deux chemins convergent vers
+        // la MÊME structure, afin que la validation métier et la détection de
+        // conflits ne divergent pas par format (EF-PLAN-011).
+        ParsedPlanningCsv parsed;
+        List<String> ignoredSheets = List.of();
+        if (PlanningWorkbookParser.looksLikeWorkbook(command.originalFileName())) {
+            byte[] workbookBytes = PlanningWorkbookGuard.validate(command.originalFileName(),
+                    command.contentType(), command.content(), properties.maxFileBytes());
+            PlanningWorkbookParser.ParsedWorkbook workbook =
+                    PlanningWorkbookParser.parse(workbookBytes, properties.maxRows());
+            parsed = workbook.parsed();
+            ignoredSheets = workbook.ignoredSheets();
+        } else {
+            String csvText = PlanningCsvGuard.decodeAndValidate(command.originalFileName(),
+                    command.contentType(), command.content(), properties.maxFileBytes());
+            parsed = PlanningCsvParser.parse(csvText, properties.maxRows());
+        }
         if (parsed.tooManyRows()) {
             throw new PlanningException(PlanningException.Kind.TOO_MANY_ROWS);
         }
@@ -116,6 +138,15 @@ class PlanningSimulationService {
                 command.content().length, parsed.separator(), command.requesterInternalId(),
                 now, now.plus(properties.simulationTtl()));
         jobRepository.save(job);
+
+        // Feuilles présentes mais non lues : signalées, jamais ignorées en
+        // silence. Un planning porte sur UNE classe (EF-PLAN-011).
+        for (String ignored : ignoredSheets) {
+            jobIssueRepository.save(new PlanningImportJobIssue(job, PlanningIssueSeverity.WARNING,
+                    PlanningIssueCodes.WORKBOOK_SHEET_IGNORED,
+                    "La feuille « " + ignored + " » n'a pas été lue : un planning porte sur une "
+                            + "seule classe, seule la première feuille est prise en compte.", null));
+        }
 
         // 1. Analyse ligne à ligne.
         List<RowAnalysis> analyses = new ArrayList<>();
@@ -137,11 +168,16 @@ class PlanningSimulationService {
         detectConflicts(analyses);
 
         // 2bis. Conflits avec des séances DÉJÀ publiées (RG-034 ; audit
-        // G1-B.1) — formateur et classe uniquement. La salle n'est PAS
-        // vérifiée contre les séances existantes : le module
-        // `coursesession` ne porte pas de `room_code` (limite documentée
-        // dans G1_REQUIREMENTS_TRACEABILITY.md / DEC-G1-005).
+        // G1-B.1) — formateur, classe ET salle. La salle est vérifiée
+        // depuis le sprint 6 : `course_session.room_code` existe (V21), ce
+        // qui lève la limite DEC-G1-005 (EF-ORG-004).
         detectPublishedConflicts(analyses, target);
+
+        // 2ter. Avertissement d'alternance (EF-PLAN-010) : un créneau qui
+        // tombe sur une période résolue en ENTREPRISE pour la classe visée.
+        // Avertissement et non erreur : le cahier prévoit explicitement une
+        // séance exceptionnelle qui prime sur le rythme (docs/02 §8.3).
+        detectAlternationWarnings(analyses, target);
 
         // 3. Comparaison avec la version publiée courante.
         Map<String, PlanningEntry> publishedBySlotKey = loadPublishedEntries(target);
@@ -544,6 +580,39 @@ class PlanningSimulationService {
                     a.addError(PlanningIssueCodes.CONFLICT_ROOM, "room_code", a.roomCode,
                             "La salle est déjà occupée par une séance publiée sur ce créneau.");
                 }
+            }
+        }
+    }
+
+    /**
+     * Signale les créneaux tombant sur une période d'entreprise
+     * (EF-PLAN-010).
+     *
+     * <p>Le contrôle porte sur la <strong>classe</strong>, pas sur chaque
+     * apprenant : une exception individuelle ne remet pas en cause la
+     * cohérence du planning, et parcourir l'effectif à chaque ligne
+     * coûterait cher pour un simple avertissement.
+     *
+     * <p>Une seule résolution par jour distinct : un planning de vingt
+     * créneaux sur cinq jours ne doit pas produire vingt requêtes
+     * (NFR-PERF-08).
+     */
+    private void detectAlternationWarnings(List<RowAnalysis> analyses,
+                                           PlanningReferenceResolver.ResolvedTarget target) {
+        Map<java.time.LocalDate, AlternationDirectory.Axis> byDay = new HashMap<>();
+        for (RowAnalysis a : analyses) {
+            if (a.startsAt == null || a.timeZoneId == null || a.hasError()) {
+                continue;
+            }
+            java.time.LocalDate day = a.startsAt.atZone(java.time.ZoneId.of(a.timeZoneId))
+                    .toLocalDate();
+            AlternationDirectory.Axis axis = byDay.computeIfAbsent(day,
+                    date -> alternationDirectory.resolveClassAxis(target.classPublicId(), date));
+            if (axis == AlternationDirectory.Axis.COMPANY) {
+                a.addWarning(PlanningIssueCodes.ALTERNATION_COMPANY_PERIOD, "session_date",
+                        a.rawDate,
+                        "Ce jour est résolu en période d'entreprise pour la classe. "
+                                + "Vérifiez qu'il s'agit bien d'une séance exceptionnelle.");
             }
         }
     }

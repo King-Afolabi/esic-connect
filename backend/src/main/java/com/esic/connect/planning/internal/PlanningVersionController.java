@@ -19,9 +19,36 @@ import org.springframework.web.bind.annotation.RestController;
 class PlanningVersionController {
 
     private final PlanningVersionService versionService;
+    private final PlanningRollbackService rollbackService;
+    private final com.esic.connect.identity.CurrentUserResolver currentUserResolver;
 
-    PlanningVersionController(PlanningVersionService versionService) {
+    PlanningVersionController(PlanningVersionService versionService,
+                              PlanningRollbackService rollbackService,
+                              com.esic.connect.identity.CurrentUserResolver currentUserResolver) {
         this.versionService = versionService;
+        this.rollbackService = rollbackService;
+        this.currentUserResolver = currentUserResolver;
+    }
+
+    /**
+     * Retour à une version antérieure (EF-PLAN-008 ; critère AC-009 ;
+     * docs/02 §30.2 : {@code POST /planning/versions/{id}/rollback}).
+     *
+     * <p>Crée une version <strong>N+1</strong> dont le contenu est celui
+     * de la version choisie. L'historique n'est jamais effacé (RG-046), et
+     * l'identité des créneaux étant conservée, les séances existantes sont
+     * réutilisées plutôt que recréées (RG-047).
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/{publicId}/rollback")
+    @org.springframework.security.access.prepost.PreAuthorize(PlanningWeb.MANAGE_ROLES)
+    PlanningRollbackService.RollbackResult rollback(
+            @org.springframework.web.bind.annotation.PathVariable String publicId,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+            org.springframework.security.oauth2.jwt.Jwt caller) {
+        Long actorId = currentUserResolver.resolveInternalId(PlanningWeb.subject(caller))
+                .orElseThrow(() -> new PlanningException(PlanningException.Kind.SCOPE_FORBIDDEN));
+        return rollbackService.rollback(
+                PlanningWeb.parseUuid(publicId, PlanningException.Kind.VERSION_NOT_FOUND), actorId);
     }
 
     @GetMapping

@@ -11,9 +11,10 @@
 ## Dernière mise à jour
 
 ```text
-4 septembre 2026 — sprint 5 terminé : correction ligne à ligne du
-planning et conflit de salle contre les séances déjà publiées.
-Backend 990 tests, frontend 645 tests, tout vert.
+4 septembre 2026 — sprint 6 terminé : calendrier interactif, retour à
+une version antérieure, avertissement d'alternance, import Excel de
+planning, report et demande d'annulation d'une séance.
+Backend 1019 tests, frontend 653 tests, tout vert.
 ```
 
 ## Repère Git
@@ -22,7 +23,7 @@ Backend 990 tests, frontend 645 tests, tout vert.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -33,14 +34,14 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 73 | 51 % |
+| `IMPLEMENTED_AND_TESTED` | 80 | 56 % |
 | `PARTIAL` | 6 | 4 % |
-| `NOT_IMPLEMENTED` | 63 | 44 % |
+| `NOT_IMPLEMENTED` | 56 | 39 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
-cible. Les 71 exigences non implémentées ne sont pas des régressions :
-ce sont les sprints 3 à 13 de la roadmap.
+cible. Les 56 exigences non implémentées ne sont pas des régressions :
+ce sont les sprints 7 à 13 de la roadmap.
 
 Le sprint 2 a fait passer huit exigences de `NOT_IMPLEMENTED` à
 `IMPLEMENTED_AND_TESTED` : `EF-AUTH-006` à `EF-AUTH-011`, `EF-AUTH-013`
@@ -59,6 +60,16 @@ Le sprint 5 clôt deux exigences restées partielles depuis l'origine :
 `EF-PLAN-003` (correction ligne à ligne) et `EF-PLAN-009` (conflit de
 salle contre les séances déjà publiées).
 
+Le sprint 6 en ajoute six : `EF-PLAN-006` (calendrier interactif),
+`EF-PLAN-008` (retour à une version antérieure), `EF-PLAN-010`
+(avertissement d'alternance), `EF-PLAN-011` (planning Excel),
+`EF-SES-007` (report) et `EF-SES-008` (demande d'annulation).
+
+`EF-SES-009` (séance multi-classes) était **déjà implémenté** et listé à
+tort comme absent : `CourseSession` porte une collection `SessionClass`
+et l'API accepte `classPublicIds`. Correction faite ici — le dépôt a
+raison, le document avait tort.
+
 ### 1.1 Par domaine
 
 | Domaine | Livré | Partiel | Absent |
@@ -68,8 +79,8 @@ salle contre les séances déjà publiées).
 | Référentiels et organisation (13) | 11 | 0 | 2 |
 | Inscriptions et imports (10) | 8 | 0 | 2 |
 | Corps enseignant (5) | 4 | 1 | 0 |
-| Planning (13) | 7 | 0 | 6 |
-| Séances (9) | 6 | 0 | 3 |
+| Planning (13) | 11 | 0 | 2 |
+| Séances (9) | 9 | 0 | 0 |
 | Émargement et assiduité (16) | 6 | 3 | 7 |
 | Justificatifs et réclamations (8) | 3 | 1 | 4 |
 | Notifications et mobilité (9) | 1 | 1 | 7 |
@@ -290,8 +301,30 @@ salle contre les séances déjà publiées).
   contrôle porte sur **tout l'établissement** — une salle n'appartient
   pas à une classe (`DEC-S5-001`). Deux créneaux sans salle ne sont
   jamais en conflit ; le même créneau republié reste exclu.
+- `EF-PLAN-006` **calendrier interactif** : ajout, modification,
+  déplacement, suppression, duplication d'une semaine, répétition d'un
+  créneau, brouillon, publication. Un créneau saisi devient une ligne d'un
+  travail d'import ordinaire et chaque mutation rejoue l'analyse du lot
+  entier ; la publication reste `POST /planning-imports/{id}/publish`,
+  avec les mêmes conflits et le même versionnement (`DEC-S6-001`). Le
+  publié et le brouillon sont présentés séparément.
+- `EF-PLAN-008` **retour à une version antérieure** : crée une version
+  **N+1** dont le contenu est celui de la version choisie (AC-009).
+  L'historique n'est jamais effacé ; `slot_public_id` étant conservé, les
+  séances existantes sont réutilisées et non recréées (RG-047). Refusé si
+  un formateur n'est plus éligible ou si la version est vide
+  (`DEC-S6-002`).
+- `EF-PLAN-010` **avertissement d'alternance** non bloquant : un créneau
+  tombant sur une période résolue `COMPANY` produit
+  `PLAN_ALTERNATION_COMPANY_PERIOD` sans empêcher la publication. Sans
+  rythme affecté (axe `UNKNOWN`), le produit se tait plutôt que de
+  présumer.
+- `EF-PLAN-011` **import Excel `.xlsx`** : type réel dérivé du contenu
+  (un CSV renommé `.xlsx` est refusé), dates et heures converties de
+  façon prévisible, feuilles supplémentaires signalées et non lues en
+  silence — un planning porte sur une seule classe.
 - Écrans `/planning/import`, `/planning/import/:jobId`,
-  `/planning/versions`.
+  `/planning/calendar`, `/planning/versions`.
 
 ### 2.6 Séances et remplacements
 
@@ -299,6 +332,19 @@ salle contre les séances déjà publiées).
   manuellement avec motif ; cycle strict `PLANNED → OPEN → CLOSED` sans
   réouverture ; `CANCELLED` avec motif, la séance restant consultable en
   historique ; séance supersédée inactive partout.
+- `EF-SES-007` **report** d'une séance annulée : crée une séance de
+  remplacement **liée** à l'originale, qui reste `CANCELLED` et
+  consultable en portant `postponedToPublicId`. Une séance non annulée
+  n'est pas reportable ; un second report est refusé
+  (`SESSION_ALREADY_POSTPONED`).
+- `EF-SES-008` **demande d'annulation** par le formateur, décidée par le
+  responsable : une acceptation annule la séance dans la foulée, un refus
+  la laisse `PLANNED`. Une seule demande en attente par séance ; le
+  demandeur peut la retirer, l'historique la conservant en `WITHDRAWN`.
+  Le formateur reçoit `403` s'il tente de décider — « il demande, il ne
+  décide pas » (RG-024).
+- `EF-SES-009` séance rattachée à **plusieurs classes** (RG-023) : porté
+  par `SessionClass`, exposé par `classPublicIds`.
 - `EF-TEA-003..005` remplacements datés : formateur principal jamais
   écrasé, une seule substitution active applicable, droits accordés au
   remplaçant **uniquement** pendant sa période, `TEACHER` exclu de la
@@ -389,8 +435,7 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 | QR fixe de salle, conflits de salle | `EF-ORG-003`, `004` | 6, 8 |
 | Import Excel, multifeuille, correction de ligne | `EF-IMP-003`, `004`, `006` | 4 |
 | Suivi à distance individuel | `EF-ENR-004` | 7 |
-| Calendrier de planning, retour arrière, alternance, Excel, PDF, IA | `EF-PLAN-006`, `008`, `010..013` | 6, 12 |
-| Report, demande d'annulation, séance multi-classes | `EF-SES-007`, `008`, `009` | 6 |
+| Planning PDF texte et assistance IA au mapping | `EF-PLAN-012`, `013` | 12 |
 | Points de contrôle nommés, contrôle réseau, QR salle, apprenant provisoire, départ anticipé, transparence, borne | `EF-ATT-007`, `008`, `010`, `013`, `014`, `016` | 8–9, 12 |
 | Réclamations | `EF-CLAIM-001..004` | 9 |
 | Audience élargie, courriel, push, préférences, PWA | `EF-NOTIF-003..006`, `EF-PWA-001..003` | 10 |
@@ -421,8 +466,8 @@ module, aucun cycle.
 | `academic` | année, formation, niveau, promotion, classe, affectation, matières | V5, V6, V19 |
 | `enrollment` | profil apprenant, inscription, changement de classe, groupes temporaires | V7, V19 |
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
-| `planning` | import, simulation, conflits, correction de ligne, publication versionnée | V12, V13 |
-| `coursesession` | séances, cycle de vie, points de contrôle, remplacements, salle | V9, V10, V13, V14, V21 |
+| `planning` | import CSV et Excel, simulation, conflits, correction de ligne, calendrier interactif, publication versionnée, retour arrière | V12, V13, V23 |
+| `coursesession` | séances, cycle de vie, points de contrôle, remplacements, salle, report, demandes d'annulation | V9, V10, V13, V14, V21, V22 |
 | `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
@@ -434,9 +479,9 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V21
+### 5.2 Migrations Flyway — schéma en V23
 
-52 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+53 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
@@ -445,7 +490,10 @@ par une migration. `V17` ajoute `password_reset_token` et la colonne
 ajoute `student_import_row_correction`, la colonne
 `student_import_row.sheet_name` et **remplace** l'unicité
 `(job, ligne)` par `(job, feuille, ligne)` ; `V21` ajoute
-`course_session.room_code`.
+`course_session.room_code` ; `V22` ajoute le lien de report et
+`session_cancellation_request` ; `V23` assouplit la contrainte
+`file_size_bytes > 0` en `>= 0`, un planning construit au calendrier
+n'ayant pas de fichier.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -462,14 +510,13 @@ ajoute `student_import_row_correction`, la colonne
 
 ## 6. Résultats de tests
 
-Mesurés sur ce dépôt, branche `feature/produit-complet-v2`,
-3 septembre 2026. Environnement : OpenJDK 21.0.12, Node 24.13.0,
+Mesurés sur ce dépôt, branche `batch/S02A-S11`, 4 septembre 2026. Environnement : OpenJDK 21.0.12, Node 24.13.0,
 npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **116 classes / 990 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V21 |
-| `cd frontend && npm test -- --watch=false` | **78 fichiers / 645 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **118 classes / 1019 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V23 |
+| `cd frontend && npm test -- --watch=false` | **79 fichiers / 653 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 

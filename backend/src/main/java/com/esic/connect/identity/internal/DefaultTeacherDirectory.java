@@ -56,6 +56,16 @@ class DefaultTeacherDirectory implements TeacherDirectory {
                 .map(this::toRef);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<TeacherRef> findEligibleTeacherByInternalId(long userInternalId) {
+        return userAccountRepository.findById(userInternalId)
+                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
+                .filter(account -> userRoleRepository.findActiveWithRoleByUserId(account.getId()).stream()
+                        .anyMatch(userRole -> userRole.getRole().getCode() == RoleCode.TEACHER))
+                .map(this::toRef);
+    }
+
     private TeacherRef toRef(UserAccount account) {
         return new TeacherRef(account.getId(), account.getPublicId(),
                 account.getFirstName(), account.getLastName());

@@ -67,6 +67,12 @@ class CourseSessionException extends RuntimeException {
         CHECKPOINT_ORDER_CONFLICT,
         /** Motif d'annulation manquant. */
         CHECKPOINT_REASON_REQUIRED,
+        /** Séance déjà reportée : un second report rendrait l'historique ambigu. */
+        ALREADY_POSTPONED,
+        /** Une demande d'annulation est déjà en attente sur cette séance. */
+        CANCELLATION_ALREADY_REQUESTED,
+        /** Aucune demande d'annulation pour cet identifiant. */
+        CANCELLATION_REQUEST_NOT_FOUND,
         /** Impossible d'ajouter / ouvrir un point de contrôle : la séance n'est pas ouverte. */
         CHECKPOINT_SESSION_NOT_OPEN
     }
