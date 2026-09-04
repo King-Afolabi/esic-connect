@@ -2382,6 +2382,45 @@ de lignes.
 
 **Statut.** Adoptée le 4 septembre 2026.
 
+### DEC-S6-001 — Le calendrier interactif réutilise le pipeline d'import
+
+**Contexte.** `EF-PLAN-006` demande de construire un planning directement
+dans un calendrier : ajout, modification, déplacement, duplication d'une
+semaine, répétition, brouillon, publication.
+
+**Décision.** Un créneau saisi devient une ligne d'un travail d'import
+ordinaire (`planning_import_job` / `planning_import_row`), et chaque
+mutation rejoue `PlanningSimulationService.revalidate` sur le lot entier.
+La publication reste `POST /planning-imports/{id}/publish`.
+
+**Raison.** Le cahier exige que « les mêmes contrôles de conflit
+s'appliquent » (docs/02 §13.7). Un moteur de conflits propre au
+calendrier finirait par diverger de celui de l'import, et la divergence
+ne se verrait qu'au moment où deux classes se retrouveraient dans la même
+salle. Réutiliser le pipeline rend la divergence impossible par
+construction.
+
+**Conséquence.** Un travail né du calendrier n'a pas de fichier :
+`V23` assouplit la contrainte `file_size_bytes > 0` en `>= 0`. Un
+téléversement vide reste refusé par les gardes CSV et classeur, très en
+amont de la base.
+
+### DEC-S6-002 — Le retour arrière crée une version N+1 et refuse un planning devenu impubliable
+
+**Contexte.** `EF-PLAN-008` et `AC-009` demandent de revenir à une version
+antérieure sans effacer l'historique.
+
+**Décision.** Le retour arrière **copie** les entrées de la version
+choisie dans une version N+1, en conservant `slot_public_id`. Il est
+refusé si un formateur de la version cible n'est plus éligible
+(`ROLLBACK_TEACHER_UNAVAILABLE`) ou si la version est vide.
+
+**Raison.** Conserver `slot_public_id` fait que les séances existantes
+sont **réutilisées** et non recréées (RG-047) : un retour arrière ne perd
+ni les présences ni les points de contrôle déjà attachés. Le refus, lui,
+évite de restaurer un planning que la publication rejetterait aussitôt —
+mieux vaut un message explicite qu'une version morte dans l'historique.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

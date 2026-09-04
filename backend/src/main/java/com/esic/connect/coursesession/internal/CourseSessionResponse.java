@@ -30,6 +30,13 @@ record CourseSessionResponse(
         Instant closedAt,
         String cancellationReason,
         Instant cancelledAt,
+        /**
+         * Séance de remplacement créée par un report (EF-SES-007). Non
+         * {@code null} uniquement sur une séance annulée puis reportée :
+         * le cahier veut que l'originale « reste consultable en
+         * historique » en portant le lien (docs/02 §14.4).
+         */
+        UUID postponedToPublicId,
         UUID checkpointPublicId,
         boolean checkpointOpen,
         List<CheckpointView> checkpoints,

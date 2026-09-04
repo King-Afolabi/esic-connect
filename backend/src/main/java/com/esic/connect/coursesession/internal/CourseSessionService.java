@@ -309,7 +309,12 @@ class CourseSessionService {
         return checkpointRepository.findFirstByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId());
     }
 
-    private void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {
+    /**
+     * Contrôle d'accès à une séance, exposé au sein du module pour que
+     * {@link SessionLifecycleExtensionService} n'en réimplémente pas une
+     * variante — deux copies de la même règle finiraient par diverger.
+     */
+    void requireAccess(CourseSession session, AccessLevel level, String callerSubject) {
         Set<UUID> classPublicIds = classPublicIds(session);
         if (!accessGuard.isAllowed(session.getTeacherUserId(), session.getId(), classPublicIds, level, callerSubject)) {
             throw new CourseSessionException(accessGuard.isPedagogicalManagerScoped()
@@ -385,6 +390,17 @@ class CourseSessionService {
                 .or(() -> Optional.of(-1L));
     }
 
+    /** Classes rattachées à une séance, sous forme d'identifiants publics. */
+    Set<UUID> classPublicIdsOf(CourseSession session) {
+        return classPublicIds(session);
+    }
+
+    /** Formateur principal d'une séance, sous forme d'identifiant public. */
+    Optional<UUID> teacherPublicIdOf(CourseSession session) {
+        return userDirectory.findByInternalId(session.getTeacherUserId())
+                .map(com.esic.connect.identity.UserDirectory.UserRef::publicId);
+    }
+
     private Set<UUID> classPublicIds(CourseSession session) {
         return session.getClasses().stream()
                 .map(SessionClass::getClassGroupId)
@@ -421,10 +437,16 @@ class CourseSessionService {
         UUID checkpointPublicId = first != null ? first.getPublicId() : null;
         boolean checkpointOpen = first != null && first.isOpen();
 
+        // Lecture supplémentaire uniquement sur une séance réellement
+        // reportée : le cas courant ne paie rien (EF-SES-007).
+        UUID postponedTo = session.getPostponedToSessionId() == null ? null
+                : sessionRepository.findById(session.getPostponedToSessionId())
+                        .map(CourseSession::getPublicId).orElse(null);
+
         return new CourseSessionResponse(session.getPublicId(), session.getStatus(), session.getTitle(),
                 session.getExceptionReason(), teacherView, classViews, session.getStartsAt(), session.getEndsAt(),
                 session.getTimeZoneId(), session.getOpenedAt(), session.getClosedAt(),
-                session.getCancellationReason(), session.getCancelledAt(),
+                session.getCancellationReason(), session.getCancelledAt(), postponedTo,
                 checkpointPublicId, checkpointOpen, checkpointViews,
                 session.getCreatedAt(), session.getUpdatedAt());
     }

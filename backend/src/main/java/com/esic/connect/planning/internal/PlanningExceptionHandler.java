@@ -94,6 +94,16 @@ class PlanningExceptionHandler {
                 code = "PLAN_JOB_EXPIRED";
                 message = "Cette simulation a expiré : relancez un import.";
             }
+            case CALENDAR_INVALID_RANGE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "PLAN_CALENDAR_INVALID_RANGE";
+                message = "La période ou la répétition demandée est incohérente.";
+            }
+            case CALENDAR_NOTHING_TO_COPY -> {
+                status = HttpStatus.CONFLICT;
+                code = "PLAN_CALENDAR_NOTHING_TO_COPY";
+                message = "La semaine source ne contient aucun créneau à dupliquer.";
+            }
             case PUBLICATION_FAILED -> {
                 status = HttpStatus.CONFLICT;
                 code = "PLAN_PUBLICATION_FAILED";
@@ -118,6 +128,17 @@ class PlanningExceptionHandler {
                 status = HttpStatus.BAD_REQUEST;
                 code = "PLAN_CORRECTION_UNKNOWN_FIELD";
                 message = "Ce champ ne peut pas être corrigé.";
+            }
+            case VERSION_HAS_NO_ENTRY -> {
+                status = HttpStatus.CONFLICT;
+                code = "PLAN_VERSION_HAS_NO_ENTRY";
+                message = "Cette version ne contient aucun créneau : il n'y a rien à restaurer.";
+            }
+            case ROLLBACK_TEACHER_UNAVAILABLE -> {
+                status = HttpStatus.CONFLICT;
+                code = "PLAN_ROLLBACK_TEACHER_UNAVAILABLE";
+                message = "Un formateur de cette version n'est plus disponible. "
+                        + "Corrigez le planning plutôt que de restaurer cette version.";
             }
             default -> {
                 status = HttpStatus.BAD_REQUEST;

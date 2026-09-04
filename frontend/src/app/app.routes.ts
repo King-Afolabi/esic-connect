@@ -446,7 +446,8 @@ export const routes: Routes = [
         // planning de classe (`com.esic.connect.planning`, EF-PLAN-001..007,
         // EF-SES-001) : `/planning/import` (upload + choix de la classe),
         // `/planning/import/:jobId` (revue des lignes + anomalies +
-        // publication), `/planning/versions` (versions publiées + détail).
+        // publication), `/planning/calendar` (construction directe —
+        // EF-PLAN-006), `/planning/versions` (versions publiées + détail).
         // Périmètre aligné sur `PlanningWeb.MANAGE_ROLES` ; Spring Security
         // reste l'autorité (un `403` est rendu « accès refusé »).
         path: 'planning',
@@ -469,6 +470,14 @@ export const routes: Routes = [
               import(
                 './features/planning/planning-import-review/planning-import-review'
               ).then((m) => m.PlanningImportReview),
+          },
+          {
+            path: 'calendar',
+            title: `Calendrier de planning — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/planning/planning-calendar/planning-calendar').then(
+                (m) => m.PlanningCalendar,
+              ),
           },
           {
             path: 'versions',

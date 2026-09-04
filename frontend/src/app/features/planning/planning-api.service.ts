@@ -10,6 +10,9 @@ import {
   PlanningRowCorrection,
   PlanningRowListQuery,
   PlanningRowResponse,
+  PlanningCalendarView,
+  PlanningRollbackResponse,
+  PlanningSlotRequest,
   PlanningVersionDetailResponse,
   PlanningVersionResponse,
 } from './planning.models';
@@ -28,6 +31,7 @@ export class PlanningApiService {
   private readonly http = inject(HttpClient);
   private readonly imports = `${environment.apiBaseUrl}/v1/planning-imports`;
   private readonly versions = `${environment.apiBaseUrl}/v1/planning/versions`;
+  private readonly planning = `${environment.apiBaseUrl}/v1/planning`;
 
   /** `POST /api/v1/planning-imports` (multipart) — lance une simulation. */
   simulate(file: File, classGroupPublicId: string): Observable<PlanningJobResponse> {
@@ -104,6 +108,87 @@ export class PlanningApiService {
   getVersion(publicId: string): Observable<PlanningVersionDetailResponse> {
     return this.http.get<PlanningVersionDetailResponse>(
       `${this.versions}/${encodeURIComponent(publicId)}`,
+    );
+  }
+
+  /**
+   * `POST /api/v1/planning/versions/{publicId}/rollback` — revient à une
+   * version antérieure en créant une version N+1 (EF-PLAN-008, AC-009).
+   * L'historique n'est jamais effacé.
+   */
+  rollbackVersion(publicId: string): Observable<PlanningRollbackResponse> {
+    return this.http.post<PlanningRollbackResponse>(
+      `${this.versions}/${encodeURIComponent(publicId)}/rollback`,
+      {},
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // Calendrier interactif (EF-PLAN-006)
+  // -------------------------------------------------------------------
+
+  /** `GET /api/v1/planning/calendar` — publié + brouillon sur une fenêtre. */
+  calendar(
+    classGroupPublicId: string,
+    from: string,
+    to: string,
+  ): Observable<PlanningCalendarView> {
+    return this.http.get<PlanningCalendarView>(`${this.planning}/calendar`, {
+      params: toHttpParams({ classGroupPublicId, from, to }),
+    });
+  }
+
+  /** `POST /api/v1/planning/slots` — ajoute un créneau au brouillon (201). */
+  addSlot(
+    classGroupPublicId: string,
+    slot: PlanningSlotRequest,
+  ): Observable<PlanningJobResponse> {
+    return this.http.post<PlanningJobResponse>(`${this.planning}/slots`, slot, {
+      params: toHttpParams({ classGroupPublicId }),
+    });
+  }
+
+  /** `PATCH /api/v1/planning/drafts/{jobId}/slots/{rowId}` — déplace ou modifie. */
+  updateSlot(
+    jobId: string,
+    rowId: string,
+    slot: PlanningSlotRequest,
+  ): Observable<PlanningJobResponse> {
+    return this.http.patch<PlanningJobResponse>(
+      `${this.planning}/drafts/${encodeURIComponent(jobId)}/slots/${encodeURIComponent(rowId)}`,
+      slot,
+    );
+  }
+
+  /** `DELETE /api/v1/planning/drafts/{jobId}/slots/{rowId}`. */
+  removeSlot(jobId: string, rowId: string): Observable<PlanningJobResponse> {
+    return this.http.delete<PlanningJobResponse>(
+      `${this.planning}/drafts/${encodeURIComponent(jobId)}/slots/${encodeURIComponent(rowId)}`,
+    );
+  }
+
+  /** `POST /api/v1/planning/drafts/{jobId}/duplicate-week`. */
+  duplicateWeek(
+    jobId: string,
+    sourceWeekStart: string,
+    targetWeekStart: string,
+  ): Observable<PlanningJobResponse> {
+    return this.http.post<PlanningJobResponse>(
+      `${this.planning}/drafts/${encodeURIComponent(jobId)}/duplicate-week`,
+      { sourceWeekStart, targetWeekStart },
+    );
+  }
+
+  /** `POST /api/v1/planning/drafts/{jobId}/slots/{rowId}/repeat`. */
+  repeatSlot(
+    jobId: string,
+    rowId: string,
+    occurrences: number,
+    everyDays: number,
+  ): Observable<PlanningJobResponse> {
+    return this.http.post<PlanningJobResponse>(
+      `${this.planning}/drafts/${encodeURIComponent(jobId)}/slots/${encodeURIComponent(rowId)}/repeat`,
+      { occurrences, everyDays },
     );
   }
 }

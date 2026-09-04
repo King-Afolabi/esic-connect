@@ -292,3 +292,102 @@ réanalyse tout le lot, les conflits étant croisés).
   salle ne seraient donc pas rapprochées.
 - La capacité de salle n'est pas contrôlée : `EF-ORG-004` mentionne aussi
   « une capacité insuffisante », qui reste à faire.
+
+---
+
+## S6 — Planning avancé et séances (`sprint/S06-planning-seances`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+- `EF-SES-009` (séance multi-classes) était **déjà implémenté** :
+  `CourseSession` porte une collection `SessionClass` et l'API accepte
+  `classPublicIds`. `CURRENT-STATE.md` le listait à tort comme absent —
+  le dépôt a raison, le document a été corrigé.
+- Le versionnement (`EF-PLAN-005/007`) et la publication atomique
+  (`EF-PLAN-004`) étaient livrés au sprint 5 : le retour arrière s'y
+  greffe, il ne les réécrit pas.
+- L'annulation d'une séance avec motif (`EF-SES-004`) existait : le
+  report et la demande d'annulation s'y appuient.
+
+### Ce qui a été livré
+
+| Exigence | Contenu |
+|---|---|
+| `EF-PLAN-006` | construction directe dans un calendrier : ajout, modification, déplacement, suppression, duplication d'une semaine, répétition d'un créneau, brouillon, publication |
+| `EF-PLAN-008` | retour à une version antérieure — crée une version **N+1** dont le contenu est celui de la version choisie (AC-009) |
+| `EF-PLAN-010` | avertissement **non bloquant** quand un créneau tombe sur une période résolue en entreprise |
+| `EF-PLAN-011` | import de planning Excel `.xlsx`, type réel dérivé du contenu |
+| `EF-SES-007` | report d'une séance annulée : crée une séance liée, l'originale reste `CANCELLED` et consultable |
+| `EF-SES-008` | demande d'annulation par le formateur, décidée par le responsable ; retrait possible tant qu'elle n'est pas décidée |
+
+### Le choix structurant du sprint
+
+**Le calendrier interactif n'est pas un second modèle de planning.** Un
+créneau saisi à la main devient une ligne d'un travail d'import ordinaire,
+et chaque mutation rejoue `PlanningSimulationService.revalidate` sur le lot
+entier. La publication reste `POST /planning-imports/{id}/publish` :
+mêmes conflits, même verrou, même versionnement atomique.
+
+La raison n'est pas l'économie de code, c'est la sûreté : le cahier exige
+que « les mêmes contrôles de conflit s'appliquent » (§13.7). Un moteur de
+conflits dupliqué pour le calendrier finirait par diverger de celui de
+l'import, et la divergence ne se verrait qu'au moment où deux classes se
+retrouveraient dans la même salle.
+
+### Défaut réel découvert et corrigé
+
+`postpone` et `decideCancellation` portaient `MANAGE_ROLES`, qui inclut
+`TEACHER`. C'est correct pour ouvrir et clore une séance — c'est faux
+pour reporter (cela crée une séance) et pour décider d'une annulation :
+« le formateur ne valide jamais lui-même » (RG-024, docs/02 §5.6). Les
+deux routes portent désormais `CREATE_ROLES`. Un test vérifie qu'un
+formateur reçoit `403` sur sa propre demande.
+
+Le lien de report n'était par ailleurs pas exposé : la séance annulée
+portait `postponed_to_session_id` en base sans que l'API le montre, alors
+que le cahier veut que l'originale « reste consultable en historique » en
+portant le lien. `CourseSessionResponse` expose maintenant
+`postponedToPublicId`, résolu par une lecture supplémentaire **uniquement**
+lorsque la séance a réellement été reportée.
+
+### Migrations
+
+- `V22__create_session_postponement_and_cancellation_requests.sql` — lien
+  de report et table `session_cancellation_request`.
+- `V23__allow_calendar_built_planning_drafts.sql` — la contrainte V12
+  `file_size_bytes > 0` devient `>= 0` : un planning saisi au calendrier
+  n'a pas de fichier. Un contenu vide reste refusé bien en amont par les
+  gardes CSV et classeur. V12 n'est pas modifiée.
+
+### Décisions
+
+`DEC-S6-001` (le calendrier réutilise le pipeline d'import plutôt que de
+dupliquer le moteur de conflits) et `DEC-S6-002` (le retour arrière crée
+une version N+1 et refuse si un formateur n'est plus éligible, plutôt que
+de restaurer un planning impubliable).
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw test` | 118 classes / **1019 tests** / 0 échec |
+| `cd frontend && npm test` | 79 fichiers / **653 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+### Limites restantes, explicitement assumées
+
+- Le calendrier saisit un formateur par son **identifiant public**, sans
+  sélecteur : l'écran reste utilisable mais peu confortable. Le
+  rapprochement d'un formateur par nom relève de l'assistance IA
+  (`EF-IMP-005` / `EF-PLAN-013`, sprint 12).
+- La répétition d'un créneau est fixée à trois occurrences hebdomadaires
+  depuis l'écran ; l'API accepte n'importe quelles valeurs. Le formulaire
+  de paramétrage reste à faire.
+- `EF-PLAN-012` (planning PDF texte) et `EF-PLAN-013` (mapping assisté)
+  restent au sprint 12, conformément à la roadmap.
+- Un seul brouillon de calendrier par classe **et par auteur** : deux
+  responsables construisant simultanément le même planning travailleraient
+  chacun sur le sien et la seconde publication supersèderait la première.
+  Le comportement est cohérent avec le versionnement, mais aucun
+  avertissement ne signale l'autre brouillon.

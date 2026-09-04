@@ -46,28 +46,25 @@ class CourseSession extends BaseEntity {
 
 
     /**
-
-
      * Code fonctionnel de salle, repris du planning ; {@code null} si la
-
-
      * salle est encore indéterminée (RG-044). Volontairement un code et
-
-
      * non une clé étrangère : le cahier prévoit qu'une salle soit
-
-
      * affectée après l'import (docs/02 §7.2).
-
-
      */
-
-
     @Column(name = "room_code", length = 50)
-
-
     private String roomCode;
 
+    /**
+     * Séance de remplacement créée lors d'un report (EF-SES-007).
+     *
+     * <p>Le cahier est explicite : « une séance annulée n'est pas
+     * reportée automatiquement ; le responsable définit une nouvelle
+     * date, ce qui crée une séance liée à l'originale » (docs/02
+     * §14.4). L'originale reste donc {@code CANCELLED} et consultable
+     * en historique : elle porte simplement le lien vers sa remplaçante.
+     */
+    @Column(name = "postponed_to_session_id")
+    private Long postponedToSessionId;
 
     @Column(name = "starts_at", nullable = false)
     private Instant startsAt;
@@ -247,6 +244,16 @@ class CourseSession extends BaseEntity {
 
     boolean isOpen() {
         return status == SessionLifecycle.OPEN;
+    }
+
+    /** Enregistre le report vers la séance de remplacement (EF-SES-007). */
+    void markPostponedTo(Long replacementSessionId, Long actorId) {
+        this.postponedToSessionId = replacementSessionId;
+        this.updatedById = actorId;
+    }
+
+    Long getPostponedToSessionId() {
+        return postponedToSessionId;
     }
 
     boolean isCancelled() {

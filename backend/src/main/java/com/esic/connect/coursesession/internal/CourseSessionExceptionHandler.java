@@ -173,6 +173,21 @@ class CourseSessionExceptionHandler {
                 code = "ATT_CHECKPOINT_INVALID_STATE";
                 message = "La séance doit être ouverte pour gérer ses points de contrôle.";
             }
+            case ALREADY_POSTPONED -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_ALREADY_POSTPONED";
+                message = "Cette séance a déjà été reportée.";
+            }
+            case CANCELLATION_ALREADY_REQUESTED -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_CANCELLATION_ALREADY_REQUESTED";
+                message = "Une demande d'annulation est déjà en attente sur cette séance.";
+            }
+            case CANCELLATION_REQUEST_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SESSION_CANCELLATION_REQUEST_NOT_FOUND";
+                message = "Aucune demande d'annulation ne correspond à cet identifiant.";
+            }
             default -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "SESSION_INVALID_FILTER";

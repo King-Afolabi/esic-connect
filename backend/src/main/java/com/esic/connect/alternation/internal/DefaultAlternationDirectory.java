@@ -19,9 +19,12 @@ import java.util.UUID;
 class DefaultAlternationDirectory implements AlternationDirectory {
 
     private final AlternationContextService contextService;
+    private final com.esic.connect.academic.ClassGroupDirectory classGroupDirectory;
 
-    DefaultAlternationDirectory(AlternationContextService contextService) {
+    DefaultAlternationDirectory(AlternationContextService contextService,
+                                com.esic.connect.academic.ClassGroupDirectory classGroupDirectory) {
         this.contextService = contextService;
+        this.classGroupDirectory = classGroupDirectory;
     }
 
     @Override
@@ -47,5 +50,17 @@ class DefaultAlternationDirectory implements AlternationDirectory {
             case COMPANY -> Axis.COMPANY;
             case UNKNOWN -> Axis.UNKNOWN;
         };
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public Axis resolveClassAxis(UUID classGroupPublicId, LocalDate date) {
+        if (classGroupPublicId == null || date == null) {
+            return Axis.UNKNOWN;
+        }
+        return classGroupDirectory.findByPublicId(classGroupPublicId)
+                .map(classRef -> map(contextService
+                        .resolvePatternUnchecked(classRef.publicId(), classRef.internalId(), date)
+                        .context()))
+                .orElse(Axis.UNKNOWN);
     }
 }
