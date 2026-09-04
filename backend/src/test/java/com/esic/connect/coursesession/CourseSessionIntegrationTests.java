@@ -895,11 +895,16 @@ class CourseSessionIntegrationTests {
         assertConflict(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/open",
                 admin, "ATT_CHECKPOINT_INVALID_STATE");
 
-        // Deux END actifs -> 400 ATT_CHECKPOINT_INVALID_TYPE.
+        // Deux END actifs -> 409 ATT_CHECKPOINT_TYPE_ALREADY_PRESENT.
+        // La requête est bien formée ; c'est la séance qui ne peut pas
+        // porter un second point de ce type. Le code renvoyé était
+        // auparavant ATT_CHECKPOINT_INVALID_TYPE / 400, qui confondait
+        // « type inconnu » et « type déjà présent » — les deux sont
+        // désormais distincts (EF-ATT-003).
         ResponseEntity<Map<String, Object>> dupEnd = exchange(HttpMethod.POST,
                 "/api/v1/sessions/" + id + "/checkpoints", Map.of("label", "Fin bis", "type", "END"), admin);
-        assertThat(dupEnd.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(dupEnd.getBody().get("code")).isEqualTo("ATT_CHECKPOINT_INVALID_TYPE");
+        assertThat(dupEnd.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(dupEnd.getBody().get("code")).isEqualTo("ATT_CHECKPOINT_TYPE_ALREADY_PRESENT");
 
         status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin);
         status(HttpMethod.POST, "/api/v1/sessions/" + id + "/checkpoints/" + customId + "/open", null, admin);

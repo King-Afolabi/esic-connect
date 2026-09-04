@@ -33,6 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -431,7 +432,7 @@ class AttendanceIntegrationTests {
     void lateArrivalIsClassifiedAsLate() {
         String admin = adminToken();
         // Séance dont l'heure de début est largement dépassée : émargement
-        // au-delà du seuil app.attendance.late-threshold -> LATE.
+        // au-delà du premier palier app.attendance.late-threshold -> LATE.
         Fixture fx = openSessionWithEnrolledStudents(admin, 1,
                 "2026-08-01T08:00:00Z", "2026-08-01T12:00:00Z");
         Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
@@ -440,6 +441,209 @@ class AttendanceIntegrationTests {
                 Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)), HttpStatus.OK);
         assertThat(record.get("status")).isEqualTo("LATE");
         assertThat(((Number) record.get("lateMinutes")).intValue()).isPositive();
+    }
+
+    // ------------------------------------------------------------------
+    // EF-ATT-005 — paliers de retard (docs/02 §16.4 ; RG-070 à RG-072)
+    // ------------------------------------------------------------------
+
+    @Test
+    void unEmargementDansLaToleranceEstPresentSansValidationManuelle() {
+        String admin = adminToken();
+        // Séance commençant à l'instant : bien en deçà du premier palier.
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1, now.toString(),
+                now.plusSeconds(4 * 3600).toString());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)),
+                HttpStatus.OK);
+
+        assertThat(record.get("status")).isEqualTo("PRESENT");
+        assertThat(record.get("lateMinutes")).isNull();
+        assertThat(record.get("manualValidationRequired")).isEqualTo(false);
+    }
+
+    @Test
+    void unRetardEntreLesDeuxPaliersEstLateSansValidationManuelle() {
+        String admin = adminToken();
+        // 20 minutes de retard : au-delà de 15, en deçà de 30 (AC-012).
+        Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(20 * 60);
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1, start.toString(),
+                start.plusSeconds(4 * 3600).toString());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)),
+                HttpStatus.OK);
+
+        assertThat(record.get("status")).isEqualTo("LATE");
+        assertThat(((Number) record.get("lateMinutes")).intValue()).isBetween(19, 21);
+        assertThat(record.get("manualValidationRequired")).isEqualTo(false);
+    }
+
+    @Test
+    void auDelaDuSecondPalierLaPresenceEstEnregistreeMaisDemandeUneValidationHumaine() {
+        String admin = adminToken();
+        // 45 minutes de retard : au-delà du second palier (RG-072).
+        Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(45 * 60);
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1, start.toString(),
+                start.plusSeconds(4 * 3600).toString());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)),
+                HttpStatus.OK);
+
+        // La présence est ENREGISTRÉE : refuser produirait une absence là
+        // où il y a un retard constaté. Le cahier demande une validation
+        // humaine, pas une porte fermée.
+        assertThat(record.get("status")).isEqualTo("LATE");
+        assertThat(record.get("manualValidationRequired")).isEqualTo(true);
+    }
+
+    // ------------------------------------------------------------------
+    // EF-ATT-007 — apprenant provisoire (docs/02 §16.12)
+    // ------------------------------------------------------------------
+
+    @Test
+    void leFormateurSignaleUnApprenantProvisoireSansCreerDInscription() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST",
+                        "comment", "présente en salle, non inscrite"), admin);
+
+        assertThat(guest.get("status")).isEqualTo("UNREGISTERED_GUEST");
+        assertThat(guest.get("linkedEnrollmentPublicId")).isNull();
+
+        // Elle ne devient PAS une présence : l'effectif attendu et les
+        // présences comptées restent ceux des inscrits.
+        Map<String, Object> roster = getMap("/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        assertThat(((Number) roster.get("expectedCount")).longValue()).isEqualTo(1);
+        assertThat(((Number) roster.get("presentCount")).intValue()).isZero();
+    }
+
+    @Test
+    void unStatutDeRegularisationEstRefuseALaCreation() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        ResponseEntity<Map<String, Object>> refused = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux", "status", "LINKED"), admin);
+
+        // LINKED est un RÉSULTAT de décision : l'accepter ici créerait une
+        // entrée « déjà régularisée » que personne n'a régularisée.
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void uneEntreeProvisoireEstRattacheeAUneInscriptionReelle() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "PENDING_REGISTRATION"), admin);
+
+        Map<String, Object> resolved = post("/api/v1/sessions/" + fx.sessionId()
+                        + "/attendance/guests/" + guest.get("publicId") + "/resolve",
+                Map.of("link", true, "enrollmentPublicId", fx.enrollments().get(0),
+                        "comment", "inscription retrouvée"), admin, HttpStatus.OK);
+
+        assertThat(resolved.get("status")).isEqualTo("LINKED");
+        assertThat(resolved.get("linkedEnrollmentPublicId")).isEqualTo(fx.enrollments().get(0));
+        assertThat(resolved.get("resolutionComment")).isEqualTo("inscription retrouvée");
+
+        // Le rattachement ne FABRIQUE pas une présence : elle se saisit
+        // ensuite par la voie manuelle, motivée et auditée.
+        Map<String, Object> roster = getMap("/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        assertThat(((Number) roster.get("presentCount")).intValue()).isZero();
+    }
+
+    @Test
+    void uneEntreeProvisoireEstEcarteeAvecMotifEtResteConsultable() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST"), admin);
+
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", false, "comment", "erreur de saisie"), admin, HttpStatus.OK);
+
+        List<Map<String, Object>> guests = listOfGuests(fx.sessionId(), admin);
+        assertThat(guests).hasSize(1);
+        assertThat(guests.get(0).get("status")).isEqualTo("DISMISSED");
+        assertThat(guests.get(0).get("resolutionComment")).isEqualTo("erreur de saisie");
+    }
+
+    @Test
+    void uneEntreeDejaRegulariseeNEstPasRejouable() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST"), admin);
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", false, "comment", "première décision"), admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> again = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", false, "comment", "seconde tentative"), admin);
+
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void unRattachementAUneAutreClasseEstRefuse() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Fixture other = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "PENDING_REGISTRATION"), admin);
+
+        ResponseEntity<Map<String, Object>> refused = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", true, "enrollmentPublicId", other.enrollments().get(0),
+                        "comment", "mauvaise classe"), admin);
+
+        // Rattacher hors de la séance fabriquerait une présence dans une
+        // séance qui n'attendait pas cet apprenant.
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code")).isEqualTo("ATT_NOT_ENROLLED");
+    }
+
+    @Test
+    void unApprenantNeSignalePasDApprenantProvisoire() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + fx.sessionId()
+                        + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST"), tokenFor(fx.students().get(0)))
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listOfGuests(String sessionId, String token) {
+        return (List<Map<String, Object>>) (List<?>) restTemplate.exchange(
+                RequestEntity.get(URI.create("/api/v1/sessions/" + sessionId + "/attendance/guests"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                }).getBody();
     }
 
     // ------------------------------------------------------------------

@@ -18,6 +18,5 @@ record CreateRoomRequest(
         @NotBlank @Size(max = 150) String name,
         @Size(max = 36) String buildingPublicId,
         @Min(1) Integer capacity,
-        @Size(max = 50) String floorLabel,
-        @Size(max = 255) String staticQrReference) {
+        @Size(max = 50) String floorLabel) {
 }

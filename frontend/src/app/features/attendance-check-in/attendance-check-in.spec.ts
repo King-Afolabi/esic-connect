@@ -13,7 +13,9 @@ const URL = '/api/v1/attendance/validate';
 
 interface CheckInInternals {
   form: FormGroup;
+  roomForm: FormGroup;
   submit: () => void;
+  submitRoomQr: () => void;
   reset: () => void;
 }
 
@@ -72,7 +74,9 @@ describe('AttendanceCheckIn', () => {
     internals.form.controls['shortCode'].setValue('  abcd-23 45 ');
     internals.submit();
     const req = http.expectOne(URL);
-    expect(req.request.body).toEqual({ shortCode: 'ABCD2345' });
+    // `remote` non coché : transmis comme absent, jamais comme `false`
+    // bavard — le serveur traite l'absence comme « en présentiel ».
+    expect(req.request.body).toEqual({ shortCode: 'ABCD2345', remote: null });
     req.flush(RECORD);
   });
 
@@ -219,6 +223,60 @@ describe('AttendanceCheckIn', () => {
     http.expectOne(URL).flush(RECORD);
     fixture.detectChanges();
     expect(text()).toContain('Présence enregistrée');
+  });
+
+  // -------------------------------------------------------------------
+  // EF-ENR-004 / EF-ATT-010 — suivi à distance et QR fixe de salle
+  // -------------------------------------------------------------------
+
+  it('transmet la déclaration de suivi à distance quand elle est cochée', () => {
+    ({ fixture, http, internals } = setup());
+    internals.form.controls['shortCode'].setValue('ABCD2345');
+    internals.form.controls['remote'].setValue(true);
+    internals.submit();
+
+    const req = http.expectOne(URL);
+    expect(req.request.body).toEqual({ shortCode: 'ABCD2345', remote: true });
+    req.flush(RECORD);
+  });
+
+  it('émarge par le QR de salle sur une route distincte', () => {
+    ({ fixture, http, internals } = setup());
+    internals.roomForm.controls['roomReference'].setValue('  jeton-affiche  ');
+    internals.submitRoomQr();
+
+    const req = http.expectOne('/api/v1/attendance/room-qr');
+    // Le corps ne porte QUE le jeton : ni séance, ni point de contrôle —
+    // le serveur déduit tout le reste (docs/02 §16.6).
+    expect(req.request.body).toEqual({ roomReference: 'jeton-affiche' });
+    req.flush({ ...RECORD, source: 'ROOM_STATIC_QR' });
+    fixture.detectChanges();
+
+    expect(internals.roomForm.getRawValue().roomReference).toBe('');
+  });
+
+  it("n'envoie rien tant que le code de salle est vide", () => {
+    ({ fixture, http, internals } = setup());
+    internals.submitRoomQr();
+
+    http.expectNone('/api/v1/attendance/room-qr');
+  });
+
+  it('affiche le refus du serveur quand le QR de salle est hors réseau', () => {
+    ({ fixture, http, internals } = setup());
+    internals.roomForm.controls['roomReference'].setValue('jeton-affiche');
+    internals.submitRoomQr();
+
+    http.expectOne('/api/v1/attendance/room-qr').flush(
+      {
+        code: 'ATT_ROOM_QR_OUT_OF_NETWORK',
+        message: "Ce QR de salle ne peut être utilisé que depuis le réseau de l'établissement.",
+      },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    fixture.detectChanges();
+
+    expect(text()).toContain('réseau de l');
   });
 });
 

@@ -31,9 +31,57 @@ import java.util.List;
 class AttendanceManagementController {
 
     private final AttendanceManagementService service;
+    private final SessionGuestService guestService;
 
-    AttendanceManagementController(AttendanceManagementService service) {
+    AttendanceManagementController(AttendanceManagementService service,
+                                   SessionGuestService guestService) {
         this.service = service;
+        this.guestService = guestService;
+    }
+
+    /**
+     * Signale un apprenant provisoire (EF-ATT-007 ; docs/02 §16.12).
+     *
+     * <p>L'entrée ne crée <strong>aucune</strong> inscription et n'entre
+     * dans aucun calcul d'assiduité : c'est un signalement adressé au
+     * responsable pédagogique, à régulariser.
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/guests")
+    @PreAuthorize(AttendanceManagementWeb.MANAGE_ROLES)
+    @org.springframework.web.bind.annotation.ResponseStatus(
+            org.springframework.http.HttpStatus.CREATED)
+    SessionGuestResponse declareGuest(
+            @PathVariable String sessionId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody
+            AttendanceManagementRequests.DeclareGuest request,
+            @AuthenticationPrincipal Jwt caller) {
+        return guestService.declare(sessionId, request, AttendanceManagementWeb.subject(caller));
+    }
+
+    /** Entrées provisoires de la séance, la plus ancienne en tête. */
+    @GetMapping("/guests")
+    @PreAuthorize(AttendanceManagementWeb.MANAGE_ROLES)
+    List<SessionGuestResponse> guests(@PathVariable String sessionId,
+                                      @AuthenticationPrincipal Jwt caller) {
+        return guestService.listForSession(sessionId, AttendanceManagementWeb.subject(caller));
+    }
+
+    /**
+     * Régularise une entrée provisoire : rattachement à une inscription
+     * réelle, ou mise à l'écart. Motif obligatoire dans les deux cas.
+     *
+     * <p>Le rattachement ne fabrique pas de présence — celle-ci se saisit
+     * par la voie manuelle ordinaire, motivée et auditée.
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/guests/{guestId}/resolve")
+    @PreAuthorize(AttendanceManagementWeb.MANAGE_ROLES)
+    SessionGuestResponse resolveGuest(
+            @PathVariable String sessionId,
+            @PathVariable String guestId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody
+            AttendanceManagementRequests.ResolveGuest request,
+            @AuthenticationPrincipal Jwt caller) {
+        return guestService.resolve(guestId, request, AttendanceManagementWeb.subject(caller));
     }
 
     /**

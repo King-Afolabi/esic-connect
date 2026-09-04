@@ -36,12 +36,16 @@ class RoomService {
     private final BuildingRepository buildingRepository;
     private final OrganizationChangePublisher changePublisher;
 
+    private final java.time.Clock clock;
+
     RoomService(RoomRepository roomRepository, SiteRepository siteRepository,
-                BuildingRepository buildingRepository, OrganizationChangePublisher changePublisher) {
+                BuildingRepository buildingRepository, OrganizationChangePublisher changePublisher,
+                java.time.Clock clock) {
         this.roomRepository = roomRepository;
         this.siteRepository = siteRepository;
         this.buildingRepository = buildingRepository;
         this.changePublisher = changePublisher;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -79,7 +83,7 @@ class RoomService {
             throw new OrganizationException(OrganizationException.Kind.DUPLICATE_CODE);
         }
         Room room = new Room(site, building, code, request.name().trim(), request.capacity(),
-                trimToNull(request.floorLabel()), trimToNull(request.staticQrReference()));
+                trimToNull(request.floorLabel()));
         Long actorId = changePublisher.actorId(callerSubject);
         room.markCreatedBy(actorId);
         Room saved = roomRepository.save(room);
@@ -96,10 +100,48 @@ class RoomService {
         Building building = resolveBuilding(request.buildingPublicId(), room.getSite());
         Long actorId = changePublisher.actorId(callerSubject);
         room.updateDetails(request.name().trim(), request.capacity(), trimToNull(request.floorLabel()),
-                trimToNull(request.staticQrReference()), building, actorId);
+                building, actorId);
         changePublisher.publish(OrganizationResourceType.ROOM, room.getPublicId(),
                 OrganizationChangeAction.UPDATED, actorId, "code=" + room.getCode());
         return RoomResponse.from(room);
+    }
+
+    /**
+     * Émet ou renouvelle le QR fixe de la salle (EF-ORG-003).
+     *
+     * <p>Le jeton est tiré d'un {@link java.security.SecureRandom} : une
+     * référence saisie à la main serait devinable, et un QR devinable
+     * n'est pas un contrôle. Le renouvellement invalide l'affiche
+     * précédente — c'est le but.
+     */
+    RoomResponse issueStaticQr(UUID publicId, String callerSubject) {
+        Room room = requireRoom(publicId);
+        if (room.isArchived()) {
+            throw new OrganizationException(OrganizationException.Kind.ENTITY_ARCHIVED);
+        }
+        Long actorId = changePublisher.actorId(callerSubject);
+        room.issueStaticQr(newStaticQrToken(), clock.instant(), actorId);
+        changePublisher.publish(OrganizationResourceType.ROOM, room.getPublicId(),
+                OrganizationChangeAction.UPDATED, actorId,
+                "staticQr=issued;code=" + room.getCode());
+        return RoomResponse.from(room);
+    }
+
+    /** Retire le QR : la salle n'accepte plus d'émargement par affiche. */
+    RoomResponse revokeStaticQr(UUID publicId, String callerSubject) {
+        Room room = requireRoom(publicId);
+        Long actorId = changePublisher.actorId(callerSubject);
+        room.revokeStaticQr(actorId);
+        changePublisher.publish(OrganizationResourceType.ROOM, room.getPublicId(),
+                OrganizationChangeAction.UPDATED, actorId,
+                "staticQr=revoked;code=" + room.getCode());
+        return RoomResponse.from(room);
+    }
+
+    private static String newStaticQrToken() {
+        byte[] raw = new byte[32];
+        new java.security.SecureRandom().nextBytes(raw);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
     }
 
     void archive(UUID publicId, String reason, String callerSubject) {

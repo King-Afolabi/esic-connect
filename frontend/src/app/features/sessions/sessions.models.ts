@@ -58,26 +58,54 @@ export function sessionStatusLabel(status: string): string {
 }
 
 /** `AttendanceRecordSource` (V10 : + MANUAL, CORRECTION). */
-export type AttendanceSource = 'DYNAMIC_QR' | 'SHORT_CODE' | 'MANUAL' | 'CORRECTION';
+export type AttendanceSource =
+  | 'DYNAMIC_QR'
+  | 'SHORT_CODE'
+  | 'MANUAL'
+  | 'CORRECTION'
+  | 'REMOTE_QR'
+  | 'REMOTE_CODE'
+  | 'ROOM_STATIC_QR';
 
 export const ATTENDANCE_SOURCE_LABELS: Record<AttendanceSource, string> = {
   DYNAMIC_QR: 'QR dynamique',
   SHORT_CODE: 'Code court',
   MANUAL: 'Saisie manuelle',
   CORRECTION: 'Correction',
+  REMOTE_QR: 'QR à distance',
+  REMOTE_CODE: 'Code court à distance',
+  ROOM_STATIC_QR: 'QR de salle',
 };
 
 export function attendanceSourceLabel(source: string): string {
   return (ATTENDANCE_SOURCE_LABELS as Record<string, string>)[source] ?? source;
 }
 
-/** `AttendanceCheckpointType` (V10). */
-export const CHECKPOINT_TYPES = ['START', 'END', 'CUSTOM'] as const;
+/**
+ * `AttendanceCheckpointType` (V10, étendu par V25).
+ *
+ * Les quatre points journaliers nommés sont les seuls à entrer dans le
+ * calcul de demi-journée et de journée (docs/02 §16.3) ; `START`, `END`
+ * et `CUSTOM` servent au parcours d'émargement.
+ */
+export const CHECKPOINT_TYPES = [
+  'START',
+  'END',
+  'CUSTOM',
+  'MORNING_ARRIVAL',
+  'MORNING_BREAK_RETURN',
+  'AFTERNOON_ARRIVAL',
+  'AFTERNOON_BREAK_RETURN',
+] as const;
 export type CheckpointType = (typeof CHECKPOINT_TYPES)[number];
 export const CHECKPOINT_TYPE_LABELS: Record<CheckpointType, string> = {
   START: 'Arrivée',
   END: 'Fin',
   CUSTOM: 'Intermédiaire',
+  MORNING_ARRIVAL: 'Arrivée du matin',
+  MORNING_BREAK_RETURN: 'Retour de pause (matin)',
+  AFTERNOON_ARRIVAL: "Arrivée de l'après-midi",
+  AFTERNOON_BREAK_RETURN: "Retour de pause (après-midi)",
 };
 export function checkpointTypeLabel(value: string): string {
   return (CHECKPOINT_TYPE_LABELS as Record<string, string>)[value] ?? value;
@@ -287,6 +315,13 @@ export interface AttendanceRecordResponse {
   sessionTitle: string | null;
   status: AttendanceStatus;
   lateMinutes: number | null;
+  /**
+   * Retard au-delà du second palier (docs/02 §16.4 ; RG-072) : la
+   * présence est enregistrée mais demande une confirmation humaine.
+   * Refuser l'émargement produirait une absence là où il y a un retard
+   * constaté.
+   */
+  manualValidationRequired: boolean;
   recordedAt: string;
   source: AttendanceSource;
 }
@@ -397,6 +432,23 @@ export interface CreateSubstitutionRequest {
 export interface ValidateAttendanceRequest {
   token?: string | null;
   shortCode?: string | null;
+  /**
+   * L'apprenant déclare suivre à distance (docs/02 §15.3). Sur une séance
+   * présentielle, cela exige une autorisation individuelle active.
+   */
+  remote?: boolean | null;
+}
+
+/**
+ * `POST /api/v1/attendance/room-qr` — émargement par le QR **fixe de
+ * salle** (EF-ATT-010).
+ *
+ * Le corps ne porte que le jeton lu dans l'affiche : ni séance, ni point
+ * de contrôle. Le serveur déduit tout le reste, et n'accepte la requête
+ * que depuis une plage réseau déclarée de l'établissement (EF-ATT-008).
+ */
+export interface ValidateRoomQrRequest {
+  roomReference: string;
 }
 
 // ---------------------------------------------------------------------------

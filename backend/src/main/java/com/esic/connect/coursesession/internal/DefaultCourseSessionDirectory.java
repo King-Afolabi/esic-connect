@@ -142,6 +142,16 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<SessionRef> findSessionByInternalId(long sessionInternalId) {
+        // Une séance annulée reste consultable en historique (G1-C.3) :
+        // une entrée provisoire s'y régularise encore.
+        return sessionRepository.findById(sessionInternalId)
+                .filter(CourseSession::isHistoricallyReadable)
+                .map(session -> toRef(session, classPublicIds(session)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<SessionRef> findSessionsInRange(Instant from, Instant to) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
         specs.add(CourseSessionSpecifications.operational());
@@ -266,7 +276,7 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         return new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
                 session.getStatus(), session.getTeacherUserId(), checkpoints, classPublicIds,
                 session.getTimeZoneId(), session.getStartsAt(), session.getEndsAt(),
-                session.getAttendanceMode());
+                session.getAttendanceMode(), session.getRoomCode());
     }
 
     private Set<UUID> classPublicIds(CourseSession session) {

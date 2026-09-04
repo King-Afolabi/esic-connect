@@ -11,9 +11,11 @@
 ## Dernière mise à jour
 
 ```text
-4 septembre 2026 — sprint 7 terminé : suivi à distance individuel,
-modalité d'enseignement d'une séance, canaux d'émargement distants.
-Backend 1033 tests, frontend 659 tests, tout vert.
+4 septembre 2026 — sprint 8 terminé : quatre points de contrôle nommés,
+résultat journalier, paliers de retard, QR fixe de salle sous contrôle de
+plage réseau, apprenant provisoire.
+Backend 1064 tests, frontend 663 tests, tout vert.
+Base `esic_test` **recréée** : la pollution par les fixtures est levée.
 ```
 
 ## Repère Git
@@ -22,7 +24,7 @@ Backend 1033 tests, frontend 659 tests, tout vert.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -33,14 +35,14 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 81 | 57 % |
-| `PARTIAL` | 6 | 4 % |
-| `NOT_IMPLEMENTED` | 55 | 39 % |
+| `IMPLEMENTED_AND_TESTED` | 88 | 62 % |
+| `PARTIAL` | 3 | 2 % |
+| `NOT_IMPLEMENTED` | 51 | 36 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
-cible. Les 55 exigences non implémentées ne sont pas des régressions :
-ce sont les sprints 8 à 13 de la roadmap.
+cible. Les 51 exigences non implémentées ne sont pas des régressions :
+ce sont les sprints 9 à 13 de la roadmap.
 
 Le sprint 2 a fait passer huit exigences de `NOT_IMPLEMENTED` à
 `IMPLEMENTED_AND_TESTED` : `EF-AUTH-006` à `EF-AUTH-011`, `EF-AUTH-013`
@@ -58,6 +60,13 @@ Le sprint 4 en ajoute cinq : `EF-IMP-003` (Excel), `EF-IMP-004`
 Le sprint 5 clôt deux exigences restées partielles depuis l'origine :
 `EF-PLAN-003` (correction ligne à ligne) et `EF-PLAN-009` (conflit de
 salle contre les séances déjà publiées).
+
+Le sprint 8 en ajoute quatre et clôt trois partiels : `EF-ORG-003` (QR
+fixe de salle), `EF-ATT-007` (apprenant provisoire), `EF-ATT-008`
+(contrôle de plage réseau) et `EF-ATT-010` (émargement par QR de salle) ;
+`EF-ATT-003` (quatre points nommés), `EF-ATT-004` (résultat journalier) et
+`EF-ATT-005` (paliers de retard) passent de `PARTIAL` à
+`IMPLEMENTED_AND_TESTED`.
 
 Le sprint 7 ajoute `EF-ENR-004` (suivi à distance individuel) — la seule
 exigence du sprint 7 qui n'était pas déjà livrée : l'émargement nominal
@@ -80,12 +89,12 @@ raison, le document avait tort.
 |---|---:|---:|---:|
 | Identité et accès (15) | 15 | 0 | 0 |
 | Utilisateurs (9) | 8 | 0 | 1 |
-| Référentiels et organisation (13) | 11 | 0 | 2 |
+| Référentiels et organisation (13) | 12 | 0 | 1 |
 | Inscriptions et imports (10) | 9 | 0 | 1 |
 | Corps enseignant (5) | 4 | 1 | 0 |
 | Planning (13) | 11 | 0 | 2 |
 | Séances (9) | 9 | 0 | 0 |
-| Émargement et assiduité (16) | 6 | 3 | 7 |
+| Émargement et assiduité (16) | 13 | 1 | 2 |
 | Justificatifs et réclamations (8) | 3 | 1 | 4 |
 | Notifications et mobilité (9) | 1 | 1 | 7 |
 | Restitution (10) | 3 | 1 | 6 |
@@ -376,6 +385,40 @@ raison, le document avait tort.
   localisation** (`DEC-S7-001`) : le contrôle de présence sur site reste
   le QR fixe de salle et la plage réseau (sprint 8). Écran : section
   « suivi à distance » de la fiche apprenant.
+- `EF-ATT-003` **quatre points de contrôle nommés** (`MORNING_ARRIVAL`,
+  `MORNING_BREAK_RETURN`, `AFTERNOON_ARRIVAL`, `AFTERNOON_BREAK_RETURN`),
+  uniques par séance. V10 les disait « réalisables via des points
+  `CUSTOM` libellés » : vrai fonctionnellement, faux structurellement —
+  un calcul journalier ne peut pas se fonder sur un libellé libre.
+- `EF-ATT-004` **résultat journalier** (`GET /attendance/reports/daily`) :
+  `FULL_DAY`, `MORNING`, `AFTERNOON`, `PARTIAL`, `TO_CONFIRM`, `ABSENT`,
+  `EXCUSED`, plus `COMPANY` (RG-028 — jamais une absence) et
+  `NOT_EXPECTED`, absents de la table du cahier qui suppose une journée
+  attendue. Un **retour de pause sans l'arrivée** qui le précède est une
+  incohérence → `TO_CONFIRM` ; l'inverse est incomplet → `PARTIAL`.
+- `EF-ATT-005` **paliers de retard** configurables : `PRESENT` jusqu'à 15
+  min, `LATE` jusqu'à 30, au-delà `LATE` **plus** validation humaine
+  requise. Le troisième palier ne refuse pas l'émargement : refuser
+  produirait une absence là où il y a un retard constaté.
+- `EF-ORG-003` **QR fixe de salle** : jeton `SecureRandom` généré par le
+  serveur, unique, daté, renouvelable et révocable. Une référence saisie
+  à la main serait devinable, donc sans valeur (`DEC-S8-001`). `V26`
+  efface les valeurs libres héritées de V4.
+- `EF-ATT-010` **émargement par QR de salle** : le corps ne porte que le
+  jeton ; le serveur détermine salle, séance imminente, inscription et
+  fenêtre. Refusé après le début de la séance (RG-051), sans séance
+  correspondante, et sur jeton inconnu (`404`).
+- `EF-ATT-008` **contrôle de plage réseau** : comparaison CIDR IPv4/IPv6
+  sur les octets, sans résolution DNS, **avant** toute autre décision.
+  Refus par défaut — un site sans plage déclarée n'autorise rien. L'adresse
+  sert à décider puis disparaît : ni persistée, ni auditée, ni renvoyée
+  (RG-094, `DEC-S8-002`).
+- `EF-ATT-007` **apprenant provisoire** : signalement par le formateur
+  (`UNREGISTERED_GUEST` / `PENDING_REGISTRATION`), puis régularisation
+  motivée — rattachement à une inscription réelle, ou mise à l'écart.
+  L'entrée n'entre dans **aucun** calcul d'assiduité tant qu'elle n'est
+  pas régularisée, et le rattachement ne fabrique pas de présence
+  (`DEC-S8-003`).
 - Redis indisponible → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` : **aucune
   validation dégradée**.
 
@@ -428,9 +471,6 @@ raison, le document avait tort.
 | Exigence | Ce qui existe | Ce qui manque |
 |---|---|---|
 | `EF-TEA-002` | API d'affectation pédagogique livrée | aucun écran d'affectation classe–matière–période |
-| `EF-ATT-003` | N points de contrôle par séance (`START` / `END` / `CUSTOM`) | les quatre types nommés (`MORNING_ARRIVAL`…) ne sont pas modélisés |
-| `EF-ATT-004` | calcul de demi-journées, alternance `COMPANY` exclue du dénominateur | pas de calcul journalier strict fondé sur les quatre points nommés |
-| `EF-ATT-005` | seuil unique `PT10M` → `LATE` | paliers 15 et 30 minutes, validation manuelle automatique au-delà de 30 min |
 | `EF-JUS-002` | contrôle structurel complet, stockage sécurisé, compensation, réconciliation | **antivirus absent** — ne jamais écrire « garanti sans logiciel malveillant » ; balayage des fichiers orphelins absent |
 | `EF-NOTIF-002` | notifications produites pour les événements de planning et de séance | audience **formateur uniquement** ; apprenants et responsables non notifiés |
 | `EF-REP-007` | endpoint typé par rôle, périmètre serveur, contexte multi-rôle vérifié ; cartes `STUDENT` et `TEACHER` complètes | cartes `PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes ; coût SQL linéaire par séance |
@@ -448,10 +488,9 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 | Confirmation locale d'un émargement par WebAuthn | `EF-ATT-011` | 8 |
 | Opérations de masse, doublons, invitations pilotées, délivrabilité, recherche globale | `EF-USER-004`, `005`, `007`, `008`, `009` | 3–4, 11 |
 | Matières, groupes temporaires | `EF-ACA-006`, `007` | 3 |
-| QR fixe de salle, conflits de salle | `EF-ORG-003`, `004` | 6, 8 |
 | Import Excel, multifeuille, correction de ligne | `EF-IMP-003`, `004`, `006` | 4 |
 | Planning PDF texte et assistance IA au mapping | `EF-PLAN-012`, `013` | 12 |
-| Points de contrôle nommés, contrôle réseau, QR salle, apprenant provisoire, départ anticipé, transparence, borne | `EF-ATT-007`, `008`, `010`, `013`, `014`, `016` | 8–9, 12 |
+| Départ anticipé, transparence, borne connectée | `EF-ATT-013`, `014`, `016` | 9, 12 |
 | Réclamations | `EF-CLAIM-001..004` | 9 |
 | Audience élargie, courriel, push, préférences, PWA | `EF-NOTIF-003..006`, `EF-PWA-001..003` | 10 |
 | Excel, PDF, attestations, tableaux alternatifs, rapports d'anomalies et d'invitations | `EF-REP-004`, `005`, `006`, `008`, `009`, `010` | 11–12 |
@@ -477,13 +516,13 @@ module, aucun cycle.
 | Module | Rôle | Migrations |
 |---|---|---|
 | `identity` | comptes, rôles, JWT, invitation, administration, mot de passe oublié, révocation, second facteur, passkeys, appareils de confiance | V1, V2, V3, V17, V18 |
-| `organization` | site, bâtiment, salle, plage réseau | V4 |
+| `organization` | site, bâtiment, salle, plage réseau, QR fixe de salle | V4, V26 |
 | `academic` | année, formation, niveau, promotion, classe, affectation, matières | V5, V6, V19 |
 | `enrollment` | profil apprenant, inscription, changement de classe, groupes temporaires, suivi à distance | V7, V19, V24 |
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
 | `planning` | import CSV et Excel, simulation, conflits, correction de ligne, calendrier interactif, publication versionnée, retour arrière | V12, V13, V23 |
-| `coursesession` | séances, cycle de vie, points de contrôle, remplacements, salle, modalité, report, demandes d'annulation | V9, V10, V13, V14, V21, V22, V24 |
-| `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
+| `coursesession` | séances, cycle de vie, points de contrôle nommés, remplacements, salle, modalité, report, demandes d'annulation | V9, V10, V13, V14, V21, V22, V24, V25 |
+| `attendance` | jetons, validation, QR de salle, corrections, apprenants provisoires, justificatifs, rapports, résultat journalier | V9, V10, V16, V26, V27 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
 | `dashboard` | tableau de bord par rôle | — |
@@ -494,7 +533,7 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V24
+### 5.2 Migrations Flyway — schéma en V27
 
 54 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
@@ -511,7 +550,11 @@ ajoute `student_import_row_correction`, la colonne
 n'ayant pas de fichier ; `V24` ajoute `course_session.attendance_mode` et
 `remote_link`, la table `remote_attendance_authorization`, et remplace la
 contrainte `chk_attendance_record_source` de V10 pour accepter les canaux
-distants.
+distants ; `V25` ajoute les quatre types de point de contrôle nommés,
+élargit `checkpoint_type` (`AFTERNOON_BREAK_RETURN` fait 21 caractères) et
+impose l'unicité d'un type nommé par séance ; `V26` transforme
+`room.static_qr_reference` en jeton serveur unique et daté et ajoute le
+canal `ROOM_STATIC_QR` ; `V27` crée `session_guest_attendance`.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -533,8 +576,8 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **119 classes / 1033 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V24 |
-| `cd frontend && npm test` | **79 fichiers / 659 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **121 classes / 1064 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V27 |
+| `cd frontend && npm test` | **79 fichiers / 663 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 
@@ -600,7 +643,7 @@ par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 | T-07 | cérémonie WebAuthn complète non rejouée en test | la vérification cryptographique repose sur la bibliothèque ; les tests couvrent contrat, défi, isolation et absence de donnée biométrique |
 | T-08 | Turnstile jamais vérifié contre le service réel | aucune clé secrète dans le dépôt ; sans clé, le produit **déclare** qu'aucun contrôle n'est actif |
 | T-09 | passkeys inutilisables hors `localhost` sans domaine ni HTTPS | contrainte du standard WebAuthn, pas du produit |
-| — | base `esic_connect` polluée par ~27 000 comptes de fixtures | `./scripts/db-reset.sh esic_connect` **non encore exécuté** |
+| — | base `esic_test` **recréée** au sprint 8 : la pollution par les fixtures y est levée | `esic_connect` (local) reste à recréer — `./scripts/db-reset.sh esic_connect` non exécuté |
 
 ---
 

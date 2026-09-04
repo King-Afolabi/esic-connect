@@ -31,9 +31,46 @@ import java.util.List;
 class AttendanceReportController {
 
     private final AttendanceReportService service;
+    private final DailyAttendanceService dailyService;
 
-    AttendanceReportController(AttendanceReportService service) {
+    AttendanceReportController(AttendanceReportService service,
+                               DailyAttendanceService dailyService) {
         this.service = service;
+        this.dailyService = dailyService;
+    }
+
+    /**
+     * Résultat journalier d'une classe (EF-ATT-004 ; docs/02 §16.3) —
+     * journée complète, demi-journée, partiel, à confirmer, absent,
+     * excusé, entreprise ou non attendu, par apprenant.
+     *
+     * <p>{@code zone} : fuseau dans lequel la journée civile est
+     * découpée. Sans lui, une séance de 8 h à Paris tomberait la veille
+     * en UTC pendant l'heure d'été.
+     */
+    @GetMapping("/daily")
+    @PreAuthorize(AttendanceManagementWeb.REPORT_ROLES)
+    DailyAttendanceService.DailyReport daily(
+            @RequestParam String classGroup,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate date,
+            @RequestParam(required = false) String zone) {
+        java.util.UUID classId;
+        try {
+            classId = java.util.UUID.fromString(classGroup);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new AttendanceException(AttendanceException.Kind.INVALID_SUBMISSION);
+        }
+        java.time.ZoneId zoneId;
+        try {
+            zoneId = zone == null || zone.isBlank()
+                    ? java.time.ZoneId.of("Europe/Paris")
+                    : java.time.ZoneId.of(zone);
+        } catch (java.time.DateTimeException unknownZone) {
+            throw new AttendanceException(AttendanceException.Kind.INVALID_SUBMISSION);
+        }
+        return dailyService.compute(classId, date, zoneId);
     }
 
     // --- JSON ---------------------------------------------------------

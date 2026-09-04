@@ -67,6 +67,31 @@ class RoomController {
         return roomService.update(parseRoomUuid(publicId), request, subject(caller));
     }
 
+    /**
+     * Émet ou renouvelle le QR fixe de la salle (EF-ORG-003 ; docs/02
+     * §7.1). Le jeton est <strong>généré par le serveur</strong> : une
+     * référence saisie à la main serait devinable, et un QR devinable
+     * n'est pas un contrôle.
+     *
+     * <p>Réservé aux rôles d'écriture de l'organisation : l'affiche
+     * matérialise un droit d'entrée, elle n'est pas une donnée de
+     * consultation.
+     */
+    @PostMapping("/rooms/{publicId}/static-qr")
+    @PreAuthorize(SiteController.WRITE_ROLES)
+    RoomResponse issueStaticQr(@PathVariable String publicId,
+                               @AuthenticationPrincipal Jwt caller) {
+        return roomService.issueStaticQr(parseRoomUuid(publicId), subject(caller));
+    }
+
+    /** Retire le QR : la salle n'accepte plus d'émargement par affiche. */
+    @org.springframework.web.bind.annotation.DeleteMapping("/rooms/{publicId}/static-qr")
+    @PreAuthorize(SiteController.WRITE_ROLES)
+    RoomResponse revokeStaticQr(@PathVariable String publicId,
+                                @AuthenticationPrincipal Jwt caller) {
+        return roomService.revokeStaticQr(parseRoomUuid(publicId), subject(caller));
+    }
+
     @PostMapping("/rooms/{publicId}/archive")
     @PreAuthorize(SiteController.WRITE_ROLES)
     @ResponseStatus(HttpStatus.NO_CONTENT)

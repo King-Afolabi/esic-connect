@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } 
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
@@ -13,6 +14,9 @@ import { AttendanceRecordResponse, formatInstantUtc } from '../sessions/sessions
 
 /** Longueur défensive du champ code court (le serveur revalide). */
 const SHORT_CODE_MAX_LENGTH = 32;
+
+/** Idem pour le jeton d'affiche de salle. */
+const ROOM_REFERENCE_MAX_LENGTH = 128;
 
 type CheckInState =
   | { kind: 'idle' }
@@ -45,6 +49,7 @@ type CheckInState =
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatCheckboxModule,
     MatIconModule,
   ],
   templateUrl: './attendance-check-in.html',
@@ -56,12 +61,30 @@ export class AttendanceCheckIn {
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
   protected readonly shortCodeMaxLength = SHORT_CODE_MAX_LENGTH;
+  protected readonly roomReferenceMaxLength = ROOM_REFERENCE_MAX_LENGTH;
   protected readonly formatInstantUtc = formatInstantUtc;
 
   protected readonly form = this.formBuilder.group({
     shortCode: this.formBuilder.control('', [
       Validators.required,
       Validators.maxLength(SHORT_CODE_MAX_LENGTH),
+    ]),
+    /**
+     * Suivi à distance déclaré (EF-ENR-004 ; docs/02 §15.3). Sur une
+     * séance présentielle, le serveur exige une autorisation active.
+     */
+    remote: this.formBuilder.control(false),
+  });
+
+  /**
+   * QR fixe de salle (EF-ATT-010) — parcours distinct : le jeton vient de
+   * l'affiche, pas du formateur, et n'est accepté que depuis le réseau de
+   * l'établissement (EF-ATT-008).
+   */
+  protected readonly roomForm = this.formBuilder.group({
+    roomReference: this.formBuilder.control('', [
+      Validators.required,
+      Validators.maxLength(ROOM_REFERENCE_MAX_LENGTH),
     ]),
   });
 
@@ -85,7 +108,8 @@ export class AttendanceCheckIn {
     effect(() => {
       if (!this.canCheckIn()) {
         this.state.set({ kind: 'idle' });
-        this.form.reset({ shortCode: '' });
+        this.form.reset({ shortCode: '', remote: false });
+        this.roomForm.reset({ roomReference: '' });
       }
     });
   }
@@ -106,14 +130,50 @@ export class AttendanceCheckIn {
     }
 
     this.state.set({ kind: 'submitting' });
-    this.api.validateAttendance({ shortCode }).subscribe({
+    this.api
+      .validateAttendance({ shortCode, remote: this.form.getRawValue().remote || null })
+      .subscribe({
+        next: (record) => {
+          // Réponse tardive après une sortie du contexte STUDENT : ignorée.
+          if (!this.canCheckIn()) {
+            return;
+          }
+          this.state.set({ kind: 'success', record });
+          this.form.reset({ shortCode: '', remote: false });
+        },
+        error: (error: unknown) => {
+          if (!this.canCheckIn()) {
+            return;
+          }
+          this.state.set({ kind: 'error', message: toSessionError(error).message });
+        },
+      });
+  }
+
+  /** Émargement par le QR fixe affiché dans la salle (EF-ATT-010). */
+  protected submitRoomQr(): void {
+    if (!this.canCheckIn()) {
+      return;
+    }
+    if (this.roomForm.invalid || this.submitting()) {
+      this.roomForm.markAllAsTouched();
+      return;
+    }
+    const roomReference = this.roomForm.getRawValue().roomReference.trim();
+    if (!roomReference) {
+      this.roomForm.controls.roomReference.setErrors({ required: true });
+      this.roomForm.markAllAsTouched();
+      return;
+    }
+
+    this.state.set({ kind: 'submitting' });
+    this.api.validateRoomQr({ roomReference }).subscribe({
       next: (record) => {
-        // Réponse tardive après une sortie du contexte STUDENT : ignorée.
         if (!this.canCheckIn()) {
           return;
         }
         this.state.set({ kind: 'success', record });
-        this.form.reset({ shortCode: '' });
+        this.roomForm.reset({ roomReference: '' });
       },
       error: (error: unknown) => {
         if (!this.canCheckIn()) {
@@ -126,7 +186,8 @@ export class AttendanceCheckIn {
 
   protected reset(): void {
     this.state.set({ kind: 'idle' });
-    this.form.reset({ shortCode: '' });
+    this.form.reset({ shortCode: '', remote: false });
+    this.roomForm.reset({ roomReference: '' });
   }
 }
 

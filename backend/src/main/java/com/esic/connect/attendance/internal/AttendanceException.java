@@ -26,8 +26,30 @@ class AttendanceException extends RuntimeException {
          * autorisation individuelle active (EF-ENR-004 ; docs/02 §15.3).
          */
         REMOTE_NOT_AUTHORIZED,
+        /**
+         * QR fixe présenté hors d'une plage réseau autorisée du site
+         * (EF-ATT-008 ; docs/02 §16.7). L'adresse n'est ni conservée ni
+         * renvoyée.
+         */
+        /**
+         * Jeton d'affiche inconnu, ou salle archivée (EF-ATT-010).
+         * {@code 404} : l'existence d'une salle est une information à
+         * protéger (docs/02 §18.2), et un jeton renouvelé doit rendre
+         * l'ancienne affiche muette, pas bavarde.
+         */
+        ROOM_QR_UNKNOWN,
+        ROOM_QR_OUT_OF_NETWORK,
+        /**
+         * QR fixe présenté après le début de la séance (RG-051) : au-delà,
+         * c'est le QR dynamique du formateur, sous son contrôle.
+         */
+        ROOM_QR_SESSION_STARTED,
+        /** Aucune séance de cet apprenant dans cette salle à cette heure. */
+        ROOM_QR_NO_SESSION,
         /** Plusieurs inscriptions actives correspondent : impossible de trancher sans risque. */
         ENROLLMENT_AMBIGUOUS,
+        /** Inscription visée introuvable (régularisation d'un provisoire). */
+        ENROLLMENT_NOT_FOUND,
         /** Une présence existe déjà pour cet apprenant et ce point de contrôle. */
         ALREADY_RECORDED,
         /** Backend de jetons (Redis) indisponible — jamais de validation dégradée. */

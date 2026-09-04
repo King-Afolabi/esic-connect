@@ -31,5 +31,12 @@ public enum AttendanceRecordSource {
     /** QR dynamique scanné à distance (docs/02 §15.4 — {@code REMOTE_QR}). */
     REMOTE_QR,
     /** Code court saisi à distance (docs/02 §15.4 — {@code REMOTE_CODE}). */
-    REMOTE_CODE
+    REMOTE_CODE,
+    /**
+     * QR fixe de salle, sous contrôle de plage réseau (docs/02 §16.6 ;
+     * EF-ATT-010). Contrairement aux autres canaux, celui-ci porte une
+     * <strong>attestation d'origine réseau</strong> : il n'est accepté que
+     * depuis une plage déclarée de l'établissement.
+     */
+    ROOM_STATIC_QR
 }

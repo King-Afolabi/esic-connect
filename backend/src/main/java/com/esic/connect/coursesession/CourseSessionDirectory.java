@@ -70,6 +70,14 @@ public interface CourseSessionDirectory {
     Optional<SessionRef> findSessionByCheckpointPublicId(UUID checkpointPublicId);
 
     /**
+     * Séance par son identifiant interne. Consommé par {@code attendance}
+     * pour les entrées provisoires (EF-ATT-007), qui stockent la clé
+     * étrangère et doivent revenir à l'identifiant public pour appliquer
+     * le contrôle d'accès habituel.
+     */
+    Optional<SessionRef> findSessionByInternalId(long sessionInternalId);
+
+    /**
      * Toutes les séances dont le début tombe dans {@code [from, to]}
      * ({@code null} = borne ouverte), <strong>sans</strong> contrôle
      * d'accès — le module {@code attendance} filtre ensuite chaque séance
@@ -233,7 +241,14 @@ public interface CourseSessionDirectory {
              * {@code attendance} en a besoin pour décider si un canal
              * distant est recevable sans autorisation individuelle.
              */
-            SessionAttendanceMode attendanceMode) {
+            SessionAttendanceMode attendanceMode,
+            /**
+             * Code fonctionnel de salle, ou {@code null} si elle est
+             * indéterminée (RG-044). Nécessaire à l'émargement par QR fixe :
+             * le QR identifie une salle, le serveur en déduit la séance
+             * (docs/02 §16.6).
+             */
+            String roomCode) {
 
         /** Point de contrôle {@code publicId} de la séance, s'il existe. */
         public Optional<CheckpointRef> checkpoint(UUID checkpointPublicId) {

@@ -12,4 +12,7 @@ interface SiteNetworkRangeRepository
     Optional<SiteNetworkRange> findByPublicId(UUID publicId);
 
     boolean existsBySiteIdAndCidrAndActiveTrue(Long siteId, String cidr);
+
+    /** Plages actives d'un site — base du contrôle réseau (EF-ATT-008). */
+    java.util.List<SiteNetworkRange> findBySite_IdAndActiveTrue(Long siteId);
 }

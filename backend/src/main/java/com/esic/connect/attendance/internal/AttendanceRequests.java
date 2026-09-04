@@ -34,4 +34,16 @@ final class AttendanceRequests {
              */
             Boolean remote) {
     }
+
+    /**
+     * Émargement par le QR fixe de salle (EF-ATT-010 ; docs/02 §16.6).
+     *
+     * <p>Le corps ne porte que le jeton lu dans l'affiche : ni séance, ni
+     * point de contrôle, ni apprenant. Le serveur déduit tout le reste —
+     * c'est ce qui permet d'imprimer l'affiche une fois pour toutes, et ce
+     * qui empêche un client de désigner la séance qui l'arrange.
+     */
+    record ValidateRoomQr(
+            @jakarta.validation.constraints.NotBlank @Size(max = 128) String roomReference) {
+    }
 }

@@ -156,7 +156,12 @@ class CourseSessionExceptionHandler {
             case CHECKPOINT_INVALID_TYPE -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ATT_CHECKPOINT_INVALID_TYPE";
-                message = "Type de point de contrôle invalide (START, END ou CUSTOM attendu).";
+                message = "Type de point de contrôle invalide.";
+            }
+            case CHECKPOINT_TYPE_ALREADY_PRESENT -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_CHECKPOINT_TYPE_ALREADY_PRESENT";
+                message = "Cette séance porte déjà un point de contrôle de ce type.";
             }
             case CHECKPOINT_ORDER_CONFLICT -> {
                 status = HttpStatus.CONFLICT;

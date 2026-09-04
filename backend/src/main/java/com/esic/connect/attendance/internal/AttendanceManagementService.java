@@ -116,8 +116,11 @@ class AttendanceManagementService {
         changePublisher.publishRecord(saved.getPublicId(), actorId, AttendanceChangeAction.MANUAL_RECORDED,
                 "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
                         + ";status=" + status.name());
+        // Une présence saisie manuellement est DÉJÀ validée par un humain :
+        // exiger une seconde validation n'aurait aucun sens.
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
-                session.title(), status, lateMinutes, saved.getRecordedAt(), AttendanceRecordSource.MANUAL);
+                session.title(), status, lateMinutes, false, saved.getRecordedAt(),
+                AttendanceRecordSource.MANUAL);
     }
 
     @Transactional
@@ -280,8 +283,8 @@ class AttendanceManagementService {
                 .filter(cp -> cp.internalId() == record.getAttendanceCheckpointId())
                 .map(CheckpointRef::publicId).findFirst().orElse(null);
         return new AttendanceRecordResponse(record.getPublicId(), session.publicId(), checkpointPublicId,
-                session.title(), record.getStatus(), record.getLateMinutes(), record.getRecordedAt(),
-                record.getSource());
+                session.title(), record.getStatus(), record.getLateMinutes(), false,
+                record.getRecordedAt(), record.getSource());
     }
 
     private CourseSessionDirectory.SessionRef requireSession(String sessionPublicId, AccessLevel level) {
