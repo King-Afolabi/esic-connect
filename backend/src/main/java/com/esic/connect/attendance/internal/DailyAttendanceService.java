@@ -4,6 +4,7 @@ import com.esic.connect.academic.AcademicScopeDirectory;
 import com.esic.connect.alternation.AlternationDirectory;
 import com.esic.connect.attendance.AttendanceStatus;
 import com.esic.connect.attendance.DailyAttendanceResult;
+import com.esic.connect.attendance.EarlyDepartureStatus;
 import com.esic.connect.coursesession.AttendanceCheckpointStatus;
 import com.esic.connect.coursesession.AttendanceCheckpointType;
 import com.esic.connect.coursesession.CourseSessionDirectory;
@@ -52,17 +53,20 @@ class DailyAttendanceService {
     private final AlternationDirectory alternationDirectory;
     private final AcademicScopeDirectory academicScope;
     private final AttendanceRecordRepository recordRepository;
+    private final EarlyDepartureRepository earlyDepartureRepository;
 
     DailyAttendanceService(CourseSessionDirectory courseSessionDirectory,
                            EnrollmentDirectory enrollmentDirectory,
                            AlternationDirectory alternationDirectory,
                            AcademicScopeDirectory academicScope,
-                           AttendanceRecordRepository recordRepository) {
+                           AttendanceRecordRepository recordRepository,
+                           EarlyDepartureRepository earlyDepartureRepository) {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.alternationDirectory = alternationDirectory;
         this.academicScope = academicScope;
         this.recordRepository = recordRepository;
+        this.earlyDepartureRepository = earlyDepartureRepository;
     }
 
     /** Une ligne par apprenant de la classe pour la journée demandée. */
@@ -153,13 +157,20 @@ class DailyAttendanceService {
             }
         }
 
+        // Départ anticipé (EF-ATT-013) : un dossier du jour qualifie une
+        // journée incomplète. Une seule requête pour toute la classe.
+        Map<Long, EarlyDepartureStatus> departureByEnrollment =
+                earlyDeparturesOfDay(roster, from, to);
+
         List<DailyRow> rows = new ArrayList<>();
         for (EnrollmentDirectory.RosterEntry entry : roster) {
             Set<AttendanceCheckpointType> validated = validatedByEnrollment
                     .getOrDefault(entry.enrollmentInternalId(), Set.of());
             Set<AttendanceCheckpointType> excused = excusedByEnrollment
                     .getOrDefault(entry.enrollmentInternalId(), Set.of());
-            DailyAttendanceResult result = classify(expected.keySet(), validated, excused, axis);
+            DailyAttendanceResult result = applyEarlyDeparture(
+                    classify(expected.keySet(), validated, excused, axis),
+                    departureByEnrollment.get(entry.enrollmentInternalId()));
             rows.add(new DailyRow(entry.enrollmentPublicId(), entry.studentProfilePublicId(),
                     entry.studentNumber(), entry.firstName(), entry.lastName(), result,
                     halfDayValidated(expected.keySet(), validated, true),
@@ -172,6 +183,55 @@ class DailyAttendanceService {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * Dossiers de départ anticipé de la journée, un par inscription. Le
+     * plus avancé l'emporte : une décision prise prime sur un dossier
+     * resté ouvert, sans quoi un second dossier oublié maintiendrait
+     * indéfiniment la journée en {@code TO_CONFIRM}.
+     */
+    private Map<Long, EarlyDepartureStatus> earlyDeparturesOfDay(
+            List<EnrollmentDirectory.RosterEntry> roster, Instant from, Instant to) {
+        Set<Long> enrollmentIds = roster.stream()
+                .map(EnrollmentDirectory.RosterEntry::enrollmentInternalId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (enrollmentIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, EarlyDepartureStatus> byEnrollment = new HashMap<>();
+        for (EarlyDeparture departure
+                : earlyDepartureRepository.findByEnrollmentIdInAndDepartureAtBetween(
+                        enrollmentIds, from, to)) {
+            byEnrollment.merge(departure.getEnrollmentId(), departure.getStatus(),
+                    (existing, candidate) -> existing.isDecided() ? existing : candidate);
+        }
+        return byEnrollment;
+    }
+
+    /**
+     * Effet d'un départ anticipé sur la journée (docs/02 §16.13).
+     *
+     * <p>N'agit que sur {@code PARTIAL} : une journée incomplète est
+     * exactement ce qu'un départ anticipé explique. Une journée complète
+     * ne redevient pas incomplète parce qu'un dossier existe, et une
+     * absence totale n'est pas excusée par un départ — on ne part pas
+     * d'un endroit où l'on n'est jamais venu.
+     *
+     * <p>Un dossier encore ouvert produit {@code TO_CONFIRM} : signaler
+     * son départ n'est pas l'avoir fait autoriser. Un dossier refusé
+     * laisse {@code PARTIAL} — le refus ne fabrique aucune présence.
+     */
+    private static DailyAttendanceResult applyEarlyDeparture(DailyAttendanceResult computed,
+                                                             EarlyDepartureStatus departure) {
+        if (departure == null || computed != DailyAttendanceResult.PARTIAL) {
+            return computed;
+        }
+        return switch (departure.effect()) {
+            case EXCUSED_PARTIAL -> DailyAttendanceResult.EXCUSED_PARTIAL;
+            case TO_CONFIRM -> DailyAttendanceResult.TO_CONFIRM;
+            case PARTIAL -> DailyAttendanceResult.PARTIAL;
+        };
+    }
 
     /**
      * Table de vérité de docs/02 §16.3, appliquée aux seuls points

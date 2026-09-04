@@ -22,6 +22,12 @@ public enum AttendanceChangeAction {
     GUEST_DECLARED,
     /** Entrée provisoire régularisée : rattachée ou écartée (EF-ATT-007). */
     GUEST_RESOLVED,
+    /** Départ anticipé signalé par l'apprenant (EF-ATT-013). */
+    EARLY_DEPARTURE_DECLARED,
+    /** Départ anticipé transmis au responsable pédagogique, avec ou sans avis. */
+    EARLY_DEPARTURE_FORWARDED,
+    /** Départ anticipé accepté ou refusé — décision finale. */
+    EARLY_DEPARTURE_DECIDED,
     /** Export CSV d'un rapport d'assiduité généré. */
     REPORT_EXPORTED
 }

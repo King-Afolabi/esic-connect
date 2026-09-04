@@ -21,6 +21,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
+import { EarlyDeparturePanel } from '../../attendance/early-departure/early-departure-panel';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { QrDisplay } from '../shared/qr-display/qr-display';
@@ -48,6 +49,7 @@ import {
   checkpointTypeLabel,
   classCodes,
   correctionActionLabel,
+  correctionActorLabel,
   formatInstantUtc,
   holdsAnySessionRole,
   sessionStatusLabel,
@@ -100,6 +102,7 @@ type AttendanceState =
     MatProgressBarModule,
     MatTableModule,
     QrDisplay,
+    EarlyDeparturePanel,
   ],
   templateUrl: './session-detail.html',
   styleUrl: './session-detail.scss',
@@ -114,6 +117,8 @@ export class SessionDetail {
   private readonly fb = inject(FormBuilder);
 
   private readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
+  /** Même identifiant, lisible depuis le gabarit (panneau enfant). */
+  protected readonly publicIdForPanel = this.publicId;
 
   protected readonly statusLabel = sessionStatusLabel;
   protected readonly sourceLabel = attendanceSourceLabel;
@@ -121,6 +126,7 @@ export class SessionDetail {
   protected readonly checkpointTypeLabel = checkpointTypeLabel;
   protected readonly checkpointStatusLabel = checkpointStatusLabel;
   protected readonly correctionActionLabel = correctionActionLabel;
+  protected readonly correctionActorLabel = correctionActorLabel;
   protected readonly candidateLabel = attendanceCandidateLabel;
   protected readonly formatInstantUtc = formatInstantUtc;
   protected readonly classCodes = classCodes;
@@ -275,6 +281,19 @@ export class SessionDetail {
   );
   protected readonly canManageAttendance = computed(() =>
     holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_ATTENDANCE_MANAGE_ROLES),
+  );
+  /**
+   * Trancher un dossier de départ anticipé DÉJÀ TRANSMIS est réservé au
+   * responsable et au-dessus (EF-ATT-013) : le formateur qui a transmis
+   * ne reprend pas la main. Ergonomie seulement — le serveur renvoie
+   * `403 ATT_EARLY_DEPARTURE_DECISION_RESERVED`.
+   */
+  protected readonly canDecideForwardedDeparture = computed(() =>
+    this.roleContext
+      .effectiveRoles()
+      .some((role) =>
+        ['PEDAGOGICAL_MANAGER', 'SCHOOL_ADMINISTRATION', 'ADMIN', 'SUPER_ADMIN'].includes(role),
+      ),
   );
   protected readonly canReadAttendance = computed(() =>
     holdsAnySessionRole(this.roleContext.effectiveRoles(), SESSION_READ_ROLES),

@@ -58,9 +58,15 @@ final class JustificationAttachmentResponses {
      * @param sizeBytes   taille du contenu
      * @param sha256      empreinte hexadécimale du contenu
      * @param uploadedAt  date de dépôt
+     * @param scanStatus  verdict antivirus — {@code NOT_SCANNED} lorsque
+     *                    aucun analyseur n'est en service. Exposé
+     *                    <strong>toujours</strong> : une pièce non analysée
+     *                    ne doit jamais passer pour une pièce saine
+     *                    (EF-JUS-002)
+     * @param scannedAt   date du verdict, {@code null} si jamais analysée
      */
     record Meta(UUID publicId, String fileName, String contentType, long sizeBytes, String sha256,
-                Instant uploadedAt) {
+                Instant uploadedAt, String scanStatus, Instant scannedAt) {
     }
 
     /**

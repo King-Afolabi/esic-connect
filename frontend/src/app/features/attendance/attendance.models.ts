@@ -127,6 +127,24 @@ export interface JustificationAttachmentMeta {
   sizeBytes: number;
   sha256: string;
   uploadedAt: string;
+  /**
+   * Verdict antivirus (EF-JUS-002). `NOT_SCANNED` signifie qu'aucune
+   * analyse n'a eu lieu — l'interface doit le dire, jamais le taire ni
+   * présenter la pièce comme saine.
+   */
+  scanStatus: AttachmentScanStatus;
+  scannedAt: string | null;
+}
+
+export type AttachmentScanStatus = 'NOT_SCANNED' | 'CLEAN' | 'INFECTED' | 'UNAVAILABLE';
+const ATTACHMENT_SCAN_LABELS: Record<AttachmentScanStatus, string> = {
+  NOT_SCANNED: 'Non analysée',
+  CLEAN: 'Analysée, aucune menace détectée',
+  INFECTED: 'Menace détectée',
+  UNAVAILABLE: 'Analyse indisponible',
+};
+export function attachmentScanLabel(value: string): string {
+  return (ATTACHMENT_SCAN_LABELS as Record<string, string>)[value] ?? value;
 }
 
 /** Taille maximale d'une pièce jointe (CDC §43 RG-071 : 5 Mo). */
@@ -341,6 +359,147 @@ export function isAllowedReportSort(kind: ReportKind, sort: string | null | unde
     (direction === 'asc' || direction === 'desc') &&
     REPORT_SORT_FIELDS[kind].includes(field)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Départ anticipé (EF-ATT-013 ; docs/02 §16.13)
+// ---------------------------------------------------------------------------
+
+export const EARLY_DEPARTURE_STATUSES = [
+  'REQUESTED',
+  'FORWARDED',
+  'ACCEPTED',
+  'REFUSED',
+] as const;
+export type EarlyDepartureStatus = (typeof EARLY_DEPARTURE_STATUSES)[number];
+const EARLY_DEPARTURE_STATUS_LABELS: Record<EarlyDepartureStatus, string> = {
+  REQUESTED: 'Signalé',
+  FORWARDED: 'Transmis au responsable',
+  ACCEPTED: 'Accepté',
+  REFUSED: 'Refusé',
+};
+export function earlyDepartureStatusLabel(value: string): string {
+  return (EARLY_DEPARTURE_STATUS_LABELS as Record<string, string>)[value] ?? value;
+}
+
+/** Effet du dossier sur la journée — calculé par le serveur, jamais ici. */
+export type EarlyDepartureEffect = 'PARTIAL' | 'EXCUSED_PARTIAL' | 'TO_CONFIRM';
+const EARLY_DEPARTURE_EFFECT_LABELS: Record<EarlyDepartureEffect, string> = {
+  PARTIAL: 'Journée incomplète, non excusée',
+  EXCUSED_PARTIAL: 'Journée incomplète, excusée',
+  TO_CONFIRM: 'À confirmer',
+};
+export function earlyDepartureEffectLabel(value: string): string {
+  return (EARLY_DEPARTURE_EFFECT_LABELS as Record<string, string>)[value] ?? value;
+}
+
+const EARLY_DEPARTURE_OPINION_LABELS: Record<string, string> = {
+  FAVOURABLE: 'Avis favorable',
+  UNFAVOURABLE: 'Avis défavorable',
+};
+export function earlyDepartureOpinionLabel(value: string | null): string {
+  return value ? (EARLY_DEPARTURE_OPINION_LABELS[value] ?? value) : 'Sans avis';
+}
+
+/** `EarlyDepartureResponse` du back-end. Les acteurs y sont désignés par leur rôle. */
+export interface EarlyDeparture {
+  publicId: string;
+  sessionPublicId: string | null;
+  sessionTitle: string | null;
+  sessionStartsAt: string | null;
+  enrollmentPublicId: string | null;
+  classCode: string | null;
+  departureAt: string;
+  reason: string;
+  status: EarlyDepartureStatus;
+  effect: EarlyDepartureEffect;
+  requestedAt: string;
+  teacherOpinion: string | null;
+  teacherOpinionComment: string | null;
+  teacherOpinionAt: string | null;
+  decidedByRole: string | null;
+  decidedAt: string | null;
+  decisionComment: string | null;
+}
+
+export interface DeclareEarlyDepartureRequest {
+  sessionPublicId: string;
+  departureAt: string;
+  reason: string;
+}
+
+export interface ForwardEarlyDepartureRequest {
+  opinion?: string | null;
+  comment?: string | null;
+}
+
+export interface DecideEarlyDepartureRequest {
+  accepted: boolean;
+  comment: string;
+}
+
+// ---------------------------------------------------------------------------
+// Journal de transparence (EF-ATT-014 ; docs/02 §5.7)
+// ---------------------------------------------------------------------------
+
+const TRANSPARENCY_EVENT_LABELS: Record<string, string> = {
+  RECORDED: 'Émargement enregistré',
+  CREATED_MANUALLY: 'Présence saisie',
+  STATUS_CORRECTED: 'Présence corrigée',
+  CANCELLED: 'Présence annulée',
+  JUSTIFICATION_ADDED: 'Justificatif déposé',
+  JUSTIFICATION_UPDATED: 'Justificatif modifié',
+  JUSTIFICATION_REVIEWED: 'Justificatif examiné',
+  EARLY_DEPARTURE_DECLARED: 'Départ anticipé signalé',
+  EARLY_DEPARTURE_FORWARDED: 'Départ anticipé transmis',
+  EARLY_DEPARTURE_DECIDED: 'Départ anticipé tranché',
+};
+export function transparencyEventLabel(value: string): string {
+  return TRANSPARENCY_EVENT_LABELS[value] ?? value;
+}
+
+const ACTOR_ROLE_LABELS: Record<string, string> = {
+  SELF: 'Vous',
+  STUDENT: 'Un apprenant',
+  TEACHER: 'Un formateur',
+  PEDAGOGICAL_MANAGER: 'Le responsable pédagogique',
+  SCHOOL_ADMINISTRATION: "L'administration",
+  ADMIN: "L'administration",
+  SUPER_ADMIN: "L'administration technique",
+};
+/** Le serveur ne transmet que la fonction de l'auteur — jamais son nom. */
+export function actorRoleLabel(value: string | null): string {
+  return value ? (ACTOR_ROLE_LABELS[value] ?? value) : 'Le système';
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  DYNAMIC_QR: 'QR dynamique',
+  SHORT_CODE: 'Code court',
+  MANUAL: 'Saisie manuelle',
+  CORRECTION: 'Correction',
+  REMOTE_QR: 'QR à distance',
+  REMOTE_CODE: 'Code court à distance',
+  ROOM_STATIC_QR: 'QR fixe de salle',
+};
+export function attendanceChannelLabel(value: string | null): string {
+  return value ? (CHANNEL_LABELS[value] ?? value) : '—';
+}
+
+/** `TransparencyEntry` du back-end : une ligne du journal de l'apprenant. */
+export interface TransparencyEntry {
+  occurredAt: string;
+  event: string;
+  actorRole: string | null;
+  channel: string | null;
+  sessionPublicId: string | null;
+  sessionTitle: string | null;
+  sessionStartsAt: string | null;
+  checkpointLabel: string | null;
+  previousStatus: string | null;
+  newStatus: string | null;
+  previousLateMinutes: number | null;
+  newLateMinutes: number | null;
+  reason: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,68 @@
+:host {
+  display: block;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.claims__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.claims__subtitle {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.claims__intro {
+  margin: 0 0 1.5rem;
+  max-width: 60ch;
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+}
+
+.claims__meta {
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+  font-size: 0.85rem;
+}
+
+.claims__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.claims__field {
+  display: block;
+  max-width: 40rem;
+  width: 100%;
+}
+
+.claims__table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+}
+
+.claims__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--mat-sys-outline-variant, #dadce0);
+  border-radius: 8px;
+}
+
+.claims__error {
+  color: var(--mat-sys-error, #b3261e);
+  margin: 0.5rem 0;
+}
+
+.claims__section {
+  margin-top: 1.5rem;
+}

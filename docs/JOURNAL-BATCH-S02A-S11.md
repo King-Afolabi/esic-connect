@@ -614,3 +614,101 @@ qu'une base incrémentale ne démontre pas. La pollution par les fixtures
 - Une salle sans plage réseau déclarée refuse tout émargement par QR fixe.
   C'est le refus par défaut voulu, mais cela signifie qu'un site doit être
   configuré avant que ses affiches ne servent à quoi que ce soit.
+
+---
+
+## S9 — Justificatifs, réclamations, départ anticipé, transparence (`sprint/S09-justificatifs-reclamations`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+`EF-JUS-001/003/004` (dépôt, examen, `ABSENT → EXCUSED_ABSENCE`) et le
+contrôle structurel des pièces jointes (extension, type déclaré, *magic
+bytes*, stockage hors webroot, compensation, réconciliation) étaient
+livrés depuis le bloc G1-E. Rien n'a été réécrit. Le sprint complète ce
+qui manquait : l'analyse antivirus et le balayage des orphelins.
+
+### Ce qui a été livré
+
+| Exigence | Livré |
+|---|---|
+| `EF-CLAIM-001..004` | module `claim` (15ᵉ module Modulith), guichets, fil de messages, transfert motivé, décision, réouverture |
+| `EF-ATT-013` | départ anticipé : dossier, avis du formateur, transmission, décision, effet sur le résultat journalier |
+| `EF-ATT-014` | journal de transparence de l'apprenant |
+| `EF-JUS-002` | analyse antivirus (port + ClamAV optionnel + adaptateur inactif explicite), balayage des orphelins |
+| `AC-018` | l'auteur d'une correction est désormais **exposé** — il ne l'était pas |
+
+Décisions : `DEC-S9-001` à `DEC-S9-006` (`docs/03-architecture.md`).
+
+### Défauts réels trouvés et corrigés
+
+1. **`AC-018` n'était pas satisfait.** `AttendanceCorrectionResponse`
+   n'exposait **aucun** auteur, alors que le critère exige que la
+   correction affiche « l'ancienne valeur, la nouvelle, l'auteur, la date
+   et le motif ». La colonne `actor_user_id` existait en base depuis V10 ;
+   elle n'atteignait ni l'API ni l'écran. Corrigé : nom + fonction pour le
+   personnel, fonction seule pour l'apprenant (`DEC-S9-003`).
+
+2. **Une réclamation pouvait devenir invisible de tous.** Un apprenant
+   sans classe active adressant sa réclamation à un guichet à périmètre
+   n'aurait été vu par aucun responsable — le dossier aurait été accepté
+   puis perdu. Refusé explicitement à la création, avec orientation vers
+   l'administration scolaire (`CLAIM_NO_SCOPE_FOR_AUDIENCE`).
+
+3. **Le canal, pas la colonne auteur, dit qui a émargé.** Sur un
+   émargement porté par l'apprenant, `recorded_by_id` reste nul — personne
+   n'a enregistré *pour* lui. Se fier à cette colonne faisait passer chaque
+   émargement pour une saisie manuelle dans le journal de transparence.
+   Trouvé par un test qui échouait, corrigé avant livraison.
+
+4. **Le compilateur incrémental masquait deux erreurs de compilation.**
+   `./mvnw -o test-compile` répondait « BUILD SUCCESS » alors que
+   `./mvnw -o clean test-compile` échouait sur deux fichiers de test.
+   L'extension Java de l'éditeur avait par ailleurs laissé dans `target/`
+   une classe portant `Unresolved compilation problem`. **Ne jamais
+   conclure d'un `test-compile` incrémental** : seul `clean` fait foi.
+
+### Migrations
+
+- `V29__create_early_departure.sql` — dossier de départ anticipé. Aucune
+  colonne d'effet : il se déduit du statut (`DEC-S9-001`).
+- `V30__justification_attachment_scan.sql` — verdict d'analyse antivirus,
+  date et signature. Défaut `NOT_SCANNED` : marquer `CLEAN`
+  rétroactivement les pièces déjà stockées serait une affirmation que rien
+  ne fonde.
+
+*(`V28__create_claims.sql` avait été écrite lors de la session précédente
+et n'était pas encore commitée ; elle l'est avec ce sprint.)*
+
+### Écrans livrés
+
+- apprenant : journal de transparence, départs anticipés ;
+- tous rôles : liste et fil des réclamations, avec transfert, décision et
+  réouverture ;
+- formateur / responsable : panneau des départs anticipés dans la fiche
+  de séance, où la décision disparaît une fois le dossier transmis.
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw clean test` | 124 classes / **1112 tests** / 0 échec / 0 erreur |
+| `cd frontend && npm test` | 84 fichiers / **695 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+### Limites restantes, explicitement assumées
+
+- **Aucun antivirus n'est actif par défaut.** Le service `clamav` du
+  profil `antivirus` de `compose.yaml` n'a **jamais été démarré ni
+  vérifié** dans ce dépôt : l'adaptateur ClamAV est écrit et compilé, non
+  éprouvé contre un `clamd` réel. Les tests couvrent le contrat du port et
+  ce que le produit fait de chaque verdict, avec un double piloté.
+- Le balayage des orphelins traite un **lot borné** par passage : il ne
+  prétend pas nettoyer tout un stockage en une fois.
+- La séance d'un départ anticipé se saisit par son identifiant public dans
+  l'écran apprenant : aucun sélecteur ne la propose depuis le planning.
+- Les réclamations n'émettent **aucune notification** : l'audience élargie
+  et le courriel relèvent du sprint 10.
+- Aucun de ces écrans n'est couvert par la recette navigateur : ils le
+  sont par des tests de composant Angular. `NOT_PERFORMED` pour ces
+  parcours.

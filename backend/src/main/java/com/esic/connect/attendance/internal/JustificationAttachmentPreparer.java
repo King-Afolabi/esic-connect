@@ -36,8 +36,10 @@ class JustificationAttachmentPreparer {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     JustificationAttachment insertPending(long justificationId, String safeFileName, String storageKey,
                                          String contentType, long sizeBytes, String sha256,
-                                         long createdById, Instant now) {
+                                         long createdById, Instant now,
+                                         JustificationAttachmentScanStatus scanStatus,
+                                         Instant scannedAt, String scanSignature) {
         return repository.saveAndFlush(new JustificationAttachment(justificationId, safeFileName, storageKey,
-                contentType, sizeBytes, sha256, createdById, now));
+                contentType, sizeBytes, sha256, createdById, now, scanStatus, scannedAt, scanSignature));
     }
 }

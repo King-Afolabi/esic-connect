@@ -13,4 +13,12 @@ import java.util.List;
 interface AttendanceCorrectionRepository extends JpaRepository<AttendanceCorrection, Long> {
 
     List<AttendanceCorrection> findByAttendanceRecordIdOrderByOccurredAtAscIdAsc(Long attendanceRecordId);
+
+    /**
+     * Historique de plusieurs présences en une requête — le journal de
+     * transparence en couvre potentiellement des centaines, une requête
+     * par ligne serait proportionnelle à l'affichage (NFR-PERF-08).
+     */
+    List<AttendanceCorrection> findByAttendanceRecordIdInOrderByOccurredAtDescIdDesc(
+            java.util.Collection<Long> attendanceRecordIds);
 }

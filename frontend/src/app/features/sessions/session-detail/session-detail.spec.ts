@@ -14,6 +14,13 @@ import { SessionDetail } from './session-detail';
 const GET_URL = '/api/v1/sessions/s-1';
 const ATTENDANCE_URL = '/api/v1/sessions/s-1/attendance';
 const SUBSTITUTIONS_URL = '/api/v1/sessions/s-1/substitutions';
+/**
+ * Le panneau des départs anticipés (EF-ATT-013) est un composant enfant
+ * de cet écran : il charge sa propre liste dès qu'il est rendu. Les cas
+ * de ce fichier ne portent pas sur lui — on vide simplement sa requête,
+ * comme celles des présences et des remplacements.
+ */
+const EARLY_DEPARTURES_URL = '/api/v1/sessions/s-1/attendance/early-departures';
 const CANDIDATES_URL = '/api/v1/sessions/s-1/attendance/candidates';
 const EXPORT_URL = '/api/v1/sessions/s-1/attendance/export';
 const TOKEN_URL = '/api/v1/sessions/s-1/checkpoints/cp-1/attendance-token';
@@ -198,6 +205,11 @@ describe('SessionDetail', () => {
       }
     });
     http.match(SUBSTITUTIONS_URL).forEach((req) => {
+      if (!req.cancelled) {
+        req.flush([]);
+      }
+    });
+    http.match(EARLY_DEPARTURES_URL).forEach((req) => {
       if (!req.cancelled) {
         req.flush([]);
       }

@@ -1,0 +1,165 @@
+<nav class="claims__actions" aria-label="Fil d'Ariane">
+  <a routerLink="/claims">← Retour aux réclamations</a>
+</nav>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    <p class="claims__meta" role="status">Chargement…</p>
+  }
+  @case ('not-found') {
+    <div class="claims__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucune réclamation ne correspond.</p>
+      <a mat-stroked-button routerLink="/claims">Retour</a>
+    </div>
+  }
+  @case ('error') {
+    <div class="claims__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ $any(state()).message }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (thread(); as t) {
+      <h1 class="claims__title">{{ t.claim.subject }}</h1>
+      <p class="claims__meta">
+        {{ categoryLabel(t.claim.category) }} · {{ audienceLabel(t.claim.audience) }} ·
+        {{ statusLabel(t.claim.status) }} · ouverte le
+        {{ formatInstantUtc(t.claim.createdAt) }}
+      </p>
+
+      <section class="claims__section" aria-label="Fil de la conversation">
+        <h2 class="claims__subtitle">Conversation</h2>
+        @for (message of t.messages; track message.publicId) {
+          <mat-card appearance="outlined">
+            <mat-card-content>
+              <p class="claims__meta">
+                {{ roleLabel(message.authorRole) }} · {{ formatInstantUtc(message.createdAt) }}
+              </p>
+              <p>{{ message.body }}</p>
+            </mat-card-content>
+          </mat-card>
+        }
+
+        @if (isClosed()) {
+          <p class="claims__meta">
+            Cette réclamation est close. Elle peut être rouverte avec un motif ; son
+            historique est conservé.
+          </p>
+        } @else {
+          <form [formGroup]="messageForm" (ngSubmit)="sendMessage()">
+            <mat-form-field appearance="outline" class="claims__field">
+              <mat-label>Votre message</mat-label>
+              <textarea matInput rows="4" formControlName="body" maxlength="5000"></textarea>
+            </mat-form-field>
+            <button mat-flat-button type="submit" [disabled]="busy() || messageForm.invalid">
+              Envoyer
+            </button>
+          </form>
+        }
+      </section>
+
+      <section class="claims__section" aria-label="Décisions">
+        <h2 class="claims__subtitle">Décisions</h2>
+        @if (t.events.length === 0) {
+          <p class="claims__meta">Aucune décision enregistrée.</p>
+        } @else {
+          <ul>
+            @for (event of t.events; track event.publicId) {
+              <li>
+                <strong>{{ eventLabel(event.eventType) }}</strong> —
+                {{ formatInstantUtc(event.createdAt) }}
+                @if (event.fromStatus || event.toStatus) {
+                  · {{ event.fromStatus ? statusLabel(event.fromStatus) : '—' }} →
+                  {{ event.toStatus ? statusLabel(event.toStatus) : '—' }}
+                }
+                @if (event.toAudience) {
+                  · vers {{ audienceLabel(event.toAudience) }}
+                }
+                @if (event.motive) {
+                  <br /><span class="claims__meta">Motif : {{ event.motive }}</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="claims__section" aria-label="Actions">
+        <div class="claims__actions">
+          @if (isStaff() && !isClosed()) {
+            <button mat-stroked-button type="button" (click)="toggle('transfer')">
+              Transférer
+            </button>
+            <button mat-stroked-button type="button" (click)="toggle('decide')">Décider</button>
+          }
+          @if (isClosed()) {
+            <button mat-flat-button type="button" (click)="toggle('reopen')">Rouvrir</button>
+          }
+        </div>
+
+        @switch (openPanel()) {
+          @case ('transfer') {
+            <form [formGroup]="transferForm" (ngSubmit)="transfer()" aria-label="Transférer">
+              <p class="claims__meta">
+                Le transfert change de guichet, jamais d'historique : le fil reste
+                entier (RG-088).
+              </p>
+              <mat-form-field appearance="outline" class="claims__field">
+                <mat-label>Nouveau guichet</mat-label>
+                <mat-select formControlName="audience">
+                  @for (audience of audiences; track audience) {
+                    <mat-option [value]="audience">{{ audienceLabel(audience) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="claims__field">
+                <mat-label>Motif du transfert</mat-label>
+                <input matInput formControlName="motive" maxlength="500" />
+              </mat-form-field>
+              <button mat-flat-button type="submit" [disabled]="busy() || transferForm.invalid">
+                Transférer
+              </button>
+            </form>
+          }
+          @case ('decide') {
+            <form [formGroup]="decideForm" (ngSubmit)="decide()" aria-label="Décider">
+              <mat-form-field appearance="outline" class="claims__field">
+                <mat-label>Nouveau statut</mat-label>
+                <mat-select formControlName="status">
+                  @for (status of decisions; track status) {
+                    <mat-option [value]="status">{{ statusLabel(status) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="claims__field">
+                <mat-label>Motif de la décision</mat-label>
+                <input matInput formControlName="motive" maxlength="500" />
+              </mat-form-field>
+              <button mat-flat-button type="submit" [disabled]="busy() || decideForm.invalid">
+                Enregistrer
+              </button>
+            </form>
+          }
+          @case ('reopen') {
+            <form [formGroup]="reopenForm" (ngSubmit)="reopen()" aria-label="Rouvrir">
+              <mat-form-field appearance="outline" class="claims__field">
+                <mat-label>Motif de la réouverture</mat-label>
+                <input matInput formControlName="motive" maxlength="500" />
+              </mat-form-field>
+              <button mat-flat-button type="submit" [disabled]="busy() || reopenForm.invalid">
+                Rouvrir
+              </button>
+            </form>
+          }
+        }
+
+        @if (actionError(); as message) {
+          <p class="claims__error" role="alert">{{ message }}</p>
+        }
+      </section>
+    }
+  }
+}

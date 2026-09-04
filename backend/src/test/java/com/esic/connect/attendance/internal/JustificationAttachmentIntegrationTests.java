@@ -152,6 +152,11 @@ class JustificationAttachmentIntegrationTests {
                     }
                     real.delete(storageKey);
                 }
+
+                @Override
+                public java.util.List<String> listKeys(int limit) {
+                    return real.listKeys(limit);
+                }
             };
         }
 

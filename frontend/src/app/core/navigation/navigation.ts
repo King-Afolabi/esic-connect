@@ -131,6 +131,39 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['STUDENT'],
   },
   {
+    // Écran livré : journal de transparence (EF-ATT-014). Le serveur le
+    // bâtit depuis le seul JWT ; aucun autre rôle n'y a accès.
+    label: 'Journal de transparence',
+    path: '/my-attendance/transparency',
+    icon: 'history',
+    roles: ['STUDENT'],
+  },
+  {
+    // Écran livré : départ anticipé (EF-ATT-013). Signaler n'est pas
+    // être autorisé — l'écran le dit.
+    label: 'Départs anticipés',
+    path: '/my-attendance/early-departures',
+    icon: 'logout',
+    roles: ['STUDENT'],
+  },
+  {
+    // Écran livré : réclamations (EF-CLAIM-001..004). L'API n'exige que
+    // d'être authentifié, mais un compte SANS rôle actif n'a ni
+    // interlocuteur ni périmètre : lui proposer l'écran l'enverrait vers
+    // une liste vide. Les six rôles sont donc listés explicitement.
+    label: 'Réclamations',
+    path: '/claims',
+    icon: 'forum',
+    roles: [
+      'STUDENT',
+      'TEACHER',
+      'PEDAGOGICAL_MANAGER',
+      'SCHOOL_ADMINISTRATION',
+      'ADMIN',
+      'SUPER_ADMIN',
+    ],
+  },
+  {
     // Écran livré : suivi d'assiduité (V10) — synthèse, rapports par
     // séance / classe / apprenant, file des justificatifs. Périmètre
     // aligné sur `AttendanceManagementWeb.REPORT_ROLES` ; un
