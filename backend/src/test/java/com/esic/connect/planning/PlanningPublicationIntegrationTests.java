@@ -62,6 +62,26 @@ class PlanningPublicationIntegrationTests {
     private static final String HEADER =
             "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n";
 
+    /**
+     * Salle unique par cas de test.
+     *
+     * <p>Depuis la migration {@code V21}, la séance conserve son code de
+     * salle et le conflit de salle s'exerce à l'échelle de
+     * l'établissement, pas d'une classe (EF-PLAN-009). Réutiliser « A1 »
+     * d'un cas à l'autre ferait entrer ces tests en collision entre eux —
+     * un faux échec sans rapport avec ce qu'ils vérifient. Le code reste
+     * en revanche constant à l'intérieur d'un cas : le comparer d'une
+     * version à la suivante est justement ce que certains d'entre eux
+     * mesurent.
+     */
+    private String room;
+
+    @BeforeEach
+    void freshRoomPerTest() {
+        room = "R" + UUID.randomUUID().toString().substring(0, 8)
+                .toUpperCase(java.util.Locale.ROOT);
+    }
+
     @TestConfiguration
     static class NoopMailerConfig {
         @Bean
@@ -94,8 +114,10 @@ class PlanningPublicationIntegrationTests {
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
         String csv = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique," + teacher + ",A101\n"
-                + "S2,2026-09-07,13:30,17:00,Europe/Paris,Bases de données," + teacher + ",A101\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-07,13:30,17:00,Europe/Paris,Bases de données," + teacher + ","
+                + room + "\n";
 
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
         // AC-007 : simulation ⇒ aucune séance.
@@ -131,7 +153,8 @@ class PlanningPublicationIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ",A1\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ","
+                + room + "\n";
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
 
         Map<String, Object> first = post("/api/v1/planning-imports/" + jobId + "/publish", admin);
@@ -148,15 +171,19 @@ class PlanningPublicationIntegrationTests {
         String teacher = teacherPublicId();
 
         String v1 = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n"
-                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ","
+                + room + "\n";
         String job1 = (String) upload("planning.csv", v1, admin, classId).getBody().get("publicId");
         post("/api/v1/planning-imports/" + job1 + "/publish", admin);
 
         // S1 modifié (nouvel horaire), S2 retiré, S3 ajouté.
         String v2 = HEADER
-                + "S1,2026-09-07,10:00,13:00,Europe/Paris,Cours A," + teacher + ",A1\n"
-                + "S3,2026-09-09,09:00,12:00,Europe/Paris,Cours C," + teacher + ",A1\n";
+                + "S1,2026-09-07,10:00,13:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n"
+                + "S3,2026-09-09,09:00,12:00,Europe/Paris,Cours C," + teacher + ","
+                + room + "\n";
         String job2 = (String) upload("planning.csv", v2, admin, classId).getBody().get("publicId");
         Map<String, Object> published2 = post("/api/v1/planning-imports/" + job2 + "/publish", admin);
         assertThat(((Number) published2.get("versionNumber")).intValue()).isEqualTo(2);
@@ -181,7 +208,8 @@ class PlanningPublicationIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String csv = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + UUID.randomUUID() + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + UUID.randomUUID() + ","
+                + room + "\n";
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
 
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST,
@@ -212,7 +240,8 @@ class PlanningPublicationIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ",A1\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ","
+                + room + "\n";
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
 
         String path = "/api/v1/planning-imports/" + jobId + "/publish";
@@ -263,8 +292,10 @@ class PlanningPublicationIntegrationTests {
         String teacher = teacherPublicId();
 
         String v1 = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n"
-                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ","
+                + room + "\n";
         String job1 = (String) upload("planning.csv", v1, admin, classId).getBody().get("publicId");
         post("/api/v1/planning-imports/" + job1 + "/publish", admin);
         String versionOneId = (String) ((Map<?, ?>) ((List<?>) getMap(
@@ -272,7 +303,8 @@ class PlanningPublicationIntegrationTests {
                 .get("publicId");
 
         // Republication sans S2 → la séance de S2 est supersédée.
-        String v2 = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n";
+        String v2 = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n";
         String job2 = (String) upload("planning.csv", v2, admin, classId).getBody().get("publicId");
         post("/api/v1/planning-imports/" + job2 + "/publish", admin);
 
@@ -311,8 +343,10 @@ class PlanningPublicationIntegrationTests {
         String teacher = teacherPublicId();
 
         String v1 = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours lundi," + teacher + ",A1\n"
-                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours mardi," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours lundi," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours mardi," + teacher + ","
+                + room + "\n";
         String job1 = (String) upload("planning.csv", v1, admin, classId).getBody().get("publicId");
         post("/api/v1/planning-imports/" + job1 + "/publish", admin);
 
@@ -321,8 +355,10 @@ class PlanningPublicationIntegrationTests {
         // publiée S2 (même formateur, même classe) mais PAS S1 (lundi) →
         // seul S9 doit être en conflit "déjà publié".
         String v2 = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours lundi," + teacher + ",A1\n"
-                + "S9,2026-09-08,10:00,11:00,Europe/Paris,Atelier mardi," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours lundi," + teacher + ","
+                + room + "\n"
+                + "S9,2026-09-08,10:00,11:00,Europe/Paris,Atelier mardi," + teacher + ","
+                + room + "\n";
         String job2 = (String) upload("planning.csv", v2, admin, classId).getBody().get("publicId");
 
         Map<String, Object> job2Body = getMap("/api/v1/planning-imports/" + job2, admin);
@@ -351,7 +387,8 @@ class PlanningPublicationIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ",A1\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ","
+                + room + "\n";
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
 
         assertThat(exchange(HttpMethod.POST, "/api/v1/planning-imports/" + jobId + "/publish",

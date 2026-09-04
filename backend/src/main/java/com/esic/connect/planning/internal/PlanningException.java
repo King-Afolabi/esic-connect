@@ -37,6 +37,12 @@ class PlanningException extends RuntimeException {
         PUBLICATION_FAILED,
         /** Champ ou direction de tri hors liste blanche. */
         INVALID_SORT,
+        /** Aucune ligne pour ce {@code public_id} dans ce travail d'import (EF-PLAN-003). */
+        ROW_NOT_FOUND,
+        /** Le travail n'est plus à l'état {@code SIMULATED} : il n'est plus corrigeable. */
+        JOB_NOT_SIMULATED,
+        /** Champ de correction inconnu — la liste est fermée, jamais devinée. */
+        CORRECTION_UNKNOWN_FIELD,
         /** Valeur de filtre invalide. */
         INVALID_FILTER
     }

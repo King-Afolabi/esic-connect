@@ -2327,6 +2327,61 @@ n'est écrit (RG-034).
 
 **Statut.** Adoptée le 4 septembre 2026.
 
+## DEC-S5-001 — la séance conserve son code de salle, et le conflit de salle devient établissement-wide
+
+**Contexte.** `EF-PLAN-009` et `EF-ORG-004` demandent de détecter « une
+salle occupée simultanément ». Le planning transportait déjà
+`room_code` de bout en bout — colonne d'import, entrée de planning,
+commande de publication — mais la **séance créée ne le conservait pas**.
+Le contrôle ne pouvait donc s'exercer qu'à l'intérieur d'un même fichier.
+
+**Décision.** `course_session` porte un `room_code` (migration `V21`), et
+la simulation de planning contrôle la salle contre les séances déjà
+publiées, au même titre que le formateur et la classe.
+
+**Conséquences.** Deux imports successifs ne peuvent plus placer deux
+classes dans la même salle à la même heure sans que rien ne le signale.
+Le contrôle porte, comme il se doit, sur **tout l'établissement** : une
+salle n'appartient pas à une classe.
+
+Deux effets à connaître :
+- deux créneaux **sans** salle ne sont jamais en conflit — ils
+  n'occupent rien ;
+- le **même créneau republié** reste exclu du contrôle, par la règle
+  d'identité stable qui existait déjà.
+
+Cette portée établissement-wide a rendu plusieurs fixtures de test
+incorrectes : elles réutilisaient « A1 » pour des classes différentes, ce
+qui est désormais — à juste titre — un conflit. Chaque cas de test tire
+maintenant un code de salle unique.
+
+`room_code` reste un **code fonctionnel**, sans clé étrangère vers
+`room` : le cahier prévoit qu'une salle soit « laissée provisoirement
+indéterminée » puis affectée plus tard (`RG-044`).
+
+**Statut.** Adoptée le 4 septembre 2026.
+
+## DEC-S5-002 — corriger une ligne de planning réanalyse tout le lot
+
+**Contexte.** `EF-PLAN-003` demande de corriger une ligne en anomalie
+sans recommencer l'import. Pour l'import d'apprenants, revalider la seule
+ligne touchée suffit.
+
+**Décision.** Pour le planning, la correction rejoue l'analyse **de tout
+le travail**.
+
+**Conséquences.** Les conflits de planning sont par nature *croisés* :
+formateur, classe et salle se disputent un créneau **entre** lignes.
+Corriger l'heure d'une ligne peut lever le conflit d'une autre, ou en
+créer un ailleurs. Ne revalider que la ligne touchée laisserait le lot
+dans un état faux et plausible — le pire des deux.
+
+Le coût est assumé : une correction relit et réévalue toutes les lignes
+du travail. À l'échelle d'un planning de classe, c'est quelques dizaines
+de lignes.
+
+**Statut.** Adoptée le 4 septembre 2026.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

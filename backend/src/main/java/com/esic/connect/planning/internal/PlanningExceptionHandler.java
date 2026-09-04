@@ -104,6 +104,21 @@ class PlanningExceptionHandler {
                 code = "PLAN_INVALID_SORT";
                 message = "Champ ou direction de tri non autorisé.";
             }
+            case ROW_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "PLAN_ROW_NOT_FOUND";
+                message = "Aucune ligne ne correspond à cet identifiant dans cet import.";
+            }
+            case JOB_NOT_SIMULATED -> {
+                status = HttpStatus.CONFLICT;
+                code = "PLAN_JOB_NOT_SIMULATED";
+                message = "Cet import n'est plus modifiable : il a été publié ou annulé.";
+            }
+            case CORRECTION_UNKNOWN_FIELD -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "PLAN_CORRECTION_UNKNOWN_FIELD";
+                message = "Ce champ ne peut pas être corrigé.";
+            }
             default -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "PLAN_INVALID_FILTER";

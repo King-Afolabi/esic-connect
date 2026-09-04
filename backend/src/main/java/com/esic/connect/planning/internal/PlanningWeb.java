@@ -32,6 +32,21 @@ final class PlanningWeb {
     private PlanningWeb() {
     }
 
+    /**
+     * Convertit un identifiant public reçu en {@link java.util.UUID}.
+     *
+     * <p>Un identifiant mal formé ne désigne aucune ressource : il produit
+     * le même refus qu'un identifiant inconnu, plutôt qu'une erreur de
+     * format qui distinguerait les deux cas.
+     */
+    static java.util.UUID parseUuid(String value, PlanningException.Kind notFound) {
+        try {
+            return java.util.UUID.fromString(value);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new PlanningException(notFound);
+        }
+    }
+
     /** Sujet ({@code sub}) du JWT de l'appelant, ou {@code null}. */
     static String subject(org.springframework.security.oauth2.jwt.Jwt caller) {
         return caller != null ? caller.getSubject() : null;

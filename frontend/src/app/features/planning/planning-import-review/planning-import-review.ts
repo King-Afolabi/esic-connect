@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
@@ -50,7 +52,9 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
     MatTableModule,
     MatPaginatorModule,
     MatButtonModule,
+    MatFormFieldModule,
     MatIconModule,
+    MatInputModule,
     MatProgressBarModule,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
@@ -69,7 +73,8 @@ export class PlanningImportReview {
   protected readonly actionLabel = planningActionLabel;
   protected readonly formatInstant = formatInstant;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
-  protected readonly rowColumns = ['rowNumber', 'slotKey', 'title', 'window', 'action', 'status'];
+  protected readonly rowColumns = ['rowNumber', 'slotKey', 'title', 'window', 'action',
+    'status', 'correction'];
 
   protected readonly jobState = signal<JobState>({ kind: 'loading' });
   protected readonly rowsState = signal<RowsState>({ kind: 'loading' });
@@ -80,6 +85,76 @@ export class PlanningImportReview {
   protected readonly confirmingPublish = signal(false);
   protected readonly submitting = signal(false);
   protected readonly actionError = signal<string | null>(null);
+
+  /**
+   * Correction d'une ligne en anomalie (EF-PLAN-003). La liste des
+   * colonnes ouvertes reprend celle du serveur ; en ajouter une ici ne
+   * l'autoriserait pas — le serveur refuse tout champ hors liste.
+   */
+  protected readonly correctableFields = [
+    { key: 'session_date', label: 'Date (AAAA-MM-JJ)' },
+    { key: 'start_time', label: 'Début (HH:mm)' },
+    { key: 'end_time', label: 'Fin (HH:mm)' },
+    { key: 'title', label: 'Intitulé' },
+    { key: 'room_code', label: 'Salle' },
+    { key: 'teacher_public_id', label: 'Formateur (identifiant)' },
+  ] as const;
+
+  protected readonly editingRow = signal<string | null>(null);
+  protected readonly correctionValues = signal<Record<string, string>>({});
+  protected readonly correctionError = signal<string | null>(null);
+  protected readonly correcting = signal(false);
+
+  /** Ouvre l'édition d'une ligne, préremplie de ses valeurs actuelles. */
+  protected startCorrection(row: PlanningRowResponse): void {
+    this.correctionError.set(null);
+    this.editingRow.set(row.publicId);
+    this.correctionValues.set({
+      session_date: row.sessionDate ?? '',
+      start_time: row.startTime ?? '',
+      end_time: row.endTime ?? '',
+      title: row.title ?? '',
+      room_code: row.roomCode ?? '',
+      teacher_public_id: row.teacherPublicId ?? '',
+    });
+  }
+
+  protected cancelCorrection(): void {
+    this.editingRow.set(null);
+    this.correctionValues.set({});
+    this.correctionError.set(null);
+  }
+
+  protected onCorrectionInput(field: string, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.correctionValues.update((current) => ({ ...current, [field]: value }));
+  }
+
+  /**
+   * Envoie la correction et recharge. Corriger une ligne peut lever ou
+   * créer un conflit ailleurs : le serveur réanalyse tout le lot, donc
+   * l'écran recharge le travail ET les lignes plutôt que de patcher un
+   * état local qui divergerait.
+   */
+  protected submitCorrection(jobId: string, row: PlanningRowResponse): void {
+    if (this.correcting()) {
+      return;
+    }
+    this.correcting.set(true);
+    this.correctionError.set(null);
+    this.api.correctRow(jobId, row.publicId, this.correctionValues()).subscribe({
+      next: () => {
+        this.correcting.set(false);
+        this.cancelCorrection();
+        this.loadJob();
+        this.loadRows();
+      },
+      error: (error: unknown) => {
+        this.correcting.set(false);
+        this.correctionError.set(toPlanningError(error).message);
+      },
+    });
+  }
 
   protected readonly job = computed(() => {
     const current = this.jobState();

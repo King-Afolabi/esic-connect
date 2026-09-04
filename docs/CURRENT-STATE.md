@@ -11,10 +11,9 @@
 ## Dernière mise à jour
 
 ```text
-4 septembre 2026 — sprint 4 terminé : import Excel et classeur
-multifeuille, correction de ligne avant confirmation, opérations de
-masse prévisualisées, détection de doublons. Backend 980 tests,
-frontend 645 tests, tout vert.
+4 septembre 2026 — sprint 5 terminé : correction ligne à ligne du
+planning et conflit de salle contre les séances déjà publiées.
+Backend 990 tests, frontend 645 tests, tout vert.
 ```
 
 ## Repère Git
@@ -23,7 +22,7 @@ frontend 645 tests, tout vert.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -34,8 +33,8 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 71 | 50 % |
-| `PARTIAL` | 8 | 6 % |
+| `IMPLEMENTED_AND_TESTED` | 73 | 51 % |
+| `PARTIAL` | 6 | 4 % |
 | `NOT_IMPLEMENTED` | 63 | 44 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
@@ -56,6 +55,10 @@ Le sprint 4 en ajoute cinq : `EF-IMP-003` (Excel), `EF-IMP-004`
 (classeur multifeuille), `EF-IMP-006` (correction de ligne),
 `EF-USER-004` (opérations de masse) et `EF-USER-005` (doublons).
 
+Le sprint 5 clôt deux exigences restées partielles depuis l'origine :
+`EF-PLAN-003` (correction ligne à ligne) et `EF-PLAN-009` (conflit de
+salle contre les séances déjà publiées).
+
 ### 1.1 Par domaine
 
 | Domaine | Livré | Partiel | Absent |
@@ -65,7 +68,7 @@ Le sprint 4 en ajoute cinq : `EF-IMP-003` (Excel), `EF-IMP-004`
 | Référentiels et organisation (13) | 11 | 0 | 2 |
 | Inscriptions et imports (10) | 8 | 0 | 2 |
 | Corps enseignant (5) | 4 | 1 | 0 |
-| Planning (13) | 5 | 2 | 6 |
+| Planning (13) | 7 | 0 | 6 |
 | Séances (9) | 6 | 0 | 3 |
 | Émargement et assiduité (16) | 6 | 3 | 7 |
 | Justificatifs et réclamations (8) | 3 | 1 | 4 |
@@ -277,6 +280,16 @@ Le sprint 4 en ajoute cinq : `EF-IMP-003` (Excel), `EF-IMP-004`
   créées ou réutilisées via le **port public**
   `coursesession.PlanningSessionWriter`. Publication concurrente
   strictement idempotente. Identité de créneau stable et déterministe.
+- `EF-PLAN-003` **correction ligne à ligne** dans l'écran de revue : la
+  correction rejoue l'analyse de **tout** le travail — les conflits de
+  planning sont croisés, corriger une ligne peut en lever ou en créer un
+  ailleurs (`DEC-S5-002`). Corriger la dernière ligne fautive rend le
+  travail publiable sans réimport.
+- `EF-PLAN-009` **conflit de salle contre les séances déjà publiées** :
+  la séance conserve désormais son `room_code` (migration `V21`). Le
+  contrôle porte sur **tout l'établissement** — une salle n'appartient
+  pas à une classe (`DEC-S5-001`). Deux créneaux sans salle ne sont
+  jamais en conflit ; le même créneau republié reste exclu.
 - Écrans `/planning/import`, `/planning/import/:jobId`,
   `/planning/versions`.
 
@@ -353,8 +366,6 @@ Le sprint 4 en ajoute cinq : `EF-IMP-003` (Excel), `EF-IMP-004`
 | Exigence | Ce qui existe | Ce qui manque |
 |---|---|---|
 | `EF-TEA-002` | API d'affectation pédagogique livrée | aucun écran d'affectation classe–matière–période |
-| `EF-PLAN-003` | annulation du travail d'import puis réimport | pas de correction ligne à ligne dans l'écran de revue |
-| `EF-PLAN-009` | conflits formateur / classe / salle **intra-fichier**, formateur / classe contre les séances publiées | conflit **salle** contre les séances déjà publiées non détecté (`coursesession` ne porte pas `room_code`) |
 | `EF-ATT-003` | N points de contrôle par séance (`START` / `END` / `CUSTOM`) | les quatre types nommés (`MORNING_ARRIVAL`…) ne sont pas modélisés |
 | `EF-ATT-004` | calcul de demi-journées, alternance `COMPANY` exclue du dénominateur | pas de calcul journalier strict fondé sur les quatre points nommés |
 | `EF-ATT-005` | seuil unique `PT10M` → `LATE` | paliers 15 et 30 minutes, validation manuelle automatique au-delà de 30 min |
@@ -410,8 +421,8 @@ module, aucun cycle.
 | `academic` | année, formation, niveau, promotion, classe, affectation, matières | V5, V6, V19 |
 | `enrollment` | profil apprenant, inscription, changement de classe, groupes temporaires | V7, V19 |
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
-| `planning` | import, simulation, conflits, publication versionnée | V12, V13 |
-| `coursesession` | séances, cycle de vie, points de contrôle, remplacements | V9, V10, V13, V14 |
+| `planning` | import, simulation, conflits, correction de ligne, publication versionnée | V12, V13 |
+| `coursesession` | séances, cycle de vie, points de contrôle, remplacements, salle | V9, V10, V13, V14, V21 |
 | `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
@@ -423,7 +434,7 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V20
+### 5.2 Migrations Flyway — schéma en V21
 
 52 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
@@ -433,7 +444,8 @@ par une migration. `V17` ajoute `password_reset_token` et la colonne
 `student_group`, `student_group_member` et `email_delivery` ; `V20`
 ajoute `student_import_row_correction`, la colonne
 `student_import_row.sheet_name` et **remplace** l'unicité
-`(job, ligne)` par `(job, feuille, ligne)`.
+`(job, ligne)` par `(job, feuille, ligne)` ; `V21` ajoute
+`course_session.room_code`.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -456,7 +468,7 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **115 classes / 980 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V20 |
+| `cd backend && ./mvnw clean test` | **116 classes / 990 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V21 |
 | `cd frontend && npm test -- --watch=false` | **78 fichiers / 645 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
@@ -543,8 +555,9 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas.
-2. **Sprint 5 — planning** : correction ligne à ligne dans l'écran de
-   revue, conflit de salle contre les séances publiées.
+2. **Sprint 6 — planning avancé** : calendrier interactif, retour à une
+   version antérieure, avertissement d'alternance, import Excel du
+   planning, report et demande d'annulation, séance multi-classes.
 4. **Sprint 6 — planning avancé** : calendrier interactif, retour
    arrière, conflit de salle.
 5. **Sprint 8 — assiduité conforme** : quatre points de contrôle nommés,

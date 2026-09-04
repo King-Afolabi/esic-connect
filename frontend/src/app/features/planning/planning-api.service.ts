@@ -7,6 +7,7 @@ import {
   PageResponse,
   PlanningJobResponse,
   PlanningPublicationResponse,
+  PlanningRowCorrection,
   PlanningRowListQuery,
   PlanningRowResponse,
   PlanningVersionDetailResponse,
@@ -53,6 +54,25 @@ export class PlanningApiService {
   }
 
   /** `POST /api/v1/planning-imports/{publicId}/publish` — `200` (jamais `201`). */
+  /**
+   * `POST /api/v1/planning-imports/{id}/rows/{rowId}` — corrige une ligne
+   * en anomalie avant publication (EF-PLAN-003).
+   *
+   * <p>Le serveur rejoue l'analyse de **tout** le travail : les conflits
+   * de planning sont croisés. La réponse est donc le travail réanalysé,
+   * pas seulement la ligne — il n'y a rien à recalculer côté client.
+   */
+  correctRow(
+    publicId: string,
+    rowId: string,
+    corrections: PlanningRowCorrection,
+  ): Observable<PlanningJobResponse> {
+    return this.http.post<PlanningJobResponse>(
+      `${this.imports}/${encodeURIComponent(publicId)}/rows/${encodeURIComponent(rowId)}`,
+      corrections,
+    );
+  }
+
   publish(publicId: string): Observable<PlanningPublicationResponse> {
     return this.http.post<PlanningPublicationResponse>(
       `${this.imports}/${encodeURIComponent(publicId)}/publish`,

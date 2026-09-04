@@ -156,6 +156,50 @@
                   }
                 </td>
               </ng-container>
+              <!--
+                Correction d'une ligne avant publication (EF-PLAN-003,
+                docs/02 §13.6). Ouverte tant que le travail est SIMULATED ;
+                le serveur reste l'autorité et réanalyse tout le lot.
+              -->
+              <ng-container matColumnDef="correction">
+                <th mat-header-cell *matHeaderCellDef>Correction</th>
+                <td mat-cell *matCellDef="let row">
+                  @if (job()?.status === 'SIMULATED') {
+                    @if (editingRow() === row.publicId) {
+                      <div class="plan__correction">
+                        @for (field of correctableFields; track field.key) {
+                          <mat-form-field appearance="outline">
+                            <mat-label>{{ field.label }}</mat-label>
+                            <input
+                              matInput
+                              [value]="correctionValues()[field.key]"
+                              (input)="onCorrectionInput(field.key, $event)"
+                            />
+                          </mat-form-field>
+                        }
+                        <p class="plan__correction-error" role="alert" aria-live="assertive">
+                          @if (correctionError()) {
+                            <mat-icon aria-hidden="true">error</mat-icon>
+                            <span>{{ correctionError() }}</span>
+                          }
+                        </p>
+                        <button mat-flat-button color="primary" type="button"
+                                [disabled]="correcting()"
+                                (click)="submitCorrection(job()!.publicId, row)">
+                          Enregistrer
+                        </button>
+                        <button mat-button type="button" (click)="cancelCorrection()">Annuler</button>
+                      </div>
+                    } @else {
+                      <button mat-stroked-button type="button" (click)="startCorrection(row)"
+                              [attr.aria-label]="'Corriger la ligne ' + row.rowNumber">
+                        Corriger
+                      </button>
+                    }
+                  }
+                </td>
+              </ng-container>
+
               <tr mat-header-row *matHeaderRowDef="rowColumns"></tr>
               <tr mat-row *matRowDef="let row; columns: rowColumns"></tr>
             </table>
