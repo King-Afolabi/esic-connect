@@ -28,8 +28,14 @@ final class FileDuplicateDetector {
     private FileDuplicateDetector() {
     }
 
-    static Map<Integer, List<RowIssueDraft>> detect(List<NormalizedRow> rows) {
-        Map<Integer, List<RowIssueDraft>> byRow = new HashMap<>();
+    /**
+     * @return les anomalies par ligne, indexées sur {@link RowKey} —
+     *         feuille <em>et</em> numéro. Indexer sur le seul numéro
+     *         mélangerait les lignes 2 de trois feuilles différentes dans
+     *         un classeur multifeuille (EF-IMP-004).
+     */
+    static Map<RowKey, List<RowIssueDraft>> detect(List<NormalizedRow> rows) {
+        Map<RowKey, List<RowIssueDraft>> byRow = new HashMap<>();
 
         groupBy(rows, row -> row.email() == null ? null : row.email().toLowerCase(Locale.ROOT))
                 .forEach((email, group) -> flag(byRow, group,
@@ -57,7 +63,7 @@ final class FileDuplicateDetector {
         return groups;
     }
 
-    private static void flag(Map<Integer, List<RowIssueDraft>> byRow, List<NormalizedRow> group,
+    private static void flag(Map<RowKey, List<RowIssueDraft>> byRow, List<NormalizedRow> group,
                              String code, String column, String messagePrefix) {
         boolean identical = group.stream().map(FileDuplicateDetector::businessKey).distinct().count() == 1;
         StudentImportIssueSeverity severity = identical
@@ -66,7 +72,7 @@ final class FileDuplicateDetector {
                 ? " avec des informations identiques."
                 : " avec des informations différentes ; corrigez le fichier.");
         for (NormalizedRow row : group) {
-            byRow.computeIfAbsent(row.rowNumber(), ignored -> new ArrayList<>())
+            byRow.computeIfAbsent(RowKey.of(row), ignored -> new ArrayList<>())
                     .add(new RowIssueDraft(severity, code, message, column, null, null));
         }
     }
@@ -83,5 +89,16 @@ final class FileDuplicateDetector {
 
     private static String nullSafe(String value) {
         return value == null ? "" : value;
+    }
+
+    /**
+     * Identité d'une ligne dans le lot : feuille et numéro. Le numéro seul
+     * ne suffit pas dès qu'un classeur porte plusieurs feuilles.
+     */
+    record RowKey(String sheetName, int rowNumber) {
+
+        static RowKey of(NormalizedRow row) {
+            return new RowKey(row.sheetName(), row.rowNumber());
+        }
     }
 }

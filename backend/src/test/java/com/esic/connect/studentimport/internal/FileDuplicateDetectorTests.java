@@ -20,24 +20,35 @@ class FileDuplicateDetectorTests {
         return parsed.rows().stream().map(r -> CsvRowNormalizer.normalize(parsed, r)).toList();
     }
 
-    private static List<StudentImportIssueSeverity> severities(Map<Integer, List<RowIssueDraft>> byRow, int rowNumber) {
-        return byRow.getOrDefault(rowNumber, List.of()).stream().map(RowIssueDraft::severity).toList();
+    /**
+     * Les anomalies sont indexées par feuille ET numéro depuis l'import
+     * Excel (EF-IMP-004) ; un CSV n'a pas de feuille, la clé porte donc
+     * {@code null} de ce côté.
+     */
+    private static FileDuplicateDetector.RowKey csvRow(int rowNumber) {
+        return new FileDuplicateDetector.RowKey(null, rowNumber);
+    }
+
+    private static List<StudentImportIssueSeverity> severities(
+            Map<FileDuplicateDetector.RowKey, List<RowIssueDraft>> byRow, int rowNumber) {
+        return byRow.getOrDefault(csvRow(rowNumber), List.of()).stream()
+                .map(RowIssueDraft::severity).toList();
     }
 
     @Test
     void identicalDuplicateEmailsAreWarnings() {
-        Map<Integer, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
+        Map<FileDuplicateDetector.RowKey, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
                 "last_name,first_name,email,formation_code,class_code,academic_year\n"
                         + "Doe,Jane,jane@x.test,BTS,C1,2026-2027\n"
                         + "Doe,Jane,JANE@X.TEST,BTS,C1,2026-2027\n"));
         assertThat(severities(byRow, 2)).containsExactly(StudentImportIssueSeverity.WARNING);
         assertThat(severities(byRow, 3)).containsExactly(StudentImportIssueSeverity.WARNING);
-        assertThat(byRow.get(2).get(0).code()).isEqualTo(StudentImportIssueCodes.EMAIL_DUPLICATE_IN_FILE);
+        assertThat(byRow.get(csvRow(2)).get(0).code()).isEqualTo(StudentImportIssueCodes.EMAIL_DUPLICATE_IN_FILE);
     }
 
     @Test
     void divergentDuplicateEmailsAreErrorsOnBothRows() {
-        Map<Integer, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
+        Map<FileDuplicateDetector.RowKey, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
                 "last_name,first_name,email,formation_code,class_code,academic_year\n"
                         + "Doe,Jane,jane@x.test,BTS,C1,2026-2027\n"
                         + "Roe,Jane,jane@x.test,BTS,C2,2026-2027\n"));
@@ -47,18 +58,18 @@ class FileDuplicateDetectorTests {
 
     @Test
     void divergentDuplicateStudentNumbersAreErrors() {
-        Map<Integer, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
+        Map<FileDuplicateDetector.RowKey, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
                 "last_name,first_name,email,formation_code,class_code,academic_year,student_number\n"
                         + "Doe,Jane,jane@x.test,BTS,C1,2026-2027,ESIC-1\n"
                         + "Roe,John,john@x.test,BTS,C1,2026-2027,esic-1\n"));
-        assertThat(byRow.get(2)).extracting(RowIssueDraft::code)
+        assertThat(byRow.get(csvRow(2))).extracting(RowIssueDraft::code)
                 .containsExactly(StudentImportIssueCodes.STUDENT_NUMBER_DUPLICATE_IN_FILE);
         assertThat(severities(byRow, 3)).containsExactly(StudentImportIssueSeverity.ERROR);
     }
 
     @Test
     void uniqueRowsProduceNoDuplicateIssue() {
-        Map<Integer, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
+        Map<FileDuplicateDetector.RowKey, List<RowIssueDraft>> byRow = FileDuplicateDetector.detect(rows(
                 "last_name,first_name,email,formation_code,class_code,academic_year\n"
                         + "Doe,Jane,jane@x.test,BTS,C1,2026-2027\n"
                         + "Roe,John,john@x.test,BTS,C1,2026-2027\n"));

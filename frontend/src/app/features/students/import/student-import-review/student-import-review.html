@@ -167,6 +167,11 @@
     @case ('ready') {
       <div class="table-scroll">
         <table mat-table [dataSource]="rows()">
+          <ng-container matColumnDef="sheetName">
+            <th mat-header-cell *matHeaderCellDef scope="col">Feuille</th>
+            <td mat-cell *matCellDef="let row">{{ row.sheetName || '—' }}</td>
+          </ng-container>
+
           <ng-container matColumnDef="rowNumber">
             <th mat-header-cell *matHeaderCellDef>N°</th>
             <td mat-cell *matCellDef="let row">{{ row.rowNumber }}</td>
@@ -225,6 +230,46 @@
                     </li>
                   }
                 </ul>
+
+                <!--
+                  Correction sur place (EF-IMP-006, docs/02 §13.6) :
+                  corriger une ligne en anomalie sans recommencer l'import.
+                  Réservée aux rôles d'écriture ; le serveur reste
+                  l'autorité et rejoue toute la validation.
+                -->
+                @if (canWrite() && job()?.status === 'SIMULATED') {
+                  @if (editingRow() === row.publicId) {
+                    <div class="row-correction">
+                      @for (field of correctableFields; track field.key) {
+                        <mat-form-field appearance="outline">
+                          <mat-label>{{ field.label }}</mat-label>
+                          <input
+                            matInput
+                            [value]="correctionValues()[field.key]"
+                            (input)="onCorrectionInput(field.key, $event)"
+                          />
+                        </mat-form-field>
+                      }
+                      <p class="row-correction__error" role="alert" aria-live="assertive">
+                        @if (correctionError()) {
+                          <mat-icon aria-hidden="true">error</mat-icon>
+                          <span>{{ correctionError() }}</span>
+                        }
+                      </p>
+                      <button mat-flat-button color="primary" type="button"
+                              [disabled]="correcting()"
+                              (click)="submitCorrection(job()!.publicId, row)">
+                        Enregistrer la correction
+                      </button>
+                      <button mat-button type="button" (click)="cancelCorrection()">Annuler</button>
+                    </div>
+                  } @else {
+                    <button mat-stroked-button type="button" (click)="startCorrection(row)"
+                            [attr.aria-label]="'Corriger la ligne ' + row.rowNumber">
+                      Corriger cette ligne
+                    </button>
+                  }
+                }
               }
             </td>
           </ng-container>

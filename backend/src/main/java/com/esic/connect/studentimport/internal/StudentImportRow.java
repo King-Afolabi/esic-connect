@@ -74,6 +74,14 @@ class StudentImportRow extends BaseEntity {
     @Column(name = "input_company_name", length = 191)
     private String inputCompanyName;
 
+    /**
+     * Feuille d'origine pour un classeur Excel, {@code null} pour un CSV.
+     * Sans elle, une anomalie ne pourrait pas être située « fichier,
+     * feuille, ligne, colonne » (docs/02 §10.7).
+     */
+    @Column(name = "sheet_name", length = 120)
+    private String sheetName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "row_status", nullable = false, length = 12)
     private StudentImportRowStatus rowStatus;
@@ -168,6 +176,15 @@ class StudentImportRow extends BaseEntity {
 
     String getInputCompanyName() {
         return inputCompanyName;
+    }
+
+    /** Feuille d'origine ; {@code null} pour un CSV. */
+    void setSheetName(String sheetName) {
+        this.sheetName = sheetName;
+    }
+
+    String getSheetName() {
+        return sheetName;
     }
 
     void setNormalizedIdentity(String lastName, String firstName, String email, String phone) {

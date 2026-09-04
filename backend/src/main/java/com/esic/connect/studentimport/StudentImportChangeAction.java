@@ -11,12 +11,16 @@ package com.esic.connect.studentimport;
  *   <li>{@link #CONFIRMED} : confirmation appliquée (comptes / profils /
  *       inscriptions / invitations créés) ;</li>
  *   <li>{@link #CANCELLED} : simulation annulée avant confirmation ;</li>
- *   <li>{@link #EXPIRED} : simulation purgée après expiration.</li>
+ *   <li>{@link #EXPIRED} : simulation purgée après expiration ;</li>
+ *   <li>{@link #ROW_CORRECTED} : ligne corrigée avant confirmation
+ *       (EF-IMP-006, docs/02 §13.6 : « journalisation de la correction
+ *       avec son auteur »).</li>
  * </ul>
  */
 public enum StudentImportChangeAction {
     SIMULATED,
     CONFIRMED,
     CANCELLED,
-    EXPIRED
+    EXPIRED,
+    ROW_CORRECTED
 }

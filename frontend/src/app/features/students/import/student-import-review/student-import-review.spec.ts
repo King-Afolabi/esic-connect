@@ -57,6 +57,8 @@ const JOB: JobResponse = {
 const ROW: RowResponse = {
   publicId: 'r-1',
   rowNumber: 2,
+  // CSV : aucune feuille (EF-IMP-004 ne s'applique qu'aux classeurs).
+  sheetName: null,
   rowStatus: 'VALID',
   plannedAction: 'CREATE_ACCOUNT_AND_ENROLL',
   lastName: 'Doe',

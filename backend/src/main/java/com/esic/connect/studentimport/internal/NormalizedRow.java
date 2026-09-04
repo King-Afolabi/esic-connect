@@ -19,6 +19,8 @@ import java.util.Optional;
  */
 record NormalizedRow(
         int rowNumber,
+        /** Feuille d'origine pour un classeur ; {@code null} pour un CSV. */
+        String sheetName,
         boolean columnCountMismatch,
         String lastName,
         String firstName,
@@ -57,6 +59,7 @@ record NormalizedRow(
     static NormalizedRow fromPersistedRow(StudentImportRow row) {
         return new NormalizedRow(
                 row.getRowNumber(),
+                row.getSheetName(),
                 false,
                 row.getInputLastName(),
                 row.getInputFirstName(),

@@ -159,3 +159,69 @@ doit pas constituer un annuaire exploitable en cas de fuite.
   raccordement à un fournisseur réel est `EF-INT-004`, sprint 13.
 - Les écrans livrés ici ne sont pas encore couverts par la recette
   navigateur : `NOT_PERFORMED` pour ces parcours.
+
+---
+
+## S4 — Excel, opérations de masse, doublons (`sprint/S04-excel-alternance`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+`EF-ACA-009` — rythmes d'alternance, affectations historisées,
+exceptions individuelles, résolution `SCHOOL` / `COMPANY` / `UNKNOWN` —
+était déjà livré et testé avant ce lot. Le sprint ne l'a pas réécrit et
+n'y a rien changé.
+
+### Ce qui a été livré
+
+| Exigence | Contenu |
+|---|---|
+| `EF-IMP-003` | import `.xlsx` ; `.xls` refusé ; type réel dérivé du contenu ; conversion de cellule prévisible |
+| `EF-IMP-004` | classeur multifeuille ; feuille divergente signalée et écartée ; feuille d'origine conservée par ligne |
+| `EF-IMP-006` | correction de ligne avant confirmation, rejouant la validation et recalculant la synthèse |
+| `EF-USER-004` | opérations de masse avec prévisualisation obligatoire |
+| `EF-USER-005` | détection de doublons par nom normalisé ou téléphone, sans fusion ni suppression |
+
+### Défaut réel découvert et corrigé
+
+L'unicité `(travail, ligne)` de `V11` supposait un fichier plat : dans un
+classeur, la ligne 2 existe dans chaque feuille, et la deuxième feuille
+échouait sur une violation d'unicité avec un `500`. La clé devient
+`(travail, feuille, ligne)` (`DEC-S4-001`). La détection de doublons
+intra-fichier, qui indexait sur le seul numéro de ligne, a suivi.
+
+Un second défaut de conception a été corrigé de la même façon : envelopper
+une opération de masse dans une transaction unique faisait échouer le lot
+entier dès qu'un compte était refusé — un refus remontant d'une méthode
+`@Transactional` imbriquée marque la transaction englobante
+`rollback-only`. L'exécution est désormais isolée par compte
+(`DEC-S4-002`).
+
+### Migration
+
+`V20__extend_student_import_for_workbooks_and_corrections.sql` —
+`student_import_row.sheet_name`, unicité `(job, feuille, ligne)`,
+`student_import_row_correction`.
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw test` | 115 classes / **980 tests** / 0 échec |
+| `cd frontend && npm test -- --watch=false` | 78 fichiers / **645 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+### Limites restantes, explicitement assumées
+
+- La détection de doublons est **conservatrice** : nom complet normalisé
+  ou téléphone. Elle ne rapproche pas deux personnes ayant changé de nom,
+  et n'utilise pas la date de naissance — souvent absente. C'est un choix
+  assumé : un faux positif coûte plus cher qu'un faux négatif quand la
+  suite possible est une suppression.
+- La correction de ligne ne rejoue pas la détection de doublons
+  intra-fichier, qui porte sur l'ensemble du lot. Une correction créant un
+  doublon est rattrapée à la confirmation, qui revalide tout sous verrou —
+  c'est là que se prend la décision d'écrire.
+- Aucun écran d'opération de masse : l'API est livrée et testée, le
+  bouton reste à faire. `EF-USER-004` est donc `IMPLEMENTED_AND_TESTED`
+  côté serveur, sans interface.

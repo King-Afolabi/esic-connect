@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Import CSV contrôlé des apprenants (rapport §8 ; EF-IMP-001 ; US-050) —
@@ -43,15 +45,18 @@ class StudentImportController {
     private final StudentImportConfirmationService confirmationService;
     private final StudentImportQueryService queryService;
     private final CurrentUserResolver currentUserResolver;
+    private final StudentImportRowCorrectionService correctionService;
 
     StudentImportController(StudentImportSimulationService simulationService,
                             StudentImportConfirmationService confirmationService,
                             StudentImportQueryService queryService,
-                            CurrentUserResolver currentUserResolver) {
+                            CurrentUserResolver currentUserResolver,
+                            StudentImportRowCorrectionService correctionService) {
         this.simulationService = simulationService;
         this.confirmationService = confirmationService;
         this.queryService = queryService;
         this.currentUserResolver = currentUserResolver;
+        this.correctionService = correctionService;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -105,6 +110,31 @@ class StudentImportController {
      * la ressource existe déjà). Reconfirmation d'un job {@code APPLIED} →
      * {@code 200} + {@code alreadyApplied = true} (invariant T6).
      */
+    /**
+     * Corrige une ligne en anomalie avant confirmation (EF-IMP-006 ;
+     * docs/02 §13.6, §30.2 : {@code POST /student-imports/{id}/rows/{rowId}}).
+     *
+     * <p>La correction rejoue exactement la validation de la simulation et
+     * met à jour la synthèse du travail : corriger la dernière ligne
+     * fautive rend le travail confirmable, sans réimport.
+     */
+    @PostMapping("/{publicId}/rows/{rowId}")
+    @PreAuthorize(StudentImportWeb.MANAGE_ROLES)
+    RowResponse correctRow(@PathVariable String publicId,
+                           @PathVariable String rowId,
+                           @RequestBody Map<String, String> corrections,
+                           @AuthenticationPrincipal Jwt caller) {
+        StudentImportRowCorrectionService.requireKnownFields(corrections);
+        StudentImportRow row = correctionService.correct(
+                StudentImportWeb.parseUuid(publicId, StudentImportException.Kind.JOB_NOT_FOUND),
+                StudentImportWeb.parseUuid(rowId, StudentImportException.Kind.ROW_NOT_FOUND),
+                corrections,
+                currentUserResolver.resolveInternalId(StudentImportWeb.subject(caller))
+                        .orElseThrow(() -> new StudentImportException(
+                                StudentImportException.Kind.JOB_FORBIDDEN)));
+        return queryService.describeRow(row);
+    }
+
     @PostMapping("/{publicId}/confirm")
     @PreAuthorize(StudentImportWeb.MANAGE_ROLES)
     ConfirmationResultResponse confirm(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {

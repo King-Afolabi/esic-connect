@@ -11,9 +11,10 @@
 ## Dernière mise à jour
 
 ```text
-3 septembre 2026 — sprint 3 terminé : matières, groupes temporaires,
-création de compte, suivi et réémission des invitations, journal de
-délivrabilité. Backend 959 tests, frontend 645 tests, tout vert.
+4 septembre 2026 — sprint 4 terminé : import Excel et classeur
+multifeuille, correction de ligne avant confirmation, opérations de
+masse prévisualisées, détection de doublons. Backend 980 tests,
+frontend 645 tests, tout vert.
 ```
 
 ## Repère Git
@@ -22,7 +23,7 @@ délivrabilité. Backend 959 tests, frontend 645 tests, tout vert.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (sprint 2), `v0.3` (sprint 3) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -33,9 +34,9 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 66 | 46 % |
+| `IMPLEMENTED_AND_TESTED` | 71 | 50 % |
 | `PARTIAL` | 8 | 6 % |
-| `NOT_IMPLEMENTED` | 68 | 48 % |
+| `NOT_IMPLEMENTED` | 63 | 44 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
@@ -51,14 +52,18 @@ Le sprint 3 en a fait passer six de plus : `EF-ACA-006` (matières),
 `EF-USER-007` (suivi et réémission des invitations), `EF-USER-008`
 (délivrabilité) et `EF-TEA-001` (formateur externe).
 
+Le sprint 4 en ajoute cinq : `EF-IMP-003` (Excel), `EF-IMP-004`
+(classeur multifeuille), `EF-IMP-006` (correction de ligne),
+`EF-USER-004` (opérations de masse) et `EF-USER-005` (doublons).
+
 ### 1.1 Par domaine
 
 | Domaine | Livré | Partiel | Absent |
 |---|---:|---:|---:|
 | Identité et accès (15) | 15 | 0 | 0 |
-| Utilisateurs (9) | 6 | 0 | 3 |
+| Utilisateurs (9) | 8 | 0 | 1 |
 | Référentiels et organisation (13) | 11 | 0 | 2 |
-| Inscriptions et imports (10) | 5 | 0 | 5 |
+| Inscriptions et imports (10) | 8 | 0 | 2 |
 | Corps enseignant (5) | 4 | 1 | 0 |
 | Planning (13) | 5 | 2 | 6 |
 | Séances (9) | 6 | 0 | 3 |
@@ -204,6 +209,17 @@ Le sprint 3 en a fait passer six de plus : `EF-ACA-006` (matières),
   `expires_at`) et `POST /{id}/resend`, qui **révoque le jeton
   précédent** — sans quoi une adresse corrigée laisserait un lien valide
   dans la mauvaise boîte. Écran `/invitations`.
+- `EF-USER-004` **opérations de masse** : suspension, réactivation,
+  archivage et réémission groupés. **Sans `confirm: true`, rien n'est
+  écrit** (RG-034) : l'appel produit le même calcul — éligibles, ignorés,
+  refusés — et le rend, sans effet. L'exécution est isolée **par
+  compte** et non atomique sur le lot : un compte protégé est reporté
+  sans priver les autres de l'opération (`DEC-S4-002`).
+- `EF-USER-005` **doublons** : comptes rapprochés par nom complet
+  normalisé (accents et casse neutralisés) ou par numéro de téléphone.
+  Le service **signale**, il ne fusionne ni ne supprime : la suppression
+  d'un doublon reste une action humaine, exceptionnelle et doublement
+  confirmée (docs/02 §9.5).
 - `EF-USER-008` **délivrabilité** : table `email_delivery` tenant
   **deux axes distincts** — ce que le produit a fait
   (`QUEUED` / `SENT_TO_PROVIDER` / `PROCESSING_FAILED`) et ce que le
@@ -213,6 +229,30 @@ Le sprint 3 en a fait passer six de plus : `EF-ACA-006` (matières),
   (`c…e@e…c.test`).
 
 ### 2.4 Imports
+
+- `EF-IMP-003` **import Excel `.xlsx`** : le format binaire ancien
+  (`.xls`, OLE2) est **refusé**, le cahier ne demandant que `.xlsx` et
+  OLE2 ouvrant la porte aux macros. Le type réel est dérivé du contenu
+  (magie ZIP) : un CSV renommé en `.xlsx` — ou l'inverse — est rejeté,
+  jamais deviné. Le classeur converge vers la **même structure** que le
+  CSV, afin que la validation métier ne diverge pas par format. Les
+  cellules sont converties de façon prévisible : une date reste une date
+  ISO, un numéro étudiant saisi comme nombre ne devient pas
+  `20260001.0`, et une formule est lue par son résultat mis en cache —
+  jamais recalculée.
+- `EF-IMP-004` **classeur multifeuille** : toutes les feuilles non
+  masquées sont lues ; une feuille dont l'en-tête diffère est
+  **signalée et écartée**, jamais lue avec le mauvais mapping. Chaque
+  ligne conserve sa feuille d'origine, de sorte qu'une anomalie est
+  située « fichier, feuille, ligne, colonne » (docs/02 §10.7). Critère
+  IMP-STU-05 vérifié : un classeur de trois feuilles rattache trois
+  classes.
+- `EF-IMP-006` **correction de ligne avant confirmation** : corriger une
+  ligne en anomalie sans recommencer l'import. La correction rejoue
+  **exactement** la validation de la simulation, recalcule la synthèse du
+  travail — corriger la dernière ligne fautive le rend confirmable — et
+  est tracée en append-only (qui, quand, valeur avant, valeur après). La
+  liste des champs corrigeables est fermée côté serveur.
 
 - `EF-ENR-001..003` profils apprenants, inscriptions, changement de
   classe conservant l'historique. Une seule inscription active par
@@ -373,7 +413,7 @@ module, aucun cycle.
 | `planning` | import, simulation, conflits, publication versionnée | V12, V13 |
 | `coursesession` | séances, cycle de vie, points de contrôle, remplacements | V9, V10, V13, V14 |
 | `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
-| `studentimport` | import CSV des apprenants | V11 |
+| `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
 | `dashboard` | tableau de bord par rôle | — |
 | `audit` | piste d'audit | V1 |
@@ -383,14 +423,17 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V19
+### 5.2 Migrations Flyway — schéma en V20
 
-51 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+52 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
 `trusted_device` ; `V19` ajoute `subject`, `subject_program`,
-`student_group`, `student_group_member` et `email_delivery`.
+`student_group`, `student_group_member` et `email_delivery` ; `V20`
+ajoute `student_import_row_correction`, la colonne
+`student_import_row.sheet_name` et **remplace** l'unicité
+`(job, ligne)` par `(job, feuille, ligne)`.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -413,7 +456,7 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **112 classes / 959 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V19 |
+| `cd backend && ./mvnw clean test` | **115 classes / 980 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V20 |
 | `cd frontend && npm test -- --watch=false` | **78 fichiers / 645 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
@@ -476,6 +519,7 @@ par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 | T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
 | T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
 | T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
+| T-10 | opérations de masse et doublons sans écran | l'API est livrée et testée ; l'interface reste à faire (sprint 11, recherche et pilotage) |
 | T-07 | cérémonie WebAuthn complète non rejouée en test | la vérification cryptographique repose sur la bibliothèque ; les tests couvrent contrat, défi, isolation et absence de donnée biométrique |
 | T-08 | Turnstile jamais vérifié contre le service réel | aucune clé secrète dans le dépôt ; sans clé, le produit **déclare** qu'aucun contrôle n'est actif |
 | T-09 | passkeys inutilisables hors `localhost` sans domaine ni HTTPS | contrainte du standard WebAuthn, pas du produit |
@@ -499,9 +543,8 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas.
-2. **Sprint 4 — Excel et alternance appliquée** : import `.xlsx`,
-   classeur multifeuille, correction de ligne avant confirmation,
-   opérations de masse, doublons.
+2. **Sprint 5 — planning** : correction ligne à ligne dans l'écran de
+   revue, conflit de salle contre les séances publiées.
 4. **Sprint 6 — planning avancé** : calendrier interactif, retour
    arrière, conflit de salle.
 5. **Sprint 8 — assiduité conforme** : quatre points de contrôle nommés,

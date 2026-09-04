@@ -2280,6 +2280,53 @@ En développement, Mailpit ne remonte rien : le statut fournisseur reste
 
 **Statut.** Adoptée le 3 septembre 2026.
 
+## DEC-S4-001 — l'unicité d'une ligne d'import porte sur (travail, feuille, ligne)
+
+**Contexte.** La migration `V11` posait `UNIQUE (job, row_number)` : dans
+un fichier plat, un numéro de ligne identifie une ligne. Un classeur
+Excel casse cette hypothèse — la ligne 2 existe dans **chaque** feuille.
+
+**Décision.** La clé devient `(travail, feuille, ligne)`. Une colonne
+générée porte la feuille ramenée à la chaîne vide pour un CSV.
+
+**Conséquences.** Le défaut était réel et a été découvert par le test du
+classeur de trois feuilles : la deuxième feuille échouait sur une
+violation d'unicité, avec un `500`. Utiliser directement `sheet_name`,
+qui vaut `NULL` pour un CSV, aurait *affaibli* la garantie — MySQL
+autorise plusieurs `NULL` dans un index `UNIQUE`, et deux lignes CSV de
+même numéro seraient redevenues possibles.
+
+La détection de doublons intra-fichier a suivi : elle indexait ses
+anomalies sur le seul numéro de ligne, ce qui aurait mélangé les lignes 2
+de trois feuilles différentes.
+
+**Statut.** Adoptée le 4 septembre 2026.
+
+## DEC-S4-002 — une opération de masse est isolée par compte, pas atomique sur le lot
+
+**Contexte.** `EF-USER-004` demande des opérations groupées avec
+prévisualisation. Le réflexe est d'envelopper l'exécution dans une
+transaction unique : tout ou rien.
+
+**Décision.** Chaque bascule s'exécute dans sa propre transaction, celle
+de `UserManagementService`. Un compte refusé — protégé, auto-action,
+état incompatible — est reporté dans le résultat sans priver les autres
+de l'opération.
+
+**Conséquences.** La transaction unique semblait plus propre ; elle est
+en réalité fausse ici, et le test l'a montré. Un refus individuel
+remonte depuis une méthode `@Transactional` imbriquée, ce qui marque la
+transaction englobante `rollback-only` : le lot entier échouait à la
+validation, y compris les comptes traités sans problème, et sans que
+l'appelant comprenne pourquoi. Or le contrat de cette opération est
+précisément de **rendre compte compte par compte** (docs/02 §9.4 : « les
+erreurs, les éléments ignorés »).
+
+La prévisualisation, elle, reste obligatoire : sans `confirm: true`, rien
+n'est écrit (RG-034).
+
+**Statut.** Adoptée le 4 septembre 2026.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

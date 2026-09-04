@@ -99,6 +99,10 @@ final class StudentImportResponses {
     /**
      * @param publicId       identifiant public de la ligne
      * @param rowNumber      n° de la ligne dans le fichier
+     * @param sheetName      feuille du classeur dont vient la ligne
+     *                       ({@code null} pour un CSV) — le cahier exige de
+     *                       situer une anomalie « fichier, feuille, ligne,
+     *                       colonne » (docs/02 §10.7)
      * @param rowStatus      {@code VALID} / {@code WARNING} / {@code ERROR}
      * @param plannedAction  action calculée
      * @param lastName       nom normalisé
@@ -122,6 +126,7 @@ final class StudentImportResponses {
     record RowResponse(
             UUID publicId,
             int rowNumber,
+            String sheetName,
             String rowStatus,
             String plannedAction,
             String lastName,
