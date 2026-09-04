@@ -44,6 +44,31 @@ class CourseSession extends BaseEntity {
     @Column(name = "status", nullable = false)
     private SessionLifecycle status;
 
+
+    /**
+
+
+     * Code fonctionnel de salle, repris du planning ; {@code null} si la
+
+
+     * salle est encore indéterminée (RG-044). Volontairement un code et
+
+
+     * non une clé étrangère : le cahier prévoit qu'une salle soit
+
+
+     * affectée après l'import (docs/02 §7.2).
+
+
+     */
+
+
+    @Column(name = "room_code", length = 50)
+
+
+    private String roomCode;
+
+
     @Column(name = "starts_at", nullable = false)
     private Instant startsAt;
 
@@ -136,10 +161,17 @@ class CourseSession extends BaseEntity {
      * à la publication d'un planning.
      */
     static CourseSession fromPlanningSlot(java.util.UUID planningSlotPublicId, Long teacherUserId,
-                                          String title, Instant startsAt, Instant endsAt, String timeZoneId) {
+                                          String title, Instant startsAt, Instant endsAt,
+                                          String timeZoneId, String roomCode) {
         CourseSession session = new CourseSession(teacherUserId, title, startsAt, endsAt, timeZoneId, null);
         session.planningSlotPublicId = planningSlotPublicId;
+        session.roomCode = roomCode;
         return session;
+    }
+
+    /** Code de salle, ou {@code null} si elle est encore indéterminée (RG-044). */
+    String getRoomCode() {
+        return roomCode;
     }
 
     void markCreatedBy(Long actorId) {
@@ -153,12 +185,15 @@ class CourseSession extends BaseEntity {
      * au statut, ni au lien d'origine.
      */
     void applyPlanningUpdate(Long teacherUserId, String title, Instant startsAt, Instant endsAt,
-                             String timeZoneId, Long actorId) {
+                             String timeZoneId, String roomCode, Long actorId) {
         this.teacherUserId = teacherUserId;
         this.title = title;
         this.startsAt = startsAt;
         this.endsAt = endsAt;
         this.timeZoneId = timeZoneId;
+        // Une republication qui change la salle doit la propager : sans
+        // cela, le contrôle de conflit raisonnerait sur l'ancienne.
+        this.roomCode = roomCode;
         this.updatedById = actorId;
     }
 

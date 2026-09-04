@@ -179,9 +179,16 @@ class PriorityPathRecetteIntegrationTests {
         String studentToken = tokenFor(new Account(null, importedStudentEmail));
 
         // --- 3. Import du planning : simulation (AC-007) puis publication
+        // Salle unique au parcours : le conflit de salle s'exerce à
+        // l'échelle de l'établissement depuis la migration V21
+        // (EF-PLAN-009). Un code fixe entrerait en collision avec les
+        // séances laissées par les autres cas de la suite.
+        String room = "R" + suffix.toUpperCase(java.util.Locale.ROOT);
         String planningCsv = "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n"
-                + "S-" + suffix + "-1," + sessionDate + ",09:00,12:00,Europe/Paris,Algorithmique," + teacher.publicId() + ",A101\n"
-                + "S-" + suffix + "-2," + sessionDate + ",13:30,17:00,Europe/Paris,Bases de données," + teacher.publicId() + ",A101\n";
+                + "S-" + suffix + "-1," + sessionDate + ",09:00,12:00,Europe/Paris,Algorithmique,"
+                + teacher.publicId() + "," + room + "\n"
+                + "S-" + suffix + "-2," + sessionDate + ",13:30,17:00,Europe/Paris,Bases de données,"
+                + teacher.publicId() + "," + room + "\n";
         Map<String, Object> planJob = multipartCsvWithClass(admin, "apprenants-plan-" + suffix + ".csv",
                 planningCsv, classPublicId).getBody();
         String planId = planJob.get("publicId").toString();

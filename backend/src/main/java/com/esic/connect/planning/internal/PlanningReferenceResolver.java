@@ -52,6 +52,24 @@ class PlanningReferenceResolver {
     }
 
     /**
+     * Résout la cible d'un travail d'import déjà persisté, à partir de ses
+     * clés internes (EF-PLAN-003).
+     *
+     * <p>Le contrôle de périmètre est refait : corriger une ligne d'un
+     * travail d'un autre responsable doit être refusé, même si le travail
+     * a été créé légitimement à une époque où le périmètre était différent.
+     */
+    ResolvedTarget resolveTargetByInternalIds(Long classInternalId, Long academicYearInternalId) {
+        ClassGroupDirectory.ClassGroupRef ref = classGroupDirectory.findByInternalId(classInternalId)
+                .orElseThrow(() -> new PlanningException(PlanningException.Kind.TARGET_UNRESOLVED));
+        if (!academicScopeDirectory.isClassInScope(ref.publicId())) {
+            throw new PlanningException(PlanningException.Kind.SCOPE_FORBIDDEN);
+        }
+        return new ResolvedTarget(ref.internalId(), ref.publicId(), ref.code(),
+                ref.academicYearInternalId(), ref.academicYearPublicId(), ref.academicYearCode());
+    }
+
+    /**
      * Résout un formateur par identifiant public. {@link Optional#empty()}
      * si l'identifiant est mal formé, inconnu, ou le compte non éligible
      * (inactif / sans rôle {@code TEACHER} actif).

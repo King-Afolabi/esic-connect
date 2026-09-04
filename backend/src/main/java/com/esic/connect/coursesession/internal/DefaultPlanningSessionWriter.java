@@ -81,7 +81,7 @@ class DefaultPlanningSessionWriter implements PlanningSessionWriter {
             if (existing.isEmpty()) {
                 CourseSession session = CourseSession.fromPlanningSlot(entry.slotPublicId(),
                         teacher.internalId(), entry.title().trim(), entry.startsAt(), entry.endsAt(),
-                        entry.timeZoneId());
+                        entry.timeZoneId(), entry.roomCode());
                 session.markCreatedBy(actorId);
                 session.addClass(classRef.internalId());
                 CourseSession saved = sessionRepository.save(session);
@@ -94,7 +94,8 @@ class DefaultPlanningSessionWriter implements PlanningSessionWriter {
                 if (session.isPlanned() && !session.isSupersededByScheduling()
                         && hasChanged(session, teacher.internalId(), entry)) {
                     session.applyPlanningUpdate(teacher.internalId(), entry.title().trim(),
-                            entry.startsAt(), entry.endsAt(), entry.timeZoneId(), actorId);
+                            entry.startsAt(), entry.endsAt(), entry.timeZoneId(), entry.roomCode(),
+                            actorId);
                 }
                 reused.add(new SyncedSession(entry.slotPublicId(), session.getPublicId()));
             }
@@ -119,7 +120,8 @@ class DefaultPlanningSessionWriter implements PlanningSessionWriter {
                 || !Objects.equals(session.getTitle(), entry.title().trim())
                 || !session.getStartsAt().equals(entry.startsAt())
                 || !session.getEndsAt().equals(entry.endsAt())
-                || !Objects.equals(session.getTimeZoneId(), entry.timeZoneId());
+                || !Objects.equals(session.getTimeZoneId(), entry.timeZoneId())
+                || !Objects.equals(session.getRoomCode(), entry.roomCode());
     }
 
     private Long currentActorId() {

@@ -183,3 +183,24 @@ export function formatInstant(value: string | null | undefined): string {
     date.getUTCHours(),
   )}:${pad(date.getUTCMinutes())}`;
 }
+
+/**
+ * Correction d'une ligne de planning avant publication (EF-PLAN-003).
+ *
+ * <p>Un champ absent reste inchangé ; une valeur vide efface le champ.
+ * La liste des colonnes corrigeables est fermée côté serveur : y ajouter
+ * un nom ici ne l'ouvrirait pas.
+ */
+export type PlanningRowCorrection = Partial<
+  Record<
+    | 'slot_key'
+    | 'session_date'
+    | 'start_time'
+    | 'end_time'
+    | 'time_zone_id'
+    | 'title'
+    | 'teacher_public_id'
+    | 'room_code',
+    string
+  >
+>;

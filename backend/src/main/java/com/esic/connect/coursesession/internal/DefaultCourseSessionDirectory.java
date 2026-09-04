@@ -214,7 +214,8 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                                 .map(UserDirectory.UserRef::publicId).orElse(null),
                         classPublicIds(session),
                         session.getStartsAt(),
-                        session.getEndsAt()))
+                        session.getEndsAt(),
+                        session.getRoomCode()))
                 .toList();
     }
 

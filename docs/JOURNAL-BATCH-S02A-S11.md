@@ -225,3 +225,70 @@ entier dès qu'un compte était refusé — un refus remontant d'une méthode
 - Aucun écran d'opération de masse : l'API est livrée et testée, le
   bouton reste à faire. `EF-USER-004` est donc `IMPLEMENTED_AND_TESTED`
   côté serveur, sans interface.
+
+---
+
+## S5 — Planning : import et publication (`sprint/S05-planning-publication`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+`EF-PLAN-001/002` import CSV borné et simulation sans création de séance,
+`EF-PLAN-004/005/007` publication atomique versionnée avec idempotence
+stricte, `EF-SES-001` création des séances depuis le planning publié, et
+les critères `AC-007` / `AC-008`. Rien de tout cela n'a été réécrit ; le
+sprint n'a traité que les **deux exigences restées partielles**.
+
+### Ce qui a été livré
+
+| Exigence | Contenu |
+|---|---|
+| `EF-PLAN-003` | correction ligne à ligne dans l'écran de revue, réanalysant tout le lot |
+| `EF-PLAN-009` | conflit de **salle** contre les séances déjà publiées, à l'échelle de l'établissement |
+
+### Le défaut que le sprint corrige
+
+Le planning transportait `room_code` de bout en bout — colonne d'import,
+entrée de planning, commande de publication — mais **la séance créée ne
+le conservait pas**. Le contrôle de conflit de salle ne pouvait donc
+s'exercer qu'à l'intérieur d'un même fichier : deux imports successifs
+pouvaient placer deux classes dans la même salle à la même heure sans que
+rien ne le signale, alors que le cahier demande explicitement de le
+détecter (§13.5).
+
+### Effet de bord assumé sur la suite de tests
+
+Rendre le conflit de salle établissement-wide a révélé que plusieurs
+fixtures réutilisaient « A1 » pour des classes différentes — ce qui est
+désormais, à juste titre, un conflit. Six classes de test tirent
+maintenant un code de salle unique par cas. Le code reste constant à
+l'intérieur d'un cas : le comparer d'une version à la suivante est
+précisément ce que certains mesurent.
+
+### Migration
+
+`V21__add_room_code_to_course_session.sql` — colonne `room_code` et index
+`(room_code, starts_at)`.
+
+### Décisions
+
+`DEC-S5-001` (la séance conserve sa salle ; le conflit est
+établissement-wide) et `DEC-S5-002` (corriger une ligne de planning
+réanalyse tout le lot, les conflits étant croisés).
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw test` | 116 classes / **990 tests** / 0 échec |
+| `cd frontend && npm test -- --watch=false` | 78 fichiers / **645 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+### Limites restantes, explicitement assumées
+
+- Le conflit de salle compare des **codes**, sans clé étrangère vers
+  `room` : le cahier prévoit qu'une salle soit laissée indéterminée puis
+  affectée plus tard (`RG-044`). Deux orthographes différentes d'une même
+  salle ne seraient donc pas rapprochées.
+- La capacité de salle n'est pas contrôlée : `EF-ORG-004` mentionne aussi
+  « une capacité insuffisante », qui reste à faire.

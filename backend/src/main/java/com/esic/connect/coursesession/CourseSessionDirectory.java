@@ -158,6 +158,11 @@ public interface CourseSessionDirectory {
      * @param classGroupPublicIds  classes rattachées
      * @param startsAt             début (UTC)
      * @param endsAt               fin (UTC)
+     * @param roomCode             code fonctionnel de salle, ou {@code null}
+     *                             si elle est indéterminée. Sans lui, le
+     *                             conflit de salle ne pouvait s'exercer
+     *                             qu'à l'intérieur d'un même fichier
+     *                             (EF-PLAN-009, EF-ORG-004).
      */
     record ExistingSessionWindow(
             UUID sessionPublicId,
@@ -165,7 +170,8 @@ public interface CourseSessionDirectory {
             UUID teacherPublicId,
             Set<UUID> classGroupPublicIds,
             Instant startsAt,
-            Instant endsAt) {
+            Instant endsAt,
+            String roomCode) {
     }
 
     /** Niveau d'accès demandé sur une séance. */

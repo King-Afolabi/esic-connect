@@ -206,27 +206,163 @@ class PlanningSimulationService {
         return job;
     }
 
+    /**
+     * Rejoue l'analyse complète d'un travail d'import à partir de ses
+     * lignes persistées (EF-PLAN-003).
+     *
+     * <p><strong>Pourquoi tout le lot, et pas seulement la ligne
+     * corrigée.</strong> Les conflits de planning sont par nature
+     * <em>croisés</em> : formateur, classe et salle se disputent un
+     * créneau <em>entre</em> lignes. Corriger l'heure d'une ligne peut
+     * lever le conflit d'une autre, ou en créer un nouveau. Ne revalider
+     * que la ligne touchée laisserait le lot dans un état faux et
+     * plausible — le pire des deux.
+     *
+     * <p>Le fichier d'origine n'est pas relu : il n'est jamais conservé
+     * (RG-036). L'analyse repart des valeurs normalisées déjà stockées,
+     * corrections comprises.
+     */
+    @Transactional
+    PlanningImportJob revalidate(PlanningImportJob job) {
+        PlanningReferenceResolver.ResolvedTarget target =
+                referenceResolver.resolveTargetByInternalIds(job.getClassGroupId(),
+                        job.getAcademicYearId());
+
+        List<PlanningImportRow> rows = rowRepository.findByJob_IdOrderByRowNumberAsc(job.getId());
+        List<RowAnalysis> analyses = new ArrayList<>();
+        Map<String, RowAnalysis> bySlotKey = new HashMap<>();
+        Map<Integer, PlanningImportRow> rowsByNumber = new HashMap<>();
+
+        for (PlanningImportRow row : rows) {
+            rowsByNumber.put(row.getRowNumber(), row);
+            RowAnalysis analysis = analyseValues(new RawRowValues(
+                            row.getInputSlotKey(), row.getInputSessionDate(), row.getInputStartTime(),
+                            row.getInputEndTime(), row.getInputTimeZoneId(), row.getInputTitle(),
+                            row.getInputTeacherPublicId(), row.getInputRoomCode()),
+                    new ParsedPlanningCsv.DataRow(row.getRowNumber(), List.of(), false),
+                    false, target);
+            if (analysis.slotKey != null) {
+                RowAnalysis previous = bySlotKey.putIfAbsent(analysis.slotKey, analysis);
+                if (previous != null) {
+                    analysis.addError(PlanningIssueCodes.SLOT_KEY_DUPLICATED, "slot_key",
+                            analysis.slotKey,
+                            "Ce slot_key est déjà présent sur une autre ligne du fichier.");
+                }
+            }
+            analyses.add(analysis);
+        }
+
+        detectConflicts(analyses);
+        detectPublishedConflicts(analyses, target);
+
+        Map<String, PlanningEntry> publishedBySlotKey = loadPublishedEntries(target);
+        int added = 0;
+        int modified = 0;
+        int unchanged = 0;
+        for (RowAnalysis analysis : analyses) {
+            if (analysis.hasError() || analysis.slotKey == null) {
+                analysis.plannedAction = analysis.hasError() ? PlannedAction.CONFLICT : PlannedAction.ADDED;
+                continue;
+            }
+            PlanningEntry existing = publishedBySlotKey.get(analysis.slotKey);
+            if (existing == null) {
+                analysis.plannedAction = PlannedAction.ADDED;
+                added++;
+            } else if (isUnchanged(existing, analysis)) {
+                analysis.plannedAction = PlannedAction.UNCHANGED;
+                unchanged++;
+            } else {
+                analysis.plannedAction = PlannedAction.MODIFIED;
+                modified++;
+            }
+        }
+        int removed = 0;
+        for (String publishedKey : publishedBySlotKey.keySet()) {
+            if (analyses.stream().noneMatch(a -> publishedKey.equals(a.slotKey))) {
+                removed++;
+            }
+        }
+
+        int valid = 0;
+        int warning = 0;
+        int error = 0;
+        List<PlanningImportRowIssue> issuesToSave = new ArrayList<>();
+        for (RowAnalysis analysis : analyses) {
+            PlanningImportRow row = rowsByNumber.get(analysis.dataRow.rowNumber());
+            row.setResolution(analysis.resolvedTeacherUserId, analysis.startsAt, analysis.endsAt);
+            PlanningRowStatus status = analysis.hasError() ? PlanningRowStatus.ERROR
+                    : analysis.hasWarning() ? PlanningRowStatus.WARNING : PlanningRowStatus.VALID;
+            row.setOutcome(status, analysis.plannedAction);
+            rowRepository.save(row);
+            // Les anomalies précédentes ne valent plus rien : les garder
+            // ferait apparaître une ligne corrigée comme toujours fautive.
+            rowIssueRepository.deleteByRowId(row.getId());
+            for (DraftIssue draft : analysis.issues) {
+                issuesToSave.add(new PlanningImportRowIssue(row, draft.severity, draft.column,
+                        PlanningCsvValues.truncateReceivedValue(draft.receivedValue), draft.code,
+                        draft.message));
+            }
+            switch (status) {
+                case VALID -> valid++;
+                case WARNING -> warning++;
+                case ERROR -> error++;
+            }
+        }
+        rowIssueRepository.flush();
+        rowIssueRepository.saveAll(issuesToSave);
+
+        job.recordSimulationCounts(analyses.size(), valid, warning, error, 0,
+                added, modified, unchanged, removed, error == 0);
+        return jobRepository.save(job);
+    }
+
     // ------------------------------------------------------------------
 
     private RowAnalysis analyseRow(ParsedPlanningCsv parsed, ParsedPlanningCsv.DataRow dataRow,
                                    PlanningReferenceResolver.ResolvedTarget target) {
+        return analyseValues(new RawRowValues(
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.SLOT_KEY)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.SESSION_DATE)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.START_TIME)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.END_TIME)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.TIME_ZONE_ID)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.TITLE)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.TEACHER_PUBLIC_ID)),
+                        PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.ROOM_CODE))),
+                dataRow, dataRow.columnCountMismatch(), target);
+    }
+
+    /**
+     * Valeurs brutes d'une ligne, indépendantes du format d'entrée.
+     *
+     * <p>Extrait pour que la <strong>correction d'une ligne</strong>
+     * (EF-PLAN-003) rejoue exactement la même analyse que la simulation :
+     * une ligne corrigée ne doit pas suivre un chemin de validation
+     * différent d'une ligne d'origine.
+     */
+    record RawRowValues(String slotKey, String rawDate, String rawStart, String rawEnd,
+                        String rawZone, String title, String rawTeacher, String roomCode) {
+    }
+
+    /** Analyse commune à la simulation et à la correction de ligne. */
+    RowAnalysis analyseValues(RawRowValues values, ParsedPlanningCsv.DataRow dataRow,
+                              boolean columnCountMismatch,
+                              PlanningReferenceResolver.ResolvedTarget target) {
         RowAnalysis analysis = new RowAnalysis(dataRow);
-        if (dataRow.columnCountMismatch()) {
+        if (columnCountMismatch) {
             analysis.addWarning("PLAN_COLUMN_COUNT_MISMATCH", null, null,
                     "Le nombre de colonnes de cette ligne diffère de l'en-tête.");
         }
 
-        analysis.rawDate = PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.SESSION_DATE));
-        analysis.rawStart = PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.START_TIME));
-        analysis.rawEnd = PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.END_TIME));
-        analysis.rawZone = PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.TIME_ZONE_ID));
-        analysis.rawTeacher = PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.TEACHER_PUBLIC_ID));
-        analysis.title = PlanningCsvValues.clamp(
-                PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.TITLE)), 191);
-        analysis.roomCode = PlanningCsvValues.clamp(
-                PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.ROOM_CODE)), 50);
+        analysis.rawDate = values.rawDate();
+        analysis.rawStart = values.rawStart();
+        analysis.rawEnd = values.rawEnd();
+        analysis.rawZone = values.rawZone();
+        analysis.rawTeacher = values.rawTeacher();
+        analysis.title = PlanningCsvValues.clamp(values.title(), 191);
+        analysis.roomCode = PlanningCsvValues.clamp(values.roomCode(), 50);
 
-        String slotKey = PlanningCsvValues.trimToNull(parsed.cell(dataRow, PlanningColumn.SLOT_KEY));
+        String slotKey = values.slotKey();
         if (slotKey == null) {
             analysis.addError(PlanningIssueCodes.SLOT_KEY_REQUIRED, "slot_key", null,
                     "La colonne slot_key est obligatoire.");
@@ -348,8 +484,12 @@ class PlanningSimulationService {
      *       de la ligne pour le même planning n'est pas un conflit
      *       contre elle-même.</li>
      * </ul>
-     * La salle n'est pas vérifiée ici (le module {@code coursesession}
-     * n'a pas de {@code room_code} — limite documentée).
+     * <p>Depuis la migration {@code V21}, la séance conserve son
+     * {@code room_code} : le conflit de <strong>salle</strong> s'exerce
+     * donc aussi contre les séances déjà publiées, et plus seulement à
+     * l'intérieur d'un même fichier. Deux imports successifs ne peuvent
+     * plus placer deux classes dans la même salle à la même heure sans
+     * que rien ne le signale (EF-PLAN-009, EF-ORG-004).
      */
     private void detectPublishedConflicts(List<RowAnalysis> analyses,
                                           PlanningReferenceResolver.ResolvedTarget target) {
@@ -395,6 +535,14 @@ class PlanningSimulationService {
                 if (w.classGroupPublicIds().contains(target.classPublicId())) {
                     a.addError(PlanningIssueCodes.CONFLICT_CLASS, null, null,
                             "La classe a déjà une séance publiée qui chevauche ce créneau.");
+                }
+                // Salle occupée par une séance déjà publiée (EF-PLAN-009,
+                // EF-ORG-004). Une salle indéterminée des deux côtés n'est
+                // évidemment pas un conflit : deux créneaux sans salle
+                // n'occupent rien.
+                if (a.roomCode != null && a.roomCode.equalsIgnoreCase(w.roomCode())) {
+                    a.addError(PlanningIssueCodes.CONFLICT_ROOM, "room_code", a.roomCode,
+                            "La salle est déjà occupée par une séance publiée sur ce créneau.");
                 }
             }
         }
