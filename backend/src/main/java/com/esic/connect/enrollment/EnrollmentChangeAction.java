@@ -20,5 +20,7 @@ public enum EnrollmentChangeAction {
     CLOSED,
     UPDATED,
     ARCHIVED,
+    /** Autorisation de suivi à distance retirée (EF-ENR-004). */
+    REVOKED,
     RESTORED
 }

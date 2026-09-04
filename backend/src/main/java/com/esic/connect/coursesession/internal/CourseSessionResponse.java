@@ -4,6 +4,8 @@ import com.esic.connect.coursesession.AttendanceCheckpointStatus;
 import com.esic.connect.coursesession.AttendanceCheckpointType;
 import com.esic.connect.coursesession.SessionLifecycle;
 
+import com.esic.connect.coursesession.SessionAttendanceMode;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +28,10 @@ record CourseSessionResponse(
         Instant startsAt,
         Instant endsAt,
         String timeZoneId,
+        /** Modalité d'enseignement (docs/02 §15). */
+        SessionAttendanceMode attendanceMode,
+        /** Lien distant ; {@code null} sur une séance {@code ON_SITE}. */
+        String remoteLink,
         Instant openedAt,
         Instant closedAt,
         String cancellationReason,

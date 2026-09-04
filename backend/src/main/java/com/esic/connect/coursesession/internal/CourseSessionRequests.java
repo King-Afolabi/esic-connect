@@ -1,5 +1,6 @@
 package com.esic.connect.coursesession.internal;
 
+import com.esic.connect.coursesession.SessionAttendanceMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -30,7 +31,14 @@ final class CourseSessionRequests {
             @NotNull Instant endsAt,
             @NotBlank @Size(max = 64) String timeZoneId,
             @NotBlank @Size(max = 500) String reason,
-            @Size(max = 191) String title) {
+            @Size(max = 191) String title,
+            /**
+             * Modalité d'enseignement (docs/02 §15). Absente ⇒
+             * {@code ON_SITE} : le présentiel reste le défaut, il n'est
+             * jamais déduit d'un lien renseigné par erreur.
+             */
+            SessionAttendanceMode attendanceMode,
+            @Size(max = 500) String remoteLink) {
     }
 
     /**

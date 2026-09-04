@@ -4,7 +4,9 @@ import com.esic.connect.attendance.AttendanceStatus;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
 import com.esic.connect.coursesession.CourseSessionDirectory.CheckpointRef;
+import com.esic.connect.coursesession.SessionAttendanceMode;
 import com.esic.connect.enrollment.EnrollmentDirectory;
+import com.esic.connect.enrollment.RemoteAttendanceDirectory;
 import com.esic.connect.identity.UserDirectory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -48,6 +50,7 @@ class AttendanceService {
     private final CourseSessionDirectory courseSessionDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
     private final UserDirectory userDirectory;
+    private final RemoteAttendanceDirectory remoteAttendanceDirectory;
     private final AttendanceChangePublisher changePublisher;
     private final Clock clock;
     private final Duration lateThreshold;
@@ -58,6 +61,7 @@ class AttendanceService {
                       CourseSessionDirectory courseSessionDirectory,
                       EnrollmentDirectory enrollmentDirectory,
                       UserDirectory userDirectory,
+                      RemoteAttendanceDirectory remoteAttendanceDirectory,
                       AttendanceChangePublisher changePublisher,
                       Clock clock,
                       @Value("${app.attendance.late-threshold:PT10M}") Duration lateThreshold) {
@@ -71,6 +75,7 @@ class AttendanceService {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.userDirectory = userDirectory;
+        this.remoteAttendanceDirectory = remoteAttendanceDirectory;
         this.changePublisher = changePublisher;
         this.clock = clock;
         this.lateThreshold = lateThreshold;
@@ -149,9 +154,25 @@ class AttendanceService {
         }
         EnrollmentDirectory.EnrollmentRef enrollment = matching.get(0);
 
-        AttendanceRecordSource source = token != null
-                ? AttendanceRecordSource.DYNAMIC_QR
-                : AttendanceRecordSource.SHORT_CODE;
+        // Suivi à distance (docs/02 §15.3) : sur une séance PRÉSENTIELLE,
+        // le canal distant exige une autorisation individuelle active.
+        // Sur une séance REMOTE ou HYBRID, il est normal — la classe
+        // entière, ou une partie d'elle, est attendue à distance.
+        boolean remote = Boolean.TRUE.equals(request.remote());
+        if (remote && session.attendanceMode() == SessionAttendanceMode.ON_SITE) {
+            boolean authorized = remoteAttendanceDirectory.isRemoteAttendanceAuthorized(
+                    callerPublicId, enrollment.classGroupPublicId(), sessionDate);
+            if (!authorized) {
+                throw new AttendanceException(AttendanceException.Kind.REMOTE_NOT_AUTHORIZED);
+            }
+        }
+
+        AttendanceRecordSource source;
+        if (token != null) {
+            source = remote ? AttendanceRecordSource.REMOTE_QR : AttendanceRecordSource.DYNAMIC_QR;
+        } else {
+            source = remote ? AttendanceRecordSource.REMOTE_CODE : AttendanceRecordSource.SHORT_CODE;
+        }
 
         Instant now = clock.instant();
         Duration delay = Duration.between(session.startsAt(), now);

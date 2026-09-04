@@ -73,7 +73,15 @@ class EnrollmentException extends RuntimeException {
          * ({@code ENR_FORBIDDEN}, 403). Distinct d'un « introuvable » :
          * la ressource existe, mais ne relève pas de l'appelant.
          */
-        OUT_OF_SCOPE
+        OUT_OF_SCOPE,
+        /**
+         * Autorisation de suivi à distance déjà révoquée (EF-ENR-004).
+         * Conflit d'état, pas requête malformée : la seconde révocation
+         * écraserait le motif de la première sans rien changer.
+         */
+        AUTHORIZATION_NOT_ACTIVE,
+        /** Période d'autorisation incohérente : la fin précède le début. */
+        INVALID_REMOTE_PERIOD
     }
 
     private final Kind kind;

@@ -1,5 +1,6 @@
 package com.esic.connect.coursesession.internal;
 
+import com.esic.connect.coursesession.SessionAttendanceMode;
 import com.esic.connect.coursesession.SessionLifecycle;
 import com.esic.connect.shared.BaseEntity;
 import jakarta.persistence.CascadeType;
@@ -53,6 +54,23 @@ class CourseSession extends BaseEntity {
      */
     @Column(name = "room_code", length = 50)
     private String roomCode;
+
+    /**
+     * Modalité d'enseignement (docs/02 §15). {@code ON_SITE} par défaut :
+     * c'est le cas de l'immense majorité des séances, et une séance déjà
+     * créée ne peut pas être devinée rétroactivement comme distancielle.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "attendance_mode", nullable = false)
+    private SessionAttendanceMode attendanceMode = SessionAttendanceMode.ON_SITE;
+
+    /**
+     * Lien de visioconférence d'une séance distancielle ou hybride
+     * (docs/02 §15.2). Saisi à la main aujourd'hui ; créé par
+     * l'intégration Microsoft lorsqu'elle sera active.
+     */
+    @Column(name = "remote_link", length = 500)
+    private String remoteLink;
 
     /**
      * Séance de remplacement créée lors d'un report (EF-SES-007).
@@ -169,6 +187,24 @@ class CourseSession extends BaseEntity {
     /** Code de salle, ou {@code null} si elle est encore indéterminée (RG-044). */
     String getRoomCode() {
         return roomCode;
+    }
+
+    SessionAttendanceMode getAttendanceMode() {
+        return attendanceMode;
+    }
+
+    String getRemoteLink() {
+        return remoteLink;
+    }
+
+    /**
+     * Fixe la modalité et le lien distant. Une séance {@code ON_SITE} ne
+     * conserve pas de lien : le garder laisserait croire qu'un suivi à
+     * distance est prévu alors que la classe est attendue sur site.
+     */
+    void applyModality(SessionAttendanceMode mode, String link) {
+        this.attendanceMode = mode == null ? SessionAttendanceMode.ON_SITE : mode;
+        this.remoteLink = this.attendanceMode == SessionAttendanceMode.ON_SITE ? null : link;
     }
 
     void markCreatedBy(Long actorId) {

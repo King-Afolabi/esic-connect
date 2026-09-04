@@ -391,3 +391,103 @@ de restaurer un planning impubliable).
   chacun sur le sien et la seconde publication supersèderait la première.
   Le comportement est cohérent avec le versionnement, mais aucun
   avertissement ne signale l'autre brouillon.
+
+---
+
+## S7 — Émargement : modalité et suivi à distance (`sprint/S07-emargement`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+Le sprint 7 de la roadmap porte sur l'émargement nominal. La quasi-totalité
+en était **déjà livrée** : `EF-ATT-001` (QR dynamique), `EF-ATT-002`
+(validation par jeton), `EF-ATT-006` et `EF-ATT-012` (présence manuelle,
+correction auditée), `EF-ATT-009` (code court), `EF-ATT-015` (suivi en
+direct), `EF-SES-002` et `EF-SES-003` (ouverture, clôture).
+
+Une seule exigence du sprint restait entière : **`EF-ENR-004`** — autoriser
+un suivi à distance individuel. Rien n'a été réécrit de ce qui fonctionnait.
+
+### Ce qui a été livré
+
+| Exigence | Contenu |
+|---|---|
+| `EF-ENR-004` | autorisation de suivi à distance : octroi, révocation, historique, contrôle de périmètre |
+| docs/02 §15.1–15.4 | modalité d'enseignement d'une séance (`ON_SITE` / `REMOTE` / `HYBRID`) et lien distant |
+| docs/02 §15.4 | canaux `REMOTE_QR` et `REMOTE_CODE` enregistrés distinctement |
+
+La règle du cahier est appliquée telle qu'écrite : « sans autorisation, le
+canal distant est refusé ». Sur une séance présentielle, un émargement
+déclaré à distance exige une autorisation active couvrant le jour de la
+séance et la classe concernée — sinon `403 ATT_REMOTE_NOT_AUTHORIZED`. Sur
+une séance `REMOTE` ou `HYBRID`, aucune autorisation individuelle n'est
+demandée : la classe est déjà attendue à distance.
+
+### Ce que ce mécanisme n'est pas
+
+Le drapeau `remote` est une **déclaration de l'apprenant**, pas une preuve
+de localisation : un client pourrait ne pas le lever. Le contrôle réel de
+la présence sur site est le QR fixe de salle associé à la plage réseau de
+l'établissement (`EF-ATT-008` / `EF-ATT-010`, sprint 8). Ce que le
+mécanisme garantit aujourd'hui, c'est qu'une décision pédagogique existe,
+qu'elle est datée, motivée, révocable et tracée — et que le canal employé
+figure dans la présence enregistrée.
+
+Cette limite est écrite dans le code (javadoc de `AttendanceRecordSource`
+et de la requête de validation) plutôt que laissée à l'interprétation.
+
+### Choix de modélisation
+
+La portée « une séance / une période / l'année » du cahier (§15.3) est
+exprimée par un **intervalle de dates**, non par une énumération : une
+autorisation d'une seule séance est un intervalle d'un jour. Le calcul de
+couverture reste ainsi unique, là où trois portées distinctes auraient
+produit trois chemins à maintenir — et à faire diverger.
+
+Une autorisation **générale** (sans classe) est réservée à un périmètre
+global : accordée par un responsable pédagogique, elle vaudrait pour les
+classes d'un autre.
+
+### Défaut réel découvert et corrigé
+
+`JustificationAttachmentIntegrationTests.reconciliationPromotesAnAgedPendingRowWhoseFileIsValid`
+échouait dans la suite complète mais passait isolément. Cause :
+`reconcile()` ne traite qu'un **lot borné** (100) de lignes
+`PENDING_STORAGE` vieillies, les plus anciennes d'abord ; la base de test
+n'étant jamais remise à zéro, les résidus accumulés d'exécutions
+antérieures avaient fini par repousser la ligne du test hors du lot. Le
+test remet donc à zéro les lignes vieillies qui ne lui appartiennent pas,
+exactement comme `AuthRateLimitIntegrationTests` remet à zéro ses compteurs
+Redis. Un test doit échouer pour ce qu'il mesure.
+
+### Migration
+
+`V24__create_remote_attendance_authorization_and_session_mode.sql` —
+`course_session.attendance_mode` et `remote_link`, table
+`remote_attendance_authorization`, et remplacement de la contrainte
+`chk_attendance_record_source` de V10 pour accepter les canaux distants.
+V10 n'est pas modifiée.
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw test` | 119 classes / **1033 tests** / 0 échec |
+| `cd frontend && npm test` | 79 fichiers / **659 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+### Limites restantes, explicitement assumées
+
+- Le drapeau `remote` est **déclaratif** : il ne prouve pas où se trouve
+  l'apprenant. Le contrôle de présence sur site arrive au sprint 8 (QR fixe
+  de salle + plage réseau, `EF-ATT-008` / `EF-ATT-010`).
+- La classe est saisie par son **identifiant public** dans le formulaire
+  d'autorisation, sans sélecteur : utilisable, peu confortable.
+- La modalité d'une séance n'est pas encore alimentée par le planning : les
+  colonnes `attendance_mode` et `remote_link` du modèle de fichier
+  (docs/02 §13.3) ne sont pas lues. Une séance issue d'un planning est donc
+  `ON_SITE` par défaut, et la modalité se règle à la création manuelle ou
+  après coup. À reprendre quand le planning couvrira ces colonnes.
+- Le statut `EXPIRED` d'une autorisation existe en base mais n'est calculé
+  par aucune tâche : la couverture se lit sur les dates, seule source qui
+  ne peut pas se désynchroniser.

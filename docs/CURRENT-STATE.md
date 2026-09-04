@@ -11,10 +11,9 @@
 ## Dernière mise à jour
 
 ```text
-4 septembre 2026 — sprint 6 terminé : calendrier interactif, retour à
-une version antérieure, avertissement d'alternance, import Excel de
-planning, report et demande d'annulation d'une séance.
-Backend 1019 tests, frontend 653 tests, tout vert.
+4 septembre 2026 — sprint 7 terminé : suivi à distance individuel,
+modalité d'enseignement d'une séance, canaux d'émargement distants.
+Backend 1033 tests, frontend 659 tests, tout vert.
 ```
 
 ## Repère Git
@@ -23,7 +22,7 @@ Backend 1019 tests, frontend 653 tests, tout vert.
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -34,14 +33,14 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 80 | 56 % |
+| `IMPLEMENTED_AND_TESTED` | 81 | 57 % |
 | `PARTIAL` | 6 | 4 % |
-| `NOT_IMPLEMENTED` | 56 | 39 % |
+| `NOT_IMPLEMENTED` | 55 | 39 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
-cible. Les 56 exigences non implémentées ne sont pas des régressions :
-ce sont les sprints 7 à 13 de la roadmap.
+cible. Les 55 exigences non implémentées ne sont pas des régressions :
+ce sont les sprints 8 à 13 de la roadmap.
 
 Le sprint 2 a fait passer huit exigences de `NOT_IMPLEMENTED` à
 `IMPLEMENTED_AND_TESTED` : `EF-AUTH-006` à `EF-AUTH-011`, `EF-AUTH-013`
@@ -60,6 +59,11 @@ Le sprint 5 clôt deux exigences restées partielles depuis l'origine :
 `EF-PLAN-003` (correction ligne à ligne) et `EF-PLAN-009` (conflit de
 salle contre les séances déjà publiées).
 
+Le sprint 7 ajoute `EF-ENR-004` (suivi à distance individuel) — la seule
+exigence du sprint 7 qui n'était pas déjà livrée : l'émargement nominal
+(`EF-ATT-001/002/006/009/012/015`, `EF-SES-002/003`) l'était depuis
+l'origine.
+
 Le sprint 6 en ajoute six : `EF-PLAN-006` (calendrier interactif),
 `EF-PLAN-008` (retour à une version antérieure), `EF-PLAN-010`
 (avertissement d'alternance), `EF-PLAN-011` (planning Excel),
@@ -77,7 +81,7 @@ raison, le document avait tort.
 | Identité et accès (15) | 15 | 0 | 0 |
 | Utilisateurs (9) | 8 | 0 | 1 |
 | Référentiels et organisation (13) | 11 | 0 | 2 |
-| Inscriptions et imports (10) | 8 | 0 | 2 |
+| Inscriptions et imports (10) | 9 | 0 | 1 |
 | Corps enseignant (5) | 4 | 1 | 0 |
 | Planning (13) | 11 | 0 | 2 |
 | Séances (9) | 9 | 0 | 0 |
@@ -360,6 +364,18 @@ raison, le document avait tort.
 - `EF-ATT-006/012` présence manuelle, correction, annulation logique,
   motif obligatoire, historique append-only, verrou optimiste → `409`.
 - `EF-ATT-015` suivi des présences en direct.
+- `EF-ENR-004` **suivi à distance individuel** : autorisation datée,
+  motivée, révocable et auditée ; sur une séance présentielle, le canal
+  distant sans autorisation active est refusé
+  (`403 ATT_REMOTE_NOT_AUTHORIZED`). La portée « séance / période / année »
+  est un **intervalle de dates** ; une autorisation générale est réservée
+  au périmètre global (`DEC-S7-002`). Une séance porte désormais sa
+  modalité (`ON_SITE` / `REMOTE` / `HYBRID`) et son lien distant ; les
+  canaux `REMOTE_QR` et `REMOTE_CODE` sont enregistrés distinctement.
+  **Le drapeau `remote` est une déclaration, pas une preuve de
+  localisation** (`DEC-S7-001`) : le contrôle de présence sur site reste
+  le QR fixe de salle et la plage réseau (sprint 8). Écran : section
+  « suivi à distance » de la fiche apprenant.
 - Redis indisponible → `503 ATT_TOKEN_BACKEND_UNAVAILABLE` : **aucune
   validation dégradée**.
 
@@ -434,7 +450,6 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 | Matières, groupes temporaires | `EF-ACA-006`, `007` | 3 |
 | QR fixe de salle, conflits de salle | `EF-ORG-003`, `004` | 6, 8 |
 | Import Excel, multifeuille, correction de ligne | `EF-IMP-003`, `004`, `006` | 4 |
-| Suivi à distance individuel | `EF-ENR-004` | 7 |
 | Planning PDF texte et assistance IA au mapping | `EF-PLAN-012`, `013` | 12 |
 | Points de contrôle nommés, contrôle réseau, QR salle, apprenant provisoire, départ anticipé, transparence, borne | `EF-ATT-007`, `008`, `010`, `013`, `014`, `016` | 8–9, 12 |
 | Réclamations | `EF-CLAIM-001..004` | 9 |
@@ -464,10 +479,10 @@ module, aucun cycle.
 | `identity` | comptes, rôles, JWT, invitation, administration, mot de passe oublié, révocation, second facteur, passkeys, appareils de confiance | V1, V2, V3, V17, V18 |
 | `organization` | site, bâtiment, salle, plage réseau | V4 |
 | `academic` | année, formation, niveau, promotion, classe, affectation, matières | V5, V6, V19 |
-| `enrollment` | profil apprenant, inscription, changement de classe, groupes temporaires | V7, V19 |
+| `enrollment` | profil apprenant, inscription, changement de classe, groupes temporaires, suivi à distance | V7, V19, V24 |
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
 | `planning` | import CSV et Excel, simulation, conflits, correction de ligne, calendrier interactif, publication versionnée, retour arrière | V12, V13, V23 |
-| `coursesession` | séances, cycle de vie, points de contrôle, remplacements, salle, report, demandes d'annulation | V9, V10, V13, V14, V21, V22 |
+| `coursesession` | séances, cycle de vie, points de contrôle, remplacements, salle, modalité, report, demandes d'annulation | V9, V10, V13, V14, V21, V22, V24 |
 | `attendance` | jetons, validation, corrections, justificatifs, rapports | V9, V10, V16 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
@@ -479,9 +494,9 @@ module, aucun cycle.
 Modules du cahier des charges **non encore créés** : `claim`,
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V23
+### 5.2 Migrations Flyway — schéma en V24
 
-53 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
+54 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
 par une migration. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
@@ -493,7 +508,10 @@ ajoute `student_import_row_correction`, la colonne
 `course_session.room_code` ; `V22` ajoute le lien de report et
 `session_cancellation_request` ; `V23` assouplit la contrainte
 `file_size_bytes > 0` en `>= 0`, un planning construit au calendrier
-n'ayant pas de fichier.
+n'ayant pas de fichier ; `V24` ajoute `course_session.attendance_mode` et
+`remote_link`, la table `remote_attendance_authorization`, et remplace la
+contrainte `chk_attendance_record_source` de V10 pour accepter les canaux
+distants.
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -515,8 +533,8 @@ npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **118 classes / 1019 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V23 |
-| `cd frontend && npm test -- --watch=false` | **79 fichiers / 653 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **119 classes / 1033 tests / 0 échec / 0 erreur** — `ModularityTests` vert (14 modules), schéma V24 |
+| `cd frontend && npm test` | **79 fichiers / 659 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
 

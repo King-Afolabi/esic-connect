@@ -161,6 +161,101 @@
           }
         }
       </section>
+
+      <!-- EF-ENR-004 — suivi à distance individuel (docs/02 §15.3) -->
+      @if (remote().kind !== 'forbidden') {
+        <section class="profile__history" aria-labelledby="remote-heading">
+          <h2 id="remote-heading" class="profile__section-title">Suivi à distance</h2>
+          <p class="profile__hint">
+            Une autorisation permet à cet apprenant d'émarger à distance sur une
+            séance tenue en présentiel. Sans elle, le canal distant est refusé.
+          </p>
+
+          @switch (remote().kind) {
+            @case ('loading') {
+              <mat-progress-bar mode="indeterminate" aria-label="Chargement des autorisations" />
+            }
+            @case ('error') {
+              <div class="profile__error" role="alert">
+                <p>{{ remoteError() }}</p>
+                <button mat-stroked-button type="button" (click)="retryRemote()">Réessayer</button>
+              </div>
+            }
+            @case ('ready') {
+              @if (remoteRows().length === 0) {
+                <p class="profile__empty">Aucune autorisation enregistrée.</p>
+              } @else {
+                <div class="profile__table-wrapper">
+                  <table mat-table [dataSource]="remoteRows()">
+                    <ng-container matColumnDef="period">
+                      <th mat-header-cell *matHeaderCellDef scope="col">Période</th>
+                      <td mat-cell *matCellDef="let row">
+                        {{ row.validFrom | date: 'dd/MM/yyyy' }} →
+                        {{ row.validUntil ? (row.validUntil | date: 'dd/MM/yyyy') : 'sans fin' }}
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="scope">
+                      <th mat-header-cell *matHeaderCellDef scope="col">Portée</th>
+                      <td mat-cell *matCellDef="let row">
+                        {{ row.classGroupPublicId ? 'Une classe' : 'Toutes ses classes' }}
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="reason">
+                      <th mat-header-cell *matHeaderCellDef scope="col">Motif</th>
+                      <td mat-cell *matCellDef="let row">{{ row.reason }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="status">
+                      <th mat-header-cell *matHeaderCellDef scope="col">Statut</th>
+                      <td mat-cell *matCellDef="let row">
+                        {{ remoteStatusLabel(row.status) }}
+                        @if (row.revocationReason) {
+                          <span class="profile__reason">— {{ row.revocationReason }}</span>
+                        }
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="actions">
+                      <th mat-header-cell *matHeaderCellDef scope="col">Actions</th>
+                      <td mat-cell *matCellDef="let row">
+                        @if (row.status === 'ACTIVE') {
+                          <button mat-stroked-button type="button" [disabled]="remoteBusy()"
+                                  (click)="revokeRemote(row)">Révoquer</button>
+                        }
+                      </td>
+                    </ng-container>
+                    <tr mat-header-row *matHeaderRowDef="remoteColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: remoteColumns"></tr>
+                  </table>
+                </div>
+              }
+
+              <form class="profile__remote-form" [formGroup]="remoteForm">
+                <mat-form-field appearance="outline">
+                  <mat-label>Motif</mat-label>
+                  <input matInput formControlName="reason" required />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>À partir du</mat-label>
+                  <input matInput type="date" formControlName="validFrom" required />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Jusqu'au (facultatif)</mat-label>
+                  <input matInput type="date" formControlName="validUntil" />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Classe (facultatif)</mat-label>
+                  <input matInput formControlName="classGroupPublicId" />
+                </mat-form-field>
+                <button mat-flat-button color="primary" type="button" [disabled]="remoteBusy()"
+                        (click)="grantRemote()">Autoriser</button>
+              </form>
+
+              @if (remoteActionError(); as message) {
+                <p class="profile__error" role="alert">{{ message }}</p>
+              }
+            }
+          }
+        </section>
+      }
     }
   }
 }

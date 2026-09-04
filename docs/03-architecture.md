@@ -2421,6 +2421,43 @@ ni les présences ni les points de contrôle déjà attachés. Le refus, lui,
 évite de restaurer un planning que la publication rejetterait aussitôt —
 mieux vaut un message explicite qu'une version morte dans l'historique.
 
+### DEC-S7-001 — Le suivi à distance est une décision tracée, pas un contrôle de localisation
+
+**Contexte.** `EF-ENR-004` demande d'autoriser un apprenant à suivre une
+séance à distance alors que sa classe est en présentiel, et de refuser le
+canal distant sans autorisation (docs/02 §15.3).
+
+**Décision.** L'apprenant **déclare** son suivi à distance au moment de la
+validation (`remote`). Sur une séance `ON_SITE`, le serveur exige une
+autorisation active couvrant le jour et la classe ; sinon
+`403 ATT_REMOTE_NOT_AUTHORIZED`. Le canal employé est enregistré
+(`REMOTE_QR` / `REMOTE_CODE`).
+
+**Ce que ce n'est pas.** Une preuve de localisation. Un client pourrait ne
+pas lever le drapeau. Le contrôle de présence sur site reste le QR fixe de
+salle associé à la plage réseau (`EF-ATT-008` / `EF-ATT-010`, sprint 8).
+Cette limite est documentée dans le code même, pour qu'aucune lecture
+ultérieure ne la prenne pour une garantie.
+
+**Conséquence assumée.** Le mécanisme apporte une décision pédagogique
+datée, motivée, révocable et auditée, et la traçabilité du canal dans les
+rapports — pas davantage.
+
+### DEC-S7-002 — La portée d'une autorisation est un intervalle de dates
+
+**Contexte.** Le cahier prévoit une autorisation « pour une séance, une
+période ou l'année » (docs/02 §15.3).
+
+**Décision.** Une seule représentation : `valid_from` / `valid_until`
+(borne haute inclusive, `NULL` = ouverte). Une autorisation d'une séance
+est un intervalle d'un jour.
+
+**Raison.** Trois portées énumérées auraient produit trois chemins de
+calcul de couverture, donc trois occasions de diverger. Une autorisation
+**générale** (sans classe) est en outre réservée au périmètre global :
+accordée par un responsable pédagogique, elle porterait au-delà de son
+périmètre.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

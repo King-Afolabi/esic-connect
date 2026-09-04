@@ -149,6 +149,148 @@ class AttendanceIntegrationTests {
         assertThat(record.get("source")).isEqualTo("DYNAMIC_QR");
     }
 
+    // ------------------------------------------------------------------
+    // EF-ENR-004 — suivi à distance individuel (docs/02 §15.3)
+    // ------------------------------------------------------------------
+
+    @Test
+    void leCanalDistantEstRefuseSurUneSeancePresentielleSansAutorisation() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        // « Sans autorisation, le canal distant est refusé » (docs/02 §15.3).
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(denied.getBody().get("code")).isEqualTo("ATT_REMOTE_NOT_AUTHORIZED");
+    }
+
+    @Test
+    void unApprenantAutoriseEmargeADistanceEtLeCanalEstTrace() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", fx.classA(),
+                "reason", "immobilisation médicale",
+                "validFrom", "2026-08-01"), admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)), HttpStatus.OK);
+
+        // Le canal distinct est enregistré : un rapport peut distinguer une
+        // présence à distance d'une présence en salle (docs/02 §15.4).
+        assertThat(record.get("source")).isEqualTo("REMOTE_CODE");
+    }
+
+    @Test
+    void uneAutorisationRevoqueeReFermeLeCanalDistant() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> authorization = created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", fx.classA(),
+                "reason", "immobilisation médicale",
+                "validFrom", "2026-08-01"), admin);
+        post("/api/v1/remote-attendance-authorizations/" + authorization.get("publicId") + "/revoke",
+                Map.of("reason", "reprise sur site"), admin, HttpStatus.OK);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void uneAutorisationExpireeNeCouvrePlusLaSeance() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        // La séance est du 10 septembre 2026 ; l'autorisation s'arrête au 31 août.
+        created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", fx.classA(),
+                "reason", "immobilisation terminée",
+                "validFrom", "2026-08-01",
+                "validUntil", "2026-08-31"), admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void uneAutorisationDUneAutreClasseNeCouvrePasLaSeance() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Chain other = academicChain(admin);
+        created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", other.classA(),
+                "reason", "autorisation d'un autre périmètre",
+                "validFrom", "2026-08-01"), admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        // Une autorisation rattachée à une classe ne vaut que pour elle :
+        // l'étendre silencieusement serait pire que de refuser.
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void surUneSeanceDistancielleAucuneAutorisationIndividuelleNEstExigee() {
+        String admin = adminToken();
+        Fixture fx = openRemoteSessionWithEnrolledStudent(admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)), HttpStatus.OK);
+
+        // La classe entière est attendue à distance : l'autorisation
+        // individuelle n'a pas d'objet (docs/02 §15.2).
+        assertThat(record.get("source")).isEqualTo("REMOTE_CODE");
+    }
+
+    @Test
+    void uneSeancePresentielleNeConservePasDeLienDistant() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        Map<String, Object> body = new java.util.HashMap<>(
+                sessionBody(teacher.publicId(), List.of(chain.classA())));
+        body.put("attendanceMode", "ON_SITE");
+        body.put("remoteLink", "https://teams.example.test/meet/abc");
+
+        Map<String, Object> session = created("/api/v1/sessions", body, admin);
+
+        assertThat(session.get("attendanceMode")).isEqualTo("ON_SITE");
+        // Garder le lien laisserait croire qu'un suivi à distance est prévu.
+        assertThat(session.get("remoteLink")).isNull();
+    }
+
     @Test
     void nonEnrolledStudentIsRejected() {
         String admin = adminToken();
@@ -986,6 +1128,26 @@ class AttendanceIntegrationTests {
             enrollments.add(enrollment);
         }
         return new Fixture(sessionId, students, enrollments, chain.classA(), chain.program(), teacher);
+    }
+
+    /** Séance déclarée à distance pour toute la classe (docs/02 §15.2). */
+    private Fixture openRemoteSessionWithEnrolledStudent(String admin) {
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        Map<String, Object> body = new java.util.HashMap<>(
+                sessionBody(teacher.publicId(), List.of(chain.classA())));
+        body.put("attendanceMode", "REMOTE");
+        body.put("remoteLink", "https://teams.example.test/meet/" + code());
+        String sessionId = (String) created("/api/v1/sessions", body, admin).get("publicId");
+        post("/api/v1/sessions/" + sessionId + "/open", null, admin, HttpStatus.NO_CONTENT);
+
+        Account student = accountWithRoles(RoleCode.STUDENT);
+        String profile = createProfile(admin, student.publicId());
+        String enrollment = (String) created("/api/v1/enrollments", Map.of(
+                "studentProfilePublicId", profile, "classGroupPublicId", chain.classA(),
+                "startDate", "2026-08-01"), admin).get("publicId");
+        return new Fixture(sessionId, List.of(student), List.of(enrollment), chain.classA(),
+                chain.program(), teacher);
     }
 
     private String createProfile(String admin, String userPublicId) {
