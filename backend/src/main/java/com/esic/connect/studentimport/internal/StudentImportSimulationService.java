@@ -67,9 +67,27 @@ class StudentImportSimulationService {
             throw new StudentImportException(StudentImportException.Kind.SCOPE_FORBIDDEN);
         }
 
-        String content = CsvFileGuard.decodeAndValidate(command.fileName(), command.contentType(),
-                command.content(), properties.maxFileBytes());
-        ParsedCsv parsed = CsvParser.parse(content, properties.maxRows());
+        // Le FORMAT est choisi sur l'extension, puis confirmé par le contenu
+        // réel (magic bytes) dans le garde correspondant : un CSV renommé
+        // en `.xlsx` — ou l'inverse — est refusé, jamais deviné.
+        // Les deux chemins convergent vers la MÊME structure `ParsedCsv`,
+        // afin que la validation métier ne diverge pas par format.
+        ParsedCsv parsed;
+        List<String> workbookSheets = List.of();
+        List<String> ignoredSheets = List.of();
+        if (WorkbookFileGuard.looksLikeWorkbook(command.fileName())) {
+            byte[] workbookBytes = WorkbookFileGuard.validate(command.fileName(),
+                    command.contentType(), command.content(), properties.maxFileBytes());
+            WorkbookParser.ParsedWorkbook workbook =
+                    WorkbookParser.parse(workbookBytes, properties.maxRows());
+            parsed = workbook.toParsedCsv();
+            workbookSheets = workbook.readSheetNames();
+            ignoredSheets = workbook.mismatchedSheets();
+        } else {
+            String content = CsvFileGuard.decodeAndValidate(command.fileName(),
+                    command.contentType(), command.content(), properties.maxFileBytes());
+            parsed = CsvParser.parse(content, properties.maxRows());
+        }
         guardStructure(parsed);
 
         Instant now = clock.instant();
@@ -85,16 +103,19 @@ class StudentImportSimulationService {
                 CsvValueNormalizer.trimToNull(command.scopeClassCode()));
 
         recordGlobalHeaderNotices(job, parsed);
+        recordWorkbookNotices(job, workbookSheets, ignoredSheets);
 
         List<NormalizedRow> normalized = parsed.rows().stream()
                 .map(row -> CsvRowNormalizer.normalize(parsed, row))
                 .toList();
-        Map<Integer, List<RowIssueDraft>> duplicateIssues = FileDuplicateDetector.detect(normalized);
+        Map<FileDuplicateDetector.RowKey, List<RowIssueDraft>> duplicateIssues =
+                FileDuplicateDetector.detect(normalized);
 
         Counters counters = new Counters();
         for (NormalizedRow normalizedRow : normalized) {
             List<RowIssueDraft> issues = new ArrayList<>(StudentImportFieldValidator.validate(normalizedRow));
-            issues.addAll(duplicateIssues.getOrDefault(normalizedRow.rowNumber(), List.of()));
+            issues.addAll(duplicateIssues.getOrDefault(
+                    FileDuplicateDetector.RowKey.of(normalizedRow), List.of()));
             boolean alreadyInError = issues.stream().anyMatch(RowIssueDraft::isError);
 
             RowResolution resolution = plannedActionResolver.resolve(normalizedRow, alreadyInError);
@@ -145,10 +166,32 @@ class StudentImportSimulationService {
                 "La colonne « " + name + " » est inconnue et sera ignorée.", name)));
     }
 
+    /**
+     * Rend compte du classeur lu : quelles feuilles ont été prises, et
+     * lesquelles ont été écartées faute d'en-tête identique.
+     *
+     * <p>Écarter une feuille en silence serait le pire des comportements :
+     * l'utilisateur croirait avoir importé trois classes alors qu'il n'en
+     * a importé que deux (docs/02 §10.4).
+     */
+    private void recordWorkbookNotices(StudentImportJob job, List<String> readSheets,
+                                       List<String> ignoredSheets) {
+        if (readSheets.size() > 1) {
+            jobIssueRepository.save(new StudentImportJobIssue(job, StudentImportIssueSeverity.INFO,
+                    StudentImportIssueCodes.WORKBOOK_SHEETS_READ,
+                    "Feuilles lues : " + String.join(", ", readSheets) + ".", null));
+        }
+        ignoredSheets.forEach(name -> jobIssueRepository.save(new StudentImportJobIssue(job,
+                StudentImportIssueSeverity.WARNING, StudentImportIssueCodes.WORKBOOK_SHEET_IGNORED,
+                "La feuille « " + name + " » a été ignorée : son en-tête diffère de celui de la "
+                        + "première feuille.", null)));
+    }
+
     private void persistRow(StudentImportJob job, NormalizedRow normalizedRow, StudentImportRowStatus status,
                             RowResolution resolution, List<RowIssueDraft> issues) {
         StudentImportRow row = new StudentImportRow(job, normalizedRow.rowNumber(), status,
                 resolution.plannedAction());
+        row.setSheetName(normalizedRow.sheetName());
         row.setNormalizedIdentity(normalizedRow.lastName(), normalizedRow.firstName(),
                 normalizedRow.email(), normalizedRow.phone());
         row.setNormalizedTarget(normalizedRow.formationCode(), normalizedRow.classCode(),

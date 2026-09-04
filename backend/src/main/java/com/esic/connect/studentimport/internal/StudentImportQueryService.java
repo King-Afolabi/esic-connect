@@ -141,10 +141,20 @@ class StudentImportQueryService {
                 job.getCreatedAt());
     }
 
-    private static RowResponse toRowResponse(StudentImportRow row, List<StudentImportRowIssue> issues) {
+    /**
+     * Vue d'une ligne après correction (EF-IMP-006) : les anomalies sont
+     * relues en base, jamais reprises de l'état précédent.
+     */
+    @Transactional(readOnly = true)
+    public RowResponse describeRow(StudentImportRow row) {
+        return toRowResponse(row, rowIssueRepository.findByRow_IdInOrderByIdAsc(List.of(row.getId())));
+    }
+
+    static RowResponse toRowResponse(StudentImportRow row, List<StudentImportRowIssue> issues) {
         return new RowResponse(
                 row.getPublicId(),
                 row.getRowNumber(),
+                row.getSheetName(),
                 row.getRowStatus().name(),
                 row.getPlannedAction().name(),
                 row.getInputLastName(),

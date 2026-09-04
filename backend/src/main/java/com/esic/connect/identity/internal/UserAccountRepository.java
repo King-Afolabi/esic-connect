@@ -18,4 +18,18 @@ public interface UserAccountRepository
     /** Décompte borné des comptes par statut (bloc G1-F). {@code [status, count]} par ligne. */
     @Query("select u.status, count(u) from UserAccount u group by u.status")
     List<Object[]> countByStatusGrouped();
+
+    /**
+     * Résout un lot de comptes en UNE requête : une opération groupée sur
+     * cinq cents comptes ne doit pas produire cinq cents requêtes
+     * (NFR-PERF-08).
+     */
+    List<UserAccount> findByPublicIdIn(java.util.Collection<UUID> publicIds);
+
+    /**
+     * Comptes non archivés — base de la détection de doublons
+     * (EF-USER-005). Un compte archivé n'est pas un doublon à traiter :
+     * il est déjà sorti du circuit.
+     */
+    List<UserAccount> findByStatusNot(AccountStatus status);
 }

@@ -9,6 +9,7 @@ import {
   JobResponse,
   PageResponse,
   RowListQuery,
+  RowCorrection,
   RowResponse,
 } from './student-import.models';
 
@@ -77,6 +78,21 @@ export class StudentImportApiService {
   }
 
   /** `POST /api/v1/student-imports/{publicId}/confirm` — `200` (jamais `201`). */
+  /**
+   * `POST /api/v1/student-imports/{id}/rows/{rowId}` — corrige une ligne
+   * en anomalie avant confirmation (EF-IMP-006).
+   *
+   * <p>Le serveur rejoue la validation et met à jour la synthèse : la
+   * réponse porte le nouvel état de la ligne, il n'y a rien à recalculer
+   * côté client.
+   */
+  correctRow(publicId: string, rowId: string, corrections: RowCorrection): Observable<RowResponse> {
+    return this.http.post<RowResponse>(
+      `${this.base}/${encodeURIComponent(publicId)}/rows/${encodeURIComponent(rowId)}`,
+      corrections,
+    );
+  }
+
   confirm(publicId: string): Observable<ConfirmationResultResponse> {
     return this.http.post<ConfirmationResultResponse>(
       `${this.base}/${encodeURIComponent(publicId)}/confirm`,

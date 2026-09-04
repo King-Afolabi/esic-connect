@@ -172,7 +172,12 @@ final class CsvParser {
     // En-tête
     // ------------------------------------------------------------------
 
-    private static List<ParsedCsv.HeaderColumn> buildHeader(List<String> rawFields) {
+    /**
+     * Classification d'un en-tête, partagée avec {@link WorkbookParser} :
+     * la reconnaissance des colonnes et des synonymes doit être
+     * strictement la même quel que soit le format du fichier.
+     */
+    static List<ParsedCsv.HeaderColumn> buildHeader(List<String> rawFields) {
         List<ParsedCsv.HeaderColumn> header = new ArrayList<>();
         List<RecognizedColumn> alreadyBound = new ArrayList<>();
         for (int index = 0; index < rawFields.size(); index++) {
@@ -194,7 +199,7 @@ final class CsvParser {
         return header;
     }
 
-    private static List<String> missingMandatory(List<ParsedCsv.HeaderColumn> header) {
+    static List<String> missingMandatory(List<ParsedCsv.HeaderColumn> header) {
         List<String> present = header.stream()
                 .map(ParsedCsv.HeaderColumn::recognized)
                 .filter(Optional::isPresent).map(Optional::get)
@@ -208,7 +213,7 @@ final class CsvParser {
         return missing;
     }
 
-    private static List<String> mandatoryNames() {
+    static List<String> mandatoryNames() {
         List<String> names = new ArrayList<>();
         for (RecognizedColumn column : RecognizedColumn.values()) {
             if (column.mandatory()) {

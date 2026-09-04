@@ -36,13 +36,16 @@ class UserAccountController {
 
     private final UserManagementService userManagementService;
     private final AccountInvitationService invitationService;
+    private final BulkUserService bulkUserService;
     private final StepUpGuard stepUpGuard;
 
     UserAccountController(UserManagementService userManagementService,
                           AccountInvitationService invitationService,
+                          BulkUserService bulkUserService,
                           StepUpGuard stepUpGuard) {
         this.userManagementService = userManagementService;
         this.invitationService = invitationService;
+        this.bulkUserService = bulkUserService;
         this.stepUpGuard = stepUpGuard;
     }
 
@@ -85,6 +88,36 @@ class UserAccountController {
                     java.util.Locale.ROOT)), subject(caller));
         }
         return created;
+    }
+
+    /**
+     * Opération groupée (EF-USER-004 ; docs/02 §9.4 et §30.2 :
+     * {@code POST /users/bulk}).
+     *
+     * <p>Sans {@code confirm: true}, l'appel <strong>prévisualise</strong> :
+     * rien n'est écrit, et la réponse chiffre les comptes éligibles,
+     * ignorés et refusés. C'est le cahier qui l'exige (RG-034), et c'est
+     * la seule protection contre un clic qui suspendrait cinq cents
+     * comptes.
+     */
+    @PostMapping("/bulk")
+    @PreAuthorize(LIFECYCLE_ROLES)
+    BulkUserWeb.BulkResult bulk(@Valid @RequestBody BulkUserWeb.BulkRequest request,
+                                @AuthenticationPrincipal Jwt caller) {
+        return bulkUserService.execute(request, subject(caller), roles(caller));
+    }
+
+    /**
+     * Comptes soupçonnés d'être des doublons (EF-USER-005).
+     *
+     * <p>Le service <em>signale</em>, il ne fusionne ni ne supprime : une
+     * suppression de doublon reste une action humaine, exceptionnelle et
+     * doublement confirmée (docs/02 §9.5).
+     */
+    @GetMapping("/duplicates")
+    @PreAuthorize(ADMIN_ROLES)
+    java.util.List<BulkUserWeb.DuplicateGroup> duplicates() {
+        return bulkUserService.findDuplicates();
     }
 
     @PostMapping("/{publicId}/suspend")

@@ -4,6 +4,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
@@ -12,6 +13,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { frenchPaginatorIntl } from '../../../alternation/alternation-paginator';
 import { RoleContextService } from '../../../../core/auth/role-context.service';
+import { normalizeHttpError } from '../../../../core/models/api-error';
 import { StudentImportApiService } from '../student-import-api.service';
 import { toStudentImportError } from '../student-import-errors';
 import {
@@ -76,6 +78,7 @@ type ConfirmState =
     MatTableModule,
     MatPaginatorModule,
     MatFormFieldModule,
+    MatInputModule,
     MatSelectModule,
     MatButtonModule,
     MatIconModule,
@@ -100,6 +103,9 @@ export class StudentImportReview {
   protected readonly jobStatusLabel = jobStatusLabel;
   protected readonly displayedColumns = [
     'rowNumber',
+    // Feuille d'origine : indispensable pour situer une anomalie dans un
+    // classeur multifeuille (EF-IMP-004, docs/02 §10.7).
+    'sheetName',
     'name',
     'email',
     'classCode',
@@ -116,6 +122,27 @@ export class StudentImportReview {
   protected readonly rowsState = signal<RowsState>({ kind: 'loading' });
   protected readonly confirmState = signal<ConfirmState>({ kind: 'idle' });
   protected readonly expandedRow = signal<number | null>(null);
+
+  /**
+   * Correction en cours (EF-IMP-006) : identifiant de la ligne éditée et
+   * valeurs saisies. Le formulaire n'ouvre que les champs que le serveur
+   * accepte de corriger — la liste y est fermée, et la dupliquer ici
+   * garantirait qu'elle diverge, d'où la constante partagée ci-dessous.
+   */
+  protected readonly correctableFields = [
+    { key: 'last_name', label: 'Nom' },
+    { key: 'first_name', label: 'Prénom' },
+    { key: 'email', label: 'Adresse électronique' },
+    { key: 'class_code', label: 'Code de classe' },
+    { key: 'formation_code', label: 'Code de formation' },
+    { key: 'academic_year', label: 'Année scolaire' },
+    { key: 'student_number', label: 'Numéro étudiant' },
+  ] as const;
+
+  protected readonly editingRow = signal<string | null>(null);
+  protected readonly correctionValues = signal<Record<string, string>>({});
+  protected readonly correctionError = signal<string | null>(null);
+  protected readonly correcting = signal(false);
 
   protected readonly filters = inject(NonNullableFormBuilder).group({
     rowStatus: '' as RowStatus | '',
@@ -244,6 +271,64 @@ export class StudentImportReview {
           return;
         }
         this.confirmState.set({ kind: 'error', message: toStudentImportError(error).message });
+      },
+    });
+  }
+
+  // --- Correction d'une ligne avant confirmation (EF-IMP-006) ---------
+
+  /** Ouvre l'édition d'une ligne, préremplie de ses valeurs actuelles. */
+  protected startCorrection(row: RowResponse): void {
+    this.correctionError.set(null);
+    this.editingRow.set(row.publicId);
+    this.correctionValues.set({
+      last_name: row.lastName ?? '',
+      first_name: row.firstName ?? '',
+      email: row.email ?? '',
+      class_code: row.classCode ?? '',
+      formation_code: row.formationCode ?? '',
+      academic_year: row.academicYear ?? '',
+      student_number: row.studentNumber ?? '',
+    });
+  }
+
+  protected cancelCorrection(): void {
+    this.editingRow.set(null);
+    this.correctionValues.set({});
+    this.correctionError.set(null);
+  }
+
+  protected onCorrectionInput(field: string, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.correctionValues.update((current) => ({ ...current, [field]: value }));
+  }
+
+  /**
+   * Envoie la correction. Le serveur rejoue la validation et met à jour
+   * la synthèse : on recharge donc le travail ET les lignes, plutôt que
+   * de recalculer un état local qui divergerait.
+   */
+  protected submitCorrection(jobId: string, row: RowResponse): void {
+    if (this.correcting()) {
+      return;
+    }
+    this.correcting.set(true);
+    this.correctionError.set(null);
+    this.api.correctRow(jobId, row.publicId, this.correctionValues()).subscribe({
+      next: () => {
+        this.correcting.set(false);
+        this.cancelCorrection();
+        this.loadJob();
+        this.loadRows();
+      },
+      error: (error: unknown) => {
+        this.correcting.set(false);
+        const normalized = normalizeHttpError(error);
+        this.correctionError.set(
+          normalized.code === 'IMP_CORRECTION_INVALID_VALUE'
+            ? "Une valeur saisie n'est pas exploitable (date attendue au format AAAA-MM-JJ)."
+            : normalized.message,
+        );
       },
     });
   }
