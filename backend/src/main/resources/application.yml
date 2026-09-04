@@ -158,12 +158,23 @@ app:
     # le jeton avant l'expiration. Doit rester strictement positive (le
     # démarrage échoue sinon, voir AttendanceTokenService).
     token-ttl: ${ATTENDANCE_TOKEN_TTL:PT30S}
-    # Seuil de tolérance de retard : un émargement effectué au-delà de ce
-    # délai après l'heure de début planifiée de la séance est classé
-    # LATE (docs/02 §17.6, simplifié en un seuil unique dans cette
-    # tranche). Doit rester >= 0 (le démarrage échoue sinon, voir
-    # AttendanceService).
-    late-threshold: ${ATTENDANCE_LATE_THRESHOLD:PT10M}
+    # Paliers de tolérance de retard (docs/02 §16.4 ; RG-070 à RG-072).
+    # Les seuils sont CONFIGURABLES par l'établissement, comme le cahier
+    # l'exige :
+    #   - jusqu'à `late-threshold`      -> PRESENT
+    #   - de là jusqu'à `late-manual-threshold` -> LATE
+    #   - au-delà                        -> LATE + validation manuelle requise
+    # `late-threshold` conserve son nom (et son ancienne sémantique de
+    # premier palier) pour ne pas invalider les déploiements existants.
+    # Les deux doivent être >= 0 et ordonnés (le démarrage échoue sinon,
+    # voir AttendanceService).
+    late-threshold: ${ATTENDANCE_LATE_THRESHOLD:PT15M}
+    late-manual-threshold: ${ATTENDANCE_LATE_MANUAL_THRESHOLD:PT30M}
+    # Fenêtre d'ouverture du QR FIXE de salle avant le début de la séance
+    # (docs/02 §16.5 ; RG-051). Au-delà du début, le QR fixe n'est plus
+    # accepté : c'est le QR dynamique du formateur qui prend le relais,
+    # sous son contrôle. Doit rester >= 0.
+    room-qr-open-before: ${ATTENDANCE_ROOM_QR_OPEN_BEFORE:PT15M}
     # Pièces jointes des justificatifs (bloc G1-E ; DEC-G1-008). Le
     # CONTENU des fichiers est stocké HORS webroot, jamais en base. Le
     # répertoire doit être accessible en écriture ; par défaut un

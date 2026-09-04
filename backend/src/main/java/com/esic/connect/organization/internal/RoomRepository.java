@@ -10,6 +10,9 @@ interface RoomRepository extends JpaRepository<Room, Long>, JpaSpecificationExec
 
     Optional<Room> findByPublicId(UUID publicId);
 
+    /** Résolution d'une salle par le jeton de son QR fixe (EF-ATT-010). */
+    Optional<Room> findByStaticQrReference(String staticQrReference);
+
     boolean existsBySiteIdAndCode(Long siteId, String code);
 
     boolean existsBySiteIdAndStatus(Long siteId, OrganizationStatus status);

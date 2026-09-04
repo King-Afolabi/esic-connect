@@ -28,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 class AttendanceController {
 
     private final AttendanceService service;
+    private final RoomQrAttendanceService roomQrService;
 
-    AttendanceController(AttendanceService service) {
+    AttendanceController(AttendanceService service, RoomQrAttendanceService roomQrService) {
         this.service = service;
+        this.roomQrService = roomQrService;
     }
 
     @PostMapping("/api/v1/sessions/{publicId}/attendance-token")
@@ -59,5 +61,29 @@ class AttendanceController {
     AttendanceRecordResponse validate(@Valid @RequestBody AttendanceRequests.Validate request,
                                       @AuthenticationPrincipal Jwt caller) {
         return service.validate(request, AttendanceWeb.subject(caller));
+    }
+
+    /**
+     * Émargement par le QR <strong>fixe de salle</strong> (EF-ATT-010),
+     * sous contrôle de plage réseau (EF-ATT-008 ; docs/02 §16.6, §16.7).
+     *
+     * <p>L'adresse distante est transmise au service <strong>pour la seule
+     * décision</strong> : elle n'est ni persistée, ni écrite dans l'audit
+     * métier, ni renvoyée (RG-094).
+     *
+     * <p>Derrière un proxy inverse, l'adresse vue ici est celle du proxy
+     * tant que le serveur n'est pas configuré pour honorer les en-têtes
+     * {@code Forwarded} / {@code X-Forwarded-For} — configuration de
+     * déploiement, jamais une confiance accordée à un en-tête fourni par
+     * le client. Même convention que {@code AuthController}.
+     */
+    @PostMapping("/api/v1/attendance/room-qr")
+    @PreAuthorize(AttendanceWeb.VALIDATE_ROLE)
+    AttendanceRecordResponse validateRoomQr(
+            @Valid @RequestBody AttendanceRequests.ValidateRoomQr request,
+            @AuthenticationPrincipal Jwt caller,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        return roomQrService.validate(request, AttendanceWeb.subject(caller),
+                httpRequest.getRemoteAddr());
     }
 }

@@ -2458,6 +2458,61 @@ calcul de couverture, donc trois occasions de diverger. Une autorisation
 accordée par un responsable pédagogique, elle porterait au-delà de son
 périmètre.
 
+### DEC-S8-001 — Le QR de salle est un jeton serveur, jamais une référence saisie
+
+**Contexte.** `EF-ORG-003` et `EF-ATT-010` demandent un QR fixe imprimé,
+associé à une salle, permettant d'émarger avant le début d'une séance.
+`room.static_qr_reference` existait depuis V4 comme texte libre.
+
+**Décision.** Le jeton est **généré par le serveur** (`SecureRandom`, 32
+octets), unique en base, non saisissable par l'API, renouvelable et
+révocable. V26 efface les valeurs déjà saisies.
+
+**Raison.** Une référence choisie à la main est « A101 » : n'importe qui
+la fabrique, et un QR fabricable n'est pas un contrôle. Le renouvellement
+existe parce qu'une affiche se photographie et se diffuse ; sans lui, la
+seule parade serait de recréer la salle.
+
+**Ce que ce n'est pas.** Le QR seul ne prouve rien — il est public par
+construction. C'est la **plage réseau** qui atteste de la présence sur
+site (`DEC-S8-002`). Les deux ne valent qu'ensemble.
+
+### DEC-S8-002 — Le contrôle réseau décide, puis l'adresse disparaît
+
+**Contexte.** `EF-ATT-008` et docs/02 §16.7 exigent que le QR fixe ne soit
+accepté que depuis une plage réseau déclarée, et que l'adresse IP ne soit
+pas conservée dans l'audit métier (RG-094).
+
+**Décision.** L'adresse d'origine (`getRemoteAddr()`, jamais un en-tête
+fourni par le client) est comparée aux blocs CIDR actifs du site, sur les
+**octets** de l'adresse et sans résolution DNS. Elle n'est ni persistée,
+ni journalisée dans l'audit métier, ni renvoyée dans la réponse ou
+l'erreur. Le contrôle passe **avant** toute autre décision : inutile de
+révéler qu'une séance existe à qui n'est pas sur le réseau.
+
+**Refus par défaut.** Adresse absente, illisible, ou site sans plage
+déclarée : refus. L'absence de plage n'est pas une autorisation.
+
+### DEC-S8-003 — Une entrée provisoire est un signalement, pas une présence
+
+**Contexte.** `EF-ATT-007` et docs/02 §16.12 : le formateur enregistre une
+personne présente sans inscription ; l'entrée « ne crée pas d'inscription
+officielle » et « reste distincte d'un compte tant que la correspondance
+n'est pas validée ».
+
+**Décision.** Table `session_guest_attendance` distincte
+d'`attendance_record`. L'entrée n'entre dans aucun calcul d'assiduité
+tant qu'elle n'est pas régularisée ; la régularisation (rattachement ou
+mise à l'écart) est une décision humaine motivée et tracée, et le
+rattachement **ne crée pas** de présence.
+
+**Raison.** `attendance_record.enrollment_id` est `NOT NULL`. Le rendre
+facultatif ferait entrer une présence sans inscription dans tous les
+calculs — exactement ce que le cahier interdit. Et l'identité d'une
+entrée provisoire est *déclarée* par le formateur, pas vérifiée : la
+confondre avec une présence enregistrée reviendrait à traiter une
+affirmation comme un fait.
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

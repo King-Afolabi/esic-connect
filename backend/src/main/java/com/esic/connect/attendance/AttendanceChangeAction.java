@@ -18,6 +18,10 @@ public enum AttendanceChangeAction {
     JUSTIFICATION_REVIEWED,
     /** Pièce jointe d'un justificatif stockée (contenu déplacé, statut {@code STORED}). */
     JUSTIFICATION_ATTACHMENT_STORED,
+    /** Apprenant provisoire signalé par le formateur (EF-ATT-007). */
+    GUEST_DECLARED,
+    /** Entrée provisoire régularisée : rattachée ou écartée (EF-ATT-007). */
+    GUEST_RESOLVED,
     /** Export CSV d'un rapport d'assiduité généré. */
     REPORT_EXPORTED
 }

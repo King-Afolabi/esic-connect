@@ -12,7 +12,13 @@ record RoomResponse(
         String name,
         Integer capacity,
         String floorLabel,
+        /**
+         * Jeton du QR fixe (EF-ORG-003). Exposé aux seuls rôles qui
+         * peuvent l'imprimer : c'est un secret d'affiche, pas un
+         * identifiant public de salle.
+         */
         String staticQrReference,
+        Instant staticQrIssuedAt,
         OrganizationStatus status,
         Instant archivedAt,
         String archiveReason,
@@ -29,6 +35,7 @@ record RoomResponse(
                 room.getCapacity(),
                 room.getFloorLabel(),
                 room.getStaticQrReference(),
+                room.getStaticQrIssuedAt(),
                 room.getStatus(),
                 room.getArchivedAt(),
                 room.getArchiveReason(),

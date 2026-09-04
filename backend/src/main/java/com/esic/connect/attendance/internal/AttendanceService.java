@@ -54,6 +54,7 @@ class AttendanceService {
     private final AttendanceChangePublisher changePublisher;
     private final Clock clock;
     private final Duration lateThreshold;
+    private final Duration lateManualThreshold;
 
     AttendanceService(AttendanceTokenService tokenService,
                       AttendanceRecordRepository recordRepository,
@@ -64,10 +65,23 @@ class AttendanceService {
                       RemoteAttendanceDirectory remoteAttendanceDirectory,
                       AttendanceChangePublisher changePublisher,
                       Clock clock,
-                      @Value("${app.attendance.late-threshold:PT10M}") Duration lateThreshold) {
+                      @Value("${app.attendance.late-threshold:PT15M}") Duration lateThreshold,
+                      @Value("${app.attendance.late-manual-threshold:PT30M}")
+                      Duration lateManualThreshold) {
         if (lateThreshold == null || lateThreshold.isNegative()) {
             throw new IllegalStateException(
                     "app.attendance.late-threshold doit être une durée non négative.");
+        }
+        if (lateManualThreshold == null || lateManualThreshold.isNegative()) {
+            throw new IllegalStateException(
+                    "app.attendance.late-manual-threshold doit être une durée non négative.");
+        }
+        if (lateManualThreshold.compareTo(lateThreshold) < 0) {
+            // Un second palier inférieur au premier rendrait le classement
+            // incohérent sans jamais lever d'erreur à l'exécution : mieux
+            // vaut refuser de démarrer.
+            throw new IllegalStateException(
+                    "app.attendance.late-manual-threshold doit être >= app.attendance.late-threshold.");
         }
         this.tokenService = tokenService;
         this.recordRepository = recordRepository;
@@ -79,6 +93,7 @@ class AttendanceService {
         this.changePublisher = changePublisher;
         this.clock = clock;
         this.lateThreshold = lateThreshold;
+        this.lateManualThreshold = lateManualThreshold;
     }
 
     // ------------------------------------------------------------------
@@ -176,11 +191,19 @@ class AttendanceService {
 
         Instant now = clock.instant();
         Duration delay = Duration.between(session.startsAt(), now);
+        // Paliers de retard (docs/02 §16.4 ; RG-070 à RG-072) : jusqu'au
+        // premier seuil PRESENT, au-delà LATE, et au-delà du second seuil
+        // LATE avec validation manuelle requise. Le troisième palier ne
+        // REFUSE pas l'émargement : le cahier demande une validation
+        // humaine, pas une porte fermée — refuser produirait une absence
+        // là où il y a un retard constaté.
         AttendanceStatus status = AttendanceStatus.PRESENT;
         Integer lateMinutes = null;
+        boolean manualValidationRequired = false;
         if (delay.compareTo(lateThreshold) > 0) {
             status = AttendanceStatus.LATE;
             lateMinutes = (int) Math.min(Integer.MAX_VALUE, Math.max(0, (delay.toSeconds() + 59) / 60));
+            manualValidationRequired = delay.compareTo(lateManualThreshold) > 0;
         }
 
         if (recordRepository.existsByAttendanceCheckpointIdAndEnrollmentId(
@@ -205,7 +228,8 @@ class AttendanceService {
                 "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
                         + ";source=" + source.name() + ";status=" + status.name());
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
-                session.title(), status, lateMinutes, saved.getRecordedAt(), source);
+                session.title(), status, lateMinutes, manualValidationRequired,
+                saved.getRecordedAt(), source);
     }
 
     // ------------------------------------------------------------------

@@ -491,3 +491,126 @@ V10 n'est pas modifiée.
 - Le statut `EXPIRED` d'une autorisation existe en base mais n'est calculé
   par aucune tâche : la couverture se lit sur les dates, seule source qui
   ne peut pas se désynchroniser.
+
+---
+
+## S8 — Assiduité conforme (`sprint/S08-assiduite`)
+
+### Ce qui existait déjà (vérifié avant d'écrire une ligne)
+
+- `EF-ATT-003` était `PARTIAL` : V10 offrait N points de contrôle typés
+  `START` / `END` / `CUSTOM`, en indiquant que les quatre points du cahier
+  restaient « réalisables via des points `CUSTOM` libellés ».
+- `EF-ATT-004` était `PARTIAL` : le calcul de demi-journées existait, sans
+  s'appuyer sur les quatre points nommés.
+- `EF-ATT-005` était `PARTIAL` : un seuil unique `PT10M`.
+- `EF-ORG-003`, `EF-ATT-007`, `EF-ATT-008`, `EF-ATT-010` : aucun code.
+  `room.static_qr_reference` existait depuis V4 comme **texte libre**,
+  jamais consommé.
+
+### Ce qui a été livré
+
+| Exigence | Contenu |
+|---|---|
+| `EF-ATT-003` | les quatre points journaliers nommés, uniques par séance |
+| `EF-ATT-004` | résultat journalier complet : `FULL_DAY`, `MORNING`, `AFTERNOON`, `PARTIAL`, `TO_CONFIRM`, `ABSENT`, `EXCUSED`, plus `COMPANY` et `NOT_EXPECTED` |
+| `EF-ATT-005` | paliers 15 / 30 minutes configurables, validation humaine requise au-delà |
+| `EF-ORG-003` | QR fixe de salle **généré par le serveur**, unique, renouvelable, révocable |
+| `EF-ATT-010` | émargement par QR fixe : le serveur déduit salle, séance, inscription et fenêtre |
+| `EF-ATT-008` | contrôle de plage réseau CIDR IPv4/IPv6, refus par défaut |
+| `EF-ATT-007` | apprenant provisoire : signalement, puis régularisation tracée |
+
+### Ce que le cahier laissait implicite, et qui a été tranché
+
+**« Validations cohérentes » (§16.3).** Le cahier exige des validations
+cohérentes sans les définir. Décision : un *retour de pause validé sans
+l'arrivée qui le précède* est une incohérence → `TO_CONFIRM`, qui appelle
+un humain. L'inverse — arrivée sans retour de pause — est simplement
+incomplet → `PARTIAL`. Sans cette lecture, `TO_CONFIRM` n'aurait aucun
+cas d'emploi.
+
+**Deux valeurs ajoutées à la table.** `COMPANY` et `NOT_EXPECTED` ne
+figurent pas au cahier, qui suppose une journée attendue. Sans elles, une
+journée en entreprise tomberait dans `ABSENT` — ce que RG-028 interdit
+explicitement.
+
+**Le troisième palier de retard ne refuse pas.** Au-delà de 30 minutes,
+la présence est **enregistrée** et marquée comme demandant une validation
+humaine. Refuser produirait une absence là où il y a un retard constaté ;
+le cahier demande une validation, pas une porte fermée.
+
+**L'entrée provisoire n'est pas une présence.** Table séparée, et non une
+ligne d'`attendance_record` : celle-ci exige une inscription, et la rendre
+facultative ouvrirait une présence sans inscription dans *tous* les
+calculs d'assiduité. Conséquence assumée : une entrée provisoire n'entre
+dans aucun rapport tant qu'elle n'est pas régularisée — c'est un
+signalement, pas une présence. Le rattachement lui-même ne fabrique pas
+de présence : elle se saisit ensuite par la voie manuelle, motivée et
+auditée.
+
+### Défauts réels découverts et corrigés
+
+1. **`static_qr_reference` était un texte libre saisi à la création.**
+   Suffisant tant que personne n'émargeait avec ; plus du tout ensuite —
+   la valeur aurait été « A101 », donc fabricable par n'importe qui. Le
+   jeton est désormais tiré d'un `SecureRandom`, unique, non saisissable,
+   et renouvelable (une affiche photographiée se remplace). Les valeurs
+   déjà saisies sont **effacées** par V26 plutôt que converties : les
+   garder laisserait des références devinables actives sur des salles
+   réelles.
+
+2. **`CHECKPOINT_INVALID_TYPE` confondait deux situations** — un type
+   inconnu (requête malformée, `400`) et un type déjà présent sur la
+   séance (conflit d'état, `409`). Son message énumérait en outre
+   « START, END ou CUSTOM », devenu faux. Les deux cas sont séparés.
+
+3. **`MODIFY COLUMN` supprime la valeur par défaut.** V25 élargissait
+   `checkpoint_type` en `VARCHAR(32)` sans répéter `DEFAULT 'START'` : la
+   valeur par défaut de V10 disparaissait et seize tests d'insertion
+   directe échouaient. Défaut de migration, corrigé dans V25 avant tout
+   commit.
+
+### Migrations
+
+- `V25__named_daily_checkpoints.sql` — quatre types nommés, colonne
+  élargie (`AFTERNOON_BREAK_RETURN` fait 21 caractères, la colonne en
+  faisait 20), unicité par type nommé et par séance.
+- `V26__room_static_qr_and_network_control.sql` — jeton de QR de salle
+  unique et daté, canal `ROOM_STATIC_QR`.
+- `V27__session_guest_attendance.sql` — entrées provisoires.
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw test` | 121 classes / **1064 tests** / 0 échec / 0 erreur |
+| `cd frontend && npm test` | 79 fichiers / **663 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+La suite a été rejouée sur une base `esic_test` **recréée** : les
+migrations V1 → V27 s'appliquent de bout en bout sur une base neuve, ce
+qu'une base incrémentale ne démontre pas. La pollution par les fixtures
+(dette ouverte depuis le rapport F-ENV-1) est du même coup levée sur
+`esic_test` ; `esic_connect` reste à recréer.
+
+### Limites restantes, explicitement assumées
+
+- `EF-ATT-011` (confirmation locale d'un émargement par WebAuthn) n'est
+  **pas** livré. La cérémonie WebAuthn existe pour l'authentification
+  (sprint 2) ; l'appliquer à l'émargement demande un défi lié à la séance
+  et au point de contrôle, qui reste à écrire.
+- Le QR de salle se saisit **au clavier** dans l'écran apprenant : le scan
+  caméra n'est toujours pas implémenté. La saisie reste l'alternative
+  exigée par le cahier (§29.4), mais elle n'est pas le parcours nominal.
+- Le résultat journalier se lit par classe et par jour ; aucun écran ne le
+  présente encore. L'API est livrée et testée, l'interface relève du
+  sprint 11 (pilotage et restitution).
+- Le contrôle réseau lit `getRemoteAddr()`. Derrière un proxy inverse,
+  c'est l'adresse du proxy tant que le serveur n'est pas configuré pour
+  honorer `Forwarded` / `X-Forwarded-For` — **configuration de
+  déploiement**, jamais une confiance accordée à un en-tête client. Même
+  convention que l'authentification.
+- Une salle sans plage réseau déclarée refuse tout émargement par QR fixe.
+  C'est le refus par défaut voulu, mais cela signifie qu'un site doit être
+  configuré avant que ses affiches ne servent à quoi que ce soit.

@@ -15,8 +15,14 @@ import java.util.UUID;
  * @param sessionTitle       libellé de la séance ({@code null} possible)
  * @param status             {@code PRESENT} ou {@code LATE} (calculé serveur)
  * @param lateMinutes        minutes de retard si {@code LATE}, {@code null} sinon
+ * @param manualValidationRequired retard au-delà du second palier
+ *                                 (docs/02 §16.4 ; RG-072) : la présence
+ *                                 est enregistrée, mais elle demande une
+ *                                 confirmation humaine. Refuser
+ *                                 l'émargement produirait une absence là
+ *                                 où il y a un retard constaté.
  * @param recordedAt         instant d'enregistrement (horloge serveur)
- * @param source             canal utilisé (DYNAMIC_QR ou SHORT_CODE)
+ * @param source             canal utilisé
  */
 record AttendanceRecordResponse(
         UUID attendancePublicId,
@@ -25,6 +31,7 @@ record AttendanceRecordResponse(
         String sessionTitle,
         AttendanceStatus status,
         Integer lateMinutes,
+        boolean manualValidationRequired,
         Instant recordedAt,
         AttendanceRecordSource source) {
 }

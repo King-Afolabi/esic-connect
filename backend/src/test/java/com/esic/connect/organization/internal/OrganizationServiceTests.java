@@ -119,7 +119,7 @@ class OrganizationServiceTests {
                 .thenReturn(Optional.of(foreignBuilding));
 
         CreateRoomRequest request = new CreateRoomRequest("R1", "Salle 1",
-                foreignBuilding.getPublicId().toString(), 20, null, null);
+                foreignBuilding.getPublicId().toString(), 20, null);
         assertThatThrownBy(() -> roomService.create(site.getPublicId(), request, null))
                 .extracting(ex -> ((OrganizationException) ex).kind())
                 .isEqualTo(OrganizationException.Kind.BUILDING_SITE_MISMATCH);
@@ -130,7 +130,7 @@ class OrganizationServiceTests {
         Site site = site("ESIC-P", 1L, true);
         when(siteRepository.findByPublicId(site.getPublicId())).thenReturn(Optional.of(site));
 
-        CreateRoomRequest request = new CreateRoomRequest("R1", "Salle 1", null, 20, null, null);
+        CreateRoomRequest request = new CreateRoomRequest("R1", "Salle 1", null, 20, null);
         assertThatThrownBy(() -> roomService.create(site.getPublicId(), request, null))
                 .extracting(ex -> ((OrganizationException) ex).kind())
                 .isEqualTo(OrganizationException.Kind.ARCHIVED_PARENT);

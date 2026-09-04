@@ -51,6 +51,27 @@ class AttendanceExceptionHandler {
                 code = "ATT_NOT_ENROLLED";
                 message = "Vous n'êtes pas inscrit à une classe de cette séance.";
             }
+            case ROOM_QR_UNKNOWN -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ROOM_QR_UNKNOWN";
+                message = "Ce QR de salle n'est pas reconnu.";
+            }
+            case ROOM_QR_OUT_OF_NETWORK -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ATT_ROOM_QR_OUT_OF_NETWORK";
+                message = "Ce QR de salle ne peut être utilisé que depuis le réseau de "
+                        + "l'établissement.";
+            }
+            case ROOM_QR_SESSION_STARTED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ROOM_QR_SESSION_STARTED";
+                message = "La séance a commencé : demandez au formateur d'afficher son code.";
+            }
+            case ROOM_QR_NO_SESSION -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ROOM_QR_NO_SESSION";
+                message = "Aucune séance ne vous attend dans cette salle à cette heure.";
+            }
             case REMOTE_NOT_AUTHORIZED -> {
                 status = HttpStatus.FORBIDDEN;
                 code = "ATT_REMOTE_NOT_AUTHORIZED";

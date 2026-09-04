@@ -88,7 +88,8 @@ class AttendanceServiceSessionDateTests {
     private AttendanceService serviceWithClock(Clock clock) {
         AttendanceService service = new AttendanceService(tokenService, recordRepository, recordPersister,
                 courseSessionDirectory, enrollmentDirectory, userDirectory,
-                remoteAttendanceDirectory, changePublisher, clock, Duration.ofMinutes(10));
+                remoteAttendanceDirectory, changePublisher, clock,
+                Duration.ofMinutes(15), Duration.ofMinutes(30));
 
         lenient().when(tokenService.resolve(eq("tok"), any()))
                 .thenReturn(Optional.of(new ResolvedAttendanceToken(SESSION_ID, CHECKPOINT_ID)));
@@ -110,7 +111,7 @@ class AttendanceServiceSessionDateTests {
                 AttendanceCheckpointStatus.OPEN, true, 0, SESSION_START, null);
         return new SessionRef(1L, SESSION_ID, "Séance", SessionLifecycle.OPEN, 5L, List.of(cp),
                 Set.of(CLASS_ID), SESSION_ZONE, SESSION_START, SESSION_END,
-                com.esic.connect.coursesession.SessionAttendanceMode.ON_SITE);
+                com.esic.connect.coursesession.SessionAttendanceMode.ON_SITE, null);
     }
 
     private static EnrollmentDirectory.EnrollmentRef enrollment() {

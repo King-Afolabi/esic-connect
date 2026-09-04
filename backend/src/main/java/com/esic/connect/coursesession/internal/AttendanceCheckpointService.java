@@ -78,11 +78,14 @@ class AttendanceCheckpointService {
         AttendanceCheckpointType type = parseType(request.type());
         List<AttendanceCheckpoint> existing =
                 checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId());
-        // Au plus un START et un END actifs (non annulés) par séance.
+        // Au plus un point actif (non annulé) par type, hors CUSTOM : un
+        // second START, ou un second MORNING_ARRIVAL, rendrait le
+        // résultat journalier indéterminé (EF-ATT-003).
         if (type != AttendanceCheckpointType.CUSTOM && existing.stream()
                 .anyMatch(cp -> cp.getCheckpointType() == type
                         && cp.getStatus() != AttendanceCheckpointStatus.CANCELLED)) {
-            throw new CourseSessionException(CourseSessionException.Kind.CHECKPOINT_INVALID_TYPE);
+            throw new CourseSessionException(
+                    CourseSessionException.Kind.CHECKPOINT_TYPE_ALREADY_PRESENT);
         }
 
         int order = request.displayOrder() != null

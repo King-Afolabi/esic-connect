@@ -51,8 +51,18 @@ public class Room extends BaseEntity {
     @Column(name = "floor_label")
     private String floorLabel;
 
-    @Column(name = "static_qr_reference")
+    /**
+     * Jeton du QR fixe de salle (EF-ORG-003 ; V26). <strong>Généré par le
+     * serveur</strong>, jamais saisi : une référence choisie à la main
+     * serait devinable, et un QR devinable n'est pas un contrôle. Nul tant
+     * qu'aucun QR n'a été émis pour cette salle.
+     */
+    @Column(name = "static_qr_reference", length = 64)
     private String staticQrReference;
+
+    /** Émission du jeton courant — trace une rotation (V26). */
+    @Column(name = "static_qr_issued_at")
+    private Instant staticQrIssuedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -86,15 +96,36 @@ public class Room extends BaseEntity {
     }
 
     public Room(Site site, Building building, String code, String name, Integer capacity,
-                String floorLabel, String staticQrReference) {
+                String floorLabel) {
         this.site = site;
         this.building = building;
         this.code = code;
         this.name = name;
         this.capacity = capacity;
         this.floorLabel = floorLabel;
-        this.staticQrReference = staticQrReference;
         this.status = OrganizationStatus.ACTIVE;
+    }
+
+    /**
+     * Émet (ou renouvelle) le jeton du QR fixe (EF-ORG-003). Le
+     * renouvellement <strong>invalide</strong> l'affiche précédente : c'est
+     * précisément ce qu'on attend d'un QR photographié et diffusé.
+     */
+    public void issueStaticQr(String token, Instant at, Long actorId) {
+        this.staticQrReference = token;
+        this.staticQrIssuedAt = at;
+        this.updatedById = actorId;
+    }
+
+    /** Retire le QR : la salle n'accepte plus d'émargement par affiche. */
+    public void revokeStaticQr(Long actorId) {
+        this.staticQrReference = null;
+        this.staticQrIssuedAt = null;
+        this.updatedById = actorId;
+    }
+
+    public Instant getStaticQrIssuedAt() {
+        return staticQrIssuedAt;
     }
 
     /**
@@ -102,12 +133,11 @@ public class Room extends BaseEntity {
      * {@code null}) devient le rattachement courant ; sa cohérence avec le
      * site est vérifiée en amont par le service.
      */
-    public void updateDetails(String name, Integer capacity, String floorLabel, String staticQrReference,
+    public void updateDetails(String name, Integer capacity, String floorLabel,
                               Building building, Long actorId) {
         this.name = name;
         this.capacity = capacity;
         this.floorLabel = floorLabel;
-        this.staticQrReference = staticQrReference;
         this.building = building;
         this.updatedById = actorId;
     }
