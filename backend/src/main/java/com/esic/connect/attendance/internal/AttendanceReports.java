@@ -84,6 +84,35 @@ final class AttendanceReports {
             HalfDayTotals totals) {
     }
 
+    /**
+     * Vérification d'un document officiel présenté par un tiers
+     * (EF-REP-006, AC-033).
+     *
+     * <p>Ne porte <strong>aucune donnée d'assiduité</strong> : le tiers
+     * doit pouvoir constater qu'un identifiant correspond bien à une
+     * attestation émise, pas lire le taux de présence de la personne.
+     */
+    record DocumentCheck(
+            String documentId,
+            String documentType,
+            java.time.Instant issuedAt,
+            String issuedBy,
+            java.time.LocalDate periodStart,
+            java.time.LocalDate periodEnd,
+            boolean revoked) {
+    }
+
+    /** Ligne du registre des documents émis (écran d'administration). */
+    record DocumentSummary(
+            UUID publicId,
+            String documentId,
+            String documentType,
+            String subject,
+            java.time.Instant issuedAt,
+            String issuedBy,
+            boolean revoked) {
+    }
+
     /** Cartes de synthèse. */
     record Summary(
             Instant from,

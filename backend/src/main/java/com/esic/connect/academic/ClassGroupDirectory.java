@@ -51,6 +51,21 @@ public interface ClassGroupDirectory {
     java.util.List<ClassGroupRef> findByPublicIds(java.util.Collection<UUID> classGroupPublicIds);
 
     /**
+     * Classes dont le code ou le nom contient {@code query}
+     * (EF-USER-009 ; docs/02 §22.7).
+     *
+     * <p>La recherche appartient au module qui détient la donnée : c'est
+     * lui qui sait ce qu'est un code de classe, et lui seul doit écrire la
+     * requête. Le module {@code search} n'assemble que des résultats.
+     *
+     * @param query           fragment recherché, déjà nettoyé par l'appelant
+     * @param visibleInternalIds restriction de périmètre ; {@code null}
+     *                        pour un appelant à périmètre global
+     * @param limit           borne haute, écrêtée par l'implémentation
+     */
+    java.util.List<ClassGroupRef> search(String query, java.util.Set<Long> visibleInternalIds, int limit);
+
+    /**
      * Résout une classe pour l'import CSV des apprenants à partir de ses
      * <em>codes fonctionnels</em> (rapport §4.3, §5.2). Vérifie
      * successivement l'existence de la formation, de l'année scolaire, de

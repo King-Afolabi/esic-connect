@@ -53,6 +53,16 @@ public interface TeacherDirectory {
     Optional<TeacherRef> findEligibleTeacherByInternalId(long userInternalId);
 
     /**
+     * Formateurs éligibles dont le nom ou le prénom contient {@code query}
+     * (EF-USER-009).
+     *
+     * <p>L'adresse électronique n'est pas un critère : la rechercher
+     * reviendrait à confirmer l'existence d'un compte à partir d'une
+     * adresse devinée.
+     */
+    List<TeacherRef> searchEligibleTeachers(String query, int limit);
+
+    /**
      * Référence technique d'un compte formateur, strictement suffisante
      * pour qu'une séance stocke la clé étrangère {@code teacher_user_id}
      * et affiche l'identité du formateur.

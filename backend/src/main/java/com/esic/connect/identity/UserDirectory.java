@@ -46,6 +46,18 @@ public interface UserDirectory {
     Optional<PersonName> findName(long userInternalId);
 
     /**
+     * Identités civiles de <strong>plusieurs</strong> comptes en une
+     * requête.
+     *
+     * <p>La variante unitaire ci-dessus, appelée dans une boucle sur un
+     * effectif, produit autant de requêtes que d'apprenants : c'est le
+     * coût proportionnel au nombre d'éléments affichés que NFR-PERF-08
+     * interdit. Les identifiants inconnus sont simplement absents du
+     * résultat.
+     */
+    java.util.Map<Long, PersonName> findNames(java.util.Collection<Long> userInternalIds);
+
+    /**
      * Comptes non archivés porteurs d'un rôle actif donné.
      *
      * <p>Sert à désigner un <strong>guichet</strong> plutôt qu'une
@@ -76,6 +88,22 @@ public interface UserDirectory {
      * @return l'adresse si le compte existe, {@link Optional#empty()} sinon
      */
     Optional<String> findEmailForDelivery(long userInternalId);
+
+    /**
+     * Comptes <strong>actifs</strong> porteurs du rôle donné dont le nom
+     * ou le prénom contient {@code query} (EF-USER-009).
+     *
+     * <p>L'adresse électronique n'est jamais un critère de recherche :
+     * elle permettrait de confirmer l'existence d'un compte à partir
+     * d'une adresse devinée.
+     *
+     * @param roleCode code du rôle, par exemple {@code "STUDENT"}
+     */
+    java.util.List<NamedUserRef> searchByName(String query, String roleCode, int limit);
+
+    /** Compte trouvé par recherche : identité civile, jamais d'adresse. */
+    record NamedUserRef(long internalId, UUID publicId, String firstName, String lastName) {
+    }
 
     /** Prénom / nom d'un compte, pour affichage. */
     record PersonName(String firstName, String lastName) {

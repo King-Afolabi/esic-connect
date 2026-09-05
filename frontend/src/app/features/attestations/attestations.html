@@ -1,0 +1,117 @@
+<section class="attest" aria-labelledby="attest-title">
+  <h1 id="attest-title">Attestations d'assiduité</h1>
+
+  @if (forbidden()) {
+    <div class="attest__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à produire ou consulter des attestations.</p>
+    </div>
+  } @else {
+    <mat-card appearance="outlined" class="attest__card">
+      <mat-card-header><mat-card-title>Émettre une attestation</mat-card-title></mat-card-header>
+      <mat-card-content>
+        <form class="attest__form" [formGroup]="issueForm" (ngSubmit)="issue()">
+          <mat-form-field appearance="outline" class="attest__field">
+            <mat-label>Identifiant du profil apprenant</mat-label>
+            <input matInput formControlName="studentProfile" autocomplete="off" required />
+            <mat-hint>Identifiant public visible sur la fiche de l'apprenant.</mat-hint>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Du</mat-label>
+            <input matInput type="date" formControlName="from" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Au</mat-label>
+            <input matInput type="date" formControlName="to" />
+          </mat-form-field>
+          <div class="attest__actions">
+            <button mat-flat-button type="submit" [disabled]="issuing()">
+              <mat-icon aria-hidden="true">description</mat-icon> Générer le PDF
+            </button>
+          </div>
+        </form>
+        @if (issuing()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Génération en cours"></mat-progress-bar>
+        }
+        @if (lastDocumentId(); as id) {
+          <p class="attest__ok" role="status">
+            Attestation émise sous l'identifiant <strong>{{ id }}</strong>.
+            Conservez-le : c'est lui qui permet de la vérifier.
+          </p>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined" class="attest__card">
+      <mat-card-header><mat-card-title>Vérifier un document</mat-card-title></mat-card-header>
+      <mat-card-content>
+        <form class="attest__form" [formGroup]="verifyForm" (ngSubmit)="verify()">
+          <mat-form-field appearance="outline" class="attest__field">
+            <mat-label>Identifiant du document</mat-label>
+            <input matInput formControlName="documentId" autocomplete="off" required />
+          </mat-form-field>
+          <div class="attest__actions">
+            <button mat-stroked-button type="submit">
+              <mat-icon aria-hidden="true">verified</mat-icon> Vérifier
+            </button>
+          </div>
+        </form>
+        @if (verification(); as v) {
+          <dl class="attest__facts" role="status">
+            <div><dt>Identifiant</dt><dd>{{ v.documentId }}</dd></div>
+            <div><dt>Type</dt><dd>{{ v.documentType }}</dd></div>
+            <div><dt>Émis le</dt><dd>{{ v.issuedAt }}</dd></div>
+            <div><dt>Émis par</dt><dd>{{ v.issuedBy }}</dd></div>
+            <div><dt>Période</dt>
+              <dd>{{ v.periodStart || 'origine' }} → {{ v.periodEnd || 'aujourd\'hui' }}</dd></div>
+            <div><dt>État</dt><dd>{{ v.revoked ? 'Révoqué' : 'Valide' }}</dd></div>
+          </dl>
+          <p class="attest__note">
+            La vérification ne révèle aucune donnée d'assiduité : elle confirme l'émission,
+            rien de plus.
+          </p>
+        }
+        @if (verificationFailed()) {
+          <p class="attest__ko" role="alert">
+            Aucune attestation ne correspond à cet identifiant.
+          </p>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined" class="attest__card">
+      <mat-card-header><mat-card-title>Documents émis</mat-card-title></mat-card-header>
+      <mat-card-content>
+        @if (loadingRegistry()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+        } @else if (registry().length) {
+          <table class="attest__table">
+            <caption class="attest__caption">Registre des attestations émises</caption>
+            <thead>
+              <tr>
+                <th scope="col">Identifiant</th>
+                <th scope="col">Apprenant</th>
+                <th scope="col">Émis le</th>
+                <th scope="col">Émis par</th>
+                <th scope="col">État</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of registry(); track row.publicId) {
+                <tr>
+                  <th scope="row">{{ row.documentId }}</th>
+                  <td>{{ row.subject || '—' }}</td>
+                  <td>{{ row.issuedAt }}</td>
+                  <td>{{ row.issuedBy }}</td>
+                  <td>{{ row.revoked ? 'Révoqué' : 'Valide' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="attest__note">Aucune attestation émise pour le moment.</p>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+</section>

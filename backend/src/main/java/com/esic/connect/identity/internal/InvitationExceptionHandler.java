@@ -17,7 +17,8 @@ import java.util.UUID;
  * code {@code INVITATION_INVALID} et le même message : la réponse
  * publique ne révèle jamais le motif exact ni aucune donnée personnelle.
  */
-@RestControllerAdvice(assignableTypes = AccountInvitationController.class)
+@RestControllerAdvice(assignableTypes = {AccountInvitationController.class,
+        PendingInvitationReportController.class})
 class InvitationExceptionHandler {
 
     @ExceptionHandler(InvitationException.class)
@@ -40,6 +41,11 @@ class InvitationExceptionHandler {
                 status = HttpStatus.UNPROCESSABLE_ENTITY;
                 code = "INVITATION_ROLE_INVALID";
                 message = "Role inconnu ou inactif.";
+            }
+            case INVALID_EXPORT_FORMAT -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "INVITATION_INVALID_EXPORT_FORMAT";
+                message = "Format d'export non pris en charge (csv, xlsx ou pdf attendu).";
             }
             default -> {
                 status = HttpStatus.BAD_REQUEST;

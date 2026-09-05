@@ -26,6 +26,8 @@ import {
   ATTENDANCE_MANAGE_ROLES,
   ClassReportRow,
   PageResponse,
+  REPORT_EXPORT_FORMATS,
+  ReportExportFormat,
   ReportKind,
   ReportQuery,
   SessionReportRow,
@@ -87,6 +89,7 @@ export class AttendanceReport {
   protected readonly state = signal<State>({ kind: 'loading' });
   protected readonly page = signal(0);
   protected readonly exporting = signal(false);
+  protected readonly exportFormats = REPORT_EXPORT_FORMATS;
   private readonly size = 20;
 
   /** Options de tri bornées à la liste blanche serveur (§6). */
@@ -168,15 +171,22 @@ export class AttendanceReport {
     }
   }
 
-  protected exportCsv(): void {
+  /**
+   * Exporte le rapport courant (EF-REP-003, EF-REP-004, EF-REP-005).
+   *
+   * Les filtres appliqués sont ceux de l'écran : exporter autre chose
+   * que ce que la personne voit serait le meilleur moyen de lui faire
+   * transmettre des chiffres qu'elle n'a pas relus.
+   */
+  protected exportAs(format: ReportExportFormat): void {
     if (this.exporting()) {
       return;
     }
     this.exporting.set(true);
-    this.api.exportReport(this.kind, this.query(false)).subscribe({
+    this.api.exportReport(this.kind, this.query(false), format).subscribe({
       next: (response) => {
         this.exporting.set(false);
-        triggerCsvDownload(response, `assiduite-${this.kind}.csv`);
+        triggerCsvDownload(response, `assiduite-${this.kind}.${format}`);
       },
       error: (error: unknown) => {
         this.exporting.set(false);

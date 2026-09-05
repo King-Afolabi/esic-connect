@@ -1,0 +1,91 @@
+<section class="search" aria-labelledby="search-title">
+  <h1 id="search-title">Recherche globale</h1>
+  <p class="search__intro">
+    Apprenants, formateurs, classes, formations, salles et séances.
+    Les résultats sont limités à votre périmètre, décidé par le serveur.
+  </p>
+
+  <form class="search__form" [formGroup]="form" (ngSubmit)="submit()">
+    <mat-form-field appearance="outline" class="search__field">
+      <mat-label>Rechercher</mat-label>
+      <input matInput formControlName="query" type="search" name="q"
+             autocomplete="off" [attr.minlength]="minLength" />
+      <mat-hint>{{ minLength }} caractères minimum. L'adresse électronique n'est pas un critère.</mat-hint>
+    </mat-form-field>
+    <div class="search__actions">
+      <button mat-flat-button type="submit">
+        <mat-icon aria-hidden="true">search</mat-icon> Rechercher
+      </button>
+      <button mat-button type="button" (click)="reset()">Effacer</button>
+    </div>
+  </form>
+
+  @switch (state().kind) {
+    @case ('idle') {
+      <p class="search__empty" role="status">Saisissez un terme pour lancer une recherche.</p>
+    }
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Recherche en cours"></mat-progress-bar>
+    }
+    @case ('forbidden') {
+      <div class="search__panel" role="alert">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p>Vous n'êtes pas autorisé à utiliser la recherche globale.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="search__panel" role="alert">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <p>La recherche a échoué. Réessayez dans un instant.</p>
+      </div>
+    }
+    @case ('ready') {
+      @if (state(); as s) {
+        @if (s.kind === 'ready') {
+          <div role="status" aria-live="polite">
+            <p class="search__count">
+              {{ s.data.results.length }} résultat(s) pour « {{ s.data.query }} ».
+              @if (s.data.truncated) {
+                <span> Liste tronquée : affinez votre recherche.</span>
+              }
+            </p>
+          </div>
+
+          @if (s.data.results.length) {
+            <table class="search__table">
+              <caption class="search__caption">Résultats de la recherche globale</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Type</th>
+                  <th scope="col">Libellé</th>
+                  <th scope="col">Complément</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (hit of s.data.results; track trackHit($index, hit)) {
+                  <tr>
+                    <td>{{ hitTypeLabel(hit.type) }}</td>
+                    <td>
+                      @if (hitRoute(hit); as route) {
+                        <a [routerLink]="route">{{ hit.label }}</a>
+                      } @else {
+                        {{ hit.label }}
+                      }
+                    </td>
+                    <td>{{ hit.secondary || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="search__empty">Aucun résultat.</p>
+          }
+
+          @for (note of s.data.notes; track note) {
+            <p class="search__note">{{ note }}</p>
+          }
+        }
+      }
+    }
+  }
+</section>

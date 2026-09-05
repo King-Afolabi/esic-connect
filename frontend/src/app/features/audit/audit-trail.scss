@@ -1,0 +1,63 @@
+.audit {
+  display: block;
+}
+
+.audit__intro,
+.audit__count {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.audit__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.audit__actions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.audit__panel {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Une table large défile dans son propre conteneur : la page, elle, ne
+   défile jamais horizontalement. */
+.audit__scroll {
+  overflow-x: auto;
+}
+
+.audit__table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  min-width: 60rem;
+  width: 100%;
+
+  th,
+  td {
+    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+  }
+}
+
+.audit__caption {
+  caption-side: top;
+  font-weight: 600;
+  padding-bottom: 0.4rem;
+  text-align: left;
+}
+
+.audit__pager {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}

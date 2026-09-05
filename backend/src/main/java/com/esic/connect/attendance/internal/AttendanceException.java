@@ -114,7 +114,18 @@ class AttendanceException extends RuntimeException {
         /** Filtre de rapport invalide. */
         REPORT_INVALID_FILTER,
         /** Champ ou direction de tri de rapport hors liste blanche. */
-        REPORT_INVALID_SORT
+        REPORT_INVALID_SORT,
+        // --- Attestation d'assiduité (V34 ; EF-REP-006, AC-033) ---
+        /**
+         * Aucun apprenant ne correspond <strong>dans le périmètre de
+         * l'appelant</strong>. Un identifiant hors périmètre produit la
+         * même réponse qu'un identifiant inexistant : confirmer
+         * l'existence d'un apprenant qu'on n'a pas le droit de voir est
+         * déjà une divulgation (docs/02 §18.2).
+         */
+        ATTESTATION_SUBJECT_NOT_FOUND,
+        /** Aucun document au registre pour cet identifiant. */
+        ATTESTATION_NOT_FOUND
     }
 
     private final Kind kind;

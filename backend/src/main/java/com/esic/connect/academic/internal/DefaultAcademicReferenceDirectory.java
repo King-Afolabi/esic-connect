@@ -1,6 +1,7 @@
 package com.esic.connect.academic.internal;
 
 import com.esic.connect.academic.AcademicReferenceDirectory;
+import com.esic.connect.shared.SearchPattern;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,24 @@ class DefaultAcademicReferenceDirectory implements AcademicReferenceDirectory {
         }
         return programRepository.findByPublicId(programPublicId)
                 .map(DefaultAcademicReferenceDirectory::toRef);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<ProgramRef> searchPrograms(String query, java.util.Set<Long> visibleInternalIds,
+                                                     int limit) {
+        String pattern = SearchPattern.of(query);
+        if (pattern == null) {
+            return java.util.List.of();
+        }
+        org.springframework.data.domain.Pageable page =
+                org.springframework.data.domain.PageRequest.of(0, SearchPattern.bound(limit));
+        java.util.List<Program> found = visibleInternalIds == null
+                ? programRepository.search(pattern, page)
+                : visibleInternalIds.isEmpty()
+                        ? java.util.List.of()
+                        : programRepository.searchWithin(pattern, visibleInternalIds, page);
+        return found.stream().map(DefaultAcademicReferenceDirectory::toRef).toList();
     }
 
     @Override

@@ -311,6 +311,48 @@ export interface ReportQuery {
 export type ReportKind = 'sessions' | 'classes' | 'students';
 
 /**
+ * Formats d'export d'un rapport (EF-REP-003, EF-REP-004, EF-REP-005).
+ * Liste fermée, miroir de `ReportExportFormat` côté serveur : c'est lui
+ * qui décide, un format inconnu produit un `400`.
+ */
+export type ReportExportFormat = 'csv' | 'xlsx' | 'pdf';
+
+export const REPORT_EXPORT_FORMATS: readonly { value: ReportExportFormat; label: string }[] = [
+  { value: 'csv', label: 'CSV' },
+  { value: 'xlsx', label: 'Excel' },
+  { value: 'pdf', label: 'PDF' },
+];
+
+/**
+ * Ligne du registre des documents officiels émis (EF-REP-006).
+ * Aucun contenu d'attestation : seulement de quoi la retrouver.
+ */
+export interface ReportDocumentSummary {
+  publicId: string;
+  documentId: string;
+  documentType: string;
+  subject: string | null;
+  issuedAt: string;
+  issuedBy: string;
+  revoked: boolean;
+}
+
+/**
+ * Vérification d'un identifiant de document (AC-033). Ne porte
+ * **aucune donnée d'assiduité** : un tiers doit pouvoir constater
+ * l'émission, pas lire le taux de présence de la personne.
+ */
+export interface ReportDocumentCheck {
+  documentId: string;
+  documentType: string;
+  issuedAt: string;
+  issuedBy: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  revoked: boolean;
+}
+
+/**
  * Liste blanche du tri serveur (correctif PR #22 §6), alignée sur
  * `AttendanceReportSort` côté back-end. Le composant n'émet jamais
  * d'autre valeur ; un `sort` hors liste renverrait

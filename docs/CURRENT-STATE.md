@@ -11,16 +11,21 @@
 ## Dernière mise à jour
 
 ```text
-5 septembre 2026 — sprint 10 terminé : outbox transactionnelle, audience
-de notification complète, canal courriel, préférences, PWA installable et
-file d'actions différées.
-Backend 1164 tests, frontend 728 tests, tout vert. Schéma en V33.
-L'analyse antivirus a été éprouvée contre un `clamd` RÉEL (ClamAV 1.4.6,
-base 28108) : dettes T-04 et T-11 levées. Elle reste INACTIVE par défaut,
-et l'API comme l'écran le déclarent.
-Les notifications poussées restent `PARTIAL` : chiffrement conforme au
-vecteur de test de la RFC 8291, mais aucun service de poussée réel n'a
-été sollicité — sans clés VAPID, l'API renvoie `providerActive: false`.
+5 septembre 2026 — sprint 11 terminé : tableaux de bord complets,
+exports Excel et PDF, attestation d'assiduité identifiable, recherche
+globale, consultation et export de la piste d'audit, flux iCalendar
+signé et révocable.
+Backend 1209 tests, frontend 764 tests, recette navigateur S11 13/13,
+tout vert. Schéma en V34. Trois modules nouveaux : `document`,
+`search` (sans table) et `integration`. ModularityTests vert — 19 modules.
+Dette T-03 (coût SQL par séance) LEVÉE et vérifiée par une mesure.
+`EF-INT-002` et `EF-INT-003` restent `PARTIAL` : les adaptateurs
+Microsoft Graph sont écrits et couverts par des tests, mais AUCUN
+LOCATAIRE MICROSOFT RÉEL n'a été sollicité — dette T-16. Sans
+identifiants, l'API déclare `meetingActive: false`.
+Limites du sprint 10 conservées telles quelles : T-13 (aucun service de
+poussée réel), T-14 (hors ligne limité à une session ouverte), T-15
+(file d'actions non persistante).
 ```
 
 ## Repère Git
@@ -29,7 +34,7 @@ vecteur de test de la RFC 8291, mais aucun service de poussée réel n'a
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8), `v0.9` (S9), `v0.10` (S10) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8), `v0.9` (S9), `v0.10` (S10), `v0.11` (S11) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -40,14 +45,35 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 103 | 72 % |
-| `PARTIAL` | 4 | 3 % |
-| `NOT_IMPLEMENTED` | 35 | 25 % |
+| `IMPLEMENTED_AND_TESTED` | 112 | 79 % |
+| `PARTIAL` | 5 | 3 % |
+| `NOT_IMPLEMENTED` | 25 | 18 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
 cible. Les 35 exigences non implémentées ne sont pas des régressions :
 ce sont les sprints 11 à 13 de la roadmap.
+
+Le sprint 11 fait passer **huit** exigences de `NOT_IMPLEMENTED` à
+`IMPLEMENTED_AND_TESTED` — `EF-REP-004` (Excel), `EF-REP-005` (PDF),
+`EF-REP-006` (attestation identifiable), `EF-REP-008` (tableau
+équivalent), `EF-REP-010` (invitations non activées), `EF-USER-009`
+(recherche globale), `EF-AUD-002` (consultation et export de l'audit),
+`EF-INT-001` (flux iCalendar) — et clôt un partiel : `EF-REP-007`, dont
+les cartes du responsable pédagogique et de l'administration étaient
+incomplètes.
+
+Deux exigences deviennent `PARTIAL` **plutôt que livrées**, et il faut
+le lire comme tel :
+
+- `EF-INT-002` (réunion Teams depuis une séance distancielle) et
+  `EF-INT-003` (écriture dans un calendrier Microsoft) — le port, les
+  adaptateurs Graph et l'adaptateur inactif sont écrits et testés, mais
+  **aucun locataire Microsoft réel n'a été sollicité** (dette T-16).
+  Sans `tenantId`, `clientId` et `clientSecret` fournis par
+  l'environnement, l'adaptateur inactif répond et
+  `GET /api/v1/integrations/microsoft/status` déclare
+  `meetingActive: false`. Il ne simule aucune réunion.
 
 Le sprint 10 fait passer sept exigences de `NOT_IMPLEMENTED` à
 `IMPLEMENTED_AND_TESTED` — `EF-AUD-003` (outbox), `EF-OPS-005` (rejeu
@@ -127,7 +153,7 @@ raison, le document avait tort.
 | Domaine | Livré | Partiel | Absent |
 |---|---:|---:|---:|
 | Identité et accès (15) | 15 | 0 | 0 |
-| Utilisateurs (9) | 8 | 0 | 1 |
+| Utilisateurs (9) | 9 | 0 | 0 |
 | Référentiels et organisation (13) | 12 | 0 | 1 |
 | Inscriptions et imports (10) | 9 | 0 | 1 |
 | Corps enseignant (5) | 4 | 1 | 0 |
@@ -136,10 +162,15 @@ raison, le document avait tort.
 | Émargement et assiduité (16) | 14 | 0 | 2 |
 | Justificatifs et réclamations (8) | 8 | 0 | 0 |
 | Notifications et mobilité (9) | 7 | 2 | 0 |
-| Restitution (10) | 3 | 1 | 6 |
+| Restitution (10) | 9 | 0 | 1 |
 | IA et objets connectés (10) | 0 | 0 | 10 |
-| Intégrations (4) | 0 | 0 | 4 |
-| Transverse (11) | 3 | 0 | 8 |
+| Intégrations (4) | 1 | 2 | 1 |
+| Transverse (11) | 4 | 0 | 7 |
+
+> **Contrôle de somme** : 15+9+12+9+4+11+9+14+8+7+9+0+1+4 = **112** livrés ;
+> 0+0+0+0+1+0+0+0+0+2+0+0+2+0 = **5** partiels ;
+> 0+0+1+1+0+2+0+2+0+0+1+10+1+7 = **25** absents. Total **142**, identique
+> au tableau §1.
 
 ---
 
@@ -594,7 +625,108 @@ raison, le document avait tort.
   cache de données est vidé à la déconnexion — un appareil partagé ne
   garde pas les données de la personne précédente.
 
-### 2.11 Transverse
+### 2.11 Restitution, documents et intégrations (sprint 11)
+
+- `EF-REP-004`/`005` **exports Excel et PDF** : un paramètre `format`
+  (`csv` | `xlsx` | `pdf`) sur les routes d'export existantes, résolu
+  contre une **liste fermée** — un format inconnu produit un `400`
+  explicite, jamais un repli silencieux sur le CSV. Les trois formats
+  partagent la **même description de rapport** (module `document`) : une
+  colonne ajoutée à l'un et oubliée à l'autre se lirait comme une
+  différence de chiffres. Conséquence assumée : les en-têtes de colonnes
+  du CSV sont désormais les **libellés français** partagés avec le PDF
+  (voir §8, changement de comportement).
+- **Injection de formule neutralisée au classeur comme au CSV**
+  (`AC-032`) : le vecteur est le tableur qui ouvre le fichier, pas
+  l'extension. Toutes les cellules `.xlsx` sont écrites en **texte**,
+  jamais en formule, et vérifiées comme telles.
+- Le **CSV n'a aucun préambule** : la ligne 1 est l'en-tête. Titre,
+  synthèse et mentions sont portés par le classeur et le PDF, qui sont
+  faits pour être lus par une personne — un CSV est un format
+  d'interéchange, et tout ce qui précède l'en-tête casse les analyseurs.
+- `EF-REP-005` **identité visuelle** : bandeau, établissement, nom du
+  rapport, période, date de génération, auteur, identifiant et mention de
+  document électronique, **sur chaque page**. Le dépôt ne contient
+  **aucun fichier de logo** : l'en-tête est une signature typographique,
+  pas une image — dessiner un logo inventé serait pire que de ne pas en
+  mettre.
+- `EF-REP-006` **attestation d'assiduité** (`AC-033`, `AC-019`) :
+  identifiant `ESIC-ATT-<année>-<10 caractères aléatoires>` inscrit au
+  registre `report_document` (V34), émetteur et auteur sur le document,
+  mesure exprimée **en demi-journées et en journées équivalentes** —
+  l'unité du cahier, pas des heures de connexion. Le **PDF n'est pas
+  conservé** : il est reproductible depuis les données d'assiduité, et le
+  garder dupliquerait des données personnelles dans un second
+  emplacement à gouverner. Est conservée une **empreinte SHA-256**, qui
+  suffit à dire si un PDF présenté est bien celui qui a été émis. La
+  route de vérification ne renvoie **aucune donnée d'assiduité** :
+  quiconque détient le papier ne doit pas pouvoir en apprendre davantage
+  que ce que le papier porte.
+- `EF-REP-007` **cartes complètes** : le responsable pédagogique voit
+  taux d'assiduité, retards, absences non justifiées, taux par classe,
+  justificatifs en attente **de son périmètre**, réclamations ouvertes de
+  son guichet et comptes non activés de ses classes ; l'administration
+  voit taux global, **comparaison des formations**, volume et délai
+  médian de traitement des justificatifs, invitations expirées, exports
+  récents et dernières opérations auditées. Le délai médian vaut
+  **`null` et non `0`** quand rien n'a été traité : « aucun dossier
+  traité » et « traité en zéro heure » ne doivent pas s'écrire pareil.
+  Le taux d'un groupe est recalculé depuis les **totaux**, jamais comme
+  moyenne des taux — une classe de six pèserait autant qu'une classe de
+  trente.
+- **Ce que la carte du responsable ne montre pas, et pourquoi** : une
+  « séance sans formateur » n'existe pas en base
+  (`course_session.teacher_user_id` est `NOT NULL` depuis V9). Le cas est
+  traité à l'import de planning, où il produit un avertissement
+  (`EF-PLAN-009`). Une tuile afficherait éternellement zéro et laisserait
+  croire à un contrôle qui n'aurait pas lieu ; une mention le dit.
+- `EF-REP-008` **tableau équivalent** : chaque histogramme est doublé
+  d'un `<table>` avec `caption`, et **chaque barre porte sa valeur en
+  toutes lettres**. Graphique et table lisent la même liste : ils ne
+  peuvent pas diverger. La couleur n'est jamais seule porteuse de
+  l'information (docs/02 §22.6, §32.5).
+- `EF-REP-010` **invitations non activées** : comptes en attente,
+  dernière relance, expiration, jours d'attente. L'adresse n'apparaît que
+  **masquée** (`c…e@e…c.test`) — ce rapport sert à relancer, pas à
+  produire un annuaire exportable qui circulerait ensuite par courriel.
+- `EF-USER-009` **recherche globale** : apprenants, formateurs, classes,
+  formations, salles et séances. **Chaque module cherche dans sa propre
+  donnée** (lui seul sait ce qu'est un code de classe) ; le module
+  `search` ne fait qu'assembler. Le périmètre est relu du contexte de
+  sécurité, jamais reçu en paramètre. Deux protections : les jokers
+  `%` et `_` saisis sont **échappés** (sans quoi `%` ramènerait tout le
+  référentiel), et un fragment de moins de deux caractères est refusé —
+  c'est une énumération, pas une recherche. **L'adresse électronique
+  n'est jamais un critère** : la chercher permettrait de confirmer
+  l'existence d'un compte à partir d'une adresse devinée.
+- `EF-AUD-002` **consultation et export de l'audit** : filtres fermés
+  (période, action, catégorie, type de ressource, résultat, acteur,
+  corrélation), pagination bornée, export CSV / Excel / PDF. **Aucune
+  route d'écriture ni de suppression n'existe** — « l'audit ne peut être
+  modifié ni effacé » (§23.4). Les colonnes JSON
+  (`old_values_json`, `new_values_json`, `metadata_json`) **ne sortent
+  pas de la base** : leur contenu dépend du module émetteur et n'est pas
+  gouverné pour l'affichage. Réservé à `ADMIN` / `SUPER_ADMIN` ;
+  l'apprenant dispose de son journal de transparence (`EF-ATT-014`), qui
+  est la bonne granularité pour lui. Un export tronqué **le dit**.
+- `EF-INT-001` **flux iCalendar** (`AC-034`) : abonnement par personne,
+  signé, révocable. La route du flux est **volontairement non
+  authentifiée** — Outlook, Google et Apple ne savent pas porter un jeton
+  d'accès, ils rappellent une URL. Le secret est donc le jeton porté par
+  l'URL : 32 octets aléatoires, **jamais stockés en clair** (empreinte
+  SHA-256 seule), comparés en temps constant. Un jeton faux et une clé
+  inconnue produisent la **même** réponse. La révocation est une **date**
+  et non une suppression : un agenda continuera d'appeler l'URL pendant
+  des semaines, et il faut pouvoir répondre `410 Gone` plutôt que
+  « inconnu ». Le flux ne contient que le planning de la personne, et
+  inclut les séances **annulées** — les retirer laisserait le cours dans
+  son agenda.
+- Le jeton d'abonnement est renvoyé **une seule fois**, à la création, et
+  ne peut pas être réaffiché ; l'écran le dit avant de le montrer.
+
+---
+
+### 2.12 Transverse
 
 - En-têtes durcis : `nosniff`, `X-Frame-Options: DENY`, anti-cache,
   CSP, `Referrer-Policy: no-referrer`.
@@ -618,11 +750,16 @@ raison, le document avait tort.
 | `EF-TEA-002` | API d'affectation pédagogique livrée | aucun écran d'affectation classe–matière–période |
 | `EF-NOTIF-005` | abonnement par appareil, révocation, préférences, chiffrement **RFC 8291 vérifié contre le vecteur de test officiel de la RFC**, signature VAPID RFC 8292, adaptateur HTTP écrit | **aucun service de poussée réel sollicité** : sans clés VAPID, l'adaptateur inactif répond et l'API déclare `providerActive: false` |
 | `EF-PWA-002` | service worker servant planning, assiduité et notifications depuis son cache quand le réseau tombe, **application ouverte** ; bandeau « hors ligne » | pas de consultation après un **démarrage à froid** sans réseau : le jeton ne vit qu'en mémoire (RG-093), il n'y a pas de session à rétablir |
-| `EF-REP-007` | endpoint typé par rôle, périmètre serveur, contexte multi-rôle vérifié ; cartes `STUDENT` et `TEACHER` complètes | cartes `PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes ; coût SQL linéaire par séance |
+| `EF-INT-002` | port `MeetingProvider`, adaptateur Microsoft Graph (flux « identifiants client », `POST /users/{id}/onlineMeetings`), adaptateur inactif, route d'état déclarée | **aucun locataire Microsoft réel sollicité** (T-16) : sans `tenantId`/`clientId`/`clientSecret`, l'adaptateur inactif répond et l'API déclare `meetingActive: false` |
+| `EF-INT-003` | port `ExternalCalendarWriter`, adaptateur Graph (`/users/{id}/events`), adaptateur inactif | idem T-16 ; priorité `COULD` |
 
-> La ligne « Audit transactionnel » a disparu de ce tableau : les onze
-> écouteurs d'audit passent désormais par l'outbox (§2.9). Ce n'était pas
-> une exigence mais une dette — T-02, levée.
+> La ligne `EF-REP-007` a disparu de ce tableau : les cartes du
+> responsable pédagogique et de l'administration sont complètes (§2.11),
+> et le coût SQL par séance est levé et **mesuré** (T-03, §6.3).
+>
+> La ligne « Audit transactionnel » avait disparu au sprint 10 : les onze
+> écouteurs d'audit passent par l'outbox (§2.9). Ce n'était pas une
+> exigence mais une dette — T-02, levée.
 
 ---
 
@@ -633,36 +770,39 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 
 | Bloc | Exigences | Nombre | Sprint |
 |---|---|---:|---|
-| Recherche globale dans son périmètre | `EF-USER-009` | 1 | 11 |
 | Détection des conflits et incohérences de salle hors planning | `EF-ORG-004` | 1 | 6 |
 | Mapping d'import assisté par l'IA | `EF-IMP-005` | 1 | 12 |
 | Planning PDF texte et mapping assisté par l'IA | `EF-PLAN-012`, `013` | 2 | 12 |
 | Confirmation locale d'un émargement par WebAuthn ; borne connectée | `EF-ATT-011`, `016` | 2 | 8, 12 |
-| Excel, PDF, attestations, tableaux alternatifs, rapports d'anomalies et d'invitations | `EF-REP-004`, `005`, `006`, `008`, `009`, `010` | 6 | 11–12 |
+| Rapport des anomalies d'émargement | `EF-REP-009` | 1 | 12 |
 | Service d'IA complet | `EF-AI-001..005` | 5 | 12 |
 | Objets connectés | `EF-IOT-001..005` | 5 | 12 |
-| Intégrations Microsoft, iCalendar, fournisseur de courriel | `EF-INT-001..004` | 4 | 11, 13 |
-| Consultation d'audit, RGPD, exploitation | `EF-AUD-002`, `EF-RGPD-001..003`, `EF-OPS-001..004` | 8 | 11, 13 |
+| Fournisseur de courriel réel | `EF-INT-004` | 1 | 13 |
+| RGPD et exploitation | `EF-RGPD-001..003`, `EF-OPS-001..004` | 7 | 13 |
 
-Total : **35**, soit exactement le compte de §1. La ligne « Audience
-élargie, courriel, push, préférences, PWA » a disparu : le sprint 10 l'a
-livrée, hors `EF-NOTIF-005` et `EF-PWA-002`, désormais `PARTIAL` (§3).
-`EF-AUD-003` et `EF-OPS-005` sortent également de ce tableau.
+Total : **25**, soit exactement le compte de §1. Sortent de ce tableau au
+sprint 11 : `EF-USER-009`, `EF-AUD-002`, `EF-REP-004`, `005`, `006`,
+`008`, `010` et `EF-INT-001` (livrés, §2.11) ; `EF-INT-002` et
+`EF-INT-003` passent en `PARTIAL` (§3) et ne sont donc plus comptés ici.
 
-**Vérifications de terrain** (5 septembre 2026, après sprint 10) : aucune
-occurrence de `MQTT` ni de bibliothèque PDF dans `backend/src/main` ou
-`frontend/src`. Aucun module `ai` ni `iot`. Les modules `claim` et
-`outbox` **existent**. Un service worker est livré
+**Vérifications de terrain** (5 septembre 2026, après sprint 11) : aucune
+occurrence de `MQTT` dans `backend/src/main` ou `frontend/src`. Aucun
+module `ai` ni `iot`. Les modules `claim`, `outbox`, `document`,
+`integration` et `search` **existent**. Une bibliothèque PDF est
+désormais présente — Apache PDFBox 3.0.8, ajoutée au sprint 11 pour
+`EF-REP-005` et `EF-REP-006` ; l'affirmation contraire du sprint 10
+n'est plus vraie et est corrigée ici. Un service worker est livré
 (`frontend/public/sw.js`) et présent dans le bundle de production.
 `clamav` reste un service de **profil optionnel** : il n'est pas démarré
-par `docker compose up -d` seul — mais il a cette fois été démarré et
-éprouvé (§6.2).
+par `docker compose up -d` seul — il a été démarré et éprouvé au
+sprint 10 (§6.2), et **n'a pas été relancé au sprint 11** : aucun
+parcours du sprint 11 ne touche aux pièces jointes.
 
 ---
 
 ## 5. Architecture réelle
 
-### 5.1 Modules Spring Modulith — 16
+### 5.1 Modules Spring Modulith — 19
 
 `ModularityTests` **vert** : aucune dépendance vers l'interne d'un autre
 module, aucun cycle.
@@ -676,29 +816,44 @@ module, aucun cycle.
 | `alternation` | rythmes, affectations, exceptions, résolution | V8 |
 | `planning` | import CSV et Excel, simulation, conflits, correction de ligne, calendrier interactif, publication versionnée, retour arrière | V12, V13, V23 |
 | `coursesession` | séances, cycle de vie, points de contrôle nommés, remplacements, salle, modalité, report, demandes d'annulation | V9, V10, V13, V14, V21, V22, V24, V25 |
-| `attendance` | jetons, validation, QR de salle, corrections, apprenants provisoires, justificatifs et leur analyse antivirus, départ anticipé, journal de transparence, rapports, résultat journalier | V9, V10, V16, V26, V27, V29, V30 |
+| `attendance` | jetons, validation, QR de salle, corrections, apprenants provisoires, justificatifs et leur analyse antivirus, départ anticipé, journal de transparence, rapports, résultat journalier, exports multiformats, attestations | V9, V10, V16, V26, V27, V29, V30, V34 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
 | `notification` | centre de notifications persistant, audience serveur, courriel, préférences, abonnements et chiffrement de poussée, délivrabilité | V15, V19, V33 |
 | `dashboard` | tableau de bord par rôle | — |
 | `claim` | réclamations : guichets, fil de messages, transfert, décision, réouverture | V28 |
 | `outbox` | file transactionnelle des effets de bord : publication, diffusion, reprise, file d'échec, rejeu manuel | V31 |
-| `audit` | piste d'audit, écrite par l'outbox | V1, V32 |
+| `document` | production des documents de restitution : CSV, classeur `.xlsx`, PDF paginé avec identité visuelle et identité de document | — |
+| `search` | recherche globale dans le périmètre de l'appelant — **aucune table** : assemble les ports des modules qui détiennent la donnée | — |
+| `integration` | flux iCalendar signé et révocable ; ports Microsoft Graph (réunion Teams, calendrier) et leurs adaptateurs inactifs | V34 |
+| `audit` | piste d'audit, écrite par l'outbox ; consultation et export | V1, V32 |
 | `bootstrap` | amorçage du profil `demo` | — |
 | `shared` | types transverses, gestion d'erreurs, horloge | — |
 
-Modules du cahier des charges **non encore créés** :
-`reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
+Modules du cahier des charges **non encore créés** : `ai`, `iot`.
+`reporting` reste fusionné dans `attendance` — les rapports vivent avec
+la donnée qu'ils agrègent ; le module `document`, lui, ne connaît aucun
+métier et ne fait que restituer ce qu'on lui donne. `integration` est
+créé au sprint 11.
+
+Le module `document` **ne dépend d'aucun module métier** : il reçoit un
+titre, des faits, un en-tête et des lignes déjà rendues en texte. Ce sont
+`attendance`, `audit` et `identity` qui dépendent de lui. Le module
+`search` **ne détient aucune donnée** : il lit les ports publics de
+`enrollment`, `identity`, `academic`, `organization` et `coursesession`,
+comme `dashboard`. `ModularityTests` reste vert.
 
 Le module `outbox` **ne dépend d'aucun module métier** : il route un
 `messageType` vers l'`OutboxHandler` que le module compétent publie. Ce
 sont les autres qui dépendent de lui. `ModularityTests` reste vert.
 
-### 5.2 Migrations Flyway — schéma en V33
+### 5.2 Migrations Flyway — schéma en V34
 
-**62 tables métier** (compté sur la base : `information_schema`, hors
-`flyway_schema_history`), `ddl-auto = validate`, aucune donnée métier
-insérée par une migration. Le chiffre annoncé au sprint 9 — « 58 » —
-était inexact : le dépôt a raison, le document avait tort. `V17` ajoute `password_reset_token` et la colonne
+**64 tables métier** (compté sur la base `esic_test` :
+`information_schema`, hors `flyway_schema_history`), `ddl-auto = validate`,
+aucune donnée métier insérée par une migration. Les deux tables ajoutées
+au sprint 11 sont `report_document` et `calendar_subscription` (V34).
+Le chiffre annoncé au sprint 9 — « 58 » — était inexact : le dépôt a
+raison, le document avait tort. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
 `trusted_device` ; `V19` ajoute `subject`, `subject_program`,
@@ -746,6 +901,28 @@ analysées serait une affirmation que rien ne fonde.
 > contient un jeton propre à l'appareil et n'a pas à être indexée en
 > clair. La révocation y est une date et non une suppression, sans quoi
 > une page restée ouverte recréerait aussitôt l'abonnement retiré.
+>
+> `V34` crée `report_document` et `calendar_subscription`.
+>
+> `report_document` est le **registre** sans lequel « identifiant
+> vérifiable » (§22.4) n'a aucun sens : sans lui, la référence imprimée
+> sur le papier n'est qu'une décoration que personne ne peut confronter à
+> quoi que ce soit. Le **contenu du PDF n'y est pas stocké** — il est
+> reproductible depuis les données d'assiduité, et le conserver
+> dupliquerait des données personnelles dans un second emplacement avec
+> sa propre durée de conservation à gouverner. Est conservée une
+> empreinte SHA-256 du document remis. `document_id` porte une part
+> **aléatoire** : une séquence devinable permettrait de fabriquer une
+> référence plausible.
+>
+> `calendar_subscription` ne stocke **pas le jeton** mais son empreinte
+> SHA-256 : un agenda externe ne sait pas s'authentifier, le secret est
+> donc l'URL, et une fuite de la base ne doit pas rendre les plannings
+> lisibles. `feed_key` est une référence publique distincte, présente
+> dans l'URL à côté du jeton, qui permet de retrouver la ligne d'un seul
+> index. La révocation est une **date** : l'agenda continuera d'appeler
+> l'URL pendant des semaines, et il faut pouvoir répondre « révoqué »
+> plutôt que « inconnu ».
 
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
@@ -762,17 +939,23 @@ analysées serait une affirmation que rien ne fonde.
 
 ## 6. Résultats de tests
 
-Mesurés sur ce dépôt, branche `sprint/S10-notifications-outbox-pwa`,
+Mesurés sur ce dépôt, branche `sprint/S11-pilotage-restitution`,
 5 septembre 2026. Environnement : OpenJDK 21.0.12, Node 24.13.0,
-npm 11.6.2, MySQL 8.4, Redis 7.4 et ClamAV 1.4.6 en Docker Compose.
+npm 11.6.2, MySQL 8.4, Redis 7.4 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **131 classes / 1156 tests / 0 échec / 0 erreur** — `ModularityTests` vert (16 modules), schéma V33. Les 8 tests exigeant un `clamd` réel sont **ignorés** sans `ESIC_CLAMAV_REAL=1` |
-| `cd backend && ESIC_CLAMAV_REAL=1 ./mvnw clean test` | **131 classes / 1164 tests / 0 échec / 0 erreur** — les 8 tests antivirus réels s'exécutent |
-| `cd frontend && npm test -- --watch=false` | **89 fichiers / 728 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **140 classes / 1209 tests / 0 échec / 0 erreur** — `BUILD SUCCESS`, `ModularityTests` vert (19 modules), schéma V34 |
+| `cd frontend && npm test -- --watch=false` | **94 fichiers / 764 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
 | `cd frontend && npm run build` | bundle produit, aucune alerte de budget ; `manifest.webmanifest`, `sw.js` et les icônes présents dans la sortie |
+| `cd frontend && ./node_modules/.bin/tsc -p ../tsconfig.json --noEmit` | contrôle de type de la suite Playwright — aucune erreur |
+| Chaîne de migrations sur base **vierge** | `V1` … `V34` appliquées dans l'ordre sur une base `esic_v34_check` créée pour l'occasion : **64 tables**, dont `report_document` et `calendar_subscription`. Base supprimée après contrôle |
+
+**Antivirus non rejoué au sprint 11.** Les 8 tests exigeant un `clamd`
+réel restent **ignorés** sans `ESIC_CLAMAV_REAL=1` ; ils n'ont pas été
+relancés, aucun parcours du sprint 11 ne touchant aux pièces jointes. La
+preuve du sprint 10 (§6.2) reste valable et n'est pas rejouée ici.
 
 Les tests portant le tag `perf` sont exclus par défaut
 (`./mvnw test -Pperf` pour les exécuter).
@@ -810,6 +993,52 @@ rend qu'après avoir déclenché les synchronisations — tandis que le
 diffuseur en ouvre une seconde. Un même fil de requête détient donc deux
 connexions au lieu d'une.
 
+**Défaut corrigé au sprint 11 — une méthode HTTP inattendue produisait
+un `500`.** En vérifiant que la piste d'audit n'offre aucune route
+d'écriture (`EF-AUD-002`, docs/02 §23.4), le test a constaté que
+`POST /api/v1/audit-events` répondait **`500 INTERNAL_ERROR`** au lieu de
+`405`. La cause n'était pas propre à l'audit : le
+`GlobalExceptionHandler` n'avait pas de gestionnaire pour
+`HttpRequestMethodNotSupportedException`, et le rattrapage générique
+`Exception` transformait **toute** méthode HTTP incorrecte, sur
+**n'importe quelle route de l'API**, en panne serveur — ce que
+docs/02 §30.1 interdit explicitement (« une erreur d'appel du client
+produit un `400` explicite, jamais un `500` »). Un `405` est désormais
+renvoyé, avec l'en-tête `Allow` exigé par la RFC 9110 §15.5.6.
+
+**Défaut d'instabilité corrigé au sprint 11 — des tests affirmaient une
+livraison synchrone que l'outbox ne promet pas.** Trois assertions
+(`OutboxIntegrationTests` × 2, `PriorityPathRecetteIntegrationTests`)
+vérifiaient l'existence d'une trace ou d'une notification
+**immédiatement** après le commit métier. Or le drain qui suit le commit
+est délibérément *best effort*
+(`DefaultOutboxPublisher.scheduleDrain` → `drainQuietly`) : sous la
+charge de la suite complète — six connexions partagées, dont deux
+détenues par le même fil pendant l'`afterCompletion` — il peut ne pas
+obtenir de connexion, et la ligne attend la reprise planifiée. **C'est la
+garantie de l'outbox, pas un défaut** : l'effet de bord n'est jamais
+perdu, il peut être différé (dette T-01 levée au sprint 10). Ces tests
+passaient isolément et échouaient en suite complète.
+
+Correction : `OutboxIntegrationTests` force un drain avant d'assertir —
+ce qu'il vérifie reste l'idempotence, pas le délai ; la recette
+prioritaire ramène `app.outbox.poll-interval` à 500 ms pour elle-même et
+attend, dans une limite de 20 secondes, que la notification apparaisse.
+Aucune des deux ne touche à l'encapsulation du module `outbox` :
+`OutboxDispatcher` reste *package-private*.
+
+**Changement de comportement assumé — en-têtes des exports CSV.** Les
+trois formats d'un même rapport partagent désormais une seule
+description (module `document`), donc les mêmes libellés de colonnes :
+`session_id;titre;debut` devient
+`Identifiant de séance;Titre;Début`. Des en-têtes techniques dans un PDF
+officiel seraient illisibles, et deux jeux d'en-têtes finiraient par
+diverger. Le CSV **n'a en revanche aucun préambule** : sa ligne 1 reste
+l'en-tête, parce que tout ce qui la précède casse les analyseurs. Le test
+`AttendanceIntegrationTests
+.csvExportIsUtf8WithBomAndNeutralizesFormulaInjection` a été mis à jour
+en conséquence.
+
 **Couplage connu entre classes de test** : les compteurs de limitation
 indexés sur l'*origine* réseau vivent dans Redis et sont partagés par
 toute la suite — toutes les classes se connectent depuis `127.0.0.1`.
@@ -839,6 +1068,69 @@ navigateur : ils sont couverts par des tests de composant Angular.
 Les écrans livrés au sprint 2 — vérification en deux étapes, sécurité du
 compte — sont couverts par des tests de composant Angular, **pas encore**
 par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
+
+### Recette navigateur du sprint 11 — exécutée
+
+| Élément | Valeur |
+|---|---|
+| Fichier | `tests/11-pilotage-restitution.spec.ts` |
+| Commande | `npx playwright test --project=chromium tests/11-pilotage-restitution.spec.ts` |
+| Pile | back-end profil `demo` sur `esic_connect_demo` (port 8080), `ng serve` (port 4200), MySQL / Redis / Mailpit en Docker |
+| Résultat | **13 / 13 passés en 8,4 s** |
+
+Parcours réellement rejoués dans Chromium : recherche globale, refus de
+la recherche à un apprenant, fragment trop court refusé sans appel
+serveur ; écran d'attestation (émission, vérification, registre), refus
+d'un identifiant inconnu, refus de l'écran à un formateur ; abonnement
+iCalendar **de bout en bout** — création, lecture du flux **réellement
+servi hors session applicative** (`BEGIN:VCALENDAR`, `PRODID` ESIC),
+révocation, `410 INT_FEED_REVOKED` ensuite, `404` sur jeton faux ; refus
+de la piste d'audit au responsable et au formateur ; invitations non
+activées sans adresse en clair ; **tableau équivalent** du graphique du
+tableau de bord, avec la valeur portée en toutes lettres par chaque
+barre.
+
+**Ce que cette recette ne couvre pas, et pourquoi.** La *consultation*
+de la piste d'audit est réservée à `ADMIN` / `SUPER_ADMIN`, et ces
+comptes n'obtiennent aucun jeton contre leur seul mot de passe depuis le
+sprint 2 (RG-007, `DEC-S2-005`) : la connexion renvoie un défi de second
+facteur, que le support e2e ne sait pas franchir. Écrire un test qui le
+contournerait donnerait une fausse preuve. Elle reste couverte côté
+serveur (`AuditQueryIntegrationTests`, 6 tests) et côté écran
+(`audit-trail.spec.ts`, 8 tests). **`NOT_PERFORMED` en navigateur.**
+
+**Deux défauts de la suite navigateur, corrigés ici.**
+
+1. **Toute la recette navigateur était cassée depuis le sprint 2.**
+   `tests/support/auth.ts` cliquait
+   `getByRole('button', { name: 'Se connecter' })` sans `exact` ; l'écran
+   de connexion porte aussi, depuis les passkeys (`EF-AUTH-007`), un
+   bouton « Se connecter avec une clé d'accès » que ce libellé apparie
+   également. Playwright échouait en *strict mode violation* **dès
+   l'authentification**, donc sur les 10 fichiers existants comme sur le
+   nouveau. Corrigé par `exact: true`. Les 10 fichiers antérieurs
+   n'ont pas été relancés dans ce sprint : leur état reste celui de
+   l'audit du 3 septembre.
+2. **`scripts/seed-demo.sh` ne fonctionne plus** : il se connecte en
+   `ADMIN` et attend un jeton, alors que la politique de second facteur
+   du sprint 2 renvoie un défi. Il échoue sur
+   « Échec de connexion ADMIN (HTTP 200) ». Non corrigé au sprint 11 —
+   hors périmètre, et le jeu de démonstration existant a suffi. Dette
+   **T-19**.
+
+**Deux couplages d'environnement à connaître avant de relancer.**
+
+- **Limitation de débit.** Chaque exécution complète du fichier ouvre
+  13 sessions depuis `127.0.0.1`, contre un seau d'origine de 60 par
+  fenêtre de 15 minutes (`LOGIN_ORIGIN_LIMIT`). Au-delà de quatre
+  exécutions rapprochées, la connexion est refusée et les tests
+  échouent **pour une raison sans rapport avec ce qu'ils vérifient**.
+  Remise à zéro : supprimer les clés Redis `esic:rate-limit:login-*`.
+- **Compilation à la demande d'`ng serve`.** La toute première
+  navigation vers un écran jamais compilé peut dépasser le délai du
+  premier test. Précharger les routes visées (un simple `curl` sur
+  chacune) avant de lancer la suite suffit ; c'est ce qui a été fait
+  pour le run 13/13 ci-dessus.
 
 **La recette navigateur n'a pas été relancée au sprint 10** : les écrans
 livrés — préférences de notification, file d'échec des effets de bord,
@@ -882,12 +1174,83 @@ avec un double. C'est une propriété de la chaîne d'essai, pas une lacune
 du produit — et le rappel que l'antivirus ne remplace pas les contrôles
 structurels, qui s'appliquent **avant** lui.
 
+### 6.3 Coût SQL du tableau de bord — dette T-03 levée
+
+C'est ce qui manquait pour affirmer que la dette T-03 est traitée :
+jusqu'ici le coût n'était pas mesuré, seulement supposé.
+
+**Mesure.** `DashboardCardsIntegrationTests
+.theManagerDashboardCostDoesNotGrowWithTheNumberOfSessions` compte les
+`PreparedStatement` (statistiques Hibernate) d'un appel
+`GET /api/v1/me/dashboard` d'un responsable pédagogique, avec 3 puis
+9 séances dans son périmètre, et échoue si six séances de plus coûtent
+six requêtes de plus.
+
+| État du code | Requêtes, 3 séances | Requêtes, 9 séances | Écart |
+|---|---:|---:|---:|
+| Avant correction | 21 124 | 21 221 | **+97** (≈ 16 / séance) |
+| Alternance mémorisée | 21 775 | 21 822 | **+47** (≈ 8 / séance) |
+| Comptage de justificatifs borné | 2 508 | 2 514 | **+6** (1 / séance) |
+| Rattachements de classes chargés en bloc | — | — | **0** ✅ |
+
+> Les valeurs absolues sont cumulées sur la classe de test : seul l'écart
+> entre deux appels identiques a un sens ici, et c'est lui que le test
+> vérifie.
+
+**Deux tests antérieurs documentaient cette dette et ont dû être
+inversés** — ils affirmaient la croissance au lieu de la corriger :
+
+| Test | Avant | Après |
+|---|---|---|
+| `DashboardIntegrationTests.…GrowsLinearlyWithTheNumberOfSessions…` | assertait `qMany > qFew` | renommé `…DoesNotGrowItsQueryCountWithTheNumberOfSessions` : 1 séance → **1640** requêtes, 10 séances → **1640** |
+| `DashboardIntegrationTests.…DoesNotGrowItsQueryCountWithTheNumberOfClasses` | croissance ≤ 3 pour +14 classes ; garde-fou absolu `< 25` | croissance ≤ 3 tenue ; **garde-fou absolu retiré et expliqué** — la carte calcule désormais l'assiduité du périmètre (EF-REP-007), c'est un travail supplémentaire réel, pas une régression |
+
+**Sept causes distinctes, toutes réelles :**
+
+1. **une requête de points de contrôle par séance** — la conversion
+   unitaire `toRef` en émettait une par séance ; `toRefs` les charge en
+   bloc ;
+2. **une résolution de contexte d'alternance par (apprenant × séance)** —
+   le contexte dépend de l'inscription et du **jour**, jamais de la
+   séance : deux cours du même après-midi donnent forcément la même
+   réponse. Mémorisé par `(inscription, jour)` ;
+3. **un comptage de justificatifs qui recalculait toute l'assiduité de la
+   base** — `countPendingJustificationsInScope()` passait par la synthèse
+   complète, avec des bornes ouvertes, pour obtenir un seul nombre. C'est
+   ce qui expliquait les ~21 000 requêtes de base, et un coût qui
+   grandissait à **chaque séance jamais créée**. La fenêtre est désormais
+   obligatoire et le compte direct ;
+4. **une requête de périmètre par (séance × classe)** —
+   `AcademicScopeDirectory.isClassInScope(uuid)` interroge la base à
+   chaque appel, et il était appelé dans la boucle sur les séances. Le
+   périmètre est maintenant résolu une fois, puis interrogé en mémoire ;
+5. **une requête de rattachement de classes par séance** —
+   `CourseSession.classes` est une collection `LAZY` ; elle est
+   désormais initialisée pour tout le lot par un `join fetch` ;
+6. **une requête d'effectif par classe** — `classReport` interrogeait
+   `findActiveRosterForClasses(Set.of(uneClasse))` classe par classe ;
+   un seul appel couvre désormais tout le périmètre, groupé en mémoire ;
+7. **deux requêtes par apprenant** — `DefaultEnrollmentDirectory.roster`
+   résolvait le nom (`identity`) et le code de classe (`academic`) une
+   inscription à la fois. Un nouveau port
+   `UserDirectory.findNames(Collection)` et `findByPublicIds` les
+   chargent en bloc. `internalIdsOf` faisait de même, une classe à la
+   fois : il utilise désormais `findByPublicIds`.
+
+Les points 2, 3, 4, 6 et 7 profitent aussi aux **rapports**
+(`EF-REP-001` à `EF-REP-003`), qui partagent ce code, et le point 7 à
+tout appelant de l'effectif d'une classe.
+
+---
+
 ## 7. Démonstration
 
 | Nature | Statut |
 |---|---|
 | Recette d'intégration API du parcours prioritaire | `IMPLEMENTED_AND_TESTED` |
 | Parcours prioritaire rejoué dans un vrai navigateur (2 apprenants, création → ouverture → QR et code court → émargement → anti-rejeu → clôture → isolation `AC-017`) | `IMPLEMENTED_AND_TESTED` |
+| Parcours du sprint 11 rejoués dans un vrai navigateur contre la pile démarrée (recherche, attestation, abonnement iCalendar de bout en bout, refus de la piste d'audit, invitations, tableau équivalent) — **13 / 13**, §6.1 | `IMPLEMENTED_AND_TESTED` |
+| Écrans réservés à `ADMIN` / `SUPER_ADMIN` en navigateur | **`NOT_PERFORMED`** — le support e2e ne franchit pas le second facteur (T-20) |
 | Démonstration **manuelle** de bout en bout par un humain | **`NOT_PERFORMED`** — un navigateur piloté par script n'en est pas une |
 | Déploiement | **`NOT_PERFORMED`** — aucune instance, aucune URL |
 
@@ -902,16 +1265,21 @@ structurels, qui s'appliquent **avant** lui.
 | ~~T-12~~ | **levée au sprint 10** — les réclamations notifient participants et guichet courant | — |
 | ~~T-04~~ | **levée au sprint 10** — `clamd` réel démarré et éprouvé (ClamAV 1.4.6, base 28108) ; voir §6.2 | l'analyse reste **inactive par défaut** : sans le profil `antivirus`, les pièces sont marquées `NOT_SCANNED`, l'API et l'écran l'annoncent, et « garanti sans logiciel malveillant » ne doit jamais être écrit |
 | ~~T-11~~ | **levée au sprint 10** — protocole `INSTREAM` vérifié contre un vrai serveur TCP **et** contre un `clamd` réel | — |
-| T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
+| ~~T-03~~ | **levée au sprint 11** — quatre sources de coût par séance supprimées et **mesurées** (§6.3) | le coût du tableau de bord ne suit plus le nombre de séances affichées |
 | T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
 | T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
-| T-10 | opérations de masse et doublons sans écran | l'API est livrée et testée ; l'interface reste à faire (sprint 11) |
+| ~~T-10~~ | **renumérotée T-18** — non traitée au sprint 11, voir ci-dessous | — |
 | T-07 | cérémonie WebAuthn complète non rejouée en test | la vérification cryptographique repose sur la bibliothèque ; les tests couvrent contrat, défi, isolation et absence de donnée biométrique |
 | T-08 | Turnstile jamais vérifié contre le service réel | aucune clé secrète dans le dépôt ; sans clé, le produit **déclare** qu'aucun contrôle n'est actif |
 | T-09 | passkeys inutilisables hors `localhost` sans domaine ni HTTPS | contrainte du standard WebAuthn, pas du produit |
 | **T-13** | **aucun service de poussée réel sollicité** (sprint 10) | le chiffrement RFC 8291 est vérifié contre le vecteur officiel de la RFC et la signature VAPID est implémentée, mais aucun message n'a jamais atteint un navigateur. Sans clés VAPID, l'API déclare `providerActive: false` — elle ne simule aucun envoi |
 | **T-14** | **consultation hors ligne limitée à une session ouverte** (sprint 10) | le jeton ne vivant qu'en mémoire (RG-093), un démarrage à froid sans réseau affiche l'écran de connexion. Lever cette limite exigerait de persister un élément de session, ce que RG-093 interdit : c'est un arbitrage, pas un oubli |
 | **T-15** | **file d'actions différées non persistante** (sprint 10) | elle ne survit pas à un rechargement de page. Le code court étant un jeton (RG-093) et expirant en 30 s, la persister n'apporterait qu'un rejeu de codes périmés |
+| **T-16** | **aucun locataire Microsoft réel sollicité** (sprint 11) | `EF-INT-002` et `EF-INT-003` restent `PARTIAL`. Le port, l'adaptateur Graph (jeton d'application mis en cache, `onlineMeetings`, `events`) et l'adaptateur inactif sont écrits et couverts par des tests, mais **aucun appel n'a jamais atteint Microsoft**. Sans identifiants, `GET /api/v1/integrations/microsoft/status` déclare `meetingActive: false` — le produit ne simule aucune réunion |
+| **T-17** | **aucun fichier de logo dans le dépôt** (sprint 11) | l'en-tête des documents PDF est une **signature typographique** (bandeau, établissement, produit), pas une image. Dessiner un logo inventé serait pire que de ne pas en mettre. L'insertion d'un logo fourni par l'établissement se réduit à un `PDImageXObject` dans `PdfDocumentWriter.header` |
+| **T-18** | **écrans des opérations de masse et des doublons toujours absents** (ex-T-10, sprint 11) | l'API `POST /users/bulk` et la détection de doublons sont livrées et testées depuis le sprint 4 ; l'interface reste à faire. Reporté du sprint 11, où le périmètre a été tenu sur les exigences `EF-REP-*`, `EF-USER-009`, `EF-AUD-002` et `EF-INT-001` |
+| **T-19** | **`scripts/seed-demo.sh` inopérant depuis le sprint 2** (constaté au sprint 11) | le script se connecte en `ADMIN` et attend un jeton ; la politique de second facteur (RG-007, `DEC-S2-005`) renvoie un défi. Il échoue sur « Échec de connexion ADMIN (HTTP 200) ». Le jeu de démonstration existant reste exploitable ; le script devra soit enrôler un facteur, soit s'appuyer sur un rôle sans second facteur obligatoire |
+| **T-20** | **la recette navigateur ne franchit pas le second facteur** (constaté au sprint 11) | `tests/support/auth.ts` s'arrête à l'écran de vérification pour `ADMIN` et `SUPER_ADMIN`. Conséquence directe : aucun parcours navigateur ne couvre les écrans réservés à ces rôles — piste d'audit, file d'échec des effets de bord. Ils restent couverts par tests serveur et tests de composant |
 | — | base `esic_test` **recréée** au sprint 8 ; `esic_connect` (local) reste à recréer — `./scripts/db-reset.sh esic_connect` non exécuté | — |
 
 ---
@@ -941,18 +1309,35 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas. `esic_test` a été recréée au sprint 8 ;
    la base locale ne l'est toujours pas.
-2. **Sprint 11 — pilotage et restitution** : tableaux de bord complets
-   (T-03), exports Excel et PDF, attestations, recherche globale, écran du
-   résultat journalier, et écrans manquants des opérations de masse et des
-   doublons (T-10).
-3. **Éprouver la poussée** (T-13) : générer une paire VAPID hors dépôt,
+2. **Sprint 12 — intelligence et objets connectés** : service d'IA
+   (`EF-AI-001..005`), borne connectée MQTT (`EF-IOT-001..005`), rapport
+   des anomalies (`EF-REP-009`), mapping d'import et planning PDF texte
+   assistés (`EF-IMP-005`, `EF-PLAN-012/013`), confirmation d'émargement
+   par WebAuthn (`EF-ATT-011`).
+3. **Livrer les écrans des opérations de masse et des doublons** (T-18) :
+   l'API est livrée et testée depuis le sprint 4, l'interface manque
+   toujours. Reporté du sprint 11.
+4. **Éprouver les intégrations Microsoft** (T-16) : enregistrer une
+   application dans un locataire Entra ID, injecter `tenantId`,
+   `clientId` et `clientSecret` par l'environnement, et vérifier qu'une
+   réunion Teams est réellement créée avant de présenter `EF-INT-002`
+   comme livré.
+5. **Éprouver la poussée** (T-13) : générer une paire VAPID hors dépôt,
    l'injecter par l'environnement, et vérifier qu'un navigateur reçoit
    réellement une notification avant de présenter `EF-NOTIF-005` comme
    livré.
-4. **Étendre la recette navigateur** aux écrans des sprints 9 et 10, et
-   au parcours d'installation de la PWA sur un contexte HTTPS.
-5. **Arrêter la politique de rétention des pièces jointes** (T-05) avant
+6. **Étendre la recette navigateur** aux écrans des sprints 9 et 10, et
+   au parcours d'installation de la PWA sur un contexte HTTPS. Les
+   parcours du sprint 11 ont, eux, une suite écrite
+   (`tests/11-pilotage-restitution.spec.ts`) — voir §6.1 pour son état
+   d'exécution.
+7. **Obtenir un fichier de logo de l'établissement** (T-17) pour les
+   documents PDF officiels.
+8. **Arrêter la politique de rétention des pièces jointes** (T-05) avant
    tout usage sur données réelles.
+9. **Écran du résultat journalier** (`EF-ATT-004`) : l'API
+   `GET /attendance/reports/daily` est livrée et testée depuis le
+   sprint 8, aucun écran ne l'expose.
 
 ---
 

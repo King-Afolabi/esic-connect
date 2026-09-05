@@ -1,0 +1,42 @@
+.pending {
+  display: block;
+}
+
+.pending__intro,
+.pending__count,
+.pending__empty {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.pending__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+}
+
+.pending__panel {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pending__table {
+  border-collapse: collapse;
+  width: 100%;
+
+  th,
+  td {
+    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+  }
+}
+
+.pending__caption {
+  caption-side: top;
+  font-weight: 600;
+  padding-bottom: 0.4rem;
+  text-align: left;
+}

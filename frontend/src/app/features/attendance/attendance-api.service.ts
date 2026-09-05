@@ -16,6 +16,9 @@ import {
   MyAttendanceDetail,
   MyAttendanceQuery,
   MyAttendanceRow,
+  ReportDocumentCheck,
+  ReportDocumentSummary,
+  ReportExportFormat,
   ReportKind,
   ReportQuery,
   ReviewJustificationRequest,
@@ -265,12 +268,59 @@ export class AttendanceApiService {
    * `GET /api/v1/attendance/reports/{kind}/export` — CSV en `blob`.
    * Le composant appelant déclenche le téléchargement.
    */
-  exportReport(kind: ReportKind, query: ReportQuery): Observable<HttpResponseBlob> {
+  /**
+   * Export d'un rapport (EF-REP-003, EF-REP-004, EF-REP-005).
+   *
+   * Le `format` est transmis au serveur, qui le résout contre une liste
+   * fermée : un format inconnu produit un `400` explicite, jamais un
+   * repli silencieux sur le CSV.
+   */
+  exportReport(
+    kind: ReportKind,
+    query: ReportQuery,
+    format: ReportExportFormat = 'csv',
+  ): Observable<HttpResponseBlob> {
     return this.http.get(`${this.base}/attendance/reports/${kind}/export`, {
-      params: reportParams(query),
+      params: reportParams(query).set('format', format),
       responseType: 'blob',
       observe: 'response',
     });
+  }
+
+  /**
+   * Émet une attestation d'assiduité (EF-REP-006, AC-033) et renvoie le
+   * PDF. L'identifiant du document arrive dans l'en-tête `X-Document-Id`
+   * — le client l'affiche sans avoir à ouvrir le PDF.
+   */
+  issueAttestation(
+    studentProfilePublicId: string,
+    from: string | null,
+    to: string | null,
+  ): Observable<HttpResponseBlob> {
+    return this.http.post(
+      `${this.base}/attendance/reports/attestation`,
+      null,
+      {
+        params: toParams({ studentProfile: studentProfilePublicId, from, to }),
+        responseType: 'blob',
+        observe: 'response',
+      },
+    );
+  }
+
+  /** Registre des documents officiels émis. */
+  listAttestations(limit = 20): Observable<ReportDocumentSummary[]> {
+    return this.http.get<ReportDocumentSummary[]>(
+      `${this.base}/attendance/reports/attestation`,
+      { params: new HttpParams().set('limit', limit) },
+    );
+  }
+
+  /** Vérifie un identifiant de document présenté par un tiers (AC-033). */
+  verifyAttestation(documentId: string): Observable<ReportDocumentCheck> {
+    return this.http.get<ReportDocumentCheck>(
+      `${this.base}/attendance/reports/attestation/${encodeURIComponent(documentId)}`,
+    );
   }
 }
 

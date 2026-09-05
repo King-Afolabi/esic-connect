@@ -81,32 +81,101 @@ final class DashboardResponses {
     }
 
     /**
-     * @param classCount           classes du périmètre
-     * @param upcomingSessions     séances des 7 prochains jours dans le périmètre (≤ 10)
-     * @param classCodes           codes des classes du périmètre (≤ 10)
+     * Taux d'assiduité d'une classe ou d'une formation (EF-REP-007,
+     * EF-REP-008). Le <strong>tableau équivalent</strong> exigé par
+     * EF-REP-008 se construit directement de ces lignes : le graphique
+     * n'a jamais de donnée que la table n'ait pas.
+     *
+     * @param label            code de classe ou de formation
+     * @param expectedHalfDays demi-journées attendues (hors entreprise)
+     * @param presentHalfDays  demi-journées suivies
+     * @param absentHalfDays   demi-journées absentes non excusées
+     * @param excusedHalfDays  demi-journées excusées
+     * @param lateCount        retards constatés
+     * @param attendanceRate   taux de présence, entre 0 et 1
+     */
+    record AttendanceRateLine(
+            String label,
+            long expectedHalfDays,
+            long presentHalfDays,
+            long absentHalfDays,
+            long excusedHalfDays,
+            long lateCount,
+            double attendanceRate) {
+    }
+
+    record AuditLine(java.time.Instant occurredAt, String actor, String action, String result) {
+    }
+
+    /**
+     * Carte du responsable pédagogique (docs/02 §22.6).
+     *
+     * @param classCount              classes du périmètre
+     * @param upcomingSessions        séances des 7 prochains jours (≤ 10)
+     * @param classCodes              codes des classes du périmètre (≤ 10)
+     * @param periodFrom              début de la fenêtre d'assiduité mesurée
+     * @param periodTo                fin de cette fenêtre
+     * @param attendanceRate          taux de présence du périmètre sur la fenêtre
+     * @param lateCount               retards constatés sur la fenêtre
+     * @param unjustifiedAbsenceHalfDays absences non justifiées, en demi-journées
+     * @param classRates              taux par classe — support du tableau équivalent
+     * @param pendingJustifications   justificatifs en attente <em>dans le périmètre</em>
+     * @param openClaims              réclamations ouvertes adressées au guichet du responsable
+     * @param pendingActivations      comptes d'apprenants du périmètre non activés
      */
     record ManagerCard(
             long classCount,
             List<SessionLine> upcomingSessions,
-            List<String> classCodes) {
+            List<String> classCodes,
+            Instant periodFrom,
+            Instant periodTo,
+            double attendanceRate,
+            long lateCount,
+            long unjustifiedAbsenceHalfDays,
+            List<AttendanceRateLine> classRates,
+            long pendingJustifications,
+            long openClaims,
+            long pendingActivations) {
     }
 
     /**
-     * @param activeAccounts        comptes actifs
-     * @param suspendedAccounts     comptes suspendus / verrouillés
-     * @param pendingActivation     comptes en attente d'activation
-     * @param archivedAccounts      comptes archivés
-     * @param pendingJustifications justificatifs en attente (global)
-     * @param recentImports         derniers imports d'apprenants (≤ 10)
-     * @param todaySessions         séances du jour (≤ 10)
+     * Carte d'administration (docs/02 §22.6).
+     *
+     * @param activeAccounts          comptes actifs
+     * @param suspendedAccounts       comptes suspendus / verrouillés
+     * @param pendingActivation       comptes en attente d'activation
+     * @param archivedAccounts        comptes archivés
+     * @param expiredInvitations      invitations en attente déjà expirées
+     * @param pendingJustifications   justificatifs en attente (global)
+     * @param decidedJustifications   justificatifs examinés sur la fenêtre
+     * @param medianDecisionDelayHours délai médian de décision, en heures ;
+     *                                {@code null} si rien n'a été traité —
+     *                                « 0 h » ferait croire à l'inverse
+     * @param periodFrom              début de la fenêtre mesurée
+     * @param periodTo                fin de cette fenêtre
+     * @param globalAttendanceRate    taux de présence global sur la fenêtre
+     * @param programRates            comparaison des formations — support du tableau équivalent
+     * @param recentImports           derniers imports d'apprenants (≤ 10)
+     * @param todaySessions           séances du jour (≤ 10)
+     * @param recentExports           derniers exports de données produits
+     * @param recentAuditOperations   dernières opérations auditées
      */
     record AdministrationCard(
             long activeAccounts,
             long suspendedAccounts,
             long pendingActivation,
             long archivedAccounts,
+            long expiredInvitations,
             long pendingJustifications,
+            long decidedJustifications,
+            Double medianDecisionDelayHours,
+            Instant periodFrom,
+            Instant periodTo,
+            double globalAttendanceRate,
+            List<AttendanceRateLine> programRates,
             List<ImportLine> recentImports,
-            List<SessionLine> todaySessions) {
+            List<SessionLine> todaySessions,
+            List<AuditLine> recentExports,
+            List<AuditLine> recentAuditOperations) {
     }
 }

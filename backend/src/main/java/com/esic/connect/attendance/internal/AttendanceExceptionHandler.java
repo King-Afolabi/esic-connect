@@ -171,6 +171,19 @@ class AttendanceExceptionHandler {
                 code = "ATT_REPORT_INVALID_SORT";
                 message = "Champ ou direction de tri de rapport non autorisé.";
             }
+            case ATTESTATION_SUBJECT_NOT_FOUND -> {
+                // 404 et non 403 : hors périmètre et inexistant se
+                // répondent de la même façon (docs/02 §18.2).
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ATTESTATION_SUBJECT_NOT_FOUND";
+                message = "Aucun apprenant ne correspond, ou aucune donnée d'assiduité "
+                        + "sur la période demandée.";
+            }
+            case ATTESTATION_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ATTESTATION_NOT_FOUND";
+                message = "Aucune attestation ne correspond à cet identifiant de document.";
+            }
             case ATTACHMENT_INFECTED -> {
                 status = HttpStatus.UNPROCESSABLE_ENTITY;
                 code = "ATT_ATTACHMENT_INFECTED";

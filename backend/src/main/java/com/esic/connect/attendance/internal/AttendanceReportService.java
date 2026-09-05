@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -136,15 +137,19 @@ class AttendanceReportService {
         Set<UUID> classes = scopedClasses(sessions, classFilter);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
+        // Une seule mémoire d'alternance pour tout le rapport : les mêmes
+        // couples (inscription, jour) reviennent d'une classe à l'autre.
+        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo = new HashMap<>();
+        Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
         List<AttendanceReports.ClassRow> rows = new ArrayList<>();
         for (UUID classPublicId : classes) {
-            List<RosterEntry> roster = enrollmentDirectory.findActiveRosterForClasses(Set.of(classPublicId));
+            List<RosterEntry> roster = rosterByClass.getOrDefault(classPublicId, List.of());
             Accrual acc = new Accrual();
             for (RosterEntry entry : roster) {
                 for (SessionRef session : sessions) {
                     if (session.classGroupPublicIds().contains(classPublicId)) {
                         accrueHalfDays(acc, session, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
-                                recordIndex);
+                                recordIndex, alternationMemo);
                     }
                 }
             }
@@ -163,9 +168,11 @@ class AttendanceReportService {
         Set<UUID> classes = scopedClasses(sessions, classFilter);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
+        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo = new HashMap<>();
+        Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
         List<AttendanceReports.StudentRow> rows = new ArrayList<>();
         for (UUID classPublicId : classes) {
-            for (RosterEntry entry : enrollmentDirectory.findActiveRosterForClasses(Set.of(classPublicId))) {
+            for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
                 if (studentFilter != null && !studentFilter.equals(entry.studentProfilePublicId())) {
                     continue;
                 }
@@ -173,7 +180,7 @@ class AttendanceReportService {
                 for (SessionRef session : sessions) {
                     if (session.classGroupPublicIds().contains(classPublicId)) {
                         accrueHalfDays(acc, session, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
-                                recordIndex);
+                                recordIndex, alternationMemo);
                     }
                 }
                 rows.add(new AttendanceReports.StudentRow(entry.studentProfilePublicId(),
@@ -191,13 +198,15 @@ class AttendanceReportService {
         Set<UUID> classes = scopedClasses(sessions, classFilter);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
+        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo = new HashMap<>();
+        Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
         Accrual acc = new Accrual();
         for (UUID classPublicId : classes) {
-            for (RosterEntry entry : enrollmentDirectory.findActiveRosterForClasses(Set.of(classPublicId))) {
+            for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
                 for (SessionRef session : sessions) {
                     if (session.classGroupPublicIds().contains(classPublicId)) {
                         accrueHalfDays(acc, session, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
-                                recordIndex);
+                                recordIndex, alternationMemo);
                     }
                 }
             }
@@ -210,6 +219,50 @@ class AttendanceReportService {
                 pending, notes);
     }
 
+    /**
+     * Justificatifs {@code PENDING} du périmètre de l'appelant, sur une
+     * fenêtre (EF-REP-007).
+     *
+     * <p>Ne passe <strong>pas</strong> par {@link #summary} : celle-ci
+     * recalcule toutes les demi-journées de la fenêtre pour produire, au
+     * passage, ce compteur. L'appeler avec des bornes ouvertes pour un
+     * seul nombre faisait recalculer l'assiduité de toute la base à
+     * chaque affichage du tableau de bord — un coût qui grandissait à
+     * chaque séance créée (dette T-03, NFR-PERF-08).
+     */
+    @Transactional(readOnly = true)
+    long countPendingJustificationsInScope(Instant from, Instant to) {
+        return countPendingJustifications(scopedSessions(from, to, null));
+    }
+
+    /**
+     * Effectif actif de <strong>toutes</strong> les classes du rapport, en
+     * un appel, groupé par classe (dette T-03).
+     *
+     * <p>Interroger l'effectif classe par classe coûtait une requête —
+     * plus la résolution de chaque apprenant — par classe du périmètre.
+     * Un responsable pédagogique de quinze classes payait donc quinze
+     * allers-retours pour un rapport qui en affiche quinze lignes
+     * (NFR-PERF-08).
+     */
+    private Map<UUID, List<RosterEntry>> rosterByClass(Set<UUID> classes) {
+        if (classes.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<RosterEntry>> byClass = new HashMap<>();
+        for (RosterEntry entry : enrollmentDirectory.findActiveRosterForClasses(classes)) {
+            if (entry.classGroupPublicId() != null) {
+                byClass.computeIfAbsent(entry.classGroupPublicId(), key -> new ArrayList<>()).add(entry);
+            }
+        }
+        return byClass;
+    }
+
+    /** Identifiant interne de l'appelant, pour nommer l'auteur d'un document. */
+    Long actorId(String callerSubject) {
+        return changePublisher.actorId(callerSubject);
+    }
+
     void auditExport(String type, Instant from, Instant to, int rowCount, String callerSubject) {
         changePublisher.publishExport(changePublisher.actorId(callerSubject),
                 "report=" + type + ";from=" + from + ";to=" + to + ";rows=" + rowCount);
@@ -220,11 +273,19 @@ class AttendanceReportService {
     // ------------------------------------------------------------------
 
     private void accrueHalfDays(Accrual acc, SessionRef session, long enrollmentInternalId,
-                                UUID enrollmentPublicId, Map<String, AttendanceRecord> recordIndex) {
+                                UUID enrollmentPublicId, Map<String, AttendanceRecord> recordIndex,
+                                Map<AlternationKey, AlternationDirectory.Axis> alternationMemo) {
         ZoneId zone = persistedZone(session.timeZoneId());
         LocalDate day = LocalDate.ofInstant(session.startsAt(), zone);
-        AlternationDirectory.Axis axis = alternationDirectory
-                .resolveEnrollmentContext(enrollmentPublicId, day).effective();
+        // Le contexte d'alternance dépend de l'inscription et du JOUR,
+        // jamais de la séance : deux cours du même après-midi pour le même
+        // apprenant donnent forcément la même réponse. Sans mémorisation,
+        // le coût suivait le nombre de séances affichées (dette T-03,
+        // NFR-PERF-08) alors que la donnée demandée, elle, ne change pas.
+        AlternationDirectory.Axis axis = alternationMemo.computeIfAbsent(
+                new AlternationKey(enrollmentPublicId, day),
+                key -> alternationDirectory.resolveEnrollmentContext(key.enrollmentPublicId(), key.day())
+                        .effective());
 
         List<CheckpointRef> morning = new ArrayList<>();
         List<CheckpointRef> afternoon = new ArrayList<>();
@@ -241,6 +302,10 @@ class AttendanceReportService {
 
         accrueOneHalfDay(acc, axis, morning, enrollmentInternalId, recordIndex);
         accrueOneHalfDay(acc, axis, afternoon, enrollmentInternalId, recordIndex);
+    }
+
+    /** Clé de mémorisation du contexte d'alternance : inscription + jour. */
+    private record AlternationKey(UUID enrollmentPublicId, LocalDate day) {
     }
 
     private void accrueOneHalfDay(Accrual acc, AlternationDirectory.Axis axis, List<CheckpointRef> checkpoints,
@@ -332,20 +397,52 @@ class AttendanceReportService {
                 .count();
     }
 
+    /**
+     * Périmètre de l'appelant, résolu <strong>une fois</strong>
+     * (dette T-03).
+     *
+     * <p>{@code AcademicScopeDirectory.isClassInScope(uuid)} interroge la
+     * base à chaque appel. L'appeler dans une boucle sur les séances
+     * faisait une requête par séance et par classe rattachée : sur une
+     * fenêtre d'un mois, le contrôle de périmètre coûtait plus cher que
+     * le calcul d'assiduité lui-même (NFR-PERF-08). Le périmètre est ici
+     * chargé en bloc, puis interrogé en mémoire.
+     *
+     * @return les identifiants publics des classes visibles, ou
+     *         {@link Optional#empty()} pour un appelant à périmètre global
+     */
+    private Optional<Set<UUID>> visibleClassPublicIds() {
+        Optional<Set<Long>> visible = academicScope.visibleClassGroupIds();
+        if (visible.isEmpty()) {
+            return Optional.empty();
+        }
+        if (visible.get().isEmpty()) {
+            // Périmètre vide ≠ périmètre global : ne rien voir, jamais tout voir.
+            return Optional.of(Set.of());
+        }
+        Set<UUID> publicIds = new LinkedHashSet<>();
+        for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByInternalIds(visible.get())) {
+            publicIds.add(ref.publicId());
+        }
+        return Optional.of(publicIds);
+    }
+
     private List<SessionRef> scopedSessions(Instant from, Instant to, UUID classFilter) {
-        boolean global = academicScope.hasGlobalScope();
+        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        boolean global = scope.isEmpty();
+        Set<UUID> visible = scope.orElse(Set.of());
+        if (classFilter != null && !global && !visible.contains(classFilter)) {
+            throw new AttendanceException(AttendanceException.Kind.OPERATION_FORBIDDEN);
+        }
         List<SessionRef> all = courseSessionDirectory.findSessionsInRange(from, to);
         List<SessionRef> kept = new ArrayList<>();
         for (SessionRef s : all) {
-            boolean inScope = global || s.classGroupPublicIds().stream().anyMatch(academicScope::isClassInScope);
+            boolean inScope = global || s.classGroupPublicIds().stream().anyMatch(visible::contains);
             if (!inScope) {
                 continue;
             }
             if (classFilter != null && !s.classGroupPublicIds().contains(classFilter)) {
                 continue;
-            }
-            if (classFilter != null && !global && !academicScope.isClassInScope(classFilter)) {
-                throw new AttendanceException(AttendanceException.Kind.OPERATION_FORBIDDEN);
             }
             kept.add(s);
         }
@@ -353,14 +450,16 @@ class AttendanceReportService {
     }
 
     private Set<UUID> scopedClasses(List<SessionRef> sessions, UUID classFilter) {
-        boolean global = academicScope.hasGlobalScope();
+        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        boolean global = scope.isEmpty();
+        Set<UUID> visible = scope.orElse(Set.of());
         LinkedHashSet<UUID> classes = new LinkedHashSet<>();
         for (SessionRef s : sessions) {
             for (UUID classPublicId : s.classGroupPublicIds()) {
                 if (classFilter != null && !classFilter.equals(classPublicId)) {
                     continue;
                 }
-                if (global || academicScope.isClassInScope(classPublicId)) {
+                if (global || visible.contains(classPublicId)) {
                     classes.add(classPublicId);
                 }
             }

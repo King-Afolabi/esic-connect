@@ -37,9 +37,13 @@
   <div class="att__filter-actions">
     <button mat-flat-button type="submit">Appliquer</button>
     <button mat-button type="button" (click)="reset()">Réinitialiser</button>
-    <button mat-stroked-button type="button" (click)="exportCsv()" [disabled]="exporting()">
-      <mat-icon aria-hidden="true">download</mat-icon> Exporter (CSV)
-    </button>
+    @for (format of exportFormats; track format.value) {
+      <button mat-stroked-button type="button"
+              (click)="exportAs(format.value)" [disabled]="exporting()"
+              [attr.aria-label]="'Exporter le rapport au format ' + format.label">
+        <mat-icon aria-hidden="true">download</mat-icon> {{ format.label }}
+      </button>
+    }
   </div>
 </form>
 

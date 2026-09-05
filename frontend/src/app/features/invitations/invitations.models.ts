@@ -54,3 +54,34 @@ export interface EmailDeliveryPage {
   totalElements: number;
   totalPages: number;
 }
+
+/**
+ * Ligne du rapport des invitations non activées (EF-REP-010 ;
+ * docs/02 §22.3 — « comptes en attente, dernière relance »).
+ *
+ * `maskedEmail` est volontairement masquée : ce rapport sert à relancer,
+ * pas à exporter un annuaire. Corriger une adresse se fait depuis
+ * l'écran de suivi des invitations, sous contrôle.
+ */
+export interface PendingInvitationRow {
+  invitationPublicId: string;
+  userPublicId: string;
+  firstName: string | null;
+  lastName: string | null;
+  maskedEmail: string;
+  lastSentAt: string;
+  expiresAt: string;
+  expired: boolean;
+  daysPending: number;
+}
+
+export type PendingInvitationExportFormat = 'csv' | 'xlsx' | 'pdf';
+
+export const PENDING_INVITATION_EXPORT_FORMATS: readonly {
+  value: PendingInvitationExportFormat;
+  label: string;
+}[] = [
+  { value: 'csv', label: 'CSV' },
+  { value: 'xlsx', label: 'Excel' },
+  { value: 'pdf', label: 'PDF' },
+];

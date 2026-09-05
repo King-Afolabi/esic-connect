@@ -1213,7 +1213,14 @@ class AttendanceIntegrationTests {
         String csv = getCsv("/api/v1/attendance/reports/sessions/export"
                 + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z", admin);
         assertThat(csv).startsWith("﻿"); // BOM UTF-8
-        assertThat(csv).contains("session_id;titre;debut"); // en-tête, séparateur ;
+        // Sprint 11 : les trois formats (CSV, Excel, PDF) partagent la
+        // MÊME description de rapport, donc les mêmes libellés de
+        // colonnes — des en-têtes techniques dans un PDF officiel
+        // seraient illisibles, et deux jeux d'en-têtes finiraient par
+        // diverger. La ligne 1 reste l'en-tête : aucun préambule.
+        assertThat(csv.split("\r\n", 2)[0])
+                .isEqualTo("﻿Identifiant de séance;Titre;Début;Fin;Classes;Formateur;"
+                        + "Points de contrôle;Attendu;Présent;Retard;Absent;Excusé;Taux de présence (%)");
         // La cellule commençant par '=' est neutralisée par une apostrophe en tête.
         assertThat(csv).contains("'=SUM(A1:A9)+cmd");
         assertThat(csv).doesNotContain(";=SUM(A1:A9)");

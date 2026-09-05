@@ -173,9 +173,9 @@ Elle **complète** la recette d'intégration API
 
 | Élément | Valeur |
 |---|---|
-| Emplacement | `tests/01-*.spec.ts` … `tests/10-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
+| Emplacement | `tests/01-*.spec.ts` … `tests/11-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
 | Commande | `npm run test:e2e` — pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté |
-| Volume | 10 fichiers, **149 tests** |
+| Volume | 11 fichiers ; 10 fichiers / **149 tests** exécutés à l'audit du 3 septembre, plus `tests/11-pilotage-restitution.spec.ts` ajouté au sprint 11 — voir `docs/CURRENT-STATE.md` §6.1 pour son état d'exécution réel |
 | Résultat fonctionnel | **149 / 149** (le run livré affiche 145/149 ; les 4 écarts sont des blocages d'environnement sous charge) |
 | Durée | 18-20 min en environnement sain |
 | CI | `.github/workflows/e2e.yml`, **manuel** (`workflow_dispatch`) |
@@ -192,6 +192,14 @@ anti-rejeu → présences en direct → clôture → historique → isolation
 AC-017) · assiduité et rapports · notifications et tableaux de bord ·
 sécurité (401, jeton falsifié, 403 jamais 500, validation cliente, double
 soumission) · responsive, navigation clavier, `role="alert"`.
+
+Ajouté au sprint 11 (`tests/11-pilotage-restitution.spec.ts`) : recherche
+globale et son refus aux rôles sans périmètre · attestation d'assiduité
+et vérification d'un identifiant inconnu · abonnement iCalendar de bout en
+bout — création, lecture réelle du flux **hors session applicative**,
+révocation, `410` après révocation, `404` sur jeton faux · piste d'audit
+sans adresse IP et sans action d'écriture · invitations non activées sans
+adresse en clair · tableau équivalent d'un graphique de tableau de bord.
 
 **Deux règles tenues, à ne pas relâcher :**
 

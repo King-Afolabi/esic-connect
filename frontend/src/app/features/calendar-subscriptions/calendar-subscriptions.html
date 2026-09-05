@@ -1,0 +1,83 @@
+<section class="cal" aria-labelledby="cal-title">
+  <h1 id="cal-title">Abonnement calendrier</h1>
+  <p class="cal__intro">
+    Abonnez votre agenda (Outlook, Google Agenda, Apple Calendrier) à votre planning.
+    Le lien ne contient que <strong>votre</strong> planning et peut être révoqué à tout moment.
+  </p>
+
+  <mat-card appearance="outlined" class="cal__card">
+    <mat-card-header><mat-card-title>Nouvel abonnement</mat-card-title></mat-card-header>
+    <mat-card-content>
+      <form class="cal__form" [formGroup]="form" (ngSubmit)="create()">
+        <mat-form-field appearance="outline" class="cal__field">
+          <mat-label>Nom (facultatif)</mat-label>
+          <input matInput formControlName="label" autocomplete="off" maxlength="120" />
+          <mat-hint>Par exemple « Téléphone » ou « Outlook du bureau ».</mat-hint>
+        </mat-form-field>
+        <div class="cal__actions">
+          <button mat-flat-button type="submit" [disabled]="working()">
+            <mat-icon aria-hidden="true">event</mat-icon> Créer le lien
+          </button>
+        </div>
+      </form>
+
+      @if (freshUrl(); as url) {
+        <div class="cal__fresh" role="status">
+          <p><strong>Copiez ce lien maintenant : il ne sera plus affiché.</strong></p>
+          <code class="cal__url">{{ url }}</code>
+          <button mat-stroked-button type="button" (click)="copy(url)">
+            <mat-icon aria-hidden="true">content_copy</mat-icon> Copier
+          </button>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="cal__card">
+    <mat-card-header><mat-card-title>Mes abonnements</mat-card-title></mat-card-header>
+    <mat-card-content>
+      @if (loading()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+      } @else if (subscriptions().length) {
+        <table class="cal__table">
+          <caption class="cal__caption">Abonnements iCalendar</caption>
+          <thead>
+            <tr>
+              <th scope="col">Nom</th>
+              <th scope="col">Créé le</th>
+              <th scope="col">Dernier accès</th>
+              <th scope="col">État</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of subscriptions(); track row.publicId) {
+              <tr>
+                <th scope="row">{{ row.label || 'Sans nom' }}</th>
+                <td>{{ row.createdAt }}</td>
+                <td>{{ row.lastUsedAt || 'Jamais' }}</td>
+                <td>{{ row.revokedAt ? 'Révoqué' : 'Actif' }}</td>
+                <td>
+                  @if (!row.revokedAt) {
+                    <button mat-button type="button" (click)="revoke(row)" [disabled]="working()"
+                            [attr.aria-label]="'Révoquer l\'abonnement ' + (row.label || 'sans nom')">
+                      Révoquer
+                    </button>
+                  } @else {
+                    —
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="cal__note">
+          Un abonnement révoqué reste listé : son lien répond « révoqué » aux agendas
+          qui continueraient de l'appeler.
+        </p>
+      } @else {
+        <p class="cal__note">Aucun abonnement pour le moment.</p>
+      }
+    </mat-card-content>
+  </mat-card>
+</section>

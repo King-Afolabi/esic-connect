@@ -45,6 +45,21 @@ class DefaultTeacherDirectory implements TeacherDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<TeacherRef> searchEligibleTeachers(String query, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        if (pattern == null) {
+            return List.of();
+        }
+        return userAccountRepository.searchByName(pattern, RoleCode.TEACHER, AccountStatus.ACTIVE,
+                        org.springframework.data.domain.PageRequest.of(0,
+                                com.esic.connect.shared.SearchPattern.bound(limit)))
+                .stream()
+                .map(this::toRef)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<TeacherRef> findEligibleTeacher(UUID userPublicId) {
         if (userPublicId == null) {
             return Optional.empty();

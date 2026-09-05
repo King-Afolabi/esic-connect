@@ -43,6 +43,7 @@ class AttendanceManagementService {
     private final AttendanceCorrectionRepository correctionRepository;
     private final AttendanceChangePublisher changePublisher;
     private final AttendanceActorResolver actorResolver;
+    private final com.esic.connect.document.DocumentRenderer documentRenderer;
     private final Clock clock;
 
     AttendanceManagementService(CourseSessionDirectory courseSessionDirectory,
@@ -53,6 +54,7 @@ class AttendanceManagementService {
                                 AttendanceCorrectionRepository correctionRepository,
                                 AttendanceChangePublisher changePublisher,
                                 AttendanceActorResolver actorResolver,
+                                com.esic.connect.document.DocumentRenderer documentRenderer,
                                 Clock clock) {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
@@ -62,6 +64,7 @@ class AttendanceManagementService {
         this.correctionRepository = correctionRepository;
         this.changePublisher = changePublisher;
         this.actorResolver = actorResolver;
+        this.documentRenderer = documentRenderer;
         this.clock = clock;
     }
 
@@ -277,9 +280,16 @@ class AttendanceManagementService {
                         record.getSource() != null ? record.getSource().name() : ""));
             }
         }
-        String content = AttendanceCsvWriter.write(List.of(
-                "point_de_controle", "numero_etudiant", "prenom", "nom", "statut", "retard_minutes",
-                "enregistre_le", "canal"), body);
+        // Un seul écrivain CSV pour tout le produit (module `document`) :
+        // deux implémentations finiraient par diverger, et c'est
+        // exactement ainsi qu'un jour une seule des deux neutraliserait
+        // l'injection de formule (AC-032). Titre vide : cet export est un
+        // fichier de travail, pas un document en-tête.
+        String content = new String(documentRenderer.toCsv(com.esic.connect.document.TabularDocument.of(
+                "", null,
+                List.of("point_de_controle", "numero_etudiant", "prenom", "nom", "statut",
+                        "retard_minutes", "enregistre_le", "canal"),
+                body)), java.nio.charset.StandardCharsets.UTF_8);
         String fileName = "attendance-session_" + session.publicId() + ".csv";
         return new SessionCsv(fileName, content);
     }

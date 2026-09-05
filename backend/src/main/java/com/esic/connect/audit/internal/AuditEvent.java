@@ -138,6 +138,34 @@ public class AuditEvent extends BaseEntity {
         return result;
     }
 
+    // --- Lectures pour la consultation d'audit (EF-AUD-002) ------------
+    // Aucun `setter` n'est ajouté ici : une trace d'audit ne se modifie
+    // pas (docs/02 §23.4).
+
+    public Instant getOccurredAt() {
+        return occurredAt;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public String getResourceType() {
+        return resourceType;
+    }
+
+    public String getActorRole() {
+        return actorRole;
+    }
+
+    public UUID getActorPublicIdSnapshot() {
+        return actorPublicIdSnapshot;
+    }
+
+    public UUID getCorrelationId() {
+        return correlationId;
+    }
+
     public void setOutboxKey(String outboxKey) {
         this.outboxKey = outboxKey;
     }

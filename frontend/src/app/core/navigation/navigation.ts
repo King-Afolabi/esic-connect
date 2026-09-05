@@ -190,6 +190,47 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'tune',
   },
   {
+    // Écran livré (sprint 11) : recherche globale dans le périmètre de
+    // l'appelant (EF-USER-009). Périmètre aligné sur
+    // `GlobalSearchController` — un formateur et un apprenant en sont
+    // exclus : leur besoin est couvert par leurs propres écrans.
+    label: 'Recherche globale',
+    path: '/recherche',
+    icon: 'search',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 11) : attestations d'assiduité (EF-REP-006).
+    label: 'Attestations',
+    path: '/attestations',
+    icon: 'workspace_premium',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 11) : rapport des invitations non activées
+    // (EF-REP-010).
+    label: 'Invitations non activées',
+    path: '/invitations/non-activees',
+    icon: 'hourglass_top',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 11) : abonnement iCalendar au planning
+    // (EF-INT-001). Visible par tout rôle : chacun s'abonne au sien, et
+    // le serveur dérive le périmètre du sujet du jeton.
+    label: 'Abonnement calendrier',
+    path: '/mon-compte/calendrier',
+    icon: 'event_available',
+  },
+  {
+    // Écran livré (sprint 11) : consultation et export de la piste
+    // d'audit (EF-AUD-002). Réservé à l'administration.
+    label: "Piste d'audit",
+    path: '/exploitation/audit',
+    icon: 'fact_check',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
+  },
+  {
     // Écran livré (sprint 10) : file d'échec des effets de bord et rejeu
     // manuel (EF-OPS-005). Périmètre aligné sur `OutboxAdminController`
     // (`ADMIN` / `SUPER_ADMIN`) : un rejeu peut envoyer un courriel.

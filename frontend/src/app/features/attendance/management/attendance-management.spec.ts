@@ -180,7 +180,7 @@ describe('AttendanceReport', () => {
     http.verify();
   });
 
-  it('exportCsv requests a blob and triggers a programmatic download (no navigation URL)', () => {
+  it('exportAs requests a blob and triggers a programmatic download (no navigation URL)', () => {
     const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const clickSpy = vi
@@ -190,7 +190,7 @@ describe('AttendanceReport', () => {
     const { fixture, http } = setupReport('sessions');
     http.expectOne((r) => r.url === SESSIONS_URL).flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
 
-    (fixture.componentInstance as unknown as { exportCsv: () => void }).exportCsv();
+    (fixture.componentInstance as unknown as { exportAs: (f: string) => void }).exportAs('csv');
     const req = http.expectOne((r) => r.url === SESSIONS_EXPORT_URL);
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['session_id;titre'], { type: 'text/csv' }), {
@@ -200,6 +200,38 @@ describe('AttendanceReport', () => {
     expect(createUrlSpy).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
     expect(revokeSpy).toHaveBeenCalledWith('blob:x');
+    createUrlSpy.mockRestore();
+    revokeSpy.mockRestore();
+    clickSpy.mockRestore();
+    http.verify();
+  });
+
+  /**
+   * EF-REP-004, EF-REP-005 : le format demandé est transmis au serveur,
+   * qui le résout contre une liste fermée. Le client ne fabrique aucun
+   * fichier lui-même.
+   */
+  it.each(['xlsx', 'pdf'])('exportAs forwards the %s format to the server', (format) => {
+    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    const { fixture, http } = setupReport('classes');
+    http
+      .expectOne((r) => r.url === '/api/v1/attendance/reports/classes')
+      .flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+
+    (fixture.componentInstance as unknown as { exportAs: (f: string) => void }).exportAs(format);
+    const req = http.expectOne((r) => r.url === '/api/v1/attendance/reports/classes/export');
+    expect(req.request.params.get('format')).toBe(format);
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['x']), {
+      headers: { 'content-disposition': `attachment; filename="assiduite.${format}"` },
+    });
+
+    expect(clickSpy).toHaveBeenCalledOnce();
     createUrlSpy.mockRestore();
     revokeSpy.mockRestore();
     clickSpy.mockRestore();

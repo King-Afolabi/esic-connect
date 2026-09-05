@@ -1,6 +1,7 @@
 package com.esic.connect.academic.internal;
 
 import com.esic.connect.academic.ClassGroupDirectory;
+import com.esic.connect.shared.SearchPattern;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +58,25 @@ class DefaultClassGroupDirectory implements ClassGroupDirectory {
         return classGroupRepository.findAllById(classGroupInternalIds).stream()
                 .map(DefaultClassGroupDirectory::toRef)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ClassGroupRef> search(String query, java.util.Set<Long> visibleInternalIds, int limit) {
+        String pattern = SearchPattern.of(query);
+        if (pattern == null) {
+            return List.of();
+        }
+        org.springframework.data.domain.Pageable page =
+                org.springframework.data.domain.PageRequest.of(0, SearchPattern.bound(limit));
+        // Périmètre vide ≠ périmètre global : un responsable sans classe
+        // visible ne doit rien trouver, jamais tout trouver.
+        List<ClassGroup> found = visibleInternalIds == null
+                ? classGroupRepository.search(pattern, page)
+                : visibleInternalIds.isEmpty()
+                        ? List.of()
+                        : classGroupRepository.searchWithin(pattern, visibleInternalIds, page);
+        return found.stream().map(DefaultClassGroupDirectory::toRef).toList();
     }
 
     @Override
