@@ -180,3 +180,103 @@ export interface CreateUserRequest {
   role: string;
   sendInvitation?: boolean;
 }
+
+/**
+ * Opérations de masse (EF-USER-004) — `POST /api/v1/users/bulk`,
+ * `BulkUserWeb.BulkRequest` / `BulkResult` / `BulkOutcome`
+ * (`UserAccountController`, rôles `ADMIN` / `SUPER_ADMIN` /
+ * `SCHOOL_ADMINISTRATION`).
+ *
+ * <p>`confirm` absent ou `false` → **aperçu seul, aucune écriture**
+ * (RG-034) : le serveur calcule exactement le même résultat qu'à
+ * l'exécution (éligibles / ignorés / refusés), sans rien modifier.
+ * `confirm: true` exécute réellement l'action, compte par compte,
+ * isolant les échecs individuels sans faire échouer le lot entier.
+ */
+export const BULK_ACTIONS = ['SUSPEND', 'RESTORE', 'ARCHIVE', 'RESEND_INVITATION'] as const;
+export type BulkAction = (typeof BULK_ACTIONS)[number];
+
+export const BULK_ACTION_LABELS: Record<BulkAction, string> = {
+  SUSPEND: 'Suspendre',
+  RESTORE: 'Réactiver',
+  ARCHIVE: 'Archiver',
+  RESEND_INVITATION: "Réémettre l'invitation",
+};
+
+export function bulkActionLabel(action: string): string {
+  return (BULK_ACTION_LABELS as Record<string, string>)[action] ?? action;
+}
+
+/** Maximum d'identifiants acceptés par lot (`BulkRequest.userIds`, `@Size(max = 500)`). */
+export const BULK_MAX_USER_IDS = 500;
+
+export interface BulkRequest {
+  action: BulkAction;
+  userIds: string[];
+  reason: string;
+  /** Absent/`false` = aperçu ; `true` = exécution réelle. */
+  confirm?: boolean;
+}
+
+export const BULK_OUTCOMES = ['ELIGIBLE', 'IGNORED', 'REJECTED'] as const;
+export type BulkOutcomeStatus = (typeof BULK_OUTCOMES)[number];
+
+export const BULK_OUTCOME_LABELS: Record<BulkOutcomeStatus, string> = {
+  ELIGIBLE: 'Éligible',
+  IGNORED: 'Ignoré',
+  REJECTED: 'Refusé',
+};
+
+export function bulkOutcomeLabel(outcome: string): string {
+  return (BULK_OUTCOME_LABELS as Record<string, string>)[outcome] ?? outcome;
+}
+
+/** Un compte du lot et l'issue qui lui a été appliquée (ou le serait). */
+export interface BulkOutcome {
+  userId: string;
+  /** `null` si l'identifiant ne correspondait à aucun compte. */
+  email: string | null;
+  outcome: BulkOutcomeStatus;
+  /** Motif lisible (déjà ÉLIGIBLE, rôle protégé, identifiant inconnu…). */
+  reason: string;
+}
+
+export interface BulkResult {
+  /** `false` pour un aperçu — rien n'a été écrit. */
+  applied: boolean;
+  action: BulkAction;
+  requested: number;
+  eligible: number;
+  ignored: number;
+  rejected: number;
+  outcomes: BulkOutcome[];
+}
+
+/**
+ * Détection de doublons (EF-USER-005) — `GET /api/v1/users/duplicates`,
+ * `BulkUserWeb.DuplicateGroup` / `DuplicateCandidate`
+ * (`UserAccountController`, rôles `ADMIN` / `SUPER_ADMIN` uniquement —
+ * plus restreint que les opérations de masse).
+ *
+ * <p>Le service **signale** les doublons, il ne les fusionne ni ne les
+ * supprime jamais (docs/02 §9.5) : aucune route de fusion n'existe côté
+ * serveur, et cette interface n'en propose donc aucune. La réponse est un
+ * simple tableau JSON, sans pagination — recalculé à chaque appel, jamais
+ * mis en cache côté serveur.
+ */
+export interface DuplicateCandidate {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: AccountStatus;
+  createdAt: string;
+}
+
+export interface DuplicateGroup {
+  /** Valeur normalisée à l'origine du rapprochement (nom ou téléphone). */
+  signature: string;
+  /** Motif lisible, ex. « Même nom et prénom, à la casse et aux accents près. » */
+  reason: string;
+  accounts: DuplicateCandidate[];
+}

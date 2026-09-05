@@ -92,3 +92,71 @@ table[mat-table] {
   margin: 0;
   color: var(--mat-sys-error, #b3261e);
 }
+
+.users__duplicates-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-end: 1.5rem;
+}
+
+.users__bulk {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-block-end: 1rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 0.5rem;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.users__bulk-count {
+  font: var(--mat-sys-title-medium);
+  margin: 0;
+}
+
+.users__bulk-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.users__bulk-field {
+  min-width: 12rem;
+}
+
+.users__bulk-field--reason {
+  flex: 1 1 20rem;
+}
+
+.users__bulk-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-basis: 100%;
+}
+
+.users__bulk-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+table.users__bulk-outcomes {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.users__inline-error {
+  color: var(--mat-sys-error, #b3261e);
+  margin: 0;
+}

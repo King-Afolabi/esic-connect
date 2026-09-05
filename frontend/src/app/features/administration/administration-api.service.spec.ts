@@ -135,6 +135,70 @@ describe('AdministrationApiService', () => {
     });
   });
 
+  describe('bulk operations (EF-USER-004)', () => {
+    it('bulkUsers POSTs /users/bulk with the exact request body, confirm omitted by default', () => {
+      service
+        .bulkUsers({ action: 'SUSPEND', userIds: ['u-1', 'u-2'], reason: 'Départ' })
+        .subscribe();
+      const req = http.expectOne('/api/v1/users/bulk');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        action: 'SUSPEND',
+        userIds: ['u-1', 'u-2'],
+        reason: 'Départ',
+      });
+      req.flush({
+        applied: false,
+        action: 'SUSPEND',
+        requested: 2,
+        eligible: 2,
+        ignored: 0,
+        rejected: 0,
+        outcomes: [],
+      });
+    });
+
+    it('bulkUsers with confirm: true sends it verbatim (execution, not preview)', () => {
+      service
+        .bulkUsers({ action: 'ARCHIVE', userIds: ['u-1'], reason: 'x', confirm: true })
+        .subscribe();
+      const req = http.expectOne('/api/v1/users/bulk');
+      expect(req.request.body).toEqual({
+        action: 'ARCHIVE',
+        userIds: ['u-1'],
+        reason: 'x',
+        confirm: true,
+      });
+      req.flush({
+        applied: true,
+        action: 'ARCHIVE',
+        requested: 1,
+        eligible: 1,
+        ignored: 0,
+        rejected: 0,
+        outcomes: [],
+      });
+    });
+  });
+
+  describe('duplicate detection (EF-USER-005)', () => {
+    it('listDuplicates GETs /users/duplicates and returns the bare array', () => {
+      let result: unknown;
+      service.listDuplicates().subscribe((groups) => (result = groups));
+      const req = http.expectOne('/api/v1/users/duplicates');
+      expect(req.request.method).toBe('GET');
+      const groups = [
+        {
+          signature: 'awa diallo',
+          reason: 'Même nom et prénom, à la casse et aux accents près.',
+          accounts: [],
+        },
+      ];
+      req.flush(groups);
+      expect(result).toEqual(groups);
+    });
+  });
+
   it('issues no write request on a pure read (list + detail)', () => {
     service.listUsers({}).subscribe();
     http.expectOne((r) => r.url === '/api/v1/users' && r.method === 'GET').flush({

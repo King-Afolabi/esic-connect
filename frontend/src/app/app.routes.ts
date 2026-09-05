@@ -353,6 +353,23 @@ export const routes: Routes = [
               import('./features/administration/user-list/user-list').then((m) => m.UserList),
           },
           {
+            // Déclaré AVANT `:publicId` et hors de son sous-arbre — sinon
+            // Angular router route « duplicates » vers `UserDetail` avec
+            // `publicId = 'duplicates'` (même précaution que `students/import`
+            // face à `students/:id`).
+            path: 'duplicates',
+            // Périmètre plus restreint (`ADMIN_ROLES`) que le reste de
+            // `/administration` (`READ_ROLES`, qui inclut aussi
+            // `SCHOOL_ADMINISTRATION`) — aligné sur
+            // `UserAccountController.duplicates()` (EF-USER-005).
+            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+            title: `Doublons détectés — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/administration/duplicate-list/duplicate-list').then(
+                (m) => m.DuplicateList,
+              ),
+          },
+          {
             path: ':publicId',
             title: `Fiche compte — ${APP_NAME}`,
             loadComponent: () =>

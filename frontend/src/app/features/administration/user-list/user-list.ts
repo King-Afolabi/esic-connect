@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -12,12 +13,19 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { RouterLink } from '@angular/router';
 
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
-import { ROLES, roleLabel } from '../../../core/models/role';
+import { ROLES, Role, roleLabel } from '../../../core/models/role';
+import { NotificationService } from '../../../core/notifications/notification.service';
 import { AdministrationApiService } from '../administration-api.service';
+import { toAdministrationError } from '../administration-errors';
 import {
   ACCOUNT_STATUSES,
+  ACTION_REASON_MAX_LENGTH,
   AccountStatus,
+  BULK_ACTIONS,
+  BulkAction,
+  BulkResult,
   PageResponse,
   SortDirection,
   USER_SORT_FIELDS,
@@ -25,7 +33,14 @@ import {
   UserSortField,
   UserSummaryResponse,
   accountStatusLabel,
+  bulkActionLabel,
+  bulkOutcomeLabel,
 } from '../administration.models';
+
+/** Périmètre des opérations de masse (`UserAccountController` `LIFECYCLE_ROLES`) — identique côté serveur. */
+const BULK_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'];
+/** Périmètre de la détection de doublons (`UserAccountController` `ADMIN_ROLES`) — plus restreint. */
+const DUPLICATE_VIEW_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN'];
 
 /** État de la consultation de la liste. */
 type ListState =
@@ -68,6 +83,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    MatCheckboxModule,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './user-list.html',
@@ -76,6 +92,8 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 export class UserList {
   private readonly api = inject(AdministrationApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly notifications = inject(NotificationService);
 
   protected readonly statuses = ACCOUNT_STATUSES;
   protected readonly roleOptions = ROLES;
@@ -87,15 +105,12 @@ export class UserList {
   protected rolesLabel(codes: readonly string[]): string {
     return codes.length ? codes.map(roleLabel).join(', ') : '—';
   }
-  protected readonly displayedColumns = [
-    'email',
-    'lastName',
-    'roles',
-    'status',
-    'createdAt',
-    'lastLoginAt',
-    'actions',
-  ] as const;
+  /** La colonne de sélection n'apparaît que pour un rôle habilité aux opérations de masse. */
+  protected readonly displayedColumns = computed(() =>
+    this.canBulk()
+      ? (['select', 'email', 'lastName', 'roles', 'status', 'createdAt', 'lastLoginAt', 'actions'] as const)
+      : (['email', 'lastName', 'roles', 'status', 'createdAt', 'lastLoginAt', 'actions'] as const),
+  );
 
   /** Filtres appliqués (recherche + statut + rôle). */
   /**
@@ -191,12 +206,14 @@ export class UserList {
 
   protected applyFilters(): void {
     this.pageIndex.set(0);
+    this.resetBulkOutcome();
     this.load();
   }
 
   protected resetFilters(): void {
     this.filters.reset({ q: '', status: '', role: '' });
     this.pageIndex.set(0);
+    this.resetBulkOutcome();
     this.load();
   }
 
@@ -207,12 +224,14 @@ export class UserList {
     this.sortField.set(field);
     this.sortDirection.set(sort.direction === 'asc' ? 'asc' : 'desc');
     this.pageIndex.set(0);
+    this.resetBulkOutcome();
     this.load();
   }
 
   protected onPageChange(event: PageEvent): void {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
+    this.resetBulkOutcome();
     this.load();
   }
 
@@ -241,6 +260,151 @@ export class UserList {
             return;
           }
           this.state.set({ kind: 'error', message: normalized.message });
+        },
+      });
+  }
+
+  // -------------------------------------------------------------------
+  // Opérations de masse (EF-USER-004) — sélection multiple sur la PAGE
+  // affichée, aperçu obligatoire avant toute écriture (RG-034 : « une
+  // opération groupée exige une confirmation explicite »).
+  // -------------------------------------------------------------------
+
+  protected readonly bulkActions = BULK_ACTIONS;
+  protected readonly bulkActionLabel = bulkActionLabel;
+  protected readonly bulkOutcomeLabel = bulkOutcomeLabel;
+  protected readonly bulkReasonMaxLength = ACTION_REASON_MAX_LENGTH;
+
+  /** Même périmètre que le back-end (`LIFECYCLE_ROLES`) — masquage ergonomique seulement. */
+  protected readonly canBulk = computed(() =>
+    BULK_ROLES.some((role) => this.roleContext.effectiveRoles().includes(role)),
+  );
+  /** Détection de doublons : périmètre plus restreint (`ADMIN_ROLES`) que les opérations de masse. */
+  protected readonly canViewDuplicates = computed(() =>
+    DUPLICATE_VIEW_ROLES.some((role) => this.roleContext.effectiveRoles().includes(role)),
+  );
+
+  private readonly selectedIds = signal<ReadonlySet<string>>(new Set());
+  protected readonly selectedCount = computed(() => this.selectedIds().size);
+
+  protected readonly bulkForm = this.formBuilder.group({
+    action: this.formBuilder.control<BulkAction>('SUSPEND', [Validators.required]),
+    reason: this.formBuilder.control('', [
+      Validators.required,
+      Validators.maxLength(ACTION_REASON_MAX_LENGTH),
+    ]),
+  });
+
+  /** Résultat du dernier aperçu (`applied: false`) — `null` tant qu'aucun n'a été demandé. */
+  protected readonly bulkPreview = signal<BulkResult | null>(null);
+  protected readonly bulkSubmitting = signal(false);
+  protected readonly bulkError = signal<string | null>(null);
+  /** Vrai une fois l'exécution réelle terminée (`applied: true`) : affiche le résultat final. */
+  protected readonly bulkApplied = signal(false);
+
+  protected isRowSelected(publicId: string): boolean {
+    return this.selectedIds().has(publicId);
+  }
+
+  protected toggleRow(publicId: string): void {
+    const next = new Set(this.selectedIds());
+    if (next.has(publicId)) {
+      next.delete(publicId);
+    } else {
+      next.add(publicId);
+    }
+    this.selectedIds.set(next);
+    this.resetBulkOutcome();
+  }
+
+  /** Vrai si toutes les lignes de la page courante sont sélectionnées (et qu'il y en a). */
+  protected readonly allOnPageSelected = computed(() => {
+    const rows = this.rows();
+    return rows.length > 0 && rows.every((row) => this.selectedIds().has(row.publicId));
+  });
+  protected readonly someOnPageSelected = computed(() => {
+    const rows = this.rows();
+    return rows.some((row) => this.selectedIds().has(row.publicId)) && !this.allOnPageSelected();
+  });
+
+  protected toggleAllOnPage(): void {
+    const rows = this.rows();
+    const next = new Set(this.selectedIds());
+    if (this.allOnPageSelected()) {
+      for (const row of rows) {
+        next.delete(row.publicId);
+      }
+    } else {
+      for (const row of rows) {
+        next.add(row.publicId);
+      }
+    }
+    this.selectedIds.set(next);
+    this.resetBulkOutcome();
+  }
+
+  protected clearSelection(): void {
+    this.selectedIds.set(new Set());
+    this.resetBulkOutcome();
+  }
+
+  /** Un aperçu affiché ne reste valable que tant que la sélection ou le motif ne changent pas. */
+  private resetBulkOutcome(): void {
+    this.bulkPreview.set(null);
+    this.bulkApplied.set(false);
+    this.bulkError.set(null);
+  }
+
+  /** Étape 1 : calcule éligibles / ignorés / refusés — AUCUNE écriture (RG-034). */
+  protected previewBulk(): void {
+    if (this.bulkForm.invalid || this.selectedIds().size === 0 || this.bulkSubmitting()) {
+      this.bulkForm.markAllAsTouched();
+      return;
+    }
+    this.runBulk(false);
+  }
+
+  /** Étape 2 : exécute réellement l'action précédemment prévisualisée. */
+  protected confirmBulk(): void {
+    if (this.bulkSubmitting()) {
+      return;
+    }
+    this.runBulk(true);
+  }
+
+  protected cancelBulkPreview(): void {
+    this.resetBulkOutcome();
+  }
+
+  private runBulk(confirm: boolean): void {
+    this.bulkSubmitting.set(true);
+    this.bulkError.set(null);
+    const value = this.bulkForm.getRawValue();
+    this.api
+      .bulkUsers({
+        action: value.action,
+        userIds: Array.from(this.selectedIds()),
+        reason: value.reason.trim(),
+        confirm,
+      })
+      .subscribe({
+        next: (result) => {
+          this.bulkSubmitting.set(false);
+          this.bulkPreview.set(result);
+          this.bulkApplied.set(result.applied);
+          if (result.applied) {
+            this.selectedIds.set(new Set());
+            this.notifications.info(
+              `Opération « ${bulkActionLabel(result.action)} » appliquée : ` +
+                `${result.eligible} traité(s), ${result.ignored} ignoré(s), ${result.rejected} refusé(s).`,
+            );
+            this.load();
+          }
+        },
+        error: (error: unknown) => {
+          this.bulkSubmitting.set(false);
+          const view = toAdministrationError(error);
+          this.bulkError.set(view.message);
         },
       });
   }

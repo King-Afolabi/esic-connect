@@ -6,7 +6,10 @@ import { environment } from '../../../environments/environment';
 import {
   AccountActionRequest,
   AssignRoleRequest,
+  BulkRequest,
+  BulkResult,
   CreateUserRequest,
+  DuplicateGroup,
   PageResponse,
   UserDetailResponse,
   UserListQuery,
@@ -115,6 +118,22 @@ export class AdministrationApiService {
       `${this.base}/users/${encodeURIComponent(publicId)}/roles/${encodeURIComponent(roleCode)}/revoke`,
       body,
     );
+  }
+
+  /**
+   * `POST /api/v1/users/bulk` — aperçu (`confirm` absent/`false`) ou
+   * exécution (`confirm: true`) d'une opération de masse (EF-USER-004).
+   */
+  bulkUsers(request: BulkRequest): Observable<BulkResult> {
+    return this.http.post<BulkResult>(`${this.base}/users/bulk`, request);
+  }
+
+  /**
+   * `GET /api/v1/users/duplicates` — groupes de comptes probablement
+   * dupliqués (EF-USER-005). Réservé à `ADMIN` / `SUPER_ADMIN`.
+   */
+  listDuplicates(): Observable<DuplicateGroup[]> {
+    return this.http.get<DuplicateGroup[]>(`${this.base}/users/duplicates`);
   }
 }
 

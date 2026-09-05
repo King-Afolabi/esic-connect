@@ -6,6 +6,13 @@
   l'historique de ses rôles.
 </p>
 
+@if (canViewDuplicates()) {
+  <a mat-stroked-button routerLink="/administration/duplicates" class="users__duplicates-link">
+    <mat-icon aria-hidden="true">content_copy</mat-icon>
+    Doublons détectés
+  </a>
+}
+
 <!--
   Création d'un compte (EF-USER-001) et, par la même route, d'un
   formateur externe (EF-TEA-001) : le domaine de l'adresse est libre et
@@ -116,6 +123,98 @@
   @if (isEmpty()) {
     <p class="users__status" role="status">Aucun compte ne correspond à votre recherche.</p>
   } @else {
+    @if (canBulk() && selectedCount() > 0) {
+      <section class="users__bulk" aria-label="Opération de masse">
+        <p class="users__bulk-count">{{ selectedCount() }} compte(s) sélectionné(s)</p>
+
+        @if (!bulkPreview()) {
+          <form class="users__bulk-form" [formGroup]="bulkForm" (ngSubmit)="previewBulk()" novalidate>
+            <mat-form-field appearance="outline" class="users__bulk-field">
+              <mat-label>Action</mat-label>
+              <mat-select formControlName="action">
+                @for (action of bulkActions; track action) {
+                  <mat-option [value]="action">{{ bulkActionLabel(action) }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="users__bulk-field users__bulk-field--reason">
+              <mat-label>Motif</mat-label>
+              <textarea
+                matInput
+                formControlName="reason"
+                rows="2"
+                required
+                [maxlength]="bulkReasonMaxLength"
+              ></textarea>
+              @if (bulkForm.controls.reason.touched && bulkForm.controls.reason.invalid) {
+                <mat-error>Le motif est obligatoire.</mat-error>
+              }
+            </mat-form-field>
+            <div class="users__bulk-actions">
+              <button mat-flat-button type="submit" [disabled]="bulkSubmitting()">
+                Prévisualiser
+              </button>
+              <button mat-button type="button" (click)="clearSelection()" [disabled]="bulkSubmitting()">
+                Annuler la sélection
+              </button>
+            </div>
+          </form>
+        } @else {
+          @let preview = bulkPreview()!;
+          <div class="users__bulk-preview" role="status">
+            <p>
+              <strong>{{ bulkActionLabel(preview.action) }}</strong> —
+              {{ preview.eligible }} éligible(s), {{ preview.ignored }} ignoré(s),
+              {{ preview.rejected }} refusé(s) sur {{ preview.requested }} demandé(s).
+              {{ bulkApplied() ? 'Appliqué.' : 'Aperçu — rien n\'a encore été écrit.' }}
+            </p>
+            <div class="users__table-wrapper">
+              <table class="users__bulk-outcomes">
+                <caption class="users__sr-only">Détail par compte</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Compte</th>
+                    <th scope="col">Résultat</th>
+                    <th scope="col">Motif</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (outcome of preview.outcomes; track outcome.userId) {
+                    <tr>
+                      <td>{{ outcome.email ?? outcome.userId }}</td>
+                      <td>{{ bulkOutcomeLabel(outcome.outcome) }}</td>
+                      <td>{{ outcome.reason }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (!bulkApplied()) {
+              <div class="users__bulk-actions">
+                <button
+                  mat-flat-button
+                  color="primary"
+                  type="button"
+                  (click)="confirmBulk()"
+                  [disabled]="bulkSubmitting() || preview.eligible === 0"
+                >
+                  Confirmer et appliquer
+                </button>
+                <button mat-button type="button" (click)="cancelBulkPreview()" [disabled]="bulkSubmitting()">
+                  Annuler
+                </button>
+              </div>
+            } @else {
+              <button mat-button type="button" (click)="clearSelection()">Fermer</button>
+            }
+          </div>
+        }
+        @if (bulkError()) {
+          <p class="users__inline-error" role="alert">{{ bulkError() }}</p>
+        }
+      </section>
+    }
+
     <div class="users__table-wrapper">
       <table
         mat-table
@@ -126,6 +225,26 @@
         matSortDisableClear
         (matSortChange)="onSortChange($event)"
       >
+        @if (canBulk()) {
+          <ng-container matColumnDef="select">
+            <th mat-header-cell *matHeaderCellDef>
+              <mat-checkbox
+                [checked]="allOnPageSelected()"
+                [indeterminate]="someOnPageSelected()"
+                (change)="toggleAllOnPage()"
+                aria-label="Sélectionner tous les comptes de la page"
+              ></mat-checkbox>
+            </th>
+            <td mat-cell *matCellDef="let row">
+              <mat-checkbox
+                [checked]="isRowSelected(row.publicId)"
+                (change)="toggleRow(row.publicId)"
+                [attr.aria-label]="'Sélectionner ' + row.email"
+              ></mat-checkbox>
+            </td>
+          </ng-container>
+        }
+
         <ng-container matColumnDef="email">
           <th mat-header-cell *matHeaderCellDef mat-sort-header>Adresse électronique</th>
           <td mat-cell *matCellDef="let row">{{ row.email }}</td>
@@ -174,8 +293,8 @@
           </td>
         </ng-container>
 
-        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns()"></tr>
       </table>
     </div>
 
