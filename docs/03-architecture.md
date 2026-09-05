@@ -520,6 +520,43 @@ iot            → attendance, coursesession, shared
 > Les §6.2, §6.5 et §6.6 (listes de modules et règles de dépendance)
 > décrivent également le découpage cible et ne sont pas alignées sur les
 > 14 modules réels ci-dessus.
+>
+> **Mise à jour, sprints 9 à 11.** Le dépôt compte désormais
+> **19 modules** : les 14 ci-dessus, plus `claim` (S9), `outbox` (S10) et
+> `document`, `search`, `integration` (S11). `ModularityTests` reste vert.
+> Trois précisions sur les modules du sprint 11, parce qu'elles fixent des
+> règles de dépendance :
+>
+> - **`document`** ne connaît aucun métier. Il reçoit un titre, des faits,
+>   un en-tête et des lignes **déjà rendues en texte**, et les restitue en
+>   CSV, en classeur `.xlsx` ou en PDF. Il n'a ni table, ni autorisation,
+>   ni décision sur *quoi* montrer. Ce sont `attendance`, `audit` et
+>   `identity` qui dépendent de lui. Deux garanties transverses justifient
+>   de le centraliser plutôt que de recopier le travail : la
+>   neutralisation de l'injection de formule (AC-032) doit s'appliquer au
+>   CSV **comme** au classeur, et l'identité d'un document officiel
+>   (AC-033) doit figurer sur **toute** page PDF.
+> - **`search`** ne détient aucune donnée et n'a pas de migration. Chaque
+>   module cherche dans la sienne — lui seul sait ce qu'est un code de
+>   classe — via une méthode ajoutée à son **port public existant** ;
+>   `search` assemble les réponses et applique le périmètre, exactement
+>   comme `dashboard`.
+> - **`integration`** porte le flux iCalendar (table
+>   `calendar_subscription`, V34) et les **ports sortants**
+>   `MeetingProvider` / `ExternalCalendarWriter`, avec un adaptateur
+>   Microsoft Graph et un adaptateur **inactif** choisi par configuration.
+>   Aucun module métier ne dépend de lui : c'est lui qui lit leurs ports.
+>
+> | Port public ajouté | Fournisseur → consommateur(s) | Objet |
+> |---|---|---|
+> | `document.DocumentRenderer` | `document` → `attendance`, `audit`, `identity` | CSV, classeur, PDF d'un `TabularDocument` |
+> | `academic.ClassGroupDirectory#search`, `academic.AcademicReferenceDirectory#searchPrograms` | `academic` → `search` | recherche périmétrée sur le référentiel |
+> | `enrollment.EnrollmentDirectory#searchStudents` | `enrollment` → `search` | recherche d'apprenants, jamais par adresse |
+> | `identity.TeacherDirectory#searchEligibleTeachers`, `identity.UserDirectory#searchByName` | `identity` → `search`, `enrollment` | recherche d'identité civile |
+> | `organization.RoomDirectory#search` | `organization` → `search` | recherche de salles, jamais le jeton de QR fixe |
+> | `coursesession.CourseSessionDirectory#searchSessions`, `#findTeacherSchedule`, `#findClassSchedule` | `coursesession` → `search`, `integration` | recherche et fenêtres de calendrier |
+> | `attendance.AttendanceDashboardDirectory#classDigests`, `#justificationThroughput` | `attendance` → `dashboard` | agrégats d'assiduité périmétrés |
+> | `claim.ClaimDashboardDirectory`, `audit.AuditDashboardDirectory`, `identity.AccountStatsDirectory#countPendingActivationAmong` | → `dashboard` | compteurs bornés des cartes complètes |
 
 ## 7.1 `identity`
 

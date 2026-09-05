@@ -13,7 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -122,10 +126,8 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         if (to != null) {
             specs.add(CourseSessionSpecifications.startsUntil(to));
         }
-        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
-                .stream()
-                .map(session -> toRef(session, classPublicIds(session)))
-                .toList();
+        return toRefs(sessionRepository.findAll(Specification.allOf(specs),
+                Sort.by(Sort.Direction.ASC, "startsAt")));
     }
 
     @Override
@@ -161,10 +163,8 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
         if (to != null) {
             specs.add(CourseSessionSpecifications.startsUntil(to));
         }
-        return sessionRepository.findAll(Specification.allOf(specs), Sort.by(Sort.Direction.ASC, "startsAt"))
-                .stream()
-                .map(session -> toRef(session, classPublicIds(session)))
-                .toList();
+        return toRefs(sessionRepository.findAll(Specification.allOf(specs),
+                Sort.by(Sort.Direction.ASC, "startsAt")));
     }
 
     @Override
@@ -196,12 +196,110 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                     CourseSessionSpecifications.hasInternalIdIn(substituted));
         }
         specs.add(assignedToTeacher);
-        return sessionRepository.findAll(Specification.allOf(specs),
+        return toRefs(sessionRepository.findAll(Specification.allOf(specs),
                         org.springframework.data.domain.PageRequest.of(0, bounded,
                                 Sort.by(Sort.Direction.ASC, "startsAt")))
-                .stream()
-                .map(session -> toRef(session, classPublicIds(session)))
-                .toList();
+                .getContent());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> searchSessions(String query, Set<UUID> visibleClassGroupPublicIds, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        if (pattern == null) {
+            return List.of();
+        }
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.notSupersededByScheduling());
+        specs.add(CourseSessionSpecifications.titleLike(pattern));
+        if (visibleClassGroupPublicIds != null) {
+            // Périmètre vide ≠ périmètre global : un responsable sans
+            // classe visible ne trouve rien, jamais tout.
+            if (visibleClassGroupPublicIds.isEmpty()) {
+                return List.of();
+            }
+            Set<Long> internalIds = classGroupDirectory.findByPublicIds(visibleClassGroupPublicIds).stream()
+                    .map(ClassGroupDirectory.ClassGroupRef::internalId)
+                    .collect(Collectors.toUnmodifiableSet());
+            if (internalIds.isEmpty()) {
+                return List.of();
+            }
+            specs.add(CourseSessionSpecifications.hasAnyClassIn(internalIds));
+        }
+        return toRefs(sessionRepository.findAll(Specification.allOf(specs),
+                        org.springframework.data.domain.PageRequest.of(0,
+                                com.esic.connect.shared.SearchPattern.bound(limit),
+                                Sort.by(Sort.Direction.DESC, "startsAt")))
+                .getContent());
+    }
+
+    /** Borne haute d'un calendrier : au-delà, ce n'est plus une lecture d'agenda. */
+    private static final int SCHEDULE_LIMIT = 750;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findTeacherSchedule(UUID teacherPublicId, Instant from, Instant to, int limit) {
+        Long teacherId = userDirectory.findByPublicId(teacherPublicId)
+                .map(UserDirectory.UserRef::internalId)
+                .orElse(null);
+        if (teacherId == null) {
+            return List.of();
+        }
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        // `notSupersededByScheduling` sans `operational` : une séance
+        // ANNULÉE reste dans le calendrier, avec son statut, afin qu'un
+        // agenda externe puisse refléter l'annulation (EF-INT-001).
+        specs.add(CourseSessionSpecifications.notSupersededByScheduling());
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        Specification<CourseSession> assigned = CourseSessionSpecifications.taughtBy(teacherId);
+        List<Long> substituted =
+                substitutionRepository.findActiveSubstitutedSessionIds(teacherId, clock.instant());
+        if (!substituted.isEmpty()) {
+            assigned = Specification.anyOf(assigned,
+                    CourseSessionSpecifications.hasInternalIdIn(substituted));
+        }
+        specs.add(assigned);
+        return toRefs(sessionRepository.findAll(Specification.allOf(specs),
+                        org.springframework.data.domain.PageRequest.of(0, bound(limit),
+                                Sort.by(Sort.Direction.ASC, "startsAt")))
+                .getContent());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SessionRef> findClassSchedule(Set<UUID> classGroupPublicIds, Instant from, Instant to,
+                                              int limit) {
+        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> internalIds = classGroupDirectory.findByPublicIds(classGroupPublicIds).stream()
+                .map(ClassGroupDirectory.ClassGroupRef::internalId)
+                .collect(Collectors.toUnmodifiableSet());
+        if (internalIds.isEmpty()) {
+            return List.of();
+        }
+        List<Specification<CourseSession>> specs = new ArrayList<>();
+        specs.add(CourseSessionSpecifications.notSupersededByScheduling());
+        specs.add(CourseSessionSpecifications.hasAnyClassIn(internalIds));
+        if (from != null) {
+            specs.add(CourseSessionSpecifications.startsFrom(from));
+        }
+        if (to != null) {
+            specs.add(CourseSessionSpecifications.startsUntil(to));
+        }
+        return toRefs(sessionRepository.findAll(Specification.allOf(specs),
+                        org.springframework.data.domain.PageRequest.of(0, bound(limit),
+                                Sort.by(Sort.Direction.ASC, "startsAt")))
+                .getContent());
+    }
+
+    private static int bound(int limit) {
+        return Math.max(1, Math.min(limit, SCHEDULE_LIMIT));
     }
 
     @Override
@@ -267,12 +365,79 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /**
+     * Convertit une <strong>liste</strong> de séances en références, en
+     * bornant le coût SQL (dette T-03).
+     *
+     * <p>La conversion unitaire ({@link #toRef}) émet une requête de
+     * points de contrôle par séance, et une résolution de classe par
+     * rattachement : sur une fenêtre d'une semaine, un tableau de bord ou
+     * un rapport payait plusieurs dizaines d'allers-retours pour un
+     * résultat que la base rend en deux requêtes. Ici, points de contrôle
+     * et identifiants publics de classes sont chargés <strong>en
+     * bloc</strong>, puis distribués en mémoire — le coût cesse d'être
+     * proportionnel au nombre de séances affichées (NFR-PERF-08).
+     */
+    private List<SessionRef> toRefs(List<CourseSession> sessions) {
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> sessionIds = sessions.stream()
+                .map(CourseSession::getId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        // Initialise `classes` pour tout le lot : la collection est LAZY,
+        // et la parcourir séance par séance coûterait une requête par
+        // séance. Le résultat est ignoré — c'est le contexte de
+        // persistance qui garde les entités désormais initialisées, et
+        // les instances de `sessions` en font partie.
+        sessionRepository.findAllWithClassesByIdIn(sessionIds);
+        Map<Long, List<CheckpointRef>> checkpointsBySession = new HashMap<>();
+        for (AttendanceCheckpoint cp : checkpointRepository
+                .findByCourseSessionIdInOrderByCourseSessionIdAscDisplayOrderAscIdAsc(sessionIds)) {
+            checkpointsBySession
+                    .computeIfAbsent(cp.getCourseSession().getId(), key -> new ArrayList<>())
+                    .add(toCheckpointRef(cp));
+        }
+
+        Set<Long> classInternalIds = new LinkedHashSet<>();
+        for (CourseSession session : sessions) {
+            for (SessionClass link : session.getClasses()) {
+                classInternalIds.add(link.getClassGroupId());
+            }
+        }
+        Map<Long, UUID> publicIdByInternalId = new HashMap<>();
+        if (!classInternalIds.isEmpty()) {
+            for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByInternalIds(classInternalIds)) {
+                publicIdByInternalId.put(ref.internalId(), ref.publicId());
+            }
+        }
+
+        List<SessionRef> refs = new ArrayList<>(sessions.size());
+        for (CourseSession session : sessions) {
+            Set<UUID> classPublicIds = session.getClasses().stream()
+                    .map(SessionClass::getClassGroupId)
+                    .map(publicIdByInternalId::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toUnmodifiableSet());
+            refs.add(new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
+                    session.getStatus(), session.getTeacherUserId(),
+                    checkpointsBySession.getOrDefault(session.getId(), List.of()), classPublicIds,
+                    session.getTimeZoneId(), session.getStartsAt(), session.getEndsAt(),
+                    session.getAttendanceMode(), session.getRoomCode()));
+        }
+        return refs;
+    }
+
+    private static CheckpointRef toCheckpointRef(AttendanceCheckpoint cp) {
+        return new CheckpointRef(cp.getId(), cp.getPublicId(), cp.getLabel(),
+                cp.getCheckpointType(), cp.getStatus(), cp.isRequired(), cp.getDisplayOrder(),
+                cp.getOpenedAt(), cp.getClosedAt());
+    }
+
     private SessionRef toRef(CourseSession session, Set<UUID> classPublicIds) {
         List<CheckpointRef> checkpoints = checkpointRepository
                 .findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId()).stream()
-                .map(cp -> new CheckpointRef(cp.getId(), cp.getPublicId(), cp.getLabel(),
-                        cp.getCheckpointType(), cp.getStatus(), cp.isRequired(), cp.getDisplayOrder(),
-                        cp.getOpenedAt(), cp.getClosedAt()))
+                .map(DefaultCourseSessionDirectory::toCheckpointRef)
                 .toList();
         return new SessionRef(session.getId(), session.getPublicId(), session.getTitle(),
                 session.getStatus(), session.getTeacherUserId(), checkpoints, classPublicIds,

@@ -106,6 +106,37 @@ public interface CourseSessionDirectory {
     List<SessionRef> findUpcomingForTeacher(UUID teacherPublicId, Instant from, Instant to, int limit);
 
     /**
+     * Séances confiées au formateur sur une <strong>fenêtre de
+     * planning</strong>, y compris les séances annulées.
+     *
+     * <p>Distinct de {@link #findUpcomingForTeacher}, dont la borne est
+     * volontairement réduite à dix lignes : un tableau de bord affiche
+     * les prochaines séances, un <em>calendrier</em> les affiche toutes.
+     * Le flux iCalendar (EF-INT-001) inclut en outre les séances
+     * {@code CANCELLED} : un agenda externe a besoin de recevoir
+     * l'annulation pour la refléter — la retirer du flux laisserait le
+     * cours dans l'agenda de la personne.
+     *
+     * @param limit borne haute, écrêtée par l'implémentation
+     */
+    List<SessionRef> findTeacherSchedule(UUID teacherPublicId, Instant from, Instant to, int limit);
+
+    /**
+     * Séances des classes données sur une fenêtre, <strong>séances
+     * annulées comprises</strong> — même motif que
+     * {@link #findTeacherSchedule}.
+     */
+    List<SessionRef> findClassSchedule(Set<UUID> classGroupPublicIds, Instant from, Instant to, int limit);
+
+    /**
+     * Séances dont le titre contient {@code query} (EF-USER-009).
+     *
+     * @param visibleClassGroupPublicIds restriction de périmètre ;
+     *        {@code null} pour un appelant à périmètre global
+     */
+    List<SessionRef> searchSessions(String query, Set<UUID> visibleClassGroupPublicIds, int limit);
+
+    /**
      * Fenêtres des séances <strong>opérationnelles</strong> (hors
      * supersédées / annulées) dont l'intervalle {@code [startsAt, endsAt)}
      * chevauche {@code [from, to)}. Contrat <strong>100 % UUID publics</strong> :

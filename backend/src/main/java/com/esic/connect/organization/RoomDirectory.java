@@ -41,6 +41,17 @@ public interface RoomDirectory {
     boolean isWithinAuthorizedRange(UUID sitePublicId, String ipAddress);
 
     /**
+     * Salles actives dont le code ou le nom contient {@code query}
+     * (EF-USER-009). Les salles ne sont pas périmétrées : elles
+     * appartiennent à l'établissement, pas à une formation.
+     */
+    java.util.List<RoomSearchRef> search(String query, int limit);
+
+    /** Résultat de recherche de salle : jamais le jeton de QR fixe. */
+    record RoomSearchRef(UUID publicId, String code, String name, String buildingName) {
+    }
+
+    /**
      * Référence d'une salle, strictement suffisante pour l'émargement.
      *
      * @param internalId    clé primaire SQL

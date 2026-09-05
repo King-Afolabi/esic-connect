@@ -12,6 +12,20 @@ interface AttendanceCheckpointRepository extends JpaRepository<AttendanceCheckpo
     List<AttendanceCheckpoint> findByCourseSessionIdOrderByDisplayOrderAscIdAsc(Long courseSessionId);
 
     /**
+     * Points de contrôle de <strong>plusieurs</strong> séances en une
+     * requête (dette T-03).
+     *
+     * <p>La variante par séance ci-dessus, appelée dans une boucle,
+     * produit autant de requêtes que de séances : un tableau de bord ou
+     * un rapport couvrant une semaine de cours en émettait plusieurs
+     * dizaines pour un résultat que la base sait rendre d'un coup
+     * (NFR-PERF-08). Le tri reprend celui de la variante unitaire afin
+     * que le regroupement côté Java conserve l'ordre d'affichage.
+     */
+    List<AttendanceCheckpoint> findByCourseSessionIdInOrderByCourseSessionIdAscDisplayOrderAscIdAsc(
+            java.util.Collection<Long> courseSessionIds);
+
+    /**
      * @deprecated compat V9 (point de contrôle unique). Utiliser
      * {@link #findByCourseSessionIdOrderByDisplayOrderAscIdAsc} ou
      * {@link #findFirstByCourseSessionIdOrderByDisplayOrderAscIdAsc}.

@@ -1,0 +1,137 @@
+<section class="audit" aria-labelledby="audit-title">
+  <h1 id="audit-title">Piste d'audit</h1>
+  <p class="audit__intro">
+    Historique des opérations sensibles. Il se consulte et s'exporte&nbsp;;
+    il ne peut être ni modifié ni effacé. Aucune adresse IP n'y figure.
+  </p>
+
+  <form class="audit__filters" [formGroup]="filters" (ngSubmit)="apply()">
+    <mat-form-field appearance="outline">
+      <mat-label>Du</mat-label>
+      <input matInput type="date" formControlName="from" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Au</mat-label>
+      <input matInput type="date" formControlName="to" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Action</mat-label>
+      <mat-select formControlName="action">
+        <mat-option value="">Toutes</mat-option>
+        @for (action of facets().actions; track action) {
+          <mat-option [value]="action">{{ action }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Catégorie</mat-label>
+      <mat-select formControlName="category">
+        <mat-option value="">Toutes</mat-option>
+        @for (category of facets().categories; track category) {
+          <mat-option [value]="category">{{ category }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Type de ressource</mat-label>
+      <mat-select formControlName="resourceType">
+        <mat-option value="">Tous</mat-option>
+        @for (type of facets().resourceTypes; track type) {
+          <mat-option [value]="type">{{ type }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Résultat</mat-label>
+      <mat-select formControlName="result">
+        <mat-option value="">Tous</mat-option>
+        @for (result of facets().results; track result) {
+          <mat-option [value]="result">{{ result }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Identifiant de corrélation</mat-label>
+      <input matInput formControlName="correlation" autocomplete="off" />
+    </mat-form-field>
+
+    <div class="audit__actions">
+      <button mat-flat-button type="submit">Appliquer</button>
+      <button mat-button type="button" (click)="reset()">Réinitialiser</button>
+      @for (format of exportFormats; track format.value) {
+        <button mat-stroked-button type="button" (click)="exportAs(format.value)"
+                [disabled]="exporting()"
+                [attr.aria-label]="'Exporter la piste d\'audit au format ' + format.label">
+          <mat-icon aria-hidden="true">download</mat-icon> {{ format.label }}
+        </button>
+      }
+    </div>
+  </form>
+
+  @switch (state().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    }
+    @case ('forbidden') {
+      <div class="audit__panel" role="alert">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p>Vous n'êtes pas autorisé à consulter la piste d'audit.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="audit__panel" role="alert">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <p>La piste d'audit n'a pas pu être chargée.</p>
+      </div>
+    }
+    @case ('ready') {
+      @if (state(); as s) {
+        @if (s.kind === 'ready') {
+          <p class="audit__count" role="status">
+            {{ s.data.totalElements }} événement(s) — page {{ s.data.number + 1 }} sur
+            {{ s.data.totalPages || 1 }}.
+          </p>
+          <div class="audit__scroll">
+            <table class="audit__table">
+              <caption class="audit__caption">Événements d'audit</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Acteur</th>
+                  <th scope="col">Rôle</th>
+                  <th scope="col">Action</th>
+                  <th scope="col">Catégorie</th>
+                  <th scope="col">Ressource</th>
+                  <th scope="col">Résultat</th>
+                  <th scope="col">Motif</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of s.data.content; track row.publicId) {
+                  <tr>
+                    <td>{{ row.occurredAt }}</td>
+                    <td>{{ row.actorDisplay || 'Système' }}</td>
+                    <td>{{ row.actorRole || '—' }}</td>
+                    <td>{{ row.action }}</td>
+                    <td>{{ row.category }}</td>
+                    <td>{{ row.resourceType }}</td>
+                    <td>{{ row.result }}</td>
+                    <td>{{ row.reason || '—' }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="8">Aucun événement pour ces filtres.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="audit__pager">
+            <button mat-button type="button" (click)="previousPage()"
+                    [disabled]="s.data.number === 0">Précédent</button>
+            <button mat-button type="button" (click)="nextPage()"
+                    [disabled]="s.data.number + 1 >= s.data.totalPages">Suivant</button>
+          </div>
+        }
+      }
+    }
+  }
+</section>

@@ -108,7 +108,14 @@ public class SecurityConfig {
             "/api/v1/auth/webauthn/login",
             // Parcours public d'activation (le jeton reçu par email fait foi).
             "/api/v1/account-invitations/validate",
-            "/api/v1/account-invitations/activate"
+            "/api/v1/account-invitations/activate",
+            // Flux iCalendar d'abonnement (EF-INT-001, AC-034). Un agenda
+            // externe — Outlook, Google, Apple — ne sait pas porter un jeton
+            // d'accès : il rappelle une URL. Le secret EST donc le jeton
+            // porté par l'URL, comparé par empreinte en temps constant par
+            // `CalendarFeedService`, et révocable. Le flux ne contient que
+            // le planning de la personne abonnée.
+            "/api/v1/calendar/*.ics"
     };
 
     /**

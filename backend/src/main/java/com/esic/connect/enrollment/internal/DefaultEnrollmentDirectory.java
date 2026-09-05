@@ -103,6 +103,68 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
                 .isPresent();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<RosterEntry> searchStudents(String query, Collection<UUID> visibleClassGroupPublicIds,
+                                            int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        if (pattern == null) {
+            return List.of();
+        }
+        int bounded = com.esic.connect.shared.SearchPattern.bound(limit);
+        org.springframework.data.domain.Pageable page =
+                org.springframework.data.domain.PageRequest.of(0, bounded);
+
+        // Deux sources, réunies : le numéro étudiant vit dans `enrollment`,
+        // le nom dans `identity`. Joindre les deux tables franchirait une
+        // frontière de module ; on demande donc les comptes au port, puis
+        // leurs inscriptions.
+        java.util.LinkedHashMap<Long, Enrollment> found = new java.util.LinkedHashMap<>();
+        for (Enrollment enrollment
+                : enrollmentRepository.searchByStudentNumber(pattern, EnrollmentStatus.ACTIVE, page)) {
+            found.putIfAbsent(enrollment.getId(), enrollment);
+        }
+        List<Long> userIds = userDirectory.searchByName(query, "STUDENT", bounded).stream()
+                .map(UserDirectory.NamedUserRef::internalId)
+                .toList();
+        if (!userIds.isEmpty()) {
+            for (Enrollment enrollment
+                    : enrollmentRepository.findActiveByStudentUserIds(userIds, EnrollmentStatus.ACTIVE)) {
+                found.putIfAbsent(enrollment.getId(), enrollment);
+            }
+        }
+        if (found.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> visibleClassIds = visibleClassGroupPublicIds == null
+                ? null
+                : internalIdsOf(visibleClassGroupPublicIds);
+        // Périmètre vide ≠ périmètre global : un responsable sans classe
+        // visible ne trouve aucun apprenant, jamais tous.
+        if (visibleClassIds != null && visibleClassIds.isEmpty()) {
+            return List.of();
+        }
+        return found.values().stream()
+                .filter(e -> visibleClassIds == null || visibleClassIds.contains(e.getClassGroupId()))
+                .limit(bounded)
+                .map(this::toRosterEntry)
+                .toList();
+    }
+
+    private RosterEntry toRosterEntry(Enrollment enrollment) {
+        StudentProfile profile = enrollment.getStudentProfile();
+        UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);
+        ClassGroupDirectory.ClassGroupRef classRef =
+                classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
+        return new RosterEntry(enrollment.getId(), enrollment.getPublicId(), profile.getPublicId(),
+                profile.getStudentNumber(),
+                name != null ? name.firstName() : null,
+                name != null ? name.lastName() : null,
+                classRef != null ? classRef.publicId() : null,
+                classRef != null ? classRef.code() : null);
+    }
+
     /**
      * Effectif {@code ACTIVE} des classes indiquées, filtré sur la
      * couverture de {@code date} lorsqu'elle est fournie ({@code null} =
@@ -113,14 +175,29 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         if (classInternalIds.isEmpty()) {
             return List.of();
         }
-        return enrollmentRepository
+        List<Enrollment> enrollments = enrollmentRepository
                 .findByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE).stream()
                 .filter(enrollment -> date == null || coversDate(enrollment, date))
+                .toList();
+        if (enrollments.isEmpty()) {
+            return List.of();
+        }
+        // Résolution par lot du nom et du code de classe : la variante
+        // unitaire, appelée par inscription, coûtait deux requêtes par
+        // apprenant — un effectif de trente en payait soixante pour une
+        // information que la base rend en deux (NFR-PERF-08, dette T-03).
+        java.util.Map<Long, UserDirectory.PersonName> names = userDirectory.findNames(
+                enrollments.stream().map(e -> e.getStudentProfile().getUserId()).toList());
+        java.util.Map<Long, ClassGroupDirectory.ClassGroupRef> classes = new java.util.HashMap<>();
+        for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByInternalIds(
+                enrollments.stream().map(Enrollment::getClassGroupId).distinct().toList())) {
+            classes.put(ref.internalId(), ref);
+        }
+        return enrollments.stream()
                 .map(enrollment -> {
                     StudentProfile profile = enrollment.getStudentProfile();
-                    UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);
-                    ClassGroupDirectory.ClassGroupRef classRef =
-                            classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
+                    UserDirectory.PersonName name = names.get(profile.getUserId());
+                    ClassGroupDirectory.ClassGroupRef classRef = classes.get(enrollment.getClassGroupId());
                     return new RosterEntry(
                             enrollment.getId(),
                             enrollment.getPublicId(),
@@ -173,15 +250,29 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     }
 
     /** Traduction publique -> interne d'un lot de classes ; les inconnues sont ignorées. */
+    /**
+     * Résout un lot de classes en une <strong>seule</strong> requête
+     * (dette T-03).
+     *
+     * <p>{@code findByPublicId} appelé dans un {@code map} produisait une
+     * requête par classe : un responsable pédagogique de quinze classes
+     * en payait quinze avant même de lire un effectif. Le port expose
+     * {@code findByPublicIds} précisément pour cela — les identifiants
+     * inconnus sont simplement absents du résultat, comme avant.
+     */
     private Set<Long> internalIdsOf(Collection<UUID> classGroupPublicIds) {
         if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
             return Set.of();
         }
-        return classGroupPublicIds.stream()
+        List<UUID> ids = classGroupPublicIds.stream()
                 .filter(java.util.Objects::nonNull)
-                .map(classGroupDirectory::findByPublicId)
-                .filter(Optional::isPresent)
-                .map(ref -> ref.get().internalId())
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        return classGroupDirectory.findByPublicIds(ids).stream()
+                .map(ClassGroupDirectory.ClassGroupRef::internalId)
                 .collect(Collectors.toUnmodifiableSet());
     }
 

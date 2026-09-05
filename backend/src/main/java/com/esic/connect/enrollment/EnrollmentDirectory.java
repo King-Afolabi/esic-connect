@@ -177,6 +177,21 @@ public interface EnrollmentDirectory {
     long countActiveEnrollmentsInClasses(Collection<UUID> classGroupPublicIds);
 
     /**
+     * Apprenants dont le nom, le prénom ou le numéro étudiant contient
+     * {@code query} (EF-USER-009 ; docs/02 §22.7), parmi les inscriptions
+     * <strong>actives</strong>.
+     *
+     * <p>L'adresse électronique n'est <strong>pas</strong> un critère de
+     * recherche : elle permettrait de vérifier l'existence d'un compte à
+     * partir d'une adresse devinée, ce qui est une énumération et non une
+     * recherche.
+     *
+     * @param visibleClassGroupPublicIds restriction de périmètre ;
+     *        {@code null} pour un appelant à périmètre global
+     */
+    List<RosterEntry> searchStudents(String query, Collection<UUID> visibleClassGroupPublicIds, int limit);
+
+    /**
      * Identité minimale d'un apprenant pour l'affichage d'une ligne de
      * présence — jamais d'adresse électronique ni d'identifiant interne.
      *

@@ -187,6 +187,10 @@ class OutboxIntegrationTests {
                 new OrganizationChangeEvent(OrganizationResourceType.SITE, resource, null,
                         OrganizationChangeAction.CREATED, "code=COMMIT")));
 
+        // Même raison qu'au test d'idempotence : le drain immédiat est
+        // best effort, la garantie porte sur l'existence finale de la
+        // trace, pas sur l'instant où elle apparaît.
+        drain();
         assertThat(auditRowsFor(resource)).isEqualTo(1L);
         assertThat(auditOutboxKeyFor(resource)).as("la trace porte la clé du message").isNotNull();
         assertThat(sentAuditMessages()).isPositive();
@@ -199,6 +203,14 @@ class OutboxIntegrationTests {
         transactionTemplate.executeWithoutResult(tx -> eventPublisher.publishEvent(
                 new OrganizationChangeEvent(OrganizationResourceType.SITE, resource, null,
                         OrganizationChangeAction.CREATED, "code=IDEM")));
+        // Le drain immédiat est délibérément « best effort »
+        // (`drainQuietly`) : sous charge, il peut ne pas obtenir de
+        // connexion, et la ligne attend alors la reprise planifiée. C'est
+        // la garantie de l'outbox — l'effet n'est pas perdu, il est
+        // différé (T-01) — et non une livraison synchrone. Forcer le
+        // drain rend le test déterministe sans affaiblir ce qu'il
+        // vérifie : l'idempotence du rejeu.
+        drain();
         assertThat(auditRowsFor(resource)).isEqualTo(1L);
 
         // Remise en file du message déjà traité, puis nouveau passage :

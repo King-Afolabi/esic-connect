@@ -65,3 +65,78 @@
   color: var(--mat-sys-on-surface-variant);
   margin: 0;
 }
+
+/*
+ * Histogramme et tableau équivalent (EF-REP-008).
+ *
+ * La barre n'est jamais le seul porteur de l'information : chaque ligne
+ * affiche sa valeur en toutes lettres à droite, et le tableau qui suit
+ * reprend les mêmes chiffres. Une personne qui ne distingue pas les
+ * couleurs, ou qui navigue au lecteur d'écran, lit exactement la même
+ * chose (docs/02 §22.6, §32.5).
+ */
+.dashboard__card--wide {
+  grid-column: 1 / -1;
+}
+
+.dashboard__chart {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.dashboard__bar-row {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(6rem, 10rem) 1fr minmax(4.5rem, auto);
+  margin-bottom: 0.35rem;
+}
+
+.dashboard__bar-label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dashboard__bar-track {
+  background: rgb(0 0 0 / 8%);
+  border-radius: 0.2rem;
+  display: block;
+  height: 0.9rem;
+  overflow: hidden;
+}
+
+.dashboard__bar-fill {
+  background: #0b3d7a;
+  display: block;
+  height: 100%;
+}
+
+.dashboard__bar-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dashboard__table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  width: 100%;
+
+  caption {
+    caption-side: top;
+    font-weight: 600;
+    padding-bottom: 0.4rem;
+    text-align: left;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+  }
+
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+}

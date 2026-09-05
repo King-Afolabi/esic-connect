@@ -1,0 +1,63 @@
+.cal {
+  display: block;
+  max-width: 56rem;
+}
+
+.cal__card {
+  margin-bottom: 1rem;
+}
+
+.cal__intro,
+.cal__note {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.cal__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.cal__field {
+  flex: 1 1 22rem;
+}
+
+.cal__actions {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.cal__fresh {
+  background: var(--mat-sys-secondary-container);
+  border-radius: 0.5rem;
+  color: var(--mat-sys-on-secondary-container);
+  padding: 0.75rem;
+}
+
+.cal__url {
+  display: block;
+  overflow-wrap: anywhere;
+  padding-bottom: 0.5rem;
+}
+
+.cal__table {
+  border-collapse: collapse;
+  width: 100%;
+
+  th,
+  td {
+    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+  }
+}
+
+.cal__caption {
+  caption-side: top;
+  font-weight: 600;
+  padding-bottom: 0.4rem;
+  text-align: left;
+}

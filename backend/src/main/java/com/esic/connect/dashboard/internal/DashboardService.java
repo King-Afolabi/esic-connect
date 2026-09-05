@@ -4,10 +4,14 @@ import com.esic.connect.academic.AcademicScopeDirectory;
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.academic.ClassGroupDirectory.ClassGroupRef;
 import com.esic.connect.attendance.AttendanceDashboardDirectory;
+import com.esic.connect.audit.AuditDashboardDirectory;
+import com.esic.connect.claim.ClaimAudience;
+import com.esic.connect.claim.ClaimDashboardDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory.SessionRef;
 import com.esic.connect.coursesession.SessionLifecycle;
 import com.esic.connect.dashboard.internal.DashboardResponses.AdministrationCard;
+import com.esic.connect.dashboard.internal.DashboardResponses.AttendanceRateLine;
 import com.esic.connect.dashboard.internal.DashboardResponses.Dashboard;
 import com.esic.connect.dashboard.internal.DashboardResponses.ImportLine;
 import com.esic.connect.dashboard.internal.DashboardResponses.ManagerCard;
@@ -50,6 +54,8 @@ class DashboardService {
 
     private static final int LIST_LIMIT = 10;
     private static final Duration WEEK = Duration.ofDays(7);
+    /** Fenêtre de mesure des taux : assez pour une tendance, bornée en coût. */
+    private static final Duration REPORTING_WINDOW = Duration.ofDays(30);
 
     private final EnrollmentDirectory enrollmentDirectory;
     private final CourseSessionDirectory courseSessionDirectory;
@@ -58,6 +64,8 @@ class DashboardService {
     private final ClassGroupDirectory classGroupDirectory;
     private final AccountStatsDirectory accountStats;
     private final StudentImportDashboardDirectory studentImportDashboard;
+    private final ClaimDashboardDirectory claimDashboard;
+    private final AuditDashboardDirectory auditDashboard;
     private final Clock clock;
 
     DashboardService(EnrollmentDirectory enrollmentDirectory,
@@ -67,6 +75,8 @@ class DashboardService {
                      ClassGroupDirectory classGroupDirectory,
                      AccountStatsDirectory accountStats,
                      StudentImportDashboardDirectory studentImportDashboard,
+                     ClaimDashboardDirectory claimDashboard,
+                     AuditDashboardDirectory auditDashboard,
                      Clock clock) {
         this.enrollmentDirectory = enrollmentDirectory;
         this.courseSessionDirectory = courseSessionDirectory;
@@ -75,6 +85,8 @@ class DashboardService {
         this.classGroupDirectory = classGroupDirectory;
         this.accountStats = accountStats;
         this.studentImportDashboard = studentImportDashboard;
+        this.claimDashboard = claimDashboard;
+        this.auditDashboard = auditDashboard;
         this.clock = clock;
     }
 
@@ -155,11 +167,13 @@ class DashboardService {
 
     private ManagerCard manager(Instant now, List<String> notes) {
         Optional<Set<Long>> visible = academicScope.visibleClassGroupIds();
+        Instant from = now.minus(REPORTING_WINDOW);
         if (visible.isEmpty()) {
             // Un compte à périmètre global ne devrait pas être routé ici
             // (priorité de rôle) ; défensif.
             notes.add("Périmètre global : utilisez le tableau de bord d'administration.");
-            return new ManagerCard(0, List.of(), List.of());
+            return new ManagerCard(0, List.of(), List.of(), from, now, 0d, 0, 0,
+                    List.of(), 0, 0, 0);
         }
         List<ClassGroupRef> classes = classGroupDirectory.findByInternalIds(visible.get());
         Map<UUID, String> known = new HashMap<>();
@@ -177,12 +191,71 @@ class DashboardService {
         List<SessionLine> upcoming = classPublicIds.isEmpty() ? List.of()
                 : lines(trim(courseSessionDirectory.findSessionsForClasses(classPublicIds, now, now.plus(WEEK))),
                         known);
-        // Cartes non exposées faute de port agrégé borné (dette G1-F, non
-        // inventée) : justificatifs en attente périmétrés, alternance
-        // UNKNOWN, planning actif, conflits récents.
-        notes.add("Justificatifs en attente périmétrés, alternance UNKNOWN, planning actif et conflits : "
-                + "non exposés au tableau de bord (dette G1-F) — voir « Suivi d'assiduité » et « Planning ».");
-        return new ManagerCard(classes.size(), upcoming, classCodes);
+
+        // Assiduité du périmètre : le module `attendance` applique le
+        // périmètre lui-même, à partir du contexte de sécurité — le
+        // tableau de bord ne peut donc pas élargir ce qu'il voit.
+        List<AttendanceDashboardDirectory.ClassAttendanceDigest> digests =
+                attendanceDashboard.classDigests(from, now);
+        List<AttendanceRateLine> classRates = digests.stream()
+                .map(d -> new AttendanceRateLine(d.classCode(), d.expectedHalfDays(), d.presentHalfDays(),
+                        d.absentHalfDays(), d.excusedHalfDays(), d.lateCount(), d.attendanceRate()))
+                .toList();
+        Totals totals = Totals.of(digests);
+
+        long pendingActivations = accountStats.countPendingActivationAmong(
+                enrollmentDirectory.findActiveStudentUserPublicIds(classPublicIds,
+                        LocalDate.ofInstant(now, clock.getZone())));
+        long openClaims = claimDashboard.countOpenClaims(
+                ClaimAudience.PEDAGOGICAL_MANAGER, classPublicIds);
+
+        // Ce que la carte ne montre PAS, et pourquoi : une séance sans
+        // formateur n'existe pas en base (`course_session.teacher_user_id`
+        // est NOT NULL depuis V9). Le cas est traité en amont, à l'import
+        // de planning, où il produit un avertissement (EF-PLAN-009). Une
+        // tuile « séances sans formateur » afficherait donc éternellement
+        // zéro et laisserait croire à un contrôle qui n'aurait pas lieu.
+        notes.add("Les séances sans formateur sont détectées à l'import du planning, "
+                + "pas ici : une séance publiée porte toujours un formateur.");
+        notes.add("Assiduité mesurée sur les " + REPORTING_WINDOW.toDays() + " derniers jours.");
+        return new ManagerCard(classes.size(), upcoming, classCodes, from, now,
+                totals.rate(), totals.late(), totals.unjustified(), classRates,
+                attendanceDashboard.countPendingJustificationsInScope(from, now), openClaims, pendingActivations);
+    }
+
+    /**
+     * Agrégat de demi-journées sur un lot de classes ou de formations.
+     *
+     * <p>Le taux global est recalculé à partir des <em>totaux</em> et non
+     * comme moyenne des taux : une classe de six apprenants pèserait
+     * autant qu'une classe de trente, et le chiffre affiché ne
+     * correspondrait à aucune réalité.
+     */
+    private record Totals(long expected, long present, long absent, long excused, long late) {
+
+        static Totals of(Collection<AttendanceDashboardDirectory.ClassAttendanceDigest> digests) {
+            long expected = 0;
+            long present = 0;
+            long absent = 0;
+            long excused = 0;
+            long late = 0;
+            for (AttendanceDashboardDirectory.ClassAttendanceDigest d : digests) {
+                expected += d.expectedHalfDays();
+                present += d.presentHalfDays();
+                absent += d.absentHalfDays();
+                excused += d.excusedHalfDays();
+                late += d.lateCount();
+            }
+            return new Totals(expected, present, absent, excused, late);
+        }
+
+        double rate() {
+            return expected == 0 ? 0d : Math.round((double) present / expected * 10000d) / 10000d;
+        }
+
+        long unjustified() {
+            return absent;
+        }
     }
 
     private AdministrationCard administration(Instant now) {
@@ -190,12 +263,48 @@ class DashboardService {
         LocalDate today = LocalDate.ofInstant(now, clock.getZone());
         Instant dayStart = today.atStartOfDay(clock.getZone()).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
+        Instant from = now.minus(REPORTING_WINDOW);
         List<SessionLine> todaySessions = lines(trim(courseSessionDirectory.findSessionsInRange(dayStart, dayEnd)));
         List<ImportLine> imports = studentImportDashboard.recentJobs(LIST_LIMIT).stream()
                 .map(j -> new ImportLine(j.publicId(), j.status(), j.totalRows(), j.createdAt()))
                 .toList();
+
+        List<AttendanceDashboardDirectory.ClassAttendanceDigest> digests =
+                attendanceDashboard.classDigests(from, now);
+        Totals totals = Totals.of(digests);
+        // Comparaison des formations (§22.6) : les classes sont regroupées
+        // par code de formation, en sommant les demi-journées — jamais en
+        // moyennant des taux, qui donnerait le même poids à une classe de
+        // six et à une classe de trente.
+        Map<String, List<AttendanceDashboardDirectory.ClassAttendanceDigest>> byProgram =
+                new java.util.LinkedHashMap<>();
+        for (AttendanceDashboardDirectory.ClassAttendanceDigest d : digests) {
+            byProgram.computeIfAbsent(d.programCode() == null ? "—" : d.programCode(),
+                    key -> new ArrayList<>()).add(d);
+        }
+        List<AttendanceRateLine> programRates = byProgram.entrySet().stream()
+                .map(entry -> {
+                    Totals t = Totals.of(entry.getValue());
+                    return new AttendanceRateLine(entry.getKey(), t.expected(), t.present(),
+                            t.absent(), t.excused(), t.late(), t.rate());
+                })
+                .toList();
+
+        AttendanceDashboardDirectory.JustificationThroughput throughput =
+                attendanceDashboard.justificationThroughput(from, now);
         return new AdministrationCard(a.active(), a.suspended(), a.pendingActivation(), a.archived(),
-                attendanceDashboard.countPendingJustifications(), imports, todaySessions);
+                accountStats.countExpiredPendingInvitations(),
+                throughput.pending(), throughput.decided(), throughput.medianDelayHours(),
+                from, now, totals.rate(), programRates, imports, todaySessions,
+                auditLines(auditDashboard.recentExports(LIST_LIMIT)),
+                auditLines(auditDashboard.recent(LIST_LIMIT)));
+    }
+
+    private static List<DashboardResponses.AuditLine> auditLines(
+            List<AuditDashboardDirectory.AuditLine> lines) {
+        return lines.stream()
+                .map(l -> new DashboardResponses.AuditLine(l.occurredAt(), l.actor(), l.action(), l.result()))
+                .toList();
     }
 
     // ------------------------------------------------------------------

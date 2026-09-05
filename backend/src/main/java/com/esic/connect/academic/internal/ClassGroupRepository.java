@@ -29,6 +29,24 @@ interface ClassGroupRepository extends JpaRepository<ClassGroup, Long>,
      */
     List<ClassGroup> findByCodeIgnoreCase(String code);
 
+    /** Recherche globale (EF-USER-009) : code ou nom contenant le fragment. */
+    @Query("""
+            SELECT c FROM ClassGroup c
+            WHERE LOWER(c.code) LIKE :pattern OR LOWER(c.name) LIKE :pattern
+            ORDER BY c.code ASC
+            """)
+    List<ClassGroup> search(@Param("pattern") String pattern,
+                            org.springframework.data.domain.Pageable pageable);
+
+    @Query("""
+            SELECT c FROM ClassGroup c
+            WHERE c.id IN :ids AND (LOWER(c.code) LIKE :pattern OR LOWER(c.name) LIKE :pattern)
+            ORDER BY c.code ASC
+            """)
+    List<ClassGroup> searchWithin(@Param("pattern") String pattern,
+                                  @Param("ids") Collection<Long> ids,
+                                  org.springframework.data.domain.Pageable pageable);
+
     boolean existsByPromotionIdAndCode(Long promotionId, String code);
 
     boolean existsByPromotionIdAndStatus(Long promotionId, AcademicStatus status);

@@ -232,6 +232,16 @@ l'intégration sur des comptes fictifs. À demander sur
 **Demande cet accès tôt** : c'est le délai le plus long et le moins
 maîtrisable.
 
+**État au sprint 11.** Le code est prêt et attend ces quatre valeurs :
+port `MeetingProvider` (réunion Teams), port `ExternalCalendarWriter`
+(calendrier), adaptateur Microsoft Graph et adaptateur inactif choisi par
+configuration. Sans `APP_INTEGRATION_MICROSOFT_ENABLED`, `_TENANT_ID`,
+`_CLIENT_ID` et `_CLIENT_SECRET`, l'intégration est **inactive** et
+`GET /api/v1/integrations/microsoft/status` le déclare — le produit ne
+fabrique aucun lien de réunion. **Aucun appel n'a jamais atteint
+Microsoft** : `EF-INT-002` et `EF-INT-003` restent `PARTIAL`, dette T-16
+dans `docs/CURRENT-STATE.md`.
+
 ---
 
 ## 10. Service d'intelligence artificielle
@@ -294,8 +304,18 @@ Contraintes à connaître :
 - la mention légale à faire figurer en pied de document ;
 - éventuellement une police d'écriture, avec sa licence.
 
-Sans ces éléments, les documents seront générés avec une mise en page
-neutre, correcte mais non estampillée ESIC.
+**État au sprint 11 : aucun de ces éléments n'a été fourni.** Les
+documents PDF sont produits avec un bandeau et une signature
+**typographique** — « ESIC CONNECT », le nom de l'établissement,
+l'identifiant du document et la mention de document électronique — mais
+**sans image de logo**, parce qu'aucun fichier n'existe dans le dépôt et
+qu'en dessiner un serait inventer une identité visuelle. Dette T-17 dans
+`docs/CURRENT-STATE.md` ; l'insertion se réduit à un `PDImageXObject`
+dans `PdfDocumentWriter.header` le jour où le fichier arrive.
+
+L'émetteur imprimé sur les documents est configurable par
+`APP_REPORTING_ISSUER` : c'est là que se règle le nom exact de
+l'établissement, sans toucher au code.
 
 ---
 

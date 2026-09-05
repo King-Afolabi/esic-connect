@@ -52,6 +52,8 @@ Renseigner `.env` — le fichier n'est **jamais** versionné :
 | `ESIC_DEMO_PASSWORD` | oui pour le profil `demo` | **≥ 12 caractères**. Lu aussi par la suite e2e |
 | `MYSQL_TEST_DATABASE` | recommandé | `esic_test`. Garantit qu'un `./mvnw test` n'écrit jamais dans la base applicative — cause probable du finding F-ENV-1 |
 | `JUSTIFICATION_STORAGE_PATH` | oui hors Docker | le défaut `/data/uploads/justifications` n'est pas inscriptible sur macOS / Linux |
+| `APP_REPORTING_ISSUER` | non | émetteur imprimé sur les documents officiels (PDF, attestations). Défaut : « ESIC — École Supérieure d'Informatique et de Commerce » |
+| `APP_INTEGRATION_MICROSOFT_ENABLED`, `_TENANT_ID`, `_CLIENT_ID`, `_CLIENT_SECRET` | non | intégration Microsoft 365 (EF-INT-002, EF-INT-003). **Les quatre sont nécessaires** : une configuration incomplète laisse l'intégration inactive, et le produit le déclare (`GET /api/v1/integrations/microsoft/status`). Le secret ne doit **jamais** entrer dans le dépôt. **Jamais éprouvée contre un locataire réel** — dette T-16 |
 
 Puis :
 

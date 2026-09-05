@@ -44,6 +44,23 @@ class DefaultRoomDirectory implements RoomDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.List<RoomSearchRef> search(String query, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        if (pattern == null) {
+            return java.util.List.of();
+        }
+        return roomRepository.search(pattern, org.springframework.data.domain.PageRequest.of(0,
+                        com.esic.connect.shared.SearchPattern.bound(limit)))
+                .stream()
+                // Le jeton de QR fixe n'entre jamais dans un résultat de
+                // recherche : il vaut émargement (EF-ATT-010).
+                .map(room -> new RoomSearchRef(room.getPublicId(), room.getCode(), room.getName(),
+                        room.getBuilding() != null ? room.getBuilding().getName() : null))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean isWithinAuthorizedRange(UUID sitePublicId, String ipAddress) {
         if (sitePublicId == null || ipAddress == null || ipAddress.isBlank()) {
             // Refus par défaut : une adresse absente n'est pas une adresse

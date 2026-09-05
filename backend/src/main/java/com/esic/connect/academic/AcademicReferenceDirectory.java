@@ -40,6 +40,15 @@ public interface AcademicReferenceDirectory {
     Optional<AcademicYearRef> findAcademicYearByInternalId(long academicYearInternalId);
 
     /**
+     * Formations dont le code ou le nom contient {@code query}
+     * (EF-USER-009).
+     *
+     * @param visibleInternalIds restriction de périmètre ; {@code null}
+     *                           pour un appelant à périmètre global
+     */
+    java.util.List<ProgramRef> searchPrograms(String query, java.util.Set<Long> visibleInternalIds, int limit);
+
+    /**
      * @param usable {@code true} si la formation est {@code ACTIVE} — une
      *               formation archivée ne peut plus recevoir de nouveau
      *               rattachement

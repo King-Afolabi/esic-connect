@@ -19,7 +19,9 @@ class InvitationException extends RuntimeException {
         /** Compte ciblé pas en attente d'activation (émission, route protégée). */
         TARGET_NOT_PENDING,
         /** Rôle demandé inconnu ou inactif (émission, route protégée). */
-        ROLE_INVALID
+        ROLE_INVALID,
+        /** Format d'export hors liste ({@code csv}, {@code xlsx}, {@code pdf}) — EF-REP-010. */
+        INVALID_EXPORT_FORMAT
     }
 
     private final Kind kind;

@@ -35,7 +35,12 @@ export async function loginAsUi(page: Page, account: DemoAccount, targetPath?: s
   }
   await page.getByLabel('Adresse électronique').fill(account.email);
   await page.getByLabel('Mot de passe').fill(account.password);
-  await page.getByRole('button', { name: 'Se connecter' }).click();
+  // `exact: true` est INDISPENSABLE depuis le sprint 2 : l'écran de
+  // connexion porte aussi un bouton « Se connecter avec une clé d'accès »
+  // (passkey, EF-AUTH-007), que le libellé non exact apparie également.
+  // Sans cela, Playwright échoue en « strict mode violation » et TOUTE la
+  // suite navigateur tombe dès l'authentification.
+  await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
   // On attend seulement la sortie de /login : la destination finale dépend
   // du rôle (targetPath, un enfant par défaut de targetPath comme
   // `/academic` → `/academic/academic-years`, ou `/forbidden` si le rôle

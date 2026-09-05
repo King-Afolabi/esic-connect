@@ -260,6 +260,68 @@ export const routes: Routes = [
           ),
       },
       {
+        // Recherche globale (EF-USER-009 ; docs/02 §22.7). Périmètre
+        // aligné **à l'identique** sur le `@PreAuthorize` de
+        // `GlobalSearchController` : seuls les rôles qui disposent d'un
+        // périmètre à parcourir. Le garde ne fait que masquer la
+        // navigation — le serveur applique le périmètre réel.
+        path: 'recherche',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Recherche globale — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/search/global-search').then((m) => m.GlobalSearch),
+      },
+      {
+        // Consultation et export de la piste d'audit (EF-AUD-002 ;
+        // docs/02 §23.4). Périmètre aligné sur `AuditController`
+        // (`ADMIN` / `SUPER_ADMIN`) : l'apprenant dispose de son journal
+        // de transparence, qui est la bonne granularité pour lui.
+        path: 'exploitation/audit',
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+        title: `Piste d'audit — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/audit/audit-trail').then((m) => m.AuditTrail),
+      },
+      {
+        // Attestations d'assiduité (EF-REP-006, AC-033). Périmètre aligné
+        // sur `AttendanceManagementWeb.REPORT_ROLES` — un `TEACHER` n'y a
+        // pas accès, il consulte les présences de ses séances.
+        path: 'attestations',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Attestations — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/attestations/attestations').then((m) => m.Attestations),
+      },
+      {
+        // Abonnement iCalendar de l'appelant (EF-INT-001, AC-034). Aucune
+        // garde de rôle : `CalendarSubscriptionController` porte
+        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
+        // sujet du JWT, jamais un paramètre.
+        path: 'mon-compte/calendrier',
+        title: `Abonnement calendrier — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/calendar-subscriptions/calendar-subscriptions').then(
+            (m) => m.CalendarSubscriptions,
+          ),
+      },
+      {
+        // Rapport des invitations non activées (EF-REP-010). Mêmes rôles
+        // que le suivi des invitations : c'est le même besoin.
+        path: 'invitations/non-activees',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Invitations non activées — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/invitations/pending-report/pending-invitation-report').then(
+            (m) => m.PendingInvitationReport,
+          ),
+      },
+      {
         // File d'échec des effets de bord (EF-OPS-005 ; docs/02 §34.2,
         // écrans du super administrateur). Périmètre aligné **à
         // l'identique** sur le `@PreAuthorize` de `OutboxAdminController`

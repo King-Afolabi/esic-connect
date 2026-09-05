@@ -284,29 +284,36 @@ class DashboardIntegrationTests {
         assertThat(growth).as("croissance des requêtes SQL de 1 à 15 classes (qSmall=%s, qLarge=%s)",
                         qSmall, qLarge)
                 .isLessThanOrEqualTo(3L);
-        // Garde-fou absolu.
-        assertThat(qLarge).as("requêtes SQL du dashboard manager à 15 classes").isLessThan(25L);
+        // Le garde-fou absolu « < 25 requêtes » a été RETIRÉ au sprint 11,
+        // et il faut le dire : la carte du responsable ne se contente plus
+        // de lister des séances, elle calcule l'assiduité de son périmètre
+        // (EF-REP-007). Le coût de base est donc plus élevé qu'au bloc
+        // G1-F — c'est un travail supplémentaire réel, pas une régression.
+        // Ce qui doit rester vrai, et que ce test vérifie, c'est que ce
+        // coût ne suit ni le nombre de classes (ici) ni le nombre de
+        // séances (test suivant).
     }
 
     /**
-     * Passe corrective probatoire (chantier 4) : le test ci-dessus ne fait
-     * varier que le nombre de <strong>classes</strong> (séances constantes à
-     * 3) — il ne prouve donc rien sur le coût par <strong>séance</strong>.
-     * {@code DefaultCourseSessionDirectory.toRef} hydrate, pour CHAQUE
-     * séance renvoyée par {@code findSessionsForClasses}, ses points de
-     * contrôle ({@code checkpointRepository.findByCourseSessionId...}) et
-     * ses classes ({@code session.getClasses()}, {@code @OneToMany(LAZY)}
-     * sans {@code @BatchSize}, puis un {@code classGroupDirectory
-     * .findByInternalId} par classe) — <strong>avant</strong> que
-     * {@code DashboardService.trim(...)} ne coupe l'affichage à 10 lignes.
-     * Le coût par séance est donc réellement <strong>linéaire dans le
-     * nombre de séances renvoyées par la fenêtre des 7 jours</strong>, et
-     * seulement <strong>affiché</strong> à 10 — pas borné en requêtes tant
-     * que la fenêtre contient ≤ 10 séances. Ce test mesure exactement cette
-     * croissance à classes constantes (2) pour 1 vs 10 séances.
+     * Coût SQL du tableau de bord d'un responsable pédagogique en
+     * fonction du nombre de <strong>séances</strong> (dette T-03).
+     *
+     * <p>Ce test mesurait auparavant une croissance et l'assumait :
+     * {@code DefaultCourseSessionDirectory.toRef} hydratait, pour chaque
+     * séance, ses points de contrôle puis ses classes, une séance à la
+     * fois. Le sprint 11 a supprimé cette croissance — points de contrôle
+     * et rattachements de classes sont chargés en bloc, le contexte
+     * d'alternance est mémorisé par (inscription, jour), le périmètre est
+     * résolu une fois, et le comptage de justificatifs ne recalcule plus
+     * toute l'assiduité de la base.
+     *
+     * <p>L'assertion est donc <strong>inversée</strong> : le coût ne doit
+     * plus suivre le nombre de séances. Une tolérance de deux requêtes
+     * absorbe le bruit d'un environnement partagé, sans laisser passer
+     * une régression par séance.
      */
     @Test
-    void aPedagogicalManagerDashboardQueryCountGrowsLinearlyWithTheNumberOfSessionsWithinTheDisplayLimit() {
+    void aPedagogicalManagerDashboardDoesNotGrowItsQueryCountWithTheNumberOfSessions() {
         String admin = tokenFor(account(RoleCode.ADMIN));
 
         // Nombre de classes FIXE (2) ; seul le nombre de séances varie : 1 vs
@@ -323,30 +330,9 @@ class DashboardIntegrationTests {
         assertManagerContent(fewSessions, 2);
         assertManagerContent(manySessions, 2);
 
-        // Constat honnête : la croissance n'est PAS bornée par le nombre de
-        // classes (chantier F, déjà corrigé) mais reste, elle,
-        // proportionnelle au nombre de séances effectivement hydratées
-        // (checkpoints + classes par séance, non groupées). Avec la borne
-        // d'affichage à 10 séances, l'ordre de grandeur reste maîtrisé pour
-        // ce dashboard (pas d'explosion cartésienne : coût = O(séances),
-        // jamais O(séances × classes) ni pire) mais n'est PAS indépendant du
-        // nombre de séances comme l'étaient les classes. Documenté au lieu
-        // d'être corrigé dans cette passe (coût borné en pratique par
-        // l'affichage à 10 séances ; une correction demanderait un
-        // chargement par lot des points de contrôle et des classes de
-        // séance, hors périmètre de cette passe corrective courte).
-        assertThat(qMany).as("le coût par séance croît avec le nombre de séances (qFew=%s, qMany=%s)", qFew, qMany)
-                .isGreaterThan(qFew);
-        // Garde-fou : la croissance doit rester LINÉAIRE dans le nombre de
-        // séances (pas de produit cartésien classes × séances). Mesuré
-        // ≈ 2 requêtes par séance supplémentaire (points de contrôle +
-        // classes de séance, non groupées) ; un plafond à 3/séance laisse
-        // une marge sans masquer une explosion.
-        assertThat(qMany - qFew).as("croissance des requêtes SQL de 1 à 10 séances (qFew=%s, qMany=%s)", qFew, qMany)
-                .isLessThanOrEqualTo(9L * 3L);
-        // Garde-fou absolu : le coût du dashboard manager reste maîtrisé
-        // tant que la fenêtre des 7 jours contient ≤ 10 séances affichées.
-        assertThat(qMany).as("requêtes SQL du dashboard manager à 10 séances").isLessThan(40L);
+        assertThat(qMany - qFew)
+                .as("croissance des requêtes SQL de 1 à 10 séances (qFew=%s, qMany=%s)", qFew, qMany)
+                .isLessThanOrEqualTo(2L);
     }
 
     private record Scope(String managerToken, java.util.Set<String> classCodes) {
