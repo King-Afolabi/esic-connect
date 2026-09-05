@@ -14,6 +14,9 @@ import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
 import { roleLabel } from '../../models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
+import { ConnectivityService } from '../../pwa/connectivity.service';
+import { OfflineQueueService } from '../../pwa/offline-queue.service';
+import { PwaService } from '../../pwa/pwa.service';
 import { NotificationBell } from '../../../features/notifications/notification-bell/notification-bell';
 import { RoleContextMenu } from '../role-context-menu/role-context-menu';
 
@@ -47,6 +50,13 @@ export class AppShell {
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly breakpointObserver = inject(BreakpointObserver);
+  private readonly pwa = inject(PwaService);
+  private readonly queue = inject(OfflineQueueService);
+
+  protected readonly connectivity = inject(ConnectivityService);
+  /** Nombre d'actions faites hors ligne, en attente de confirmation (AC-031). */
+  protected readonly pendingActions = this.queue.pendingCount;
+  protected readonly installable = this.pwa.installable;
 
   protected readonly roleLabel = roleLabel;
 
@@ -64,7 +74,18 @@ export class AppShell {
     { initialValue: false },
   );
 
+  protected install(): void {
+    void this.pwa.promptInstall();
+  }
+
+  /**
+   * Déconnexion. La file d'actions et le cache de données de l'appareil
+   * sont vidés : sur un poste partagé, rien de la session précédente ne
+   * doit rester consultable hors ligne.
+   */
   protected logout(): void {
+    this.queue.clear();
+    this.pwa.clearCachedData();
     this.auth.logout();
   }
 }

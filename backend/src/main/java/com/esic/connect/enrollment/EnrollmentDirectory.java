@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -147,6 +148,24 @@ public interface EnrollmentDirectory {
      * @return le descriptif si l'inscription existe, {@link Optional#empty()} sinon
      */
     Optional<AttendeeRef> describeAttendee(long enrollmentInternalId);
+
+    /**
+     * Identifiants de <strong>compte</strong> ({@code user_account.public_id})
+     * des apprenants dont l'inscription est {@code ACTIVE} dans l'une des
+     * classes indiquées, et valable le jour {@code date}.
+     *
+     * <p>Distinct de {@link #findActiveRosterForClasses} : un
+     * {@link RosterEntry} porte l'identifiant du <em>profil</em> apprenant,
+     * qui ne permet pas de désigner un destinataire. Notifier une classe
+     * exige l'identifiant du compte, et rien d'autre — ni nom, ni adresse,
+     * ni numéro étudiant (EF-NOTIF-003).
+     *
+     * @param classGroupPublicIds identifiants publics des classes
+     * @param date                jour civil de référence ; {@code null}
+     *                            pour ne pas filtrer sur la période
+     * @return les identifiants publics de compte, sans doublon ; vide si aucun
+     */
+    Set<UUID> findActiveStudentUserPublicIds(Collection<UUID> classGroupPublicIds, LocalDate date);
 
     /**
      * Nombre d'inscriptions {@code ACTIVE} rattachées à l'une des classes

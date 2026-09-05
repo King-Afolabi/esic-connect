@@ -23,8 +23,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -195,7 +193,7 @@ public class WebAuthnService {
                         signCount,
                         label(body.label())));
 
-        publishAfterCommit(new WebAuthnCredentialChangedEvent(account.getId(), account.getPublicId(),
+        publish(new WebAuthnCredentialChangedEvent(account.getId(), account.getPublicId(),
                 WebAuthnCredentialChangedEvent.Action.REGISTERED));
         return toResponse(entity);
     }
@@ -296,7 +294,7 @@ public class WebAuthnService {
         if (entity.getStatus() == WebAuthnCredentialStatus.ACTIVE) {
             entity.revoke(clock.instant());
             credentialRepository.save(entity);
-            publishAfterCommit(new WebAuthnCredentialChangedEvent(account.getId(),
+            publish(new WebAuthnCredentialChangedEvent(account.getId(),
                     account.getPublicId(), WebAuthnCredentialChangedEvent.Action.REVOKED));
         }
     }
@@ -374,16 +372,26 @@ public class WebAuthnService {
                 entity.getCreatedAt(), entity.getLastUsedAt());
     }
 
-    private void publishAfterCommit(Object event) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    eventPublisher.publishEvent(event);
-                }
-            });
-        } else {
-            eventPublisher.publishEvent(event);
-        }
+    /**
+     * Publication <strong>synchrone</strong>, dans la transaction
+     * courante.
+     *
+     * <p>Ce point publiait auparavant après commit (DEC-S2-003) parce que
+     * l'écouteur d'audit écrivait immédiatement, dans une transaction
+     * séparée : publier avant le commit aurait laissé une trace de succès
+     * derrière une opération ensuite annulée.
+     *
+     * <p>Ce détour n'a plus lieu d'être depuis l'outbox transactionnelle
+     * (EF-AUD-003) : l'écouteur n'écrit plus rien, il enregistre une
+     * intention qui commite — ou disparaît — avec cette transaction. La
+     * garantie RG-097 est donc tenue par construction.
+     *
+     * <p>Le conserver serait de surcroît <em>incorrect</em> : appelé
+     * depuis un {@code afterCommit}, l'enregistrement de l'intention
+     * participerait à une transaction déjà committée et échouerait —
+     * l'audit disparaîtrait en silence.
+     */
+    private void publish(Object event) {
+        eventPublisher.publishEvent(event);
     }
 }

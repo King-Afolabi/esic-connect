@@ -244,7 +244,8 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                             .map(UserDirectory.UserRef::publicId).orElse(null))
                     .filter(java.util.Objects::nonNull)
                     .collect(Collectors.toUnmodifiableSet());
-            return new SessionNotificationInfo(session.getPublicId(), session.getTitle(), principal, substitutes);
+            return new SessionNotificationInfo(session.getPublicId(), session.getTitle(),
+                    principal, substitutes, classPublicIds(session));
         });
     }
 

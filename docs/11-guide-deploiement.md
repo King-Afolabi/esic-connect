@@ -186,15 +186,16 @@ qu'aucune décision de mise en service ne soit prise sans les connaître.
 | Verrou | État | Effet si ignoré |
 |---|---|---|
 | **HTTPS / TLS** | `NOT_IMPLEMENTED` | jetons JWT et mots de passe en clair sur le réseau. Bloquant absolu |
-| **Rate-limiting `/auth/login`** | `NOT_IMPLEMENTED` (`docs/08` §5) | attaque par force brute non freinée |
+| **Rate-limiting `/auth/login`** | `IMPLEMENTED_AND_TESTED` (EF-AUTH-012, sprint 2) | — ligne corrigée : elle annonçait encore `NOT_IMPLEMENTED` alors que les compteurs Redis par identité et par origine sont livrés et testés |
 | **Persistance de session** | `NOT_IMPLEMENTED` (finding F-ENV-2) | tout rechargement de page déconnecte l'utilisateur |
 | **Sauvegarde / restauration testée** | `NOT_PERFORMED` | `scripts/db-reset.sh` produit un dump, mais **aucune restauration n'a jamais été rejouée** |
-| **Antivirus sur les pièces jointes** | `NOT_IMPLEMENTED` (`DEC-G1-E-ANTIVIRUS`) | ne jamais écrire « garanti sans malware » |
+| **Antivirus sur les pièces jointes** | `IMPLEMENTED_AND_TESTED`, **inactif par défaut** (§7) | sans le profil `antivirus`, aucune pièce n'est analysée : l'API et l'écran l'annoncent, ne jamais écrire « garanti sans logiciel malveillant » |
 | **Rétention RGPD des pièces `DELETED`** | `À_DÉFINIR` (`R-G1-30`) | politique à arrêter avant tout usage sur données réelles |
 | **Stockage des pièces jointes** | système de fichiers local | non persistant sur un hébergement éphémère |
 | **Supervision** | `/actuator/health` seul | ni métriques, ni logs structurés, ni alerte |
 | **Secrets** | `.env` local | aucun coffre ; à remplacer par le gestionnaire de secrets de la cible |
-| **Notifications** | audience formateur, sans reprise (`G1-D-OUTBOX`) | une panne du writer perd la notification |
+| **Notifications** | outbox transactionnelle avec reprise et file d'échec (sprint 10) | une panne du diffuseur ne perd plus la notification ; surveiller la file d'échec (`/exploitation/effets-de-bord`) |
+| **Notifications poussées (VAPID)** | `PARTIAL` — chiffrement conforme RFC 8291, aucun service de poussée réel sollicité | sans clés VAPID, l'API déclare `providerActive: false` et aucune poussée n'est envoyée |
 
 ### 6.1 Cible de déploiement
 
@@ -216,7 +217,97 @@ forme du fichier dépend entièrement de la cible.
 
 ---
 
-## 7. Dépannage
+## 7. Analyse antivirus des pièces jointes (ClamAV)
+
+L'analyse est **inactive par défaut**, et le produit le déclare : chaque
+pièce est marquée `NOT_SCANNED`, l'API l'expose
+(`GET /api/v1/attendance/antivirus/status`) et l'écran de dépôt
+l'annonce. Rien n'est jamais présenté comme « sain » sans analyse.
+
+### 7.1 Démarrage
+
+```bash
+# Le service appartient à un profil optionnel : il ne démarre pas avec
+# `docker compose up -d` seul.
+docker compose --profile antivirus up -d clamav
+
+# La première mise en service télécharge la base de signatures : compter
+# plusieurs minutes avant que le conteneur passe `healthy`.
+docker compose --profile antivirus ps
+docker exec esic-connect-clamav clamdscan --ping 1   # attendre « PONG »
+docker exec esic-connect-clamav clamdscan --version  # version + n° de base
+```
+
+**Poste Apple Silicon.** L'image officielle ClamAV n'est publiée que pour
+`linux/amd64`. `compose.yaml` fixe donc `platform: linux/amd64` ; sans
+cette ligne, `docker compose up` échoue sur `no matching manifest for
+linux/arm64`. L'exécution passe par l'émulation : plus lente au
+chargement des signatures, fonctionnelle ensuite.
+
+### 7.2 Activation côté application
+
+```bash
+export ANTIVIRUS_ENABLED=true      # bascule sur l'adaptateur ClamAV
+export ANTIVIRUS_HOST=127.0.0.1
+export ANTIVIRUS_PORT=3310
+export ANTIVIRUS_TIMEOUT_MILLIS=10000
+# Quarantaine : une pièce sans verdict exploitable n'est pas
+# téléchargeable. À activer AVEC un analyseur réellement en service —
+# sans lui, plus aucune pièce ne serait téléchargeable.
+export ANTIVIRUS_REQUIRED=true
+```
+
+Aucun secret n'est nécessaire : `clamd` écoute en clair sur le réseau
+`backend-network` de la composition, jamais exposé au-delà.
+
+### 7.3 Vérification
+
+```bash
+cd backend
+set -a && source ../.env && set +a
+ESIC_CLAMAV_REAL=1 ./mvnw test \
+  -Dtest='ClamAvRealDaemonIntegrationTests,JustificationAttachmentRealAntivirusIntegrationTests'
+```
+
+Sans `ESIC_CLAMAV_REAL=1`, ou sans démon joignable, ces classes sont
+**ignorées** — et un test ignoré n'est pas un test réussi : tant qu'elles
+n'ont pas tourné, l'analyse n'est pas démontrée.
+
+Contrôle manuel de la chaîne de détection, avec la chaîne d'essai
+standard EICAR (inoffensive, prévue pour cet usage) :
+
+```bash
+printf 'X5O!P%%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > /tmp/eicar.txt
+docker cp /tmp/eicar.txt esic-connect-clamav:/tmp/eicar.txt
+docker exec esic-connect-clamav clamdscan /tmp/eicar.txt
+# attendu : /tmp/eicar.txt: Eicar-Test-Signature FOUND
+```
+
+### 7.4 Ce que l'analyse ne fait pas
+
+- **La signature EICAR est ancrée au fichier entier**, par construction :
+  enveloppée dans un PDF, elle n'est plus reconnue. C'est une propriété
+  de la chaîne d'essai, pas une lacune du produit — et le rappel que
+  l'antivirus ne remplace jamais les contrôles structurels (extension,
+  type déclaré, *magic bytes*, taille), qui s'appliquent **avant** lui.
+- Un antivirus reconnaît ce qu'il connaît ; il ne rend pas un format
+  dangereux inoffensif.
+- Une base de signatures périmée n'alerte sur rien. `freshclam` tourne
+  dans le conteneur officiel ; vérifier la date de la base avec
+  `clamdscan --version` avant toute affirmation sur la protection.
+
+### 7.5 Exploitation
+
+| Situation | Comportement | À faire |
+|---|---|---|
+| `clamd` injoignable | verdict `UNAVAILABLE`, **jamais** `CLEAN` | redémarrer le service ; avec `ANTIVIRUS_REQUIRED=true`, les pièces restent en quarantaine |
+| Délai dépassé | `UNAVAILABLE` | augmenter `ANTIVIRUS_TIMEOUT_MILLIS` ou dimensionner le conteneur |
+| `INSTREAM size limit exceeded` | `UNAVAILABLE` | relever `StreamMaxLength` de `clamd`, au-dessus de la limite métier (5 Mo) |
+| Signature détectée | `422 ATT_ATTACHMENT_INFECTED` | le contenu **ne touche pas le disque** ; aucune action technique |
+
+---
+
+## 8. Dépannage
 
 Voir le tableau de dépannage du `README.md`. Deux symptômes propres à ce
 guide :

@@ -11,107 +11,80 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
- * Traduit les événements de connexion du module {@code identity} en
+ * Traduit les événements de sécurité du module {@code identity} en
  * {@code audit_event} (docs/04-modele-donnees.md §24), sans dépendance
  * directe vers les classes internes d'identity (docs/03 §6.6).
  *
- * Exécuté en transaction dédiée ({@code REQUIRES_NEW}) : un incident
- * d'écriture de l'audit ne doit jamais faire échouer ni altérer la
- * transaction de connexion appelante (voir
- * AuthenticationService#publishSafely, qui absorbe toute exception
- * remontant d'ici sans exposer de détail sensible à l'appelant).
+ * <p><strong>Écriture par l'outbox transactionnelle</strong> (EF-AUD-003).
+ * Tous ces écouteurs rejoignent la transaction courante et enregistrent
+ * l'intention via {@link AuditRecorder}. Deux conséquences heureuses :
+ * une opération annulée ne laisse plus de trace de succès (RG-097), et le
+ * verrou que prenait l'ancien motif disparaît — la ligne d'outbox ne
+ * porte aucune clé étrangère vers {@code user_account}, contrairement à
+ * {@code audit_event.actor_user_id}. C'est ce verrou qui obligeait
+ * jusqu'ici le changement de mot de passe et la révocation de sessions à
+ * écouter en {@code AFTER_COMMIT}, sous peine d'attendre indéfiniment un
+ * verrou que seule la transaction suspendue pouvait libérer.
  */
 @Component
 public class SecurityAuditEventListener {
 
-    private final AuditEventRepository auditEventRepository;
+    private final AuditRecorder recorder;
 
-    public SecurityAuditEventListener(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public SecurityAuditEventListener(AuditRecorder recorder) {
+        this.recorder = recorder;
     }
 
     @EventListener
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onLoginSucceeded(LoginSucceededEvent event) {
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), event.userId(), "LOGIN_SUCCESS",
-                "SECURITY", "USER_ACCOUNT", "SUCCESS");
-        auditEvent.setActorPublicIdSnapshot(event.userPublicId());
-        auditEvent.setActorDisplaySnapshot(event.displaySnapshot());
-        auditEvent.setActorRole(event.roleSnapshot());
-        auditEventRepository.save(auditEvent);
+        recorder.record(AuditIntent
+                .of(Instant.now(), event.userId(), "LOGIN_SUCCESS", "SECURITY", "USER_ACCOUNT", "SUCCESS")
+                .withActorSnapshot(event.userPublicId(), event.displaySnapshot(), event.roleSnapshot()));
     }
 
     /**
      * Changement de mot de passe (docs/02 §23.1). Le mot de passe, ancien
      * comme nouveau, n'apparaît évidemment jamais : seuls l'auteur,
      * l'instant et l'origine sont conservés.
-     *
-     * <p><strong>AFTER_COMMIT et non @EventListener synchrone.</strong>
-     * La transaction qui change un mot de passe a déjà modifié — et donc
-     * verrouillé — la ligne {@code user_account} concernée. Un écouteur
-     * synchrone en {@code REQUIRES_NEW} suspendrait cette transaction pour
-     * insérer un {@code audit_event} dont la clé étrangère
-     * {@code actor_user_id} pointe vers cette même ligne : la nouvelle
-     * transaction attendrait un verrou que seule l'ancienne peut libérer,
-     * jusqu'au « lock wait timeout ». Publier après le commit supprime la
-     * situation, et donne au passage la bonne sémantique : une transaction
-     * annulée ne laisse aucune trace d'audit (RG-097).
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @EventListener
     public void onPasswordChanged(PasswordChangedEvent event) {
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), event.userId(), "PASSWORD_CHANGED",
-                "SECURITY", "USER_ACCOUNT", "SUCCESS");
-        auditEvent.setActorPublicIdSnapshot(event.userPublicId());
-        auditEvent.setActorDisplaySnapshot(event.displaySnapshot());
-        auditEvent.setResourcePublicId(event.userPublicId());
-        auditEvent.setReason(event.origin());
-        auditEventRepository.save(auditEvent);
+        recorder.record(AuditIntent
+                .of(Instant.now(), event.userId(), "PASSWORD_CHANGED", "SECURITY", "USER_ACCOUNT", "SUCCESS")
+                .withActorSnapshot(event.userPublicId(), event.displaySnapshot(), null)
+                .withResource(event.userPublicId())
+                .withReason(event.origin()));
     }
 
-    /**
-     * Révocation globale des sessions d'un compte (EF-AUTH-014). Même
-     * raison qu'au-dessus pour l'écoute après commit.
-     */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /** Révocation globale des sessions d'un compte (EF-AUTH-014). */
+    @EventListener
     public void onSessionsRevoked(SessionsRevokedEvent event) {
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), event.userId(), "SESSIONS_REVOKED",
-                "SECURITY", "USER_ACCOUNT", "SUCCESS");
-        auditEvent.setActorPublicIdSnapshot(event.userPublicId());
-        auditEvent.setActorDisplaySnapshot(event.displaySnapshot());
-        auditEvent.setResourcePublicId(event.userPublicId());
-        auditEvent.setReason(event.reason());
-        auditEventRepository.save(auditEvent);
+        recorder.record(AuditIntent
+                .of(Instant.now(), event.userId(), "SESSIONS_REVOKED", "SECURITY", "USER_ACCOUNT", "SUCCESS")
+                .withActorSnapshot(event.userPublicId(), event.displaySnapshot(), null)
+                .withResource(event.userPublicId())
+                .withReason(event.reason()));
     }
 
     /**
      * Changement de second facteur (docs/02 §23.1 : « ajout ou
      * suppression d'un facteur ou d'une passkey »). Aucun secret partagé,
      * aucun code : seule la nature du changement est conservée.
-     *
-     * <p>Écoute après commit pour la même raison que
-     * {@link #onPasswordChanged} : la transaction appelante a déjà
-     * verrouillé la ligne {@code user_account} vers laquelle pointe la
-     * clé étrangère de l'audit.
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @EventListener
     public void onMfaChanged(MfaChangedEvent event) {
-        save(event.userId(), event.userPublicId(), "MFA_" + event.action().name());
+        record(event.userId(), event.userPublicId(), "MFA_" + event.action().name());
     }
 
     /** Ajout ou révocation d'une passkey (EF-AUTH-006, RG-008). */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @EventListener
     public void onWebAuthnCredentialChanged(WebAuthnCredentialChangedEvent event) {
-        save(event.userId(), event.userPublicId(), "PASSKEY_" + event.action().name());
+        record(event.userId(), event.userPublicId(), "PASSKEY_" + event.action().name());
     }
 
     /**
@@ -119,28 +92,43 @@ public class SecurityAuditEventListener {
      * Aucune empreinte d'appareil ni adresse réseau n'est écrite : elles
      * n'ont pas leur place dans l'audit métier (RG-094).
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @EventListener
     public void onTrustedDeviceChanged(TrustedDeviceChangedEvent event) {
-        save(event.userId(), event.userPublicId(), "TRUSTED_DEVICE_" + event.action().name());
+        record(event.userId(), event.userPublicId(), "TRUSTED_DEVICE_" + event.action().name());
     }
 
-    private void save(Long userId, java.util.UUID userPublicId, String action) {
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), userId, action,
-                "SECURITY", "USER_ACCOUNT", "SUCCESS");
-        auditEvent.setActorPublicIdSnapshot(userPublicId);
-        auditEvent.setResourcePublicId(userPublicId);
-        auditEventRepository.save(auditEvent);
-    }
-
+    /**
+     * Échec de connexion.
+     *
+     * <p><strong>Seul écouteur d'audit qui conserve un
+     * {@code REQUIRES_NEW}, et c'est délibéré.</strong> La transaction de
+     * connexion est <em>toujours</em> annulée quand l'authentification
+     * échoue : elle relance l'exception après avoir publié cet événement.
+     * Rejoindre cette transaction ferait disparaître l'enregistrement avec
+     * elle, et une tentative infructueuse — donc l'essentiel de ce qu'un
+     * responsable sécurité cherche dans le journal — ne serait jamais
+     * tracée.
+     *
+     * <p>Ce n'est pas une entorse à RG-097 : cette règle interdit de
+     * produire l'effet de bord d'une action <em>annulée</em>. Ici, rien
+     * n'est annulé — le refus a bien eu lieu, et c'est lui qu'on trace.
+     * L'intention passe malgré tout par l'outbox : la transaction dédiée
+     * ne sert qu'à lui donner un commit propre, indépendant du rollback
+     * de la connexion.
+     */
     @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onLoginFailed(LoginFailedEvent event) {
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), event.userId(), "LOGIN_FAILURE",
-                "SECURITY", "USER_ACCOUNT", "DENIED");
-        auditEvent.setActorPublicIdSnapshot(event.userPublicId());
-        auditEvent.setActorDisplaySnapshot(event.displaySnapshot());
-        auditEvent.setReason(event.reasonCode());
-        auditEventRepository.save(auditEvent);
+        recorder.record(AuditIntent
+                .of(Instant.now(), event.userId(), "LOGIN_FAILURE", "SECURITY", "USER_ACCOUNT", "DENIED")
+                .withActorSnapshot(event.userPublicId(), event.displaySnapshot(), null)
+                .withReason(event.reasonCode()));
+    }
+
+    private void record(Long userId, UUID userPublicId, String action) {
+        recorder.record(AuditIntent
+                .of(Instant.now(), userId, action, "SECURITY", "USER_ACCOUNT", "SUCCESS")
+                .withActorSnapshot(userPublicId, null, null)
+                .withResource(userPublicId));
     }
 }

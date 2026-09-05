@@ -1,0 +1,120 @@
+<section class="preferences">
+  <header class="preferences__header">
+    <h1>Préférences de notification</h1>
+    <p class="preferences__intro">
+      Choisissez comment vous souhaitez être prévenu, catégorie par catégorie.
+    </p>
+  </header>
+
+  @if (state().kind === 'loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement des préférences"></mat-progress-bar>
+  }
+
+  @if (state(); as current) {
+    @if (current.kind === 'error') {
+      <div class="preferences__error" role="alert">
+        <p>{{ current.message }}</p>
+        <button mat-stroked-button type="button" (click)="load()">Réessayer</button>
+      </div>
+    }
+  }
+
+  @if (state().kind === 'ready') {
+    <!--
+      Tableau et non liste de cartes : le réglage est une matrice
+      catégorie × canal, et un tableau la rend lisible au lecteur d'écran
+      comme à l'œil, chaque interrupteur portant l'intitulé de sa ligne
+      et de sa colonne.
+    -->
+    <div class="preferences__scroll">
+      <table class="preferences__table">
+        <caption class="preferences__caption">
+          Canaux de notification par catégorie. Le centre de notifications et les alertes de
+          sécurité ne peuvent pas être désactivés.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Catégorie</th>
+            <th scope="col">Application</th>
+            <th scope="col">Courriel</th>
+            <th scope="col">Notification poussée</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track trackRow($index, row)) {
+            <tr>
+              <th scope="row">{{ row.label }}</th>
+              @for (preference of row.channels; track trackChannel($index, preference)) {
+                <td>
+                  <mat-slide-toggle
+                    [checked]="preference.enabled"
+                    [disabled]="preference.locked || saving() === row.category + ':' + preference.channel"
+                    (change)="toggle(preference, $event.checked)"
+                    [attr.aria-label]="
+                      channelLabel(preference.channel) + ' — ' + row.label
+                    "
+                  ></mat-slide-toggle>
+                  @if (preference.locked) {
+                    <span class="preferences__locked">
+                      <mat-icon aria-hidden="true" class="preferences__lock-icon">lock</mat-icon>
+                      <span>Toujours actif</span>
+                    </span>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <section class="preferences__push" aria-labelledby="push-title">
+      <h2 id="push-title">Notifications poussées</h2>
+
+      @if (push(); as status) {
+        @if (!status.providerActive) {
+          <!--
+            État réel et non supposé : sans clé VAPID côté serveur, aucune
+            poussée n'est envoyée. Le dire vaut mieux qu'afficher un
+            réglage sans effet (docs/02 §21.6).
+          -->
+          <p class="preferences__notice" role="status">
+            <mat-icon aria-hidden="true">info</mat-icon>
+            <span>
+              Les notifications poussées ne sont pas activées sur ce serveur : aucune notification
+              n’est envoyée vers vos appareils. Le réglage ci-dessus reste enregistré et
+              s’appliquera dès leur mise en service.
+            </span>
+          </p>
+        } @else {
+          <p class="preferences__notice" role="status">
+            <mat-icon aria-hidden="true">notifications_active</mat-icon>
+            <span>Les notifications poussées sont actives sur ce serveur.</span>
+          </p>
+        }
+
+        @if (status.subscriptions.length > 0) {
+          <ul class="preferences__devices">
+            @for (subscription of status.subscriptions; track subscription.publicId) {
+              <li>
+                <span>Appareil enregistré le {{ subscription.createdAt }}</span>
+                <span class="preferences__device-state">
+                  {{ subscription.active ? 'actif' : 'révoqué' }}
+                </span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="preferences__empty">Aucun appareil abonné.</p>
+        }
+      }
+
+      @if (!pushSupported()) {
+        <p class="preferences__notice" role="status">
+          <mat-icon aria-hidden="true">info</mat-icon>
+          <span>Ce navigateur ne prend pas en charge les notifications poussées.</span>
+        </p>
+      }
+    </section>
+  }
+</section>

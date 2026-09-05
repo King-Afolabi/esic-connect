@@ -64,3 +64,17 @@
 .checkin__back a {
   color: var(--mat-sys-primary);
 }
+
+// État « en attente de confirmation » (AC-031) : visuellement distinct du
+// succès, sans reposer sur la seule couleur — icône et libellé portent
+// l'information.
+.checkin__panel--pending {
+  border-left: 4px solid rgb(0 0 0 / 45%);
+}
+
+.checkin__offline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}

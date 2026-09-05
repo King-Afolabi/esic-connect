@@ -146,12 +146,24 @@ public interface CourseSessionDirectory {
      * @param title                        libellé libre de la séance ({@code null} possible)
      * @param principalTeacherPublicId     formateur principal ({@code user_account.public_id})
      * @param substituteTeacherPublicIds   remplaçants {@code ACTIVE} ({@code user_account.public_id})
+     * @param classGroupPublicIds          classes rattachées, d'où se
+     *                                     déduisent apprenants et
+     *                                     responsables (EF-NOTIF-003).
+     *                                     Portées ici, et non lues par
+     *                                     {@link #findForAttendance}, parce
+     *                                     que celle-ci écarte les séances
+     *                                     non opérationnelles : une séance
+     *                                     <em>annulée</em> n'y répond plus,
+     *                                     alors que c'est justement le
+     *                                     moment où il faut prévenir sa
+     *                                     classe.
      */
     record SessionNotificationInfo(
             UUID sessionPublicId,
             String title,
             UUID principalTeacherPublicId,
-            Set<UUID> substituteTeacherPublicIds) {
+            Set<UUID> substituteTeacherPublicIds,
+            Set<UUID> classGroupPublicIds) {
     }
 
     /**

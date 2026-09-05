@@ -109,15 +109,7 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
      * pas de filtrage temporel, effectif actif « courant »).
      */
     private List<RosterEntry> roster(Collection<UUID> classGroupPublicIds, LocalDate date) {
-        if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
-            return List.of();
-        }
-        Set<Long> classInternalIds = classGroupPublicIds.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(classGroupDirectory::findByPublicId)
-                .filter(Optional::isPresent)
-                .map(ref -> ref.get().internalId())
-                .collect(Collectors.toUnmodifiableSet());
+        Set<Long> classInternalIds = internalIdsOf(classGroupPublicIds);
         if (classInternalIds.isEmpty()) {
             return List.of();
         }
@@ -144,6 +136,29 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public Set<UUID> findActiveStudentUserPublicIds(Collection<UUID> classGroupPublicIds, LocalDate date) {
+        Set<Long> classInternalIds = internalIdsOf(classGroupPublicIds);
+        if (classInternalIds.isEmpty()) {
+            return Set.of();
+        }
+        return enrollmentRepository
+                .findByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE).stream()
+                .filter(enrollment -> date == null || coversDate(enrollment, date))
+                .map(enrollment -> enrollment.getStudentProfile().getUserId())
+                .filter(java.util.Objects::nonNull)
+                .map(userDirectory::findByInternalId)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                // Un compte archivé n'est jamais destinataire : le
+                // notifier reviendrait à écrire dans une boîte que
+                // personne ne relève.
+                .filter(ref -> !ref.archived())
+                .map(UserDirectory.UserRef::publicId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<AttendeeRef> describeAttendee(long enrollmentInternalId) {
         return enrollmentRepository.findById(enrollmentInternalId).map(enrollment -> {
             StudentProfile profile = enrollment.getStudentProfile();
@@ -157,18 +172,23 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         });
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public long countActiveEnrollmentsInClasses(Collection<UUID> classGroupPublicIds) {
+    /** Traduction publique -> interne d'un lot de classes ; les inconnues sont ignorées. */
+    private Set<Long> internalIdsOf(Collection<UUID> classGroupPublicIds) {
         if (classGroupPublicIds == null || classGroupPublicIds.isEmpty()) {
-            return 0;
+            return Set.of();
         }
-        Set<Long> classInternalIds = classGroupPublicIds.stream()
+        return classGroupPublicIds.stream()
                 .filter(java.util.Objects::nonNull)
                 .map(classGroupDirectory::findByPublicId)
                 .filter(Optional::isPresent)
                 .map(ref -> ref.get().internalId())
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countActiveEnrollmentsInClasses(Collection<UUID> classGroupPublicIds) {
+        Set<Long> classInternalIds = internalIdsOf(classGroupPublicIds);
         if (classInternalIds.isEmpty()) {
             return 0;
         }

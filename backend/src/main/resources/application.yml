@@ -221,6 +221,56 @@ app:
       # n'a pas conclu. À activer avec un analyseur réellement en service,
       # sans quoi plus aucune pièce ne serait téléchargeable.
       required: ${ANTIVIRUS_REQUIRED:false}
+  web:
+    # Base de l'application, insérée dans les courriels de notification.
+    # Aucun chemin d'interface n'est calculé côté serveur (docs/02 §21.5) :
+    # le courriel renvoie vers l'accueil, l'application fait le reste.
+    base-url: ${APP_WEB_BASE_URL:http://localhost:4200}
+  outbox:
+    # File transactionnelle des effets de bord (EF-AUD-003, EF-OPS-005 ;
+    # docs/02 §25). Toute valeur incohérente fait échouer le démarrage
+    # plutôt que d'affaiblir en silence la garantie de reprise
+    # (OutboxProperties).
+    #
+    # Tentatives avant passage en FILE D'ÉCHEC, où seule une relance
+    # manuelle reprend la main (§25.2).
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:5}
+    # Messages traités par passage du diffuseur.
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    # Attente croissante entre deux tentatives : doublement à chaque
+    # échec, plafonné. Le plafond compte autant que la croissance — sans
+    # lui, un fournisseur indisponible une nuit repousserait la reprise à
+    # plusieurs jours.
+    retry-initial: ${OUTBOX_RETRY_INITIAL:PT30S}
+    retry-max: ${OUTBOX_RETRY_MAX:PT30M}
+    # Période du passage de reprise, en millisecondes.
+    poll-interval: ${OUTBOX_POLL_INTERVAL:60000}
+    # Durée pendant laquelle une ligne réclamée reste invisible des autres
+    # diffuseurs. Si la JVM s'arrête entre la réclamation et le résultat,
+    # la ligne redevient traitable d'elle-même à l'expiration.
+    visibility: ${OUTBOX_VISIBILITY:PT2M}
+    # Drain immédiat dans le `afterCompletion` de la transaction métier :
+    # l'effet de bord est produit sans latence perceptible, la reprise
+    # planifiée ne servant qu'au rattrapage.
+    dispatch-after-commit: ${OUTBOX_DISPATCH_AFTER_COMMIT:true}
+  notification:
+    push:
+      # Notifications poussées (EF-NOTIF-005 ; RFC 8030 / 8291 / 8292).
+      #
+      # INACTIVES PAR DÉFAUT, et le produit le DIT : sans paire de clés
+      # VAPID, GET /api/v1/me/push/status renvoie providerActive=false et
+      # l'écran l'affiche. Aucune poussée n'est simulée.
+      #
+      # La clé PUBLIQUE est publique par construction (le navigateur la
+      # reçoit à l'abonnement). La clé PRIVÉE ne vit que dans
+      # l'environnement, JAMAIS dans le dépôt.
+      vapid:
+        public-key: ${APP_NOTIFICATION_PUSH_VAPID_PUBLIC_KEY:}
+        private-key: ${APP_NOTIFICATION_PUSH_VAPID_PRIVATE_KEY:}
+        # Point de contact exigé par la RFC 8292 §2.1, pour qu'un service
+        # de poussée puisse signaler un problème d'émission.
+        subject: ${APP_NOTIFICATION_PUSH_VAPID_SUBJECT:mailto:no-reply@esic-connect.test}
+      timeout: ${APP_NOTIFICATION_PUSH_TIMEOUT:PT10S}
   activation:
     # Base du lien d'activation inséré dans l'email (front Angular à venir).
     base-url: ${APP_ACTIVATION_BASE_URL:http://localhost:4200/activation}

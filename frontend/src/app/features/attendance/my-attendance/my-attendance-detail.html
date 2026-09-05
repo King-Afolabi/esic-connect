@@ -116,6 +116,25 @@
             @if (attachmentError()) {
               <p class="att__inline-error" role="alert">{{ attachmentError() }}</p>
             }
+            @if (canAmend() && attachment() === 'none' && antivirusStatus(); as antivirus) {
+              @if (!antivirus.active) {
+                <!--
+                  État réel du service, pas une supposition : sans
+                  analyseur configuré, aucune pièce n'est analysée. Le
+                  taire laisserait croire à un contrôle inexistant
+                  (dette T-04 ; docs/02 §19.2).
+                -->
+                <p class="att__notice" role="status">
+                  <mat-icon aria-hidden="true">info</mat-icon>
+                  <span>
+                    Aucune analyse antivirus n’est active sur ce serveur : votre pièce sera
+                    enregistrée sans être analysée. Les contrôles de format et de taille
+                    s’appliquent toujours.
+                  </span>
+                </p>
+              }
+            }
+
             @if (canAmend() && attachment() === 'none') {
               <div class="att__reveal" role="group" aria-label="Déposer une pièce jointe">
                 <label class="att__file-label">

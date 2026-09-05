@@ -96,6 +96,7 @@ describe('visibleNavItems', () => {
     expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual([
       '/dashboard',
       '/notifications',
+      '/notifications/preferences',
       '/mon-compte/securite',
     ]);
   });

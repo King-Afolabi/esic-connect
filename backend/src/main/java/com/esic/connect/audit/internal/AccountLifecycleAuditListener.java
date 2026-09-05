@@ -4,8 +4,6 @@ import com.esic.connect.identity.AccountLifecycleAction;
 import com.esic.connect.identity.AccountLifecycleEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
@@ -17,20 +15,22 @@ import java.time.Instant;
  * l'evenement {@link AccountLifecycleEvent} ne transporte que des
  * identifiants, l'action et un motif non sensible.
  *
- * Transaction dediee ({@code REQUIRES_NEW}) : un incident d'ecriture de
- * l'audit ne compromet pas la transaction metier appelante.
+ * <p><strong>Écriture par l'outbox transactionnelle</strong> (EF-AUD-003 ;
+ * docs/02 §23.4) : cet écouteur rejoint la transaction métier et
+ * enregistre l'intention via {@link AuditRecorder}, au lieu d'écrire
+ * lui-même dans une transaction séparée. Une suspension annulée ne laisse
+ * donc plus de trace de succès (RG-097).
  */
 @Component
 public class AccountLifecycleAuditListener {
 
-    private final AuditEventRepository auditEventRepository;
+    private final AuditRecorder recorder;
 
-    public AccountLifecycleAuditListener(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public AccountLifecycleAuditListener(AuditRecorder recorder) {
+        this.recorder = recorder;
     }
 
     @EventListener
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onAccountLifecycle(AccountLifecycleEvent event) {
         boolean selfService = event.action() == AccountLifecycleAction.ACCOUNT_ACTIVATED;
         Long actorUserId = selfService ? event.userId() : event.actorUserId();
@@ -45,7 +45,7 @@ public class AccountLifecycleAuditListener {
             case ROLE_REVOKED -> "ROLE_REVOKED";
         };
 
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), actorUserId, action,
+        AuditIntent intent = AuditIntent.of(Instant.now(), actorUserId, action,
                 "IDENTITY", "USER_ACCOUNT", "SUCCESS");
         // Parcours d'invitation : le compte concerne est aussi le sujet
         // (snapshot conserve pour lisibilite apres suppression). Pour les
@@ -53,14 +53,9 @@ public class AccountLifecycleAuditListener {
         // concerne est donc porte par la ressource.
         boolean invitationFlow = event.action() == AccountLifecycleAction.INVITATION_ISSUED
                 || event.action() == AccountLifecycleAction.ACCOUNT_ACTIVATED;
-        if (invitationFlow) {
-            auditEvent.setActorPublicIdSnapshot(event.userPublicId());
-        } else {
-            auditEvent.setResourcePublicId(event.userPublicId());
-        }
-        if (event.detail() != null) {
-            auditEvent.setReason(event.detail());
-        }
-        auditEventRepository.save(auditEvent);
+        intent = invitationFlow
+                ? intent.withActorSnapshot(event.userPublicId(), null, null)
+                : intent.withResource(event.userPublicId());
+        recorder.record(intent.withReason(event.detail()));
     }
 }

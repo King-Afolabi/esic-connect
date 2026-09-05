@@ -47,7 +47,26 @@ import static org.assertj.core.api.Assertions.assertThat;
  * de vérifier les deux versants du contrôle réseau sans dépendre de
  * l'environnement.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        // INDÉPENDANCE À L'HEURE DE LA JOURNÉE (défaut corrigé au sprint 10,
+        // reproduit à l'identique sur le tag v0.9 — antérieur à ce lot).
+        //
+        // Cette classe a besoin d'une séance qui commence RÉELLEMENT dans
+        // quelques minutes : c'est l'horloge du serveur qui décide si le QR
+        // fixe est encore recevable. Elle publie donc un créneau à
+        // `Instant.now()`. Avec la fenêtre de travail par défaut
+        // (08:00–19:00 UTC), toute exécution en soirée produisait une
+        // anomalie bloquante et la publication était refusée — un échec sans
+        // aucun rapport avec ce que la classe vérifie, et qui n'apparaissait
+        // qu'à certaines heures.
+        //
+        // La fenêtre et la durée minimale sont donc élargies POUR CETTE
+        // CLASSE. Elles restent vérifiées là où c'est leur objet, dans les
+        // tests du module `planning`.
+        "app.planning.working-day-start=00:00",
+        "app.planning.working-day-end=23:59",
+        "app.planning.min-duration=PT1M"
+})
 @ActiveProfiles("test")
 class RoomQrAttendanceIntegrationTests {
 
@@ -331,10 +350,22 @@ class RoomQrAttendanceIntegrationTests {
     private void openSessionIn(String admin, Fixture fx, int minutesFromNow) {
         Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS)
                 .plusSeconds(minutesFromNow * 60L);
+        // Une ligne de planning porte UNE date, une heure de début et une
+        // heure de fin : elle ne sait pas exprimer une séance qui franchit
+        // minuit. La fin est donc bornée à la fin du jour UTC du début —
+        // sans quoi une exécution en fin de soirée produisait une heure de
+        // fin antérieure à l'heure de début, donc une anomalie bloquante.
+        java.time.ZonedDateTime startUtc = start.atZone(java.time.ZoneOffset.UTC);
+        java.time.ZonedDateTime endOfDay = startUtc.toLocalDate()
+                .atTime(23, 59).atZone(java.time.ZoneOffset.UTC);
+        Instant end = start.plusSeconds(3 * 3600);
+        if (end.isAfter(endOfDay.toInstant())) {
+            end = endOfDay.toInstant();
+        }
         String csv = "slot_key,session_date,start_time,end_time,time_zone_id,title,"
                 + "teacher_public_id,room_code\n"
-                + "S1," + start.atZone(java.time.ZoneOffset.UTC).toLocalDate() + ","
-                + timeOf(start) + "," + timeOf(start.plusSeconds(3 * 3600)) + ",UTC,"
+                + "S1," + startUtc.toLocalDate() + ","
+                + timeOf(start) + "," + timeOf(end) + ",UTC,"
                 + "Cours," + fx.teacher.publicId() + "," + fx.roomCode + "\n";
 
         org.springframework.util.MultiValueMap<String, Object> parts =

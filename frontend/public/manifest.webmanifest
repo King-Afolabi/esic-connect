@@ -1,0 +1,45 @@
+{
+  "name": "ESIC Connect",
+  "short_name": "ESIC Connect",
+  "description": "Planning, émargement et assiduité de l'ESIC.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fafafa",
+  "theme_color": "#0d47a1",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Émarger",
+      "short_name": "Émarger",
+      "url": "/attendance"
+    },
+    {
+      "name": "Mes notifications",
+      "short_name": "Notifications",
+      "url": "/notifications"
+    }
+  ]
+}
