@@ -30,12 +30,18 @@ spring:
       ddl-auto: validate
   mail:
     # Serveur SMTP local (Mailpit) par défaut ; surchargé par MAIL_HOST /
-    # MAIL_PORT. Aucune authentification en développement.
+    # MAIL_PORT. Aucune authentification en développement (EF-INT-004 —
+    # fournisseur réel — reste optionnel, jamais requis pour démarrer).
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
+    # Vides par défaut : Mailpit n'authentifie personne. Un fournisseur
+    # réel (Brevo, etc.) les exige — jamais une valeur en dur, jamais
+    # dans le dépôt.
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
-      mail.smtp.auth: false
-      mail.smtp.starttls.enable: false
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:false}
 
 management:
   endpoints:
