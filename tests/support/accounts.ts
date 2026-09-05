@@ -23,6 +23,23 @@ function requiredDemoPassword(): string {
 
 export const DEMO_PASSWORD = requiredDemoPassword();
 
+/**
+ * Secret TOTP déterministe (ESIC_DEMO_TOTP_SECRET) des comptes fictifs
+ * ADMIN / SUPER_ADMIN, pour lesquels le second facteur est OBLIGATOIRE
+ * (RG-007) — voir `DemoDataInitializer` (backend, profil `demo`) et
+ * `docs/CURRENT-STATE.md` T-19/T-20.
+ *
+ * Volontairement **non lu de façon stricte** ici (contrairement à
+ * `requiredDemoPassword`) : de nombreux tests n'utilisent ni ADMIN ni
+ * SUPER_ADMIN et ne doivent pas échouer faute de cette variable. L'erreur
+ * explicite n'est levée qu'au moment réel de l'usage, dans
+ * `loginAsUi` (`tests/support/auth.ts`).
+ */
+export function demoTotpSecret(): string | undefined {
+  const value = process.env.ESIC_DEMO_TOTP_SECRET;
+  return value && value.trim().length > 0 ? value.trim() : undefined;
+}
+
 export type DemoRole =
   | 'SUPER_ADMIN'
   | 'ADMIN'
@@ -36,6 +53,8 @@ export interface DemoAccount {
   password: string;
   roles: string[];
   label: string;
+  /** Renseigné uniquement pour les rôles où le second facteur est obligatoire. */
+  totpSecret?: string;
 }
 
 export const ACCOUNTS: Record<DemoRole, DemoAccount> = {
@@ -45,6 +64,7 @@ export const ACCOUNTS: Record<DemoRole, DemoAccount> = {
     password: DEMO_PASSWORD,
     roles: ['SUPER_ADMIN'],
     label: 'Super Administrateur Démo',
+    totpSecret: demoTotpSecret(),
   },
   ADMIN: {
     role: 'ADMIN',
@@ -52,6 +72,7 @@ export const ACCOUNTS: Record<DemoRole, DemoAccount> = {
     password: DEMO_PASSWORD,
     roles: ['ADMIN'],
     label: 'Administrateur Démo',
+    totpSecret: demoTotpSecret(),
   },
   TEACHER: {
     role: 'TEACHER',

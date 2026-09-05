@@ -1,6 +1,7 @@
 package com.esic.connect.bootstrap;
 
 import com.esic.connect.identity.DemoAccountProvisioner;
+import com.esic.connect.identity.DemoMfaProvisioner;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
@@ -14,23 +15,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@link DemoDataInitializer} — le mot de passe de démonstration est
  * obligatoire (≥ 12 caractères) et l'amorçage crée exactement cinq
  * comptes fictifs sur le domaine {@code example.test}, dont un compte
- * multi-rôles ({@code PEDAGOGICAL_MANAGER} + {@code TEACHER}).
+ * multi-rôles ({@code PEDAGOGICAL_MANAGER} + {@code TEACHER}). Le secret
+ * TOTP déterministe (T-19/T-20) reste strictement optionnel : absent, le
+ * comportement historique est inchangé.
  */
 class DemoDataInitializerTests {
 
     private final RecordingProvisioner provisioner = new RecordingProvisioner();
+    private final RecordingMfaProvisioner mfaProvisioner = new RecordingMfaProvisioner();
 
     @Test
     void rejectsAMissingOrTooShortDemoPassword() {
-        assertThatThrownBy(() -> new DemoDataInitializer(provisioner, null))
+        assertThatThrownBy(() -> new DemoDataInitializer(provisioner, mfaProvisioner, null, ""))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> new DemoDataInitializer(provisioner, "short"))
+        assertThatThrownBy(() -> new DemoDataInitializer(provisioner, mfaProvisioner, "short", ""))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void provisionsExactlySixFictionalAccountsIncludingAMultiRoleOne() {
-        DemoDataInitializer initializer = new DemoDataInitializer(provisioner, "demo-password-1234");
+        DemoDataInitializer initializer =
+                new DemoDataInitializer(provisioner, mfaProvisioner, "demo-password-1234", "");
         initializer.run(new DefaultApplicationArguments());
 
         assertThat(provisioner.calls.get()).isEqualTo(6);
@@ -55,6 +60,35 @@ class DemoDataInitializerTests {
         assertThat(provisioner.passwords).containsOnly("demo-password-1234");
     }
 
+    @Test
+    void doesNotTouchMfaWhenNoDeterministicSecretIsConfigured() {
+        DemoDataInitializer initializer =
+                new DemoDataInitializer(provisioner, mfaProvisioner, "demo-password-1234", "");
+        initializer.run(new DefaultApplicationArguments());
+
+        assertThat(mfaProvisioner.calls).isEmpty();
+    }
+
+    @Test
+    void doesNotTouchMfaWhenTheSecretIsBlank() {
+        DemoDataInitializer initializer =
+                new DemoDataInitializer(provisioner, mfaProvisioner, "demo-password-1234", "   ");
+        initializer.run(new DefaultApplicationArguments());
+
+        assertThat(mfaProvisioner.calls).isEmpty();
+    }
+
+    @Test
+    void activatesDeterministicTotpForAdminAndSuperAdminOnlyWhenConfigured() {
+        DemoDataInitializer initializer = new DemoDataInitializer(provisioner, mfaProvisioner,
+                "demo-password-1234", "JBSWY3DPEHPK3PXP");
+        initializer.run(new DefaultApplicationArguments());
+
+        assertThat(mfaProvisioner.calls).containsExactlyInAnyOrderEntriesOf(java.util.Map.of(
+                "superadmin@example.test", "JBSWY3DPEHPK3PXP",
+                "admin@example.test", "JBSWY3DPEHPK3PXP"));
+    }
+
     /** Double de {@link DemoAccountProvisioner} qui enregistre les appels. */
     private static final class RecordingProvisioner implements DemoAccountProvisioner {
         final AtomicInteger calls = new AtomicInteger();
@@ -72,6 +106,16 @@ class DemoDataInitializerTests {
             rolesByEmail.put(email, new java.util.HashSet<>(roleCodes));
             passwords.add(rawPassword);
             return UUID.randomUUID();
+        }
+    }
+
+    /** Double de {@link DemoMfaProvisioner} qui enregistre les appels. */
+    private static final class RecordingMfaProvisioner implements DemoMfaProvisioner {
+        final java.util.Map<String, String> calls = new java.util.HashMap<>();
+
+        @Override
+        public void ensureDeterministicTotp(String email, String base32Secret) {
+            calls.put(email, base32Secret);
         }
     }
 }

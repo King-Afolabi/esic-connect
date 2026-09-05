@@ -13,10 +13,21 @@
 # existe déjà (la séance de démonstration n'a pas de contrainte
 # d'unicité, elle ne doit donc jamais être POSTée deux fois).
 #
-# Prérequis : bash, curl, jq. Back-end démarré (profil `demo`) et joignable
-# sur $API_BASE. Variable ESIC_DEMO_PASSWORD identique à celle du back-end.
+# Prérequis : bash, curl, jq, python3 (bibliothèque standard seulement —
+# calcul du code TOTP, aucun paquet à installer). Back-end démarré (profil
+# `demo`) et joignable sur $API_BASE. Variables ESIC_DEMO_PASSWORD et
+# ESIC_DEMO_TOTP_SECRET identiques à celles du back-end.
 #
-#   API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD=... ./scripts/seed-demo.sh
+# Le compte ADMIN de démonstration exige un second facteur (RG-007) : la
+# connexion ne renvoie jamais un jeton contre le seul mot de passe
+# (DEC-S2-005). ESIC_DEMO_TOTP_SECRET pilote, côté back-end
+# (DemoDataInitializer), l'activation d'un facteur TOTP déterministe pour
+# ce compte ; ce script calcule localement le même code et le soumet à la
+# VRAIE route /mfa/verify — aucun contournement, aucun accès direct à la
+# base (dette T-19/T-20, docs/CURRENT-STATE.md).
+#
+#   API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD=... \
+#     ESIC_DEMO_TOTP_SECRET=... ./scripts/seed-demo.sh
 #
 # Point d'injection de test : la variable CURL permet de substituer un
 # faux `curl` déterministe (voir scripts/test/test-seed-demo.sh).
@@ -27,10 +38,45 @@ API="${API_BASE%/}/api/v1"
 ADMIN_EMAIL="admin@example.test"
 CURL="${CURL:-curl}"
 : "${ESIC_DEMO_PASSWORD:?Définissez ESIC_DEMO_PASSWORD (même valeur que le back-end).}"
+: "${ESIC_DEMO_TOTP_SECRET:?Définissez ESIC_DEMO_TOTP_SECRET (même valeur que le back-end, profil demo) — nécessaire pour franchir le second facteur obligatoire du compte ADMIN (RG-007).}"
 
-for tool in "$CURL" jq; do
+for tool in "$CURL" jq python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Outil requis manquant : $tool" >&2; exit 1; }
 done
+
+# totp_code SECRET -> code à 6 chiffres pour l'instant courant (pas de 30 s).
+# Port Python (bibliothèque standard uniquement) du même algorithme que
+# TotpGenerator.java : RFC 6238 / RFC 4226, HMAC-SHA1, troncature
+# dynamique. La fenêtre de 30 s et la tolérance de dérive d'horloge
+# (±1 pas) sont gérées côté serveur (MfaService) : ce calcul n'a besoin
+# que de l'heure système courante, comme n'importe quelle application
+# d'authentification.
+totp_code() {
+  python3 - "$1" <<'PY'
+import base64, hashlib, hmac, struct, sys, time
+
+secret = sys.argv[1].strip().upper()
+padding = "=" * ((8 - len(secret) % 8) % 8)
+key = base64.b32decode(secret + padding)
+step = int(time.time()) // 30
+counter = struct.pack(">Q", step)
+mac = hmac.new(key, counter, hashlib.sha1).digest()
+offset = mac[-1] & 0x0F
+binary = (((mac[offset] & 0x7F) << 24) | ((mac[offset + 1] & 0xFF) << 16)
+          | ((mac[offset + 2] & 0xFF) << 8) | (mac[offset + 3] & 0xFF))
+print(str(binary % 1_000_000).zfill(6))
+PY
+}
+
+# seconds_until_next_totp_step -> secondes restantes avant le prochain pas
+# de 30 s (+1 s de marge). Sert uniquement à la RÉ-EXÉCUTION rapprochée du
+# script : le serveur refuse à bon droit (anti-rejeu, RG-054/055) un code
+# déjà consommé pendant son propre pas de temps — ce n'est pas une erreur,
+# c'est la protection qui fonctionne. Attendre le pas suivant est le seul
+# comportement correct, pas une dérive d'horloge à corriger.
+seconds_until_next_totp_step() {
+  python3 -c 'import time; now = int(time.time()); print(30 - (now % 30) + 1)'
+}
 
 # Fichier temporaire sécurisé pour le corps des réponses (jamais le
 # jeton : l'en-tête Authorization n'est pas une réponse). Nettoyé quoi
@@ -42,15 +88,94 @@ trap cleanup EXIT INT TERM
 say() { printf '  %s\n' "$*"; }
 
 # --- Authentification -------------------------------------------------------
-# Un seul appel. Le corps (qui contient le jeton) n'est jamais affiché :
-# seul `.accessToken` est extrait par jq.
+# Le corps (qui peut contenir le jeton) n'est jamais affiché : seuls les
+# champs nécessaires sont extraits par jq.
 login_status="$("$CURL" -sS -o "$BODY_FILE" -w '%{http_code}' -X POST "$API/auth/login" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ESIC_DEMO_PASSWORD\"}" || true)"
-TOKEN="$(jq -r '.accessToken // empty' <"$BODY_FILE" 2>/dev/null || true)"
-: >"$BODY_FILE"
-if [ "$login_status" != 200 ] || [ -z "$TOKEN" ]; then
+if [ "$login_status" != 200 ]; then
   echo "Échec de connexion ADMIN (HTTP ${login_status:-?}). Le back-end tourne-t-il avec le profil demo et le bon mot de passe ?" >&2
+  exit 1
+fi
+TOKEN="$(jq -r '.accessToken // empty' <"$BODY_FILE" 2>/dev/null || true)"
+CHALLENGE_ID="$(jq -r '.mfa.challengeId // empty' <"$BODY_FILE" 2>/dev/null || true)"
+CHALLENGE_PURPOSE="$(jq -r '.mfa.purpose // empty' <"$BODY_FILE" 2>/dev/null || true)"
+: >"$BODY_FILE"
+
+# ADMIN exige un second facteur (RG-007) : le mot de passe seul ne renvoie
+# jamais de jeton (DEC-S2-005). `TOKEN` est donc vide ici en usage normal
+# et `CHALLENGE_ID`/`CHALLENGE_PURPOSE` portent le défi à franchir.
+if [ -z "$TOKEN" ] && [ -n "$CHALLENGE_ID" ]; then
+  case "$CHALLENGE_PURPOSE" in
+    VERIFY)
+      # Facteur déjà actif (cas nominal avec ESIC_DEMO_TOTP_SECRET aligné
+      # sur le back-end) : un appel avec le code calculé localement.
+      CODE="$(totp_code "$ESIC_DEMO_TOTP_SECRET")"
+      verify_status="$("$CURL" -sS -o "$BODY_FILE" -w '%{http_code}' -X POST "$API/auth/mfa/verify" \
+        -H 'Content-Type: application/json' \
+        -d "{\"challengeId\":\"$CHALLENGE_ID\",\"code\":\"$CODE\"}" || true)"
+      # Anti-rejeu (RG-054/055) : une ré-exécution du script à moins de
+      # 30 s d'intervalle recalcule le MÊME code (même pas de temps), que
+      # le serveur refuse à bon droit — pas une erreur, la protection
+      # fonctionne. On attend le pas suivant et on retente UNE fois avec
+      # un nouveau défi (l'ancien challengeId reste valide, docs/02 §16.10).
+      if [ "$verify_status" = 401 ] && jq -e '.code == "CODE_ALREADY_USED"' <"$BODY_FILE" >/dev/null 2>&1; then
+        wait_s="$(seconds_until_next_totp_step)"
+        echo "Code TOTP déjà consommé (ré-exécution rapprochée) : nouvelle tentative dans ${wait_s}s." >&2
+        sleep "$wait_s"
+        : >"$BODY_FILE"
+        CODE="$(totp_code "$ESIC_DEMO_TOTP_SECRET")"
+        verify_status="$("$CURL" -sS -o "$BODY_FILE" -w '%{http_code}' -X POST "$API/auth/mfa/verify" \
+          -H 'Content-Type: application/json' \
+          -d "{\"challengeId\":\"$CHALLENGE_ID\",\"code\":\"$CODE\"}" || true)"
+      fi
+      if [ "$verify_status" != 200 ]; then
+        echo "Échec de vérification du second facteur ADMIN (HTTP ${verify_status:-?})." >&2
+        sed 's/^/    /' "$BODY_FILE" >&2 || true
+        exit 1
+      fi
+      TOKEN="$(jq -r '.accessToken // empty' <"$BODY_FILE")"
+      ;;
+    ENROLL)
+      # Aucun facteur actif côté back-end (ESIC_DEMO_TOTP_SECRET absent ou
+      # différent au démarrage du back-end) : parcours d'enrôlement réel en
+      # deux appels, avec le secret ALÉATOIRE renvoyé par le serveur — pas
+      # celui de cette variable, qu'un enrôlement normal ne connaît pas.
+      enroll_status="$("$CURL" -sS -o "$BODY_FILE" -w '%{http_code}' -X POST "$API/auth/mfa/enroll" \
+        -H 'Content-Type: application/json' \
+        -d "{\"challengeId\":\"$CHALLENGE_ID\"}" || true)"
+      if [ "$enroll_status" != 200 ]; then
+        echo "Échec de démarrage de l'enrôlement du second facteur ADMIN (HTTP ${enroll_status:-?})." >&2
+        sed 's/^/    /' "$BODY_FILE" >&2 || true
+        exit 1
+      fi
+      SERVER_SECRET="$(jq -r '.secret // empty' <"$BODY_FILE")"
+      : >"$BODY_FILE"
+      [ -n "$SERVER_SECRET" ] || { echo "Réponse d'enrôlement MFA sans secret." >&2; exit 1; }
+      CODE="$(totp_code "$SERVER_SECRET")"
+      confirm_status="$("$CURL" -sS -o "$BODY_FILE" -w '%{http_code}' -X POST "$API/auth/mfa/enroll/confirm" \
+        -H 'Content-Type: application/json' \
+        -d "{\"challengeId\":\"$CHALLENGE_ID\",\"code\":\"$CODE\"}" || true)"
+      if [ "$confirm_status" != 200 ]; then
+        echo "Échec de confirmation d'enrôlement du second facteur ADMIN (HTTP ${confirm_status:-?})." >&2
+        sed 's/^/    /' "$BODY_FILE" >&2 || true
+        exit 1
+      fi
+      TOKEN="$(jq -r '.session.accessToken // empty' <"$BODY_FILE")"
+      echo "Note : second facteur ADMIN enrôlé avec un secret aléatoire côté serveur (le back-end" >&2
+      echo "n'avait pas ESIC_DEMO_TOTP_SECRET actif à son démarrage). Alignez cette variable des deux" >&2
+      echo "côtés et redémarrez le back-end pour repasser par le parcours VERIFY, plus rapide." >&2
+      ;;
+    *)
+      echo "Défi de second facteur ADMIN de type inattendu : '${CHALLENGE_PURPOSE:-vide}'." >&2
+      exit 1
+      ;;
+  esac
+fi
+: >"$BODY_FILE"
+
+if [ -z "$TOKEN" ]; then
+  echo "Échec de connexion ADMIN : aucun jeton obtenu après authentification et second facteur." >&2
   exit 1
 fi
 AUTH=(-H "Authorization: Bearer $TOKEN")

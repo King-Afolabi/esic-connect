@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import { DemoAccount } from './accounts';
+import { currentTotpCode } from './totp';
 
 /**
  * IMPORTANT — architecture réelle observée : le jeton JWT vit uniquement dans un service Angular en
@@ -41,12 +42,83 @@ export async function loginAsUi(page: Page, account: DemoAccount, targetPath?: s
   // Sans cela, Playwright échoue en « strict mode violation » et TOUTE la
   // suite navigateur tombe dès l'authentification.
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
-  // On attend seulement la sortie de /login : la destination finale dépend
-  // du rôle (targetPath, un enfant par défaut de targetPath comme
-  // `/academic` → `/academic/academic-years`, ou `/forbidden` si le rôle
-  // n'a pas accès) — c'est au test appelant de vérifier laquelle, pas à ce
-  // helper de la présupposer.
+  // On attend la sortie de /login : soit directement vers la destination
+  // finale (rôle sans second facteur obligatoire), soit vers l'écran de
+  // second facteur `/connexion/verification` (ADMIN / SUPER_ADMIN,
+  // RG-007) — c'est ce dernier cas que `resolveMfaChallengeIfPresent`
+  // franchit ci-dessous.
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 10_000 });
+  await resolveMfaChallengeIfPresent(page, account);
+  // La destination finale dépend du rôle (targetPath, un enfant par défaut
+  // de targetPath comme `/academic` → `/academic/academic-years`, ou
+  // `/forbidden` si le rôle n'a pas accès) — c'est au test appelant de
+  // vérifier laquelle, pas à ce helper de la présupposer.
+}
+
+/**
+ * Franchit l'écran de second facteur (`/connexion/verification`) quand la
+ * connexion vient d'y aboutir — un compte `ADMIN` ou `SUPER_ADMIN`
+ * (RG-007 : second facteur obligatoire) n'obtient jamais de jeton contre
+ * son seul mot de passe (`DEC-S2-005`). Ne contourne aucun contrôle
+ * serveur : franchit le VRAI parcours HTTP `/mfa/verify` ou
+ * `/mfa/enroll` + `/mfa/enroll/confirm`, code TOTP calculé localement
+ * (dette T-19/T-20, `docs/CURRENT-STATE.md`).
+ *
+ * - **VERIFY** (facteur déjà actif) : le secret n'est jamais affiché à
+ *   l'écran — il faut le connaître à l'avance. Utilise
+ *   `account.totpSecret` (`ESIC_DEMO_TOTP_SECRET`), lui-même aligné sur le
+ *   facteur déterministe activé côté serveur par `DemoDataInitializer`.
+ * - **ENROLL** (aucun facteur actif — ex. `ESIC_DEMO_TOTP_SECRET` non
+ *   défini côté back-end) : le secret est généré aléatoirement par le
+ *   serveur et affiché en clair à l'écran (`.mfa__secret code`) — il est
+ *   lu là, jamais depuis l'environnement, qui ne le connaît pas.
+ */
+async function resolveMfaChallengeIfPresent(page: Page, account: DemoAccount): Promise<void> {
+  if (!/\/connexion\/verification(\?|$)/.test(page.url())) {
+    return; // Rôle sans second facteur obligatoire : rien à franchir.
+  }
+
+  // Le titre distingue immédiatement les deux parcours (connu dès la
+  // navigation, sans attendre un appel réseau) — plus fiable qu'une
+  // course entre deux sélecteurs asynchrones.
+  const isEnrolling = await page
+    .getByText('Ajoutez votre second facteur', { exact: false })
+    .isVisible()
+    .catch(() => false);
+
+  let secret: string | undefined;
+  if (isEnrolling) {
+    const secretLocator = page.locator('.mfa__secret code');
+    await secretLocator.waitFor({ state: 'visible', timeout: 10_000 });
+    secret = (await secretLocator.textContent())?.trim();
+  } else {
+    secret = account.totpSecret;
+  }
+  if (!secret) {
+    throw new Error(
+      `Second facteur requis pour ${account.email} mais aucun secret TOTP disponible : ` +
+        'définissez ESIC_DEMO_TOTP_SECRET (même valeur que le back-end, profil demo) ' +
+        'avant de lancer la suite. Voir docs/CURRENT-STATE.md, dette T-19/T-20.',
+    );
+  }
+
+  const codeInput = page.getByLabel('Code de vérification');
+  await codeInput.waitFor({ state: 'visible', timeout: 10_000 });
+  await codeInput.fill(currentTotpCode(secret));
+  await page.getByRole('button', { name: 'Valider', exact: true }).click();
+
+  if (isEnrolling) {
+    // L'enrôlement affiche les codes de récupération et attend un clic
+    // explicite avant de rediriger (mfa-challenge.ts: `finish()` n'est
+    // appelé que par ce bouton, jamais automatiquement après confirm()).
+    const continueButton = page.getByRole('button', { name: "J'ai noté mes codes, continuer" });
+    await continueButton.waitFor({ state: 'visible', timeout: 10_000 });
+    await continueButton.click();
+  }
+
+  await page.waitForURL((url) => !url.pathname.startsWith('/connexion/verification'), {
+    timeout: 10_000,
+  });
 }
 
 export async function logoutAsUi(page: Page): Promise<void> {

@@ -124,6 +124,7 @@ cp .env.example .env
 | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `REDIS_PASSWORD` | oui | valeurs locales de votre choix |
 | `JWT_SECRET` | oui | chaîne aléatoire **≥ 32 octets** ; le back-end refuse de démarrer sinon |
 | `ESIC_DEMO_PASSWORD` | profil `demo` | mot de passe des comptes fictifs, **≥ 12 caractères** |
+| `ESIC_DEMO_TOTP_SECRET` | optionnel, profil `demo` | secret TOTP base32 déterministe pour ADMIN/SUPER_ADMIN de démo ; permet à `scripts/seed-demo.sh` et à `npm run test:e2e` de franchir le second facteur (dette T-19/T-20) ; absent = comportement inchangé |
 | `JUSTIFICATION_STORAGE_PATH` | **oui hors Docker** | répertoire inscriptible pour les pièces jointes ; le défaut `/data/uploads/...` ne l'est pas |
 | `MYSQL_TEST_DATABASE` | recommandé | base de la suite de tests (défaut `esic_test`) — évite qu'un `./mvnw test` écrive dans la base applicative |
 | `APP_ALLOWED_ORIGINS` | non | origines autorisées du front (défaut `http://localhost:4200`) |
