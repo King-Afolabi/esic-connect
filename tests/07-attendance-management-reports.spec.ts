@@ -5,9 +5,11 @@ import { loginAsUi } from './support/auth';
 /**
  * DOMAINE 4 — Suivi d'assiduité et rapports.
  *
- * `docs/CURRENT-STATE.md` : export PDF, mise en page « officielle »
- * (logo, identifiant de document) et export Excel sont `PARTIAL`/absents
- * — non testés ici (aucun bouton correspondant dans l'UI réelle).
+ * `docs/CURRENT-STATE.md` (sprint 11, EF-REP-004/005) : les exports CSV,
+ * Excel et PDF sont livrés et partagent le même bouton par format
+ * (`attendance-report.html`, `REPORT_EXPORT_FORMATS`) — vérifié ci-dessous
+ * sur l'écran réel, pas seulement supposé absent comme le disait une
+ * version antérieure de ce fichier.
  */
 
 test.describe('Écrans de suivi d\'assiduité (ADMIN / PEDAGOGICAL_MANAGER)', () => {
@@ -49,18 +51,27 @@ test.describe('Autorisations', () => {
   }
 });
 
-test.describe('Export CSV des présences (EF-REP-003)', () => {
-  test('le bouton d\'export CSV déclenche un téléchargement (pas un export Excel/PDF, hors périmètre)', async ({
+test.describe('Export des rapports (EF-REP-003/004/005)', () => {
+  test('les trois formats sont proposés et le bouton CSV déclenche un vrai téléchargement', async ({
     page,
   }) => {
-    // Le seul point d'export vérifiable dans l'UI réelle est celui de la
-    // fiche de séance ("Exporter les présences de cette séance (CSV)"),
-    // couvert fonctionnellement par le test du parcours prioritaire
-    // (06-sessions-attendance.spec.ts) sur une séance qui a des présences.
-    // Ici on vérifie seulement qu'aucun bouton d'export Excel/PDF n'existe
-    // sur les écrans de rapports agrégés — confirmant l'écart documenté.
     await loginAsUi(page, ACCOUNTS.ADMIN, '/attendance-management/students');
-    await expect(page.getByRole('button', { name: /export.*excel/i })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /export.*pdf/i })).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Exporter le rapport au format CSV' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Exporter le rapport au format Excel' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Exporter le rapport au format PDF' }),
+    ).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Exporter le rapport au format CSV' }).click();
+    const download = await downloadPromise;
+    // Nom réel imposé par le serveur (`Content-Disposition`,
+    // `AttendanceReportController.render`) : seule l'extension est stable
+    // depuis l'écran, le préfixe et les dates ne le sont pas.
+    expect(download.suggestedFilename()).toMatch(/\.csv$/);
   });
 });

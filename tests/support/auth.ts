@@ -122,14 +122,18 @@ async function resolveMfaChallengeIfPresent(page: Page, account: DemoAccount): P
  * retente UNE fois avec un nouveau pas réservé — jamais un contournement,
  * seulement l'attente réelle et bornée (≤ 30 s) que la protection impose.
  * Le timeout du test en cours est prolongé d'autant plutôt que dissimulé.
+ *
+ * Le succès est décidé sur la RÉPONSE HTTP réelle de `/mfa/verify` ou
+ * `/mfa/enroll/confirm` (`page.waitForResponse`), jamais sur un sélecteur
+ * DOM : une course entre le nettoyage synchrone de `errorMessage` côté
+ * Angular (au clic) et le sondage de Playwright avait fait échouer à tort
+ * des connexions dont le second appel avait pourtant réussi côté serveur
+ * (constaté par trace réseau : réponse 200 sur la tentative que ce
+ * helper rapportait comme échouée).
  */
 async function submitTotpCode(page: Page, secret: string, isEnrolling: boolean): Promise<void> {
   const codeInput = page.getByLabel('Code de vérification');
-  const errorAlert = page.locator('p.auth-page__error[role="alert"]');
-  const successLocator = isEnrolling
-    ? page.getByRole('button', { name: "J'ai noté mes codes, continuer" })
-    : page.locator('app-mfa-challenge');
-  const successState = isEnrolling ? 'visible' : 'detached';
+  const endpointPath = isEnrolling ? '/api/v1/auth/mfa/enroll/confirm' : '/api/v1/auth/mfa/verify';
   const maxAttempts = 2;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -140,36 +144,32 @@ async function submitTotpCode(page: Page, secret: string, isEnrolling: boolean):
 
     await codeInput.waitFor({ state: 'visible', timeout: 10_000 });
     await codeInput.fill(code);
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().includes(endpointPath) && response.request().method() === 'POST',
+      { timeout: 10_000 },
+    );
     await page.getByRole('button', { name: 'Valider', exact: true }).click();
+    const response = await responsePromise;
 
-    const outcome = await Promise.race([
-      successLocator
-        .first()
-        .waitFor({ state: successState, timeout: 10_000 })
-        .then((): 'success' => 'success')
-        .catch((): 'timeout' => 'timeout'),
-      errorAlert
-        .filter({ hasText: /.+/ })
-        .waitFor({ state: 'visible', timeout: 10_000 })
-        .then((): 'error' => 'error')
-        .catch((): 'timeout' => 'timeout'),
-    ]);
-
-    if (outcome === 'success') {
+    if (response.ok()) {
       if (isEnrolling) {
         // L'enrôlement affiche les codes de récupération et attend un clic
         // explicite avant de rediriger (mfa-challenge.ts: `finish()`
         // n'est appelé que par ce bouton, jamais automatiquement après
         // confirm()).
-        await successLocator.click();
+        const continueButton = page.getByRole('button', { name: "J'ai noté mes codes, continuer" });
+        await continueButton.waitFor({ state: 'visible', timeout: 10_000 });
+        await continueButton.click();
       }
       return;
     }
     if (attempt < maxAttempts) {
       continue; // Le prochain `claimTotpCode` réservera un pas plus récent.
     }
-    const detail = await errorAlert.textContent().catch(() => null);
-    throw new Error(`Échec de vérification du second facteur (tentative ${attempt}) : ${detail ?? 'inconnu'}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(
+      `Échec de vérification du second facteur (tentative ${attempt}, HTTP ${response.status()}) : ${body}`,
+    );
   }
 }
 
