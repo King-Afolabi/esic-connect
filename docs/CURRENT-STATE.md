@@ -28,6 +28,62 @@ poussée réel), T-14 (hors ligne limité à une session ouverte), T-15
 (file d'actions non persistante).
 ```
 
+### 5 septembre 2026 (soir) — mandat hors sprint : démo, e2e, T-18
+
+Travail mené sur une branche dédiée (`feat/demo-readiness-e2e-ui`, base
+`batch/S02A-S11` @ `4b38178`), pas encore fusionnée. Portée : rendre le
+second facteur réellement franchissable en démonstration et en recette
+navigateur (T-19/T-20), livrer les écrans manquants des opérations de
+masse et de la détection de doublons (T-18), et exécuter l'ensemble des
+validations.
+
+- **T-19/T-20 levées** : `DemoMfaProvisioner` (nouveau port public du
+  module `identity`, implémenté uniquement sous `@Profile("demo")`)
+  active un facteur TOTP déterministe pour `ADMIN`/`SUPER_ADMIN` de
+  démonstration, strictement optionnel (`ESIC_DEMO_TOTP_SECRET` —
+  absent, comportement inchangé). `scripts/seed-demo.sh` et
+  `tests/support/auth.ts` franchissent désormais le VRAI défi
+  `/mfa/verify` ou `/mfa/enroll` + `/mfa/enroll/confirm`, code calculé
+  localement (RFC 6238 — port Python et TypeScript, aucune nouvelle
+  dépendance), avec gestion de l'anti-rejeu réel (RG-054/055).
+- **Défauts réels mis au jour et corrigés en cours de route**, sans
+  rapport direct avec le MFA : la limite de débit de connexion par
+  origine (`LOGIN_ORIGIN_LIMIT`, défaut 60/15 min) est trop basse pour
+  un run complet de la suite ; un test appelait l'API d'authentification
+  directement sans jamais gérer le défi MFA ; la détection de succès
+  d'un helper de test reposait sur une course DOM plutôt que sur la
+  vraie réponse HTTP ; une course entre `loginAsUi` et la redirection
+  asynchrone du garde de route Angular faisait échouer une connexion sur
+  une fraction des exécutions ; un test du parcours prioritaire créait
+  toujours une séance à horaire figé (08:00), donc dépendant de l'heure
+  du jour d'exécution de la suite.
+- **T-18 levée** : sélection multiple, aperçu obligatoire (RG-034) puis
+  confirmation explicite pour les opérations de masse sur
+  `/administration` ; nouvel écran `/administration/duplicates`
+  (`ADMIN`/`SUPER_ADMIN` uniquement, plus restreint que le reste de
+  `/administration`), lecture seule, aucune fusion proposée (docs/02
+  §9.5).
+- **Dépendance** : avis modéré sur `qs` (transitif, outillage
+  Angular CLI) corrigé par `npm audit fix` non forcé — 0 vulnérabilité.
+- **Chiffres mesurés** : backend 1218 tests (140 classes, +9 vs sprint
+  11 — nouveaux tests `DefaultDemoMfaProvisioner` et wiring
+  `DemoDataInitializer`), `ModularityTests` vert (19 modules, aucun
+  nouveau module), schéma inchangé en V34. Frontend 95 fichiers / 779
+  tests (+15, nouvel écran doublons et opérations de masse), lint et
+  build verts. Suite Playwright complète : voir §6.1 pour le décompte
+  exact après ce lot.
+- **Audit visuel** (desktop 1440px et mobile 390px, 8 écrans
+  représentatifs, captures réelles) : aucun débordement horizontal
+  détecté, conteneur de page partagé déjà cohérent
+  (`app-shell.scss` `.shell__main`, `max-width: 72rem`), bouton de
+  retour explicite déjà présent sur la quasi-totalité des écrans de
+  détail (~30 fichiers) — aucune réécriture de grande ampleur jugée
+  nécessaire ni entreprise.
+- **Non traité, hors périmètre du mandat** : T-13 (poussée, exige des
+  clés VAPID), T-16 (Microsoft, exige un locataire réel), T-04/T-11
+  (antivirus — configuration cible par environnement documentée dans
+  `.env.example`, comportement par défaut inchangé).
+
 ## Repère Git
 
 | Élément | Valeur |
@@ -1243,6 +1299,37 @@ tout appelant de l'effectif d'une classe.
 
 ---
 
+### 6.4 Résultats après le mandat démo/e2e/T-18 (5 septembre 2026, soir)
+
+Mesurés sur la branche `feat/demo-readiness-e2e-ui` (non fusionnée),
+même environnement que §6.
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw clean test` | **140 classes / 1218 tests / 0 échec / 0 erreur** — `BUILD SUCCESS`, `ModularityTests` vert (19 modules), schéma inchangé V34 |
+| `cd frontend && npm test -- --watch=false` | **95 fichiers / 779 tests / 0 échec** |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+| `npm audit` (frontend) | **0 vulnérabilité** (`qs` corrigé, `npm audit fix` non forcé) |
+| `npm run test:e2e` | **13 fichiers / 167 tests / 0 échec / 0 ignoré — 31,3 min** |
+
+Quatre exécutions complètes de la suite Playwright ont été nécessaires
+pour atteindre ce résultat, chacune ayant mis au jour une cause réelle
+distincte (jamais contournée, toujours corrigée) : limite de débit de
+connexion par origine trop basse pour 162+ connexions consécutives
+(`LOGIN_ORIGIN_LIMIT`, variable de session uniquement, jamais committée) ;
+un helper de test API oubliant le second facteur (`tests/support/api.ts`) ;
+une détection de succès MFA fondée sur une course DOM plutôt que la
+vraie réponse HTTP ; une séance de démonstration créée à un horaire
+figé dans un test antérieur à ce mandat ; une course entre `loginAsUi`
+et la redirection asynchrone du garde de route. Le dernier passage,
+sur une base `esic_connect_demo` remise à zéro juste avant, est
+**entièrement vert** : voir le rapport HTML (`test-results/html-report/`)
+et les traces (`test-results/artifacts/`, purgées à chaque nouvelle
+exécution locale).
+
+---
+
 ## 7. Démonstration
 
 | Nature | Statut |
@@ -1250,7 +1337,7 @@ tout appelant de l'effectif d'une classe.
 | Recette d'intégration API du parcours prioritaire | `IMPLEMENTED_AND_TESTED` |
 | Parcours prioritaire rejoué dans un vrai navigateur (2 apprenants, création → ouverture → QR et code court → émargement → anti-rejeu → clôture → isolation `AC-017`) | `IMPLEMENTED_AND_TESTED` |
 | Parcours du sprint 11 rejoués dans un vrai navigateur contre la pile démarrée (recherche, attestation, abonnement iCalendar de bout en bout, refus de la piste d'audit, invitations, tableau équivalent) — **13 / 13**, §6.1 | `IMPLEMENTED_AND_TESTED` |
-| Écrans réservés à `ADMIN` / `SUPER_ADMIN` en navigateur | **`NOT_PERFORMED`** — le support e2e ne franchit pas le second facteur (T-20) |
+| ~~Écrans réservés à `ADMIN` / `SUPER_ADMIN` en navigateur~~ — T-20 levée hors sprint (5 septembre 2026) : le second facteur est réellement franchi (`tests/support/auth.ts`) | `IMPLEMENTED_AND_TESTED` — suite complète 167/167, §6.4 |
 | Démonstration **manuelle** de bout en bout par un humain | **`NOT_PERFORMED`** — un navigateur piloté par script n'en est pas une |
 | Déploiement | **`NOT_PERFORMED`** — aucune instance, aucune URL |
 
@@ -1277,9 +1364,9 @@ tout appelant de l'effectif d'une classe.
 | **T-15** | **file d'actions différées non persistante** (sprint 10) | elle ne survit pas à un rechargement de page. Le code court étant un jeton (RG-093) et expirant en 30 s, la persister n'apporterait qu'un rejeu de codes périmés |
 | **T-16** | **aucun locataire Microsoft réel sollicité** (sprint 11) | `EF-INT-002` et `EF-INT-003` restent `PARTIAL`. Le port, l'adaptateur Graph (jeton d'application mis en cache, `onlineMeetings`, `events`) et l'adaptateur inactif sont écrits et couverts par des tests, mais **aucun appel n'a jamais atteint Microsoft**. Sans identifiants, `GET /api/v1/integrations/microsoft/status` déclare `meetingActive: false` — le produit ne simule aucune réunion |
 | **T-17** | **aucun fichier de logo dans le dépôt** (sprint 11) | l'en-tête des documents PDF est une **signature typographique** (bandeau, établissement, produit), pas une image. Dessiner un logo inventé serait pire que de ne pas en mettre. L'insertion d'un logo fourni par l'établissement se réduit à un `PDImageXObject` dans `PdfDocumentWriter.header` |
-| **T-18** | **écrans des opérations de masse et des doublons toujours absents** (ex-T-10, sprint 11) | l'API `POST /users/bulk` et la détection de doublons sont livrées et testées depuis le sprint 4 ; l'interface reste à faire. Reporté du sprint 11, où le périmètre a été tenu sur les exigences `EF-REP-*`, `EF-USER-009`, `EF-AUD-002` et `EF-INT-001` |
-| **T-19** | **`scripts/seed-demo.sh` inopérant depuis le sprint 2** (constaté au sprint 11) | le script se connecte en `ADMIN` et attend un jeton ; la politique de second facteur (RG-007, `DEC-S2-005`) renvoie un défi. Il échoue sur « Échec de connexion ADMIN (HTTP 200) ». Le jeu de démonstration existant reste exploitable ; le script devra soit enrôler un facteur, soit s'appuyer sur un rôle sans second facteur obligatoire |
-| **T-20** | **la recette navigateur ne franchit pas le second facteur** (constaté au sprint 11) | `tests/support/auth.ts` s'arrête à l'écran de vérification pour `ADMIN` et `SUPER_ADMIN`. Conséquence directe : aucun parcours navigateur ne couvre les écrans réservés à ces rôles — piste d'audit, file d'échec des effets de bord. Ils restent couverts par tests serveur et tests de composant |
+| ~~T-18~~ | **levée hors sprint (5 septembre 2026, mandat démo/e2e)** — écrans livrés : sélection multiple, aperçu obligatoire puis confirmation explicite pour les opérations de masse (`user-list`), nouvel écran `/administration/duplicates` (lecture seule, aucune fusion) | `DemoMfaProvisioner`, tests unitaires (80/80 module administration) et Playwright (`tests/12-bulk-and-duplicates.spec.ts`, 5/5) à l'appui |
+| ~~T-19~~ | **levée hors sprint (5 septembre 2026)** — `scripts/seed-demo.sh` franchit le vrai second facteur (`/mfa/verify` ou `/mfa/enroll`+`/mfa/enroll/confirm`) via un secret TOTP déterministe **strictement optionnel** (`ESIC_DEMO_TOTP_SECRET` → `DemoMfaProvisioner`, actif uniquement sous le profil `demo`) | validé contre un back-end réel, base `esic_connect_demo` remise à zéro, y compris en ré-exécution immédiate (retry anti-rejeu RG-054/055 observé) |
+| ~~T-20~~ | **levée hors sprint (5 septembre 2026)** — `tests/support/auth.ts` franchit réellement le second facteur pour `ADMIN`/`SUPER_ADMIN` (code TOTP calculé localement, décision sur la vraie réponse HTTP) | a mis au jour et corrigé au passage deux défauts réels sans rapport avec le MFA : une course entre `loginAsUi` et la redirection asynchrone du garde de route, et un test du parcours prioritaire à horaire de séance figé (§8, notes de validation) |
 | — | base `esic_test` **recréée** au sprint 8 ; `esic_connect` (local) reste à recréer — `./scripts/db-reset.sh esic_connect` non exécuté | — |
 
 ---
@@ -1314,9 +1401,10 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
    des anomalies (`EF-REP-009`), mapping d'import et planning PDF texte
    assistés (`EF-IMP-005`, `EF-PLAN-012/013`), confirmation d'émargement
    par WebAuthn (`EF-ATT-011`).
-3. **Livrer les écrans des opérations de masse et des doublons** (T-18) :
-   l'API est livrée et testée depuis le sprint 4, l'interface manque
-   toujours. Reporté du sprint 11.
+3. ~~Livrer les écrans des opérations de masse et des doublons~~ (T-18) :
+   **fait hors sprint le 5 septembre 2026** (soir) — voir « Dernière mise
+   à jour » et §6.4. Reste à fusionner `feat/demo-readiness-e2e-ui` dans
+   `batch/S02A-S11`.
 4. **Éprouver les intégrations Microsoft** (T-16) : enregistrer une
    application dans un locataire Entra ID, injecter `tenantId`,
    `clientId` et `clientSecret` par l'environnement, et vérifier qu'une
