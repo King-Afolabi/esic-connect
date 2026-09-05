@@ -45,6 +45,38 @@ public interface UserDirectory {
      */
     Optional<PersonName> findName(long userInternalId);
 
+    /**
+     * Comptes non archivés porteurs d'un rôle actif donné.
+     *
+     * <p>Sert à désigner un <strong>guichet</strong> plutôt qu'une
+     * personne : une réclamation adressée à l'administration scolaire doit
+     * atteindre celles et ceux qui y siègent, sans que le module appelant
+     * ait à tenir sa propre liste — laquelle se périmerait au premier
+     * changement d'affectation.
+     *
+     * @param roleCode code du rôle, par exemple {@code "SCHOOL_ADMINISTRATION"}
+     * @return les identifiants publics des comptes concernés ; vide si aucun
+     */
+    Set<UUID> findActiveUserPublicIdsByRole(String roleCode);
+
+    /**
+     * Adresse électronique d'un compte, <strong>pour lui adresser un
+     * message et rien d'autre</strong> (EF-NOTIF-004).
+     *
+     * <p>Volontairement absente de {@link UserRef} : une adresse n'a pas à
+     * circuler par défaut dans les modules qui n'ont besoin que d'une
+     * référence de compte. La demander explicitement rend visible, à la
+     * lecture, chaque endroit du produit qui manipule une adresse.
+     *
+     * <p>L'appelant ne doit ni la journaliser, ni l'afficher, ni la
+     * stocker : le journal de délivrabilité conserve une empreinte et une
+     * forme masquée, jamais la valeur (docs/02 §11.3).
+     *
+     * @param userInternalId identifiant interne du compte
+     * @return l'adresse si le compte existe, {@link Optional#empty()} sinon
+     */
+    Optional<String> findEmailForDelivery(long userInternalId);
+
     /** Prénom / nom d'un compte, pour affichage. */
     record PersonName(String firstName, String lastName) {
     }

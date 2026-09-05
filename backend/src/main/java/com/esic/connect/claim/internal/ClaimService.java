@@ -51,6 +51,7 @@ class ClaimService {
     private final ClassGroupDirectory classGroupDirectory;
     private final AcademicScopeDirectory academicScope;
     private final ClaimChangePublisher changePublisher;
+    private final ClaimAudienceResolver audienceResolver;
     private final Clock clock;
 
     ClaimService(ClaimRepository claimRepository,
@@ -62,6 +63,7 @@ class ClaimService {
                  ClassGroupDirectory classGroupDirectory,
                  AcademicScopeDirectory academicScope,
                  ClaimChangePublisher changePublisher,
+                 ClaimAudienceResolver audienceResolver,
                  Clock clock) {
         this.claimRepository = claimRepository;
         this.messageRepository = messageRepository;
@@ -72,6 +74,7 @@ class ClaimService {
         this.classGroupDirectory = classGroupDirectory;
         this.academicScope = academicScope;
         this.changePublisher = changePublisher;
+        this.audienceResolver = audienceResolver;
         this.clock = clock;
     }
 
@@ -132,7 +135,8 @@ class ClaimService {
                 "Dépôt de la réclamation"));
 
         changePublisher.publish(saved.getPublicId(), ClaimChangeAction.CREATED,
-                author.internalId(), "audience=" + audience.name() + ";category=" + category.name());
+                author.internalId(), "audience=" + audience.name() + ";category=" + category.name(),
+                audienceResolver.recipientsOf(saved, author.internalId()));
         return toResponse(saved);
     }
 
@@ -162,7 +166,7 @@ class ClaimService {
         }
 
         changePublisher.publish(claim.getPublicId(), ClaimChangeAction.MESSAGE_POSTED,
-                caller.internalId(), null);
+                caller.internalId(), null, audienceResolver.recipientsOf(claim, caller.internalId()));
         return thread(claim);
     }
 
@@ -196,8 +200,11 @@ class ClaimService {
                 caller.internalId(), fromStatus, claim.getStatus().name(), from, target.name(),
                 request.motive().trim()));
 
+        // Audience résolue APRÈS le transfert : le nouveau guichet doit
+        // apprendre qu'un dossier l'attend, l'ancien qu'il ne l'a plus.
         changePublisher.publish(claim.getPublicId(), ClaimChangeAction.TRANSFERRED,
-                caller.internalId(), "from=" + from + ";to=" + target.name());
+                caller.internalId(), "from=" + from + ";to=" + target.name(),
+                audienceResolver.recipientsOf(claim, caller.internalId()));
         return toResponse(claim);
     }
 
@@ -225,7 +232,8 @@ class ClaimService {
 
         applyStatus(claim, target, caller, request.motive().trim());
         changePublisher.publish(claim.getPublicId(), ClaimChangeAction.STATUS_CHANGED,
-                caller.internalId(), "status=" + target.name());
+                caller.internalId(), "status=" + target.name(),
+                audienceResolver.recipientsOf(claim, caller.internalId()));
         return toResponse(claim);
     }
 
@@ -249,7 +257,8 @@ class ClaimService {
                 primaryRole(caller), request.motive().trim()));
 
         changePublisher.publish(claim.getPublicId(), ClaimChangeAction.REOPENED,
-                caller.internalId(), "from=" + fromStatus);
+                caller.internalId(), "from=" + fromStatus,
+                audienceResolver.recipientsOf(claim, caller.internalId()));
         return toResponse(claim);
     }
 

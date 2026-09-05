@@ -182,6 +182,23 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'notifications',
   },
   {
+    // Écran livré (sprint 10) : préférences de notification par catégorie
+    // et par canal (EF-NOTIF-006). `@PreAuthorize("isAuthenticated()")` :
+    // chacun règle les siennes, le serveur dérive le propriétaire du JWT.
+    label: 'Préférences de notification',
+    path: '/notifications/preferences',
+    icon: 'tune',
+  },
+  {
+    // Écran livré (sprint 10) : file d'échec des effets de bord et rejeu
+    // manuel (EF-OPS-005). Périmètre aligné sur `OutboxAdminController`
+    // (`ADMIN` / `SUPER_ADMIN`) : un rejeu peut envoyer un courriel.
+    label: 'Effets de bord',
+    path: '/exploitation/effets-de-bord',
+    icon: 'sync_problem',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
+  },
+  {
     // Écran livré (sprint 3) : référentiel des matières (EF-ACA-006).
     // Lecture ouverte aux formateurs — ils qualifient leurs séances.
     label: 'Matières',

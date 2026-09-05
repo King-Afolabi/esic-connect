@@ -2641,6 +2641,210 @@ refusée à la création (`409 CLAIM_NO_SCOPE_FOR_AUDIENCE`) avec une
 orientation vers l'administration scolaire, plutôt qu'acceptée puis
 perdue.
 
+### DEC-S10-001 — L'outbox transactionnelle remplace deux motifs qui perdaient l'effet de bord
+
+**Contexte.** docs/02 §23.4 et §25.1 ; RG-096, RG-097 ; AC-027, AC-028.
+Deux mécanismes coexistaient, et perdaient l'effet de bord chacun à sa
+manière :
+
+- l'audit s'écrivait dans une transaction **séparée** (`REQUIRES_NEW`)
+  ouverte *avant* le commit métier. Une trace de succès pouvait donc
+  subsister derrière une action ensuite annulée (RG-097 non tenu), et un
+  incident d'écriture perdait la trace en silence (dette T-02) ;
+- les notifications s'écrivaient *après* commit, sans file ni reprise :
+  un arrêt de la JVM entre le commit et l'écriture perdait la
+  notification (dette T-01).
+
+**Décision.** Module `outbox` (16ᵉ module). Le module métier écrit une
+**intention** dans la table `outbox_message` (V31) *à l'intérieur* de sa
+propre transaction, via le port `OutboxPublisher`. Elle commite avec
+l'action, ou disparaît avec son annulation. Un diffuseur la traite
+ensuite, en routant `message_type` vers l'`OutboxHandler` publié par le
+module compétent — `outbox` ne connaît aucun métier.
+
+Le diffuseur a **deux déclencheurs** : un drain immédiat dans
+l'`afterCompletion` de la transaction métier, et une reprise planifiée
+pour ce que l'immédiat a manqué. Attente croissante plafonnée, puis
+**file d'échec** (`DEAD`) rejouable à la main (EF-OPS-005).
+
+**Raison.** Les deux garanties attendues — « rien si la transaction est
+annulée », « jamais perdu si le diffuseur échoue » — sont contradictoires
+tant que l'effet est produit directement : trop tôt, une annulation le
+laisse derrière elle ; trop tard, une panne le perd. Écrire l'intention
+dans la transaction lève la contradiction.
+
+**Effet de bord bénéfique.** La ligne d'outbox ne porte **aucune clé
+étrangère** vers `user_account`, là où `audit_event.actor_user_id` en
+porte une. Le motif `REQUIRES_NEW` devait donc être évité chaque fois que
+la transaction métier avait déjà verrouillé la ligne du compte concerné —
+changement de mot de passe, révocation de sessions — sous peine
+d'attendre un verrou que seule la transaction suspendue pouvait libérer.
+Ce piège disparaît, et les contournements `publishAfterCommit` de
+`MfaService`, `WebAuthnService` et `TrustedDeviceService` (DEC-S2-003)
+sont supprimés.
+
+**Exception unique et assumée.** `SecurityAuditEventListener.onLoginFailed`
+conserve un `REQUIRES_NEW`. La transaction de connexion est *toujours*
+annulée quand l'authentification échoue : la rejoindre ferait disparaître
+l'enregistrement de la tentative — donc l'essentiel de ce qu'un
+responsable sécurité cherche dans le journal. Ce n'est pas une entorse à
+RG-097 : cette règle interdit de produire l'effet de bord d'une action
+*annulée* ; ici rien n'est annulé, le refus a bien eu lieu.
+
+### DEC-S10-002 — Le diffuseur ouvre une transaction neuve autour des gestionnaires
+
+**Contexte.** Le drain immédiat s'exécute dans l'`afterCompletion` de la
+transaction métier. À cet instant, les ressources JPA sont encore liées
+au fil d'exécution alors que la transaction sous-jacente est déjà
+committée.
+
+**Décision.** `OutboxHandlerInvoker` exécute chaque gestionnaire en
+`REQUIRES_NEW`. Un gestionnaire dont l'effet principal est un appel
+**externe** — courriel, poussée — renvoie `transactional() == false` et
+porte lui-même des transactions courtes autour de ses écritures.
+
+Trois transactions distinctes par message : réclamer, exécuter,
+enregistrer le résultat. La réclamation repousse `next_attempt_at`
+(délai de visibilité) plutôt que de tenir un verrou pendant l'exécution.
+
+**Raison.** Un `@Transactional` ordinaire « participerait » à une
+transaction morte et échouerait sur *« no transaction is in progress »* —
+défaut constaté à l'exécution avant correction. Et regrouper les trois
+étapes dans une seule transaction aurait un défaut fatal : quand le
+gestionnaire échoue en marquant la transaction `rollback-only`,
+l'écriture du statut `FAILED` est annulée avec lui. La ligne repartirait
+indéfiniment sans que son compteur avance, et la file d'échec resterait
+vide pendant que le même effet échoue en boucle.
+
+Le délai de visibilité a un autre mérite : si la JVM s'arrête entre la
+réclamation et le résultat, la ligne redevient traitable d'elle-même,
+contrairement à un verrou en mémoire.
+
+### DEC-S10-003 — L'audience est décrite, puis résolue après commit
+
+**Contexte.** docs/02 §21.3 : chaque événement définit son audience —
+formateur, remplaçant, apprenants de la classe, responsable du périmètre.
+
+**Décision.** L'écouteur enregistre une **description** d'audience
+(« les apprenants de ces classes », « le formateur de cette séance »), et
+non une liste de comptes. `NotificationAudienceResolver` la résout au
+moment du traitement, après commit, par les ports publics de
+`coursesession`, `enrollment` et `academic`.
+
+Deux ports naissent de là : `EnrollmentDirectory.findActiveStudentUserPublicIds`
+— un `RosterEntry` porte l'identifiant du *profil*, qui ne désigne pas un
+destinataire — et `PedagogicalResponsibilityDirectory`, résolution
+**inverse** du périmètre : « qui répond de cette classe ? », là où
+`AcademicScopeDirectory` répond à « que voit l'appelant ? ».
+
+**Raison.** L'écouteur s'exécute dans la transaction métier, où
+l'effectif d'une classe est encore en cours de modification. Résoudre
+après commit donne l'état réellement établi. Cela garde aussi la ligne
+d'outbox petite : une classe de trente apprenants n'y écrit pas trente
+identifiants.
+
+`SessionNotificationInfo` porte désormais les classes rattachées, et non
+`findForAttendance` : celle-ci écarte les séances non opérationnelles, si
+bien qu'une séance **annulée** n'y répond plus — précisément quand il
+faut prévenir sa classe. Défaut constaté à l'exécution.
+
+**Choix d'audience assumé.** Une annulation prévient les apprenants ; un
+remplacement, non. Prévenir la classe de chaque changement de formateur
+transformerait le centre de notifications en bruit de fond, et ce qui
+compte s'y perdrait.
+
+### DEC-S10-004 — Une notification échoue par destinataire, pas en bloc
+
+**Contexte.** docs/02 §21.3 : « l'échec d'un destinataire n'interrompt
+jamais les autres ».
+
+**Décision.** `NotificationOutboxHandler` renvoie
+`transactional() == false` ; `NotificationRecipientWriter` écrit **un**
+destinataire par transaction `REQUIRES_NEW`, avec ses intentions de
+courriel et de poussée. Un échec partiel est journalisé, les autres
+destinataires sont servis, puis le gestionnaire **relance** l'exception :
+le message repasse en reprise, et l'idempotence (`dedup_key`) évite de
+notifier deux fois ceux qui l'étaient déjà.
+
+**Raison.** Une transaction unique priverait trente apprenants de leur
+notification pour une seule ligne fautive, et la reprise buterait
+indéfiniment sur la même ligne. La ligne de notification et ses envois
+commitent en revanche **ensemble** : les séparer ouvrirait le cas le plus
+désagréable — la notification apparaît à l'écran, le courriel n'est
+jamais parti, et la reprise passe son chemin parce que la ligne existe.
+
+### DEC-S10-005 — La file d'actions différées vit en mémoire
+
+**Contexte.** EF-PWA-003 et docs/02 §29.2 : une action réalisée hors
+ligne est mise en file et rejouée à la reconnexion. RG-063 : une présence
+enregistrée hors ligne n'est jamais définitive avant validation serveur.
+
+**Décision.** `OfflineQueueService` conserve la file **en mémoire**, pas
+dans `localStorage`. L'écran affiche « en attente de confirmation » — un
+état distinct du succès. Au rejeu : `409` vaut succès (la présence est
+déjà enregistrée, le résultat voulu est atteint), une erreur `4xx` est
+une décision définitive du serveur affichée avec son motif, une panne
+réseau ou un `5xx` laisse l'action en attente.
+
+**Raison.** Deux contraintes pointent dans le même sens. D'abord une
+règle : le corps d'un émargement contient le code court, c'est-à-dire un
+jeton, et RG-093 interdit d'en placer un dans `localStorage`. Ensuite un
+fait : ce code vit trente secondes. Une file qui survivrait au
+rechargement d'une page ne rejouerait que des codes expirés, et
+offrirait une promesse que le serveur refuserait.
+
+**Limite assumée.** La file couvre une coupure de quelques secondes
+pendant que l'application reste ouverte — le cas fréquent. Une coupure
+plus longue, ou une fermeture de l'application, se solde par un refus
+explicite du serveur : jamais par une présence silencieusement perdue, ni
+silencieusement inventée.
+
+### DEC-S10-006 — Un service worker écrit à la main plutôt que celui d'Angular
+
+**Contexte.** EF-PWA-001 à 003 et EF-NOTIF-005.
+
+**Décision.** Service worker propre (`frontend/public/sw.js`), sans
+`@angular/service-worker`.
+
+**Raison.** Un seul service worker peut être enregistré par portée. Celui
+d'Angular sait mettre en cache une coquille applicative, mais ne sait ni
+rejouer une action métier, ni servir de point d'entrée aux notifications
+poussées avec le contrôle voulu sur le contenu affiché. Le nôtre couvre
+les trois, et rend explicite ce qui est conservé sur l'appareil : la
+coquille, plus une **liste fermée** de réponses `GET` d'API. Les routes
+d'authentification et les jetons d'émargement n'y entrent jamais, et le
+cache de données est vidé à la déconnexion.
+
+**Limite assumée.** Le jeton ne vivant qu'en mémoire (RG-093),
+l'application démarre hors ligne mais **sans session** : elle affiche son
+écran de connexion. La consultation hors ligne couvre donc une coupure
+survenant application ouverte, pas un démarrage à froid sans réseau.
+
+### DEC-S10-007 — Le chiffrement de poussée est vérifié contre le vecteur de la RFC
+
+**Contexte.** EF-NOTIF-005 ; docs/02 §29.3 : « le contenu poussé ne
+comporte aucune donnée sensible ».
+
+**Décision.** `WebPushCrypto` implémente la RFC 8291 sur le codage
+`aes128gcm` de la RFC 8188, et `VapidSigner` la RFC 8292. La conformité
+est vérifiée contre le **vecteur de test officiel de la RFC 8291 §5**,
+octet pour octet.
+
+**Raison.** Le contenu est chiffré pour l'appareil de l'abonné : le
+service de poussée relaie un message qu'il ne peut pas lire. C'est cette
+propriété qui rend la poussée acceptable au regard du cahier, et elle
+repose entièrement sur quelques dérivations. Une implémentation
+légèrement fausse produirait des messages que le navigateur refuse de
+déchiffrer, sans qu'aucun test « maison » ne s'en aperçoive : chiffrer
+puis déchiffrer avec le même code fautif fonctionne parfaitement. Seule
+la comparaison à un résultat produit par quelqu'un d'autre prouve la
+conformité.
+
+**Limite assumée.** Aucun service de poussée réel n'a été sollicité :
+sans paire de clés VAPID, `InactiveWebPushSender` répond, et l'API
+**déclare** `providerActive: false` plutôt que de simuler un envoi.
+
+
 ## ADR à rédiger
 
 Décisions déjà prises mais pas encore formalisées ici : monolithe

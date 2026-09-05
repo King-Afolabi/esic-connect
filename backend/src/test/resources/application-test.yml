@@ -32,7 +32,18 @@ spring:
       # accumuler pendant toute la durée de la suite — c'est cette
       # accumulation (et non le pic d'un seul contexte) qui approchait la
       # limite serveur au fur et à mesure que la suite grandit.
-      maximum-pool-size: 4
+      #
+      # PORTÉ DE 4 À 6 AU SPRINT 10. L'outbox transactionnelle draine la
+      # file dans le `afterCompletion` de la transaction métier : à cet
+      # instant, la connexion de cette transaction n'est PAS encore
+      # relâchée (Spring ne la rend qu'après avoir déclenché les
+      # synchronisations), tandis que le diffuseur en ouvre une seconde.
+      # Un même fil de requête détient donc désormais deux connexions au
+      # lieu d'une. Avec quatre, une classe exerçant plusieurs requêtes
+      # simultanées pouvait épuiser le pool, faire échouer une écriture, et
+      # produire un échec intermittent sans rapport apparent avec ce
+      # qu'elle vérifiait.
+      maximum-pool-size: 6
       minimum-idle: 0
       idle-timeout: 15000
       keepalive-time: 30000

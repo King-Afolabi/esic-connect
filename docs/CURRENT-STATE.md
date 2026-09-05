@@ -11,13 +11,16 @@
 ## Dernière mise à jour
 
 ```text
-4 septembre 2026 — sprint 9 terminé : réclamations, départ anticipé,
-journal de transparence, analyse antivirus des pièces jointes et balayage
-des fichiers orphelins.
-Backend 1112 tests, frontend 695 tests, tout vert. Schéma en V30.
-Aucun antivirus n'est actif par défaut : chaque pièce est marquée
-`NOT_SCANNED` et l'API le dit — jamais « garanti sans logiciel
-malveillant ».
+5 septembre 2026 — sprint 10 terminé : outbox transactionnelle, audience
+de notification complète, canal courriel, préférences, PWA installable et
+file d'actions différées.
+Backend 1164 tests, frontend 728 tests, tout vert. Schéma en V33.
+L'analyse antivirus a été éprouvée contre un `clamd` RÉEL (ClamAV 1.4.6,
+base 28108) : dettes T-04 et T-11 levées. Elle reste INACTIVE par défaut,
+et l'API comme l'écran le déclarent.
+Les notifications poussées restent `PARTIAL` : chiffrement conforme au
+vecteur de test de la RFC 8291, mais aucun service de poussée réel n'a
+été sollicité — sans clés VAPID, l'API renvoie `providerActive: false`.
 ```
 
 ## Repère Git
@@ -26,7 +29,7 @@ malveillant ».
 |---|---|
 | Branche de travail | `batch/S02A-S11` (lot de sprints S2 → S11) |
 | Base | `f0d02d4` sur `feature/produit-complet-v2` |
-| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8), `v0.9` (S9) |
+| Jalons posés | `v0.2` (S2), `v0.3` (S3), `v0.4` (S4), `v0.5` (S5), `v0.6` (S6), `v0.7` (S7), `v0.8` (S8), `v0.9` (S9), `v0.10` (S10) |
 | Documents cadres | `docs/01-cadrage.md` v3.0, `docs/02-cahier-des-charges.md` v2.0 |
 
 ---
@@ -37,14 +40,35 @@ Le cahier des charges v2.0 définit **142 exigences fonctionnelles**.
 
 | Statut | Nombre | Part |
 |---|---:|---:|
-| `IMPLEMENTED_AND_TESTED` | 95 | 67 % |
-| `PARTIAL` | 3 | 2 % |
-| `NOT_IMPLEMENTED` | 44 | 31 % |
+| `IMPLEMENTED_AND_TESTED` | 103 | 72 % |
+| `PARTIAL` | 4 | 3 % |
+| `NOT_IMPLEMENTED` | 35 | 25 % |
 
 Cette répartition est **attendue** : la version 2.0 du cahier des
 charges a volontairement élargi le périmètre à l'ensemble du produit
-cible. Les 44 exigences non implémentées ne sont pas des régressions :
-ce sont les sprints 10 à 13 de la roadmap.
+cible. Les 35 exigences non implémentées ne sont pas des régressions :
+ce sont les sprints 11 à 13 de la roadmap.
+
+Le sprint 10 fait passer sept exigences de `NOT_IMPLEMENTED` à
+`IMPLEMENTED_AND_TESTED` — `EF-AUD-003` (outbox), `EF-OPS-005` (rejeu
+manuel), `EF-NOTIF-003` (audience), `EF-NOTIF-004` (courriel),
+`EF-NOTIF-006` (préférences), `EF-PWA-001` (installable), `EF-PWA-003`
+(file d'actions différées) — et clôt un partiel : `EF-NOTIF-002`, dont
+l'audience se limitait au formateur.
+
+Deux exigences deviennent `PARTIAL` plutôt que livrées, et il faut le
+lire comme tel :
+
+- `EF-NOTIF-005` (poussée) — le chiffrement RFC 8291 est vérifié contre
+  le vecteur de test officiel de la RFC, le cycle d'abonnement et les
+  préférences sont livrés, mais **aucun service de poussée réel n'a été
+  sollicité**. Sans clés VAPID, l'adaptateur inactif répond et l'API
+  déclare `providerActive: false` ;
+- `EF-PWA-002` (consultation hors ligne) — le service worker sert le
+  planning, l'assiduité et les notifications depuis son cache quand le
+  réseau tombe, **application ouverte**. Le jeton ne vivant qu'en mémoire
+  (RG-093), un démarrage à froid sans réseau affiche l'écran de
+  connexion : il n'y a pas de session à rétablir.
 
 Le sprint 9 en ajoute sept et clôt un partiel : `EF-CLAIM-001` à
 `EF-CLAIM-004` (réclamations), `EF-ATT-013` (départ anticipé),
@@ -111,11 +135,11 @@ raison, le document avait tort.
 | Séances (9) | 9 | 0 | 0 |
 | Émargement et assiduité (16) | 14 | 0 | 2 |
 | Justificatifs et réclamations (8) | 8 | 0 | 0 |
-| Notifications et mobilité (9) | 1 | 1 | 7 |
+| Notifications et mobilité (9) | 7 | 2 | 0 |
 | Restitution (10) | 3 | 1 | 6 |
 | IA et objets connectés (10) | 0 | 0 | 10 |
 | Intégrations (4) | 0 | 0 | 4 |
-| Transverse (11) | 1 | 0 | 10 |
+| Transverse (11) | 3 | 0 | 8 |
 
 ---
 
@@ -490,17 +514,87 @@ raison, le document avait tort.
 - Espace apprenant `/me/attendance*` : absences **dérivées** d'un point
   de contrôle fermé, jamais persistées ; aucun accès croisé (`AC-017`).
 
-### 2.9 Notifications
+### 2.9 Notifications et effets de bord
 
-- `EF-NOTIF-001` centre in-app persistant : planning publié, séance
-  annulée, remplaçant affecté, remplacement terminé. Notifications
-  produites **après commit** (rollback ⇒ zéro notification),
-  **idempotentes** (`dedup_key` SHA-256), **isolées par destinataire**
-  (notification d'autrui → `404`). Cloche `mat-badge` et centre Angular ;
-  liens en liste blanche par rôle, aucun chemin d'interface transmis par
-  le serveur.
+- `EF-AUD-003` **outbox transactionnelle** : le module `outbox` (16ᵉ
+  module) porte la table `outbox_message` (V31). Un module métier écrit
+  une **intention** dans sa propre transaction ; elle commite avec
+  l'action, ou **disparaît avec son annulation** (`AC-027`). Un diffuseur
+  la traite ensuite — drain immédiat dans l'`afterCompletion`, puis
+  reprise planifiée pour ce que l'immédiat a manqué —, avec attente
+  croissante plafonnée puis passage en **file d'échec** (`AC-028`).
+  Les onze écouteurs d'audit n'écrivent plus eux-mêmes : ils enregistrent
+  une intention, et `audit_event.outbox_key` (V32, unique) rend le
+  gestionnaire rejouable sans faire compter l'audit en double.
+  Seul `onLoginFailed` conserve une transaction dédiée, et c'est
+  délibéré : la transaction de connexion est *toujours* annulée sur
+  échec ; la rejoindre effacerait la trace de la tentative — l'essentiel
+  de ce qu'un responsable sécurité cherche (`DEC-S10-001`).
+- `EF-OPS-005` **rejeu manuel** : `GET /api/v1/outbox/messages`,
+  `/summary` et `POST /{id}/replay`, réservés à `ADMIN` / `SUPER_ADMIN` —
+  rejouer peut envoyer un courriel, ce n'est pas une lecture. Le rejeu
+  est refusé (`409`) hors file d'échec, et le **contenu du message n'est
+  jamais renvoyé** : l'exploitant voit ce qui a échoué et pourquoi.
+  Écran `/exploitation/effets-de-bord`.
+- `EF-NOTIF-002`/`003` **audience complète** : une annulation de séance
+  prévient désormais le formateur, ses remplaçants, **les apprenants
+  attendus** et **le responsable pédagogique du périmètre**. L'audience
+  est *décrite* par l'écouteur et *résolue après commit*, sur l'état
+  réellement établi (`DEC-S10-003`). Deux ports naissent de là :
+  `EnrollmentDirectory.findActiveStudentUserPublicIds` et
+  `PedagogicalResponsibilityDirectory` (résolution inverse du périmètre).
+  Choix assumé : un **remplacement** ne réveille pas la classe — prévenir
+  de chaque changement de formateur noierait ce qui compte.
+- `EF-NOTIF-004` **courriel** : chaque notification met en file son
+  propre envoi, avec ses tentatives et sa place dans la file d'échec. Le
+  journal de délivrabilité distingue quatre états sans jamais les
+  confondre — *accepté par l'adaptateur*, *remis au serveur de messagerie*
+  (`SENT_TO_PROVIDER`), *en échec* (`PROCESSING_FAILED`), *délivré*
+  (**jamais affirmé** : `UNKNOWN` par défaut). L'adresse n'est ni
+  journalisée ni stockée en clair.
+- `EF-NOTIF-006` **préférences** : réglage par catégorie et par canal
+  (V33). Seules les **exceptions** sont stockées — une catégorie ajoutée
+  plus tard est active pour tous, sans migration de données. Le centre de
+  notifications (`IN_APP`) et la catégorie `SECURITY` ne se désactivent
+  pas, refusés par le service **et** par contrainte SQL. L'écran affiche
+  ces réglages cochés et verrouillés, plutôt que de laisser cliquer sur
+  un interrupteur que le serveur refuserait. Écran
+  `/notifications/preferences`.
+- **Réclamations notifiées** (dette T-12) : dépôt, message, transfert,
+  décision et réouverture préviennent les participants du fil **et le
+  guichet courant** — résolu au moment de l'événement, ce qui rend le
+  transfert visible des deux côtés. Ni sujet ni extrait de message n'entre
+  dans la notification (§23.3).
+- **Isolation par destinataire préservée** : chaque destinataire est
+  écrit dans sa propre transaction, avec ses intentions de courriel et de
+  poussée. Un échec n'empêche pas les autres d'être servis ; le message
+  repasse malgré tout en reprise, et l'idempotence évite de notifier deux
+  fois (`DEC-S10-004`).
 
-### 2.10 Transverse
+### 2.10 Mobilité (PWA)
+
+- `EF-PWA-001` **application installable** : manifeste, icônes (dont une
+  *maskable* avec sa zone de sécurité réelle), service worker écrit à la
+  main plutôt que `@angular/service-worker` — un seul service worker peut
+  être enregistré par portée, et celui d'Angular ne sait ni rejouer une
+  action métier ni recevoir les poussées avec le contrôle voulu
+  (`DEC-S10-006`). Bouton « Installer » dans l'en-tête.
+- `EF-PWA-003` **file d'actions différées** : un émargement fait hors
+  ligne est mis en file et rejoué au retour du réseau. L'écran affiche
+  **« en attente de confirmation »** — un état distinct du succès
+  (`AC-031`, RG-063). Au rejeu, un `409` vaut succès (la présence est déjà
+  enregistrée), une erreur `4xx` est une décision définitive du serveur
+  **affichée avec son motif**, une panne réseau laisse l'action en
+  attente. La file vit **en mémoire** : le code court est un jeton
+  (RG-093) et il expire en trente secondes (`DEC-S10-005`).
+- **Ce que le cache conserve, et ce qu'il ne conserve jamais** : la
+  coquille applicative et une **liste fermée** de réponses `GET` d'API
+  (planning, assiduité, notifications, tableau de bord). Les routes
+  d'authentification et les jetons d'émargement en sont exclus, et le
+  cache de données est vidé à la déconnexion — un appareil partagé ne
+  garde pas les données de la personne précédente.
+
+### 2.11 Transverse
 
 - En-têtes durcis : `nosniff`, `X-Frame-Options: DENY`, anti-cache,
   CSP, `Referrer-Policy: no-referrer`.
@@ -522,9 +616,13 @@ raison, le document avait tort.
 | Exigence | Ce qui existe | Ce qui manque |
 |---|---|---|
 | `EF-TEA-002` | API d'affectation pédagogique livrée | aucun écran d'affectation classe–matière–période |
-| `EF-NOTIF-002` | notifications produites pour les événements de planning et de séance | audience **formateur uniquement** ; apprenants et responsables non notifiés |
+| `EF-NOTIF-005` | abonnement par appareil, révocation, préférences, chiffrement **RFC 8291 vérifié contre le vecteur de test officiel de la RFC**, signature VAPID RFC 8292, adaptateur HTTP écrit | **aucun service de poussée réel sollicité** : sans clés VAPID, l'adaptateur inactif répond et l'API déclare `providerActive: false` |
+| `EF-PWA-002` | service worker servant planning, assiduité et notifications depuis son cache quand le réseau tombe, **application ouverte** ; bandeau « hors ligne » | pas de consultation après un **démarrage à froid** sans réseau : le jeton ne vit qu'en mémoire (RG-093), il n'y a pas de session à rétablir |
 | `EF-REP-007` | endpoint typé par rôle, périmètre serveur, contexte multi-rôle vérifié ; cartes `STUDENT` et `TEACHER` complètes | cartes `PEDAGOGICAL_MANAGER` et `ADMINISTRATION` incomplètes ; coût SQL linéaire par séance |
-| Audit transactionnel | `coursesession` et `studentimport` publient après commit | 8 des 9 écouteurs restent synchrones `REQUIRES_NEW` ; pas d'outbox |
+
+> La ligne « Audit transactionnel » a disparu de ce tableau : les onze
+> écouteurs d'audit passent désormais par l'outbox (§2.9). Ce n'était pas
+> une exigence mais une dette — T-02, levée.
 
 ---
 
@@ -533,10 +631,6 @@ raison, le document avait tort.
 Aucune ligne de code. Ce sont les sprints à venir — voir
 `docs/06-roadmap-six-mois.md`.
 
-> Ce tableau était **périmé** : il listait encore comme absentes des
-> exigences livrées aux sprints 3, 4 et 9. Il est refait ici et compte
-> exactement les 44 exigences de §1.
-
 | Bloc | Exigences | Nombre | Sprint |
 |---|---|---:|---|
 | Recherche globale dans son périmètre | `EF-USER-009` | 1 | 11 |
@@ -544,25 +638,31 @@ Aucune ligne de code. Ce sont les sprints à venir — voir
 | Mapping d'import assisté par l'IA | `EF-IMP-005` | 1 | 12 |
 | Planning PDF texte et mapping assisté par l'IA | `EF-PLAN-012`, `013` | 2 | 12 |
 | Confirmation locale d'un émargement par WebAuthn ; borne connectée | `EF-ATT-011`, `016` | 2 | 8, 12 |
-| Audience élargie, courriel, push, préférences, PWA | `EF-NOTIF-003..006`, `EF-PWA-001..003` | 7 | 10 |
 | Excel, PDF, attestations, tableaux alternatifs, rapports d'anomalies et d'invitations | `EF-REP-004`, `005`, `006`, `008`, `009`, `010` | 6 | 11–12 |
 | Service d'IA complet | `EF-AI-001..005` | 5 | 12 |
 | Objets connectés | `EF-IOT-001..005` | 5 | 12 |
 | Intégrations Microsoft, iCalendar, fournisseur de courriel | `EF-INT-001..004` | 4 | 11, 13 |
-| Consultation d'audit, outbox, RGPD, exploitation | `EF-AUD-002`, `003`, `EF-RGPD-001..003`, `EF-OPS-001..005` | 10 | 10, 13 |
+| Consultation d'audit, RGPD, exploitation | `EF-AUD-002`, `EF-RGPD-001..003`, `EF-OPS-001..004` | 8 | 11, 13 |
 
-**Vérifications de terrain** (4 septembre 2026, après sprint 9) : aucune
-occurrence de `MQTT`, `outbox`, `service-worker` ni bibliothèque PDF dans
-`backend/src/main` ou `frontend/src`. Aucun module `ai` ni `iot`. Le
-module `claim` **existe** depuis ce sprint. Aucun analyseur antivirus
-n'est joignable par défaut : `clamav` est un service de profil optionnel
-de `compose.yaml`, **jamais démarré ni vérifié** dans ce dépôt.
+Total : **35**, soit exactement le compte de §1. La ligne « Audience
+élargie, courriel, push, préférences, PWA » a disparu : le sprint 10 l'a
+livrée, hors `EF-NOTIF-005` et `EF-PWA-002`, désormais `PARTIAL` (§3).
+`EF-AUD-003` et `EF-OPS-005` sortent également de ce tableau.
+
+**Vérifications de terrain** (5 septembre 2026, après sprint 10) : aucune
+occurrence de `MQTT` ni de bibliothèque PDF dans `backend/src/main` ou
+`frontend/src`. Aucun module `ai` ni `iot`. Les modules `claim` et
+`outbox` **existent**. Un service worker est livré
+(`frontend/public/sw.js`) et présent dans le bundle de production.
+`clamav` reste un service de **profil optionnel** : il n'est pas démarré
+par `docker compose up -d` seul — mais il a cette fois été démarré et
+éprouvé (§6.2).
 
 ---
 
 ## 5. Architecture réelle
 
-### 5.1 Modules Spring Modulith — 15
+### 5.1 Modules Spring Modulith — 16
 
 `ModularityTests` **vert** : aucune dépendance vers l'interne d'un autre
 module, aucun cycle.
@@ -578,20 +678,27 @@ module, aucun cycle.
 | `coursesession` | séances, cycle de vie, points de contrôle nommés, remplacements, salle, modalité, report, demandes d'annulation | V9, V10, V13, V14, V21, V22, V24, V25 |
 | `attendance` | jetons, validation, QR de salle, corrections, apprenants provisoires, justificatifs et leur analyse antivirus, départ anticipé, journal de transparence, rapports, résultat journalier | V9, V10, V16, V26, V27, V29, V30 |
 | `studentimport` | import CSV et Excel des apprenants, correction de ligne | V11, V20 |
-| `notification` | centre de notifications persistant, délivrabilité des courriels | V15, V19 |
+| `notification` | centre de notifications persistant, audience serveur, courriel, préférences, abonnements et chiffrement de poussée, délivrabilité | V15, V19, V33 |
 | `dashboard` | tableau de bord par rôle | — |
 | `claim` | réclamations : guichets, fil de messages, transfert, décision, réouverture | V28 |
-| `audit` | piste d'audit | V1 |
+| `outbox` | file transactionnelle des effets de bord : publication, diffusion, reprise, file d'échec, rejeu manuel | V31 |
+| `audit` | piste d'audit, écrite par l'outbox | V1, V32 |
 | `bootstrap` | amorçage du profil `demo` | — |
 | `shared` | types transverses, gestion d'erreurs, horloge | — |
 
 Modules du cahier des charges **non encore créés** :
 `reporting` (fusionné dans `attendance`), `ai`, `iot`, `integration`.
 
-### 5.2 Migrations Flyway — schéma en V30
+Le module `outbox` **ne dépend d'aucun module métier** : il route un
+`messageType` vers l'`OutboxHandler` que le module compétent publie. Ce
+sont les autres qui dépendent de lui. `ModularityTests` reste vert.
 
-58 tables métier, `ddl-auto = validate`, aucune donnée métier insérée
-par une migration. `V17` ajoute `password_reset_token` et la colonne
+### 5.2 Migrations Flyway — schéma en V33
+
+**62 tables métier** (compté sur la base : `information_schema`, hors
+`flyway_schema_history`), `ddl-auto = validate`, aucune donnée métier
+insérée par une migration. Le chiffre annoncé au sprint 9 — « 58 » —
+était inexact : le dépôt a raison, le document avait tort. `V17` ajoute `password_reset_token` et la colonne
 `user_account.credentials_invalidated_at` ; `V18` ajoute
 `mfa_credential`, `mfa_recovery_code`, `webauthn_credential` et
 `trusted_device` ; `V19` ajoute `subject`, `subject_program`,
@@ -618,6 +725,28 @@ verdict d'analyse antivirus, sa date et sa signature, par défaut
 `NOT_SCANNED` — marquer `CLEAN` rétroactivement des pièces jamais
 analysées serait une affirmation que rien ne fonde.
 
+>
+> `V31` crée `outbox_message` — une seule table pour tous les effets de
+> bord, le cahier (§25.1) ne décrivant qu'un flux : action → outbox →
+> diffuseur → fournisseur. `message_type` route vers le gestionnaire du
+> module concerné, sans que `outbox` connaisse aucun d'eux. Les statuts
+> `FAILED` et `DEAD` sont volontairement distincts : une tentative qui
+> sera reprise n'est pas un effet de bord abandonné qui attend une
+> décision humaine, et les confondre masquerait la file d'échec.
+>
+> `V32` ajoute `audit_event.outbox_key`, **nullable** et unique : les
+> traces antérieures n'ont jamais transité par l'outbox et ne peuvent pas
+> se voir attribuer une clé rétroactivement ; MySQL n'applique pas
+> l'unicité aux valeurs `NULL`.
+>
+> `V33` crée `notification_preference` — une ligne par **exception** au
+> défaut, jamais par combinaison, pour qu'une catégorie ajoutée plus tard
+> soit active sans migration de données — et `push_subscription`, dont
+> l'unicité porte sur l'**empreinte** de la terminaison : celle-ci
+> contient un jeton propre à l'appareil et n'a pas à être indexée en
+> clair. La révocation y est une date et non une suppression, sans quoi
+> une page restée ouverte recréerait aussitôt l'abonnement retiré.
+
 > **Règle absolue** : une migration appliquée n'est **jamais** modifiée,
 > pas même un commentaire — cela invalide sa somme de contrôle et casse
 > toute base existante. Les corrections passent par une nouvelle
@@ -633,15 +762,17 @@ analysées serait une affirmation que rien ne fonde.
 
 ## 6. Résultats de tests
 
-Mesurés sur ce dépôt, branche `batch/S02A-S11`, 4 septembre 2026. Environnement : OpenJDK 21.0.12, Node 24.13.0,
-npm 11.6.2, MySQL 8.4 et Redis 7.4 en Docker Compose.
+Mesurés sur ce dépôt, branche `sprint/S10-notifications-outbox-pwa`,
+5 septembre 2026. Environnement : OpenJDK 21.0.12, Node 24.13.0,
+npm 11.6.2, MySQL 8.4, Redis 7.4 et ClamAV 1.4.6 en Docker Compose.
 
 | Commande | Résultat |
 |---|---|
-| `cd backend && ./mvnw clean test` | **124 classes / 1112 tests / 0 échec / 0 erreur** — `ModularityTests` vert (15 modules), schéma V30 |
-| `cd frontend && npm test` | **84 fichiers / 695 tests / 0 échec** |
+| `cd backend && ./mvnw clean test` | **131 classes / 1156 tests / 0 échec / 0 erreur** — `ModularityTests` vert (16 modules), schéma V33. Les 8 tests exigeant un `clamd` réel sont **ignorés** sans `ESIC_CLAMAV_REAL=1` |
+| `cd backend && ESIC_CLAMAV_REAL=1 ./mvnw clean test` | **131 classes / 1164 tests / 0 échec / 0 erreur** — les 8 tests antivirus réels s'exécutent |
+| `cd frontend && npm test -- --watch=false` | **89 fichiers / 728 tests / 0 échec** |
 | `cd frontend && npm run lint` | « All files pass linting » |
-| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget ; `manifest.webmanifest`, `sw.js` et les icônes présents dans la sortie |
 
 Les tests portant le tag `perf` sont exclus par défaut
 (`./mvnw test -Pperf` pour les exécuter).
@@ -658,6 +789,26 @@ changé. L'extension Java de l'éditeur peut en outre laisser dans
 `target/` une classe portant `Unresolved compilation problem`, qui se
 manifeste au moment de l'exécution et non de la compilation. **Ne jamais
 conclure d'un `test-compile` incrémental** : seul `clean` fait foi.
+
+**Défaut corrigé au sprint 10 — dépendance à l'heure de la journée.**
+`RoomQrAttendanceIntegrationTests` publie un créneau de planning à
+`Instant.now()`, parce que c'est l'horloge du serveur qui décide si le QR
+fixe est encore recevable. Avec la fenêtre de travail par défaut
+(08:00–19:00 UTC), toute exécution en soirée produisait une anomalie
+bloquante et sept tests échouaient — pour une raison sans aucun rapport
+avec ce qu'ils vérifient. **Le défaut a été reproduit à l'identique sur
+le tag `v0.9`** : il est antérieur à ce lot. La classe élargit désormais
+la fenêtre et la durée minimale *pour elle-même*, et borne la fin du
+créneau à la fin du jour UTC — une ligne de planning ne sait pas exprimer
+une séance qui franchit minuit. Les deux règles restent vérifiées là où
+c'est leur objet, dans les tests du module `planning`.
+
+**Pool de connexions porté de 4 à 6 en test.** L'outbox draine la file
+dans l'`afterCompletion` de la transaction métier : à cet instant, la
+connexion de cette transaction n'est pas encore relâchée — Spring ne la
+rend qu'après avoir déclenché les synchronisations — tandis que le
+diffuseur en ouvre une seconde. Un même fil de requête détient donc deux
+connexions au lieu d'une.
 
 **Couplage connu entre classes de test** : les compteurs de limitation
 indexés sur l'*origine* réseau vivent dans Redis et sont partagés par
@@ -689,7 +840,47 @@ Les écrans livrés au sprint 2 — vérification en deux étapes, sécurité du
 compte — sont couverts par des tests de composant Angular, **pas encore**
 par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 
+**La recette navigateur n'a pas été relancée au sprint 10** : les écrans
+livrés — préférences de notification, file d'échec des effets de bord,
+état « en attente de confirmation » de l'émargement hors ligne — sont
+couverts par des tests de composant Angular. `NOT_PERFORMED` pour ces
+parcours. L'installation de la PWA et la réception d'une notification
+poussée ne sont **pas** vérifiées en navigateur : elles supposent un
+contexte sûr (HTTPS ou `localhost`) et, pour la poussée, un service
+réel — voir §3 et §8.
+
 ---
+
+### 6.2 Analyse antivirus contre un `clamd` réel — dettes T-04 et T-11
+
+Exécutée le 5 septembre 2026. C'est ce qui manquait pour affirmer que
+l'analyse antivirus fonctionne : jusqu'ici, seuls des doubles pilotés
+étaient exercés.
+
+| Élément | Valeur constatée |
+|---|---|
+| Démon | `ClamAV 1.4.6/28108/Sun Aug 30 06:27:10 2026` |
+| Démarrage | `docker compose --profile antivirus up -d clamav`, conteneur `healthy`, `clamdscan --ping 1` → `PONG` |
+| Plateforme | image publiée pour `linux/amd64` uniquement ; `compose.yaml` fixe `platform: linux/amd64` (émulation sur Apple Silicon) |
+| `ClamAvRealDaemonIntegrationTests` | 3 tests, 0 échec — fichier sain → `CLEAN` ; EICAR → `INFECTED` (`Eicar-Test-Signature`) ; 4 Mio analysés sans erreur de cadrage |
+| `JustificationAttachmentRealAntivirusIntegrationTests` | 5 tests, 0 échec — dépôt sain accepté et téléchargeable, adaptateur câblé vérifié, API annonçant `active: true` |
+| `ClamAvMalwareScannerTests` | 10 tests contre un **vrai serveur TCP** parlant `INSTREAM` : cadrage `zINSTREAM\0`, blocs préfixés en gros-boutiste, bloc de fin, contenu restitué à l'identique, découpage au-delà d'un bloc |
+| Contrôle manuel | `docker exec esic-connect-clamav clamdscan /tmp/eicar.txt` → `Eicar-Test-Signature FOUND` |
+
+**Indisponibilité, délais, taille** — vérifiés et jamais confondus avec
+« sain » : démon injoignable, démon muet (délai réellement appliqué),
+coupure en cours d'échange et `INSTREAM size limit exceeded` produisent
+tous `UNAVAILABLE`, jamais `CLEAN`.
+
+**Ce que ces tests n'établissent pas.** La signature EICAR est
+**ancrée au fichier entier**, par construction : enveloppée dans un PDF,
+elle n'est plus reconnue — vérifié contre le démon réel. Il n'existe donc
+pas de fichier à la fois structurellement valide et détecté par EICAR :
+la détection est prouvée au niveau du port, et la réaction du produit à
+un verdict `INFECTED` (`422`, aucune écriture disque) au niveau de l'API,
+avec un double. C'est une propriété de la chaîne d'essai, pas une lacune
+du produit — et le rappel que l'antivirus ne remplace pas les contrôles
+structurels, qui s'appliquent **avant** lui.
 
 ## 7. Démonstration
 
@@ -706,19 +897,22 @@ par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 
 | Réf | Dette | Effet |
 |---|---|---|
-| T-01 | pas d'outbox : notifications produites après commit sans reprise | une panne du diffuseur perd la notification |
-| T-12 | les réclamations n'émettent aucune notification | un destinataire ne sait qu'un dossier l'attend qu'en ouvrant l'écran (sprint 10) |
-| T-02 | 8 écouteurs d'audit synchrones | une trace peut manquer sans annuler l'action |
-| T-04 | **aucun antivirus actif par défaut** : le port et l'adaptateur ClamAV existent, `clamav` est un service de profil optionnel jamais démarré ici | seul le contrôle structurel s'applique ; l'API marque `NOT_SCANNED` et l'écran l'affiche — ne jamais écrire « garanti sans logiciel malveillant » |
-| T-11 | adaptateur ClamAV jamais éprouvé contre un `clamd` réel | les tests couvrent le contrat du port et le traitement de chaque verdict, avec un double piloté ; la conformité au protocole `INSTREAM` reste à vérifier |
+| ~~T-01~~ | **levée au sprint 10** — outbox transactionnelle avec drain immédiat, reprise planifiée et file d'échec | une panne du diffuseur ne perd plus la notification ; ce qui échoue durablement devient **visible** dans `/exploitation/effets-de-bord` |
+| ~~T-02~~ | **levée au sprint 10** — les onze écouteurs d'audit passent par l'outbox | une trace ne peut plus manquer sans annuler l'action, ni subsister derrière une action annulée |
+| ~~T-12~~ | **levée au sprint 10** — les réclamations notifient participants et guichet courant | — |
+| ~~T-04~~ | **levée au sprint 10** — `clamd` réel démarré et éprouvé (ClamAV 1.4.6, base 28108) ; voir §6.2 | l'analyse reste **inactive par défaut** : sans le profil `antivirus`, les pièces sont marquées `NOT_SCANNED`, l'API et l'écran l'annoncent, et « garanti sans logiciel malveillant » ne doit jamais être écrit |
+| ~~T-11~~ | **levée au sprint 10** — protocole `INSTREAM` vérifié contre un vrai serveur TCP **et** contre un `clamd` réel | — |
 | T-03 | coût SQL linéaire par séance sur le tableau de bord | dégradation quand la fenêtre contient beaucoup de séances |
 | T-05 | rétention des pièces supprimées `À_DÉFINIR` | politique RGPD à arrêter avant tout usage réel |
 | T-06 | pièces jointes sur système de fichiers local | non persistant sur un hébergement éphémère |
-| T-10 | opérations de masse et doublons sans écran | l'API est livrée et testée ; l'interface reste à faire (sprint 11, recherche et pilotage) |
+| T-10 | opérations de masse et doublons sans écran | l'API est livrée et testée ; l'interface reste à faire (sprint 11) |
 | T-07 | cérémonie WebAuthn complète non rejouée en test | la vérification cryptographique repose sur la bibliothèque ; les tests couvrent contrat, défi, isolation et absence de donnée biométrique |
 | T-08 | Turnstile jamais vérifié contre le service réel | aucune clé secrète dans le dépôt ; sans clé, le produit **déclare** qu'aucun contrôle n'est actif |
 | T-09 | passkeys inutilisables hors `localhost` sans domaine ni HTTPS | contrainte du standard WebAuthn, pas du produit |
-| — | base `esic_test` **recréée** au sprint 8 : la pollution par les fixtures y est levée | `esic_connect` (local) reste à recréer — `./scripts/db-reset.sh esic_connect` non exécuté |
+| **T-13** | **aucun service de poussée réel sollicité** (sprint 10) | le chiffrement RFC 8291 est vérifié contre le vecteur officiel de la RFC et la signature VAPID est implémentée, mais aucun message n'a jamais atteint un navigateur. Sans clés VAPID, l'API déclare `providerActive: false` — elle ne simule aucun envoi |
+| **T-14** | **consultation hors ligne limitée à une session ouverte** (sprint 10) | le jeton ne vivant qu'en mémoire (RG-093), un démarrage à froid sans réseau affiche l'écran de connexion. Lever cette limite exigerait de persister un élément de session, ce que RG-093 interdit : c'est un arbitrage, pas un oubli |
+| **T-15** | **file d'actions différées non persistante** (sprint 10) | elle ne survit pas à un rechargement de page. Le code court étant un jeton (RG-093) et expirant en 30 s, la persister n'apporterait qu'un rejeu de codes périmés |
+| — | base `esic_test` **recréée** au sprint 8 ; `esic_connect` (local) reste à recréer — `./scripts/db-reset.sh esic_connect` non exécuté | — |
 
 ---
 
@@ -727,6 +921,14 @@ par la recette navigateur : `NOT_PERFORMED` pour ces parcours.
 `docker compose up -d` démarre `mysql` (8.4), `redis` (7.4), `mailpit`
 et `mosquitto`. Les trois premiers passent `healthy` ; **Mosquitto n'a
 pas de sonde et aucun code back-end ne le consomme.**
+
+`clamav` (1.4.6) appartient au **profil optionnel** `antivirus` : il ne
+démarre pas avec `docker compose up -d` seul, mais avec
+`docker compose --profile antivirus up -d clamav`. Il a été démarré et
+éprouvé au sprint 10 (§6.2). L'image n'étant publiée que pour
+`linux/amd64`, `compose.yaml` fixe `platform: linux/amd64` — sans quoi le
+démarrage échoue sur un poste Apple Silicon. Procédure d'exploitation
+complète : `docs/11-guide-deploiement.md` §7.
 
 Quatre bases distinctes : `esic_connect` (local), `esic_connect_demo`
 (démonstration), `esic_test` (tests), `esic_connect_ci` (intégration
@@ -739,18 +941,18 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
 1. **Exécuter `./scripts/db-reset.sh esic_connect`** — l'outillage est
    livré, l'exécution ne l'est pas. `esic_test` a été recréée au sprint 8 ;
    la base locale ne l'est toujours pas.
-2. **Sprint 10 — notifications et outbox** : lève les dettes T-01, T-02 et
-   T-12 d'un coup, et donne aux réclamations et aux départs anticipés la
-   notification qui leur manque.
-3. **Sprint 10 — PWA** : installable, consultation hors ligne, file
-   d'actions différées.
-4. **Sprint 11 — pilotage et restitution** : tableaux de bord complets,
-   exports Excel et PDF, attestations, recherche globale, écran du
-   résultat journalier et écrans manquants des opérations de masse et des
+2. **Sprint 11 — pilotage et restitution** : tableaux de bord complets
+   (T-03), exports Excel et PDF, attestations, recherche globale, écran du
+   résultat journalier, et écrans manquants des opérations de masse et des
    doublons (T-10).
-5. **Éprouver ClamAV** (T-11) : démarrer `docker compose --profile
-   antivirus up -d` et vérifier l'adaptateur contre un `clamd` réel avant
-   de présenter l'analyse comme opérationnelle.
+3. **Éprouver la poussée** (T-13) : générer une paire VAPID hors dépôt,
+   l'injecter par l'environnement, et vérifier qu'un navigateur reçoit
+   réellement une notification avant de présenter `EF-NOTIF-005` comme
+   livré.
+4. **Étendre la recette navigateur** aux écrans des sprints 9 et 10, et
+   au parcours d'installation de la PWA sur un contexte HTTPS.
+5. **Arrêter la politique de rétention des pièces jointes** (T-05) avant
+   tout usage sur données réelles.
 
 ---
 

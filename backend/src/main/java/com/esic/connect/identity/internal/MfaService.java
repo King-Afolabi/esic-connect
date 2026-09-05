@@ -9,8 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -214,7 +212,7 @@ public class MfaService {
         rateLimiter.reset(BUCKET_VERIFY, IdentityHashing.of(account.getPublicId().toString()));
 
         List<String> codes = regenerateRecoveryCodesFor(account.getId());
-        publishAfterCommit(new MfaChangedEvent(account.getId(), account.getPublicId(),
+        publish(new MfaChangedEvent(account.getId(), account.getPublicId(),
                 MfaChangedEvent.Action.ENROLLED));
         return new MfaWeb.ConfirmationResult(codes);
     }
@@ -300,7 +298,7 @@ public class MfaService {
         MfaRecoveryCode recoveryCode = maybe.get();
         recoveryCode.consume(now);
         recoveryCodeRepository.save(recoveryCode);
-        publishAfterCommit(new MfaChangedEvent(account.getId(), account.getPublicId(),
+        publish(new MfaChangedEvent(account.getId(), account.getPublicId(),
                 MfaChangedEvent.Action.RECOVERY_CODE_USED));
         return true;
     }
@@ -347,7 +345,7 @@ public class MfaService {
         credentialRepository.save(credential);
         recoveryCodeRepository.findByUserIdAndStatus(account.getId(), MfaRecoveryCodeStatus.ACTIVE)
                 .forEach(MfaRecoveryCode::revoke);
-        publishAfterCommit(new MfaChangedEvent(account.getId(), account.getPublicId(),
+        publish(new MfaChangedEvent(account.getId(), account.getPublicId(),
                 MfaChangedEvent.Action.DISABLED));
     }
 
@@ -360,7 +358,7 @@ public class MfaService {
         }
         consumeSecondFactor(account, code);
         List<String> codes = regenerateRecoveryCodesFor(account.getId());
-        publishAfterCommit(new MfaChangedEvent(account.getId(), account.getPublicId(),
+        publish(new MfaChangedEvent(account.getId(), account.getPublicId(),
                 MfaChangedEvent.Action.RECOVERY_CODES_REGENERATED));
         return codes;
     }
@@ -436,19 +434,25 @@ public class MfaService {
     }
 
     /**
-     * Publie après commit : une transaction annulée ne doit produire
-     * aucune trace d'audit (RG-097, décision DEC-S2-003).
+     * Publication <strong>synchrone</strong>, dans la transaction
+     * courante.
+     *
+     * <p>Ce point publiait auparavant après commit (DEC-S2-003) parce que
+     * l'écouteur d'audit écrivait immédiatement, dans une transaction
+     * séparée : publier avant le commit aurait laissé une trace de succès
+     * derrière une opération ensuite annulée.
+     *
+     * <p>Ce détour n'a plus lieu d'être depuis l'outbox transactionnelle
+     * (EF-AUD-003) : l'écouteur n'écrit plus rien, il enregistre une
+     * intention qui commite — ou disparaît — avec cette transaction. La
+     * garantie RG-097 est donc tenue par construction.
+     *
+     * <p>Le conserver serait de surcroît <em>incorrect</em> : appelé
+     * depuis un {@code afterCommit}, l'enregistrement de l'intention
+     * participerait à une transaction déjà committée et échouerait —
+     * l'audit disparaîtrait en silence.
      */
-    private void publishAfterCommit(Object event) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    eventPublisher.publishEvent(event);
-                }
-            });
-        } else {
-            eventPublisher.publishEvent(event);
-        }
+    private void publish(Object event) {
+        eventPublisher.publishEvent(event);
     }
 }

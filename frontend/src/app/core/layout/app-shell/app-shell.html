@@ -57,6 +57,13 @@
         <app-role-context-menu />
       </div>
 
+      @if (installable()) {
+        <button type="button" mat-button (click)="install()">
+          <mat-icon aria-hidden="true">install_mobile</mat-icon>
+          <span>Installer</span>
+        </button>
+      }
+
       <app-notification-bell />
 
       <button type="button" mat-button (click)="logout()">
@@ -64,6 +71,29 @@
         <span>Se déconnecter</span>
       </button>
     </mat-toolbar>
+
+    <!--
+      État du réseau et actions différées (EF-PWA-002, EF-PWA-003).
+      `role="status"` et non `alert` : c'est une information de contexte
+      permanente, pas une urgence à interrompre la lecture.
+    -->
+    @if (!connectivity.online()) {
+      <p class="shell__offline" role="status">
+        <mat-icon aria-hidden="true">cloud_off</mat-icon>
+        <span>
+          Hors ligne. Les informations affichées peuvent dater ; vos actions seront envoyées au
+          retour du réseau.
+        </span>
+      </p>
+    }
+    @if (pendingActions() > 0) {
+      <p class="shell__pending" role="status">
+        <mat-icon aria-hidden="true">schedule_send</mat-icon>
+        <span>
+          {{ pendingActions() }} action(s) en attente de confirmation par le serveur.
+        </span>
+      </p>
+    }
 
     <main id="main-content" class="shell__main" tabindex="-1">
       <router-outlet />

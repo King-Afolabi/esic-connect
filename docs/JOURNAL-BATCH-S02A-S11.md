@@ -712,3 +712,104 @@ et n'était pas encore commitée ; elle l'est avec ce sprint.)*
 - Aucun de ces écrans n'est couvert par la recette navigateur : ils le
   sont par des tests de composant Angular. `NOT_PERFORMED` pour ces
   parcours.
+
+---
+
+## S10 — Notifications, outbox et mobilité (`sprint/S10-notifications-outbox-pwa`)
+
+**Objectif du sprint** (roadmap §S10) : « chacun est prévenu à temps, y
+compris hors ligne ». Terminé si `AC-027`, `AC-028` et `AC-031` sont
+vérifiés.
+
+### État constaté avant travaux
+
+- Aucune outbox : l'audit s'écrivait dans une transaction séparée ouverte
+  **avant** le commit métier (T-02), les notifications **après** commit
+  sans reprise (T-01).
+- `EF-NOTIF-002` partiel : audience **formateur uniquement**.
+- `EF-NOTIF-003..006`, `EF-PWA-001..003`, `EF-OPS-005` : aucun code.
+- Ni `@angular/service-worker`, ni manifeste : `public/` ne contenait que
+  `favicon.ico`.
+- ClamAV : port et adaptateur écrits, jamais exécutés contre un `clamd`
+  réel (T-04, T-11).
+
+### Livré
+
+| Exigence | État |
+|---|---|
+| `EF-AUD-003` outbox transactionnelle | `IMPLEMENTED_AND_TESTED` |
+| `EF-OPS-005` rejeu manuel d'un effet de bord | `IMPLEMENTED_AND_TESTED` |
+| `EF-NOTIF-002` notifications de planning et de séance | `PARTIAL` → `IMPLEMENTED_AND_TESTED` |
+| `EF-NOTIF-003` audience complète | `IMPLEMENTED_AND_TESTED` |
+| `EF-NOTIF-004` courriel | `IMPLEMENTED_AND_TESTED` |
+| `EF-NOTIF-005` poussée PWA | `PARTIAL` — chiffrement conforme, aucun service réel |
+| `EF-NOTIF-006` préférences | `IMPLEMENTED_AND_TESTED` |
+| `EF-PWA-001` application installable | `IMPLEMENTED_AND_TESTED` |
+| `EF-PWA-002` consultation hors ligne | `PARTIAL` — session ouverte seulement |
+| `EF-PWA-003` file d'actions différées | `IMPLEMENTED_AND_TESTED` |
+
+Hors périmètre initial, à la demande : dettes **T-04** et **T-11**
+(antivirus réel). Dette **T-12** (réclamations sans notification) levée
+au passage, l'outbox la rendant immédiate.
+
+### Ce que le sprint a corrigé, et qui n'était pas prévu
+
+- **`InvalidDataAccessApiUsageException: no transaction is in progress`.**
+  Écrire depuis l'`afterCompletion` d'une transaction fait « participer »
+  à une transaction déjà committée. Le diffuseur ouvre désormais une
+  transaction **neuve** autour de chaque gestionnaire (`DEC-S10-002`).
+- **Dépendance circulaire** publisher → dispatcher → handler → publisher,
+  apparue dès qu'un gestionnaire a eu besoin d'enregistrer à son tour un
+  message. Résolue par une résolution différée du diffuseur.
+- **Séance annulée invisible de son audience.**
+  `CourseSessionDirectory.findForAttendance` écarte les séances non
+  opérationnelles : une séance annulée n'y répondait plus, précisément
+  quand il faut prévenir sa classe. Les classes sont désormais portées par
+  `SessionNotificationInfo`.
+- **Motif de refus perdu dans la file d'actions.** Avec
+  `responseType: 'text'`, Angular remet le corps d'erreur sous forme de
+  chaîne : le message du serveur était remplacé par une formule générique.
+- **`RoomQrAttendanceIntegrationTests` dépendant de l'heure de la
+  journée** — sept tests échouaient après 19:00 UTC. **Reproduit à
+  l'identique sur le tag `v0.9`** : défaut antérieur à ce lot, corrigé
+  ici.
+- **Trois contournements `publishAfterCommit`** (`MfaService`,
+  `WebAuthnService`, `TrustedDeviceService`, DEC-S2-003) supprimés :
+  l'outbox les rend inutiles, et les conserver était devenu *incorrect*.
+
+### Vérifications
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw clean test` | 131 classes / **1156 tests** / 0 échec (les 8 tests antivirus réels sont ignorés) |
+| `cd backend && ESIC_CLAMAV_REAL=1 ./mvnw clean test` | 131 classes / **1164 tests** / 0 échec |
+| `cd frontend && npm test -- --watch=false` | 89 fichiers / **728 tests** / 0 échec |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+| `ModularityTests` | vert — 16 modules, `outbox` ne dépend d'aucun module métier |
+| Migrations V1 → V33 | rejouées sur base recréée (`./scripts/db-reset.sh esic_test`) |
+
+Antivirus réel : ClamAV **1.4.6**, base **28108** (30 août 2026). EICAR
+détecté (`Eicar-Test-Signature`), fichier sain accepté, 4 Mio analysés,
+indisponibilité et délais traités en `UNAVAILABLE` — jamais `CLEAN`.
+Détail et limites : `docs/CURRENT-STATE.md` §6.2.
+
+### Limites restantes, explicitement assumées
+
+- **Aucun service de poussée réel n'a été sollicité** (T-13). Le
+  chiffrement est conforme au vecteur de test de la RFC 8291, mais aucun
+  message n'a atteint un navigateur. Sans clés VAPID, l'API déclare
+  `providerActive: false`.
+- **La consultation hors ligne suppose une session ouverte** (T-14) : le
+  jeton ne vivant qu'en mémoire (RG-093), un démarrage à froid sans
+  réseau affiche l'écran de connexion.
+- **La file d'actions différées ne survit pas à un rechargement** (T-15) :
+  le code court est un jeton, et il expire en trente secondes.
+- **L'analyse antivirus reste inactive par défaut.** Le profil
+  `antivirus` doit être démarré explicitement.
+- **La recette navigateur n'a pas été relancée** : les écrans du sprint
+  sont couverts par des tests de composant Angular. `NOT_PERFORMED` pour
+  ces parcours, comme pour l'installation de la PWA.
+- La signature EICAR étant ancrée au fichier entier, aucun fichier ne peut
+  être à la fois structurellement valide et détecté par elle : la
+  détection est prouvée au port, la réaction du produit à l'API.

@@ -1,0 +1,109 @@
+<section class="outbox">
+  <header class="outbox__header">
+    <h1>Effets de bord</h1>
+    <p class="outbox__intro">
+      Audit, notifications, courriels et poussées passent par une file transactionnelle. Les
+      messages abandonnés après épuisement des tentatives attendent ici une décision.
+    </p>
+  </header>
+
+  @if (summary(); as counts) {
+    <dl class="outbox__summary">
+      <div class="outbox__stat outbox__stat--dead">
+        <dt>File d’échec</dt>
+        <dd>{{ counts.dead }}</dd>
+      </div>
+      <div class="outbox__stat">
+        <dt>En échec, reprise planifiée</dt>
+        <dd>{{ counts.failed }}</dd>
+      </div>
+      <div class="outbox__stat">
+        <dt>En attente</dt>
+        <dd>{{ counts.pending }}</dd>
+      </div>
+      <div class="outbox__stat">
+        <dt>Traités</dt>
+        <dd>{{ counts.sent }}</dd>
+      </div>
+    </dl>
+  }
+
+  <mat-button-toggle-group
+    [value]="filter()"
+    (change)="changeFilter($event.value)"
+    aria-label="Filtrer les effets de bord"
+  >
+    <mat-button-toggle value="DEAD">File d’échec</mat-button-toggle>
+    <mat-button-toggle value="FAILED">En échec</mat-button-toggle>
+    <mat-button-toggle value="PENDING">En attente</mat-button-toggle>
+    <mat-button-toggle value="ALL">Tous</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (state().kind === 'loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement de la file"></mat-progress-bar>
+  }
+
+  @if (state(); as current) {
+    @if (current.kind === 'error') {
+      <div class="outbox__error" role="alert">
+        <p>{{ current.message }}</p>
+        <button mat-stroked-button type="button" (click)="reload()">Réessayer</button>
+      </div>
+    }
+
+    @if (current.kind === 'ready') {
+      @if (current.items.length === 0) {
+        <p class="outbox__empty">Aucun effet de bord dans cette catégorie.</p>
+      } @else {
+        <div class="outbox__scroll">
+          <table class="outbox__table">
+            <caption class="outbox__caption">
+              {{ current.totalElements }} message(s). Le contenu des messages n’est jamais affiché :
+              seuls le type, l’état et la cause de l’échec le sont.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">État</th>
+                <th scope="col">Tentatives</th>
+                <th scope="col">Dernière erreur</th>
+                <th scope="col">Créé le</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (message of current.items; track trackMessage($index, message)) {
+                <tr>
+                  <td>{{ message.messageType }}</td>
+                  <td>
+                    <span class="outbox__status" [class.outbox__status--dead]="message.status === 'DEAD'">
+                      {{ message.status }}
+                    </span>
+                  </td>
+                  <td>{{ message.attempts }}</td>
+                  <td>{{ message.lastError ?? '—' }}</td>
+                  <td>{{ message.createdAt }}</td>
+                  <td>
+                    @if (message.status === 'DEAD') {
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        [disabled]="replaying() === message.publicId"
+                        (click)="replay(message)"
+                      >
+                        <mat-icon aria-hidden="true">replay</mat-icon>
+                        Rejouer
+                      </button>
+                    } @else {
+                      <span class="outbox__no-action">Reprise automatique</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+</section>

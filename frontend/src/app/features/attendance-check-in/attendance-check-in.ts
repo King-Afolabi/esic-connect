@@ -8,6 +8,8 @@ import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../core/auth/role-context.service';
+import { ConnectivityService } from '../../core/pwa/connectivity.service';
+import { OfflineQueueService } from '../../core/pwa/offline-queue.service';
 import { SessionsApiService } from '../sessions/sessions-api.service';
 import { toSessionError } from '../sessions/session-errors';
 import { AttendanceRecordResponse, formatInstantUtc } from '../sessions/sessions.models';
@@ -22,6 +24,12 @@ type CheckInState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
   | { kind: 'success'; record: AttendanceRecordResponse }
+  /**
+   * Action mise en file faute de réseau (EF-PWA-003 ; RG-063, AC-031).
+   * **Ce n'est pas un succès** : la présence n'existe pas tant que le
+   * serveur ne l'a pas validée, et l'écran doit le dire sans ambiguïté.
+   */
+  | { kind: 'queued' }
   | { kind: 'error'; message: string };
 
 /**
@@ -59,6 +67,9 @@ export class AttendanceCheckIn {
   private readonly api = inject(SessionsApiService);
   private readonly roleContext = inject(RoleContextService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly queue = inject(OfflineQueueService);
+
+  protected readonly connectivity = inject(ConnectivityService);
 
   protected readonly shortCodeMaxLength = SHORT_CODE_MAX_LENGTH;
   protected readonly roomReferenceMaxLength = ROOM_REFERENCE_MAX_LENGTH;
@@ -102,6 +113,7 @@ export class AttendanceCheckIn {
     const current = this.state();
     return current.kind === 'error' ? current.message : null;
   });
+  protected readonly queued = computed(() => this.state().kind === 'queued');
 
   constructor() {
     // Sortie du contexte STUDENT : on efface code, récépissé et erreurs.
@@ -129,9 +141,25 @@ export class AttendanceCheckIn {
       return;
     }
 
+    const remote = this.form.getRawValue().remote || null;
+
+    // Hors ligne : l'action est mise en file et rejouée au retour du
+    // réseau. L'écran annonce « en attente de confirmation », jamais un
+    // émargement réussi — une présence enregistrée hors ligne n'est
+    // jamais définitive avant validation serveur (RG-063, AC-031).
+    if (!this.connectivity.online()) {
+      this.queue.enqueue('Émargement par code court', '/v1/attendance/validate', {
+        shortCode,
+        remote,
+      });
+      this.state.set({ kind: 'queued' });
+      this.form.reset({ shortCode: '', remote: false });
+      return;
+    }
+
     this.state.set({ kind: 'submitting' });
     this.api
-      .validateAttendance({ shortCode, remote: this.form.getRawValue().remote || null })
+      .validateAttendance({ shortCode, remote })
       .subscribe({
         next: (record) => {
           // Réponse tardive après une sortie du contexte STUDENT : ignorée.

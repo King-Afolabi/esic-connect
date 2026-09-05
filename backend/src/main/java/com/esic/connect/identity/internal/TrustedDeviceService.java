@@ -6,8 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -99,7 +97,7 @@ public class TrustedDeviceService {
         }
         repository.save(TrustedDevice.remembered(userId, hash, defaultLabel(now), now, expiry));
         userAccountRepository.findById(userId).ifPresent(account ->
-                publishAfterCommit(new TrustedDeviceChangedEvent(userId, account.getPublicId(),
+                publish(new TrustedDeviceChangedEvent(userId, account.getPublicId(),
                         TrustedDeviceChangedEvent.Action.ADDED)));
     }
 
@@ -134,7 +132,7 @@ public class TrustedDeviceService {
         if (device.getStatus() == TrustedDeviceStatus.ACTIVE) {
             device.revoke(clock.instant());
             repository.save(device);
-            publishAfterCommit(new TrustedDeviceChangedEvent(account.getId(), account.getPublicId(),
+            publish(new TrustedDeviceChangedEvent(account.getId(), account.getPublicId(),
                     TrustedDeviceChangedEvent.Action.REVOKED));
         }
     }
@@ -153,16 +151,26 @@ public class TrustedDeviceService {
         return "Appareil reconnu le " + now.atZone(clock.getZone()).toLocalDate();
     }
 
-    private void publishAfterCommit(Object event) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    eventPublisher.publishEvent(event);
-                }
-            });
-        } else {
-            eventPublisher.publishEvent(event);
-        }
+    /**
+     * Publication <strong>synchrone</strong>, dans la transaction
+     * courante.
+     *
+     * <p>Ce point publiait auparavant après commit (DEC-S2-003) parce que
+     * l'écouteur d'audit écrivait immédiatement, dans une transaction
+     * séparée : publier avant le commit aurait laissé une trace de succès
+     * derrière une opération ensuite annulée.
+     *
+     * <p>Ce détour n'a plus lieu d'être depuis l'outbox transactionnelle
+     * (EF-AUD-003) : l'écouteur n'écrit plus rien, il enregistre une
+     * intention qui commite — ou disparaît — avec cette transaction. La
+     * garantie RG-097 est donc tenue par construction.
+     *
+     * <p>Le conserver serait de surcroît <em>incorrect</em> : appelé
+     * depuis un {@code afterCommit}, l'enregistrement de l'intention
+     * participerait à une transaction déjà committée et échouerait —
+     * l'audit disparaîtrait en silence.
+     */
+    private void publish(Object event) {
+        eventPublisher.publishEvent(event);
     }
 }

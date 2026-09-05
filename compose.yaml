@@ -76,6 +76,13 @@ services:
   clamav:
     image: clamav/clamav:1.4
     container_name: esic-connect-clamav
+    # L'image officielle ClamAV n'est publiée QUE pour linux/amd64 : sans
+    # cette ligne, `docker compose up` échoue sur un poste Apple Silicon
+    # avec « no matching manifest for linux/arm64 ». L'émulation est plus
+    # lente qu'une exécution native — le chargement des signatures prend
+    # plusieurs minutes — mais elle fonctionne, et c'est le seul moyen de
+    # disposer d'un vrai clamd sur ces machines.
+    platform: linux/amd64
     profiles:
       - antivirus
     restart: unless-stopped

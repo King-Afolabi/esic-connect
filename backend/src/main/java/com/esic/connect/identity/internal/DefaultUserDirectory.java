@@ -47,6 +47,33 @@ class DefaultUserDirectory implements UserDirectory {
                 .map(account -> new PersonName(account.getFirstName(), account.getLastName()));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> findActiveUserPublicIdsByRole(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            return Set.of();
+        }
+        RoleCode code;
+        try {
+            code = RoleCode.valueOf(roleCode.trim());
+        } catch (IllegalArgumentException unknown) {
+            return Set.of();
+        }
+        // Statut ACTIVE et non « non archivé » : un compte suspendu ou en
+        // attente d'activation ne peut pas se connecter, le notifier
+        // n'informerait personne.
+        return userRoleRepository
+                .findActiveAssignmentsByRoleCodeAndUserStatus(code, AccountStatus.ACTIVE).stream()
+                .map(userRole -> userRole.getUser().getPublicId())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> findEmailForDelivery(long userInternalId) {
+        return userAccountRepository.findById(userInternalId).map(UserAccount::getEmail);
+    }
+
     private UserRef toRef(UserAccount account) {
         Set<String> activeRoles = userRoleRepository.findActiveWithRoleByUserId(account.getId()).stream()
                 .map(userRole -> userRole.getRole().getCode().name())

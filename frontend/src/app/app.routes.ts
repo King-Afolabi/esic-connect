@@ -248,6 +248,31 @@ export const routes: Routes = [
           ),
       },
       {
+        // Préférences de notification de l'appelant (EF-NOTIF-006).
+        // Aucune garde de rôle : `NotificationPreferenceController` porte
+        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
+        // sujet du JWT, jamais un paramètre.
+        path: 'notifications/preferences',
+        title: `Préférences de notification — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/notifications/preferences/notification-preferences').then(
+            (m) => m.NotificationPreferences,
+          ),
+      },
+      {
+        // File d'échec des effets de bord (EF-OPS-005 ; docs/02 §34.2,
+        // écrans du super administrateur). Périmètre aligné **à
+        // l'identique** sur le `@PreAuthorize` de `OutboxAdminController`
+        // (`ADMIN` / `SUPER_ADMIN`) : rejouer un effet de bord peut
+        // envoyer un courriel, ce n'est pas une lecture. Le garde ne fait
+        // que masquer la navigation — Spring Security reste l'autorité.
+        path: 'exploitation/effets-de-bord',
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+        title: `Effets de bord — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/operations/outbox/outbox-console').then((m) => m.OutboxConsole),
+      },
+      {
         // Administration des comptes utilisateurs et de leurs rôles, en
         // LECTURE SEULE : liste → fiche → historique des rôles. Périmètre
         // de rôles aligné **à l'identique** sur le `@PreAuthorize` de

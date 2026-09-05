@@ -66,6 +66,10 @@ describe('AppShell', () => {
       '/claims',
       '/attendance-management',
       '/notifications',
+      '/notifications/preferences',
+      // File d'échec des effets de bord (sprint 10, EF-OPS-005) :
+      // réservée à `ADMIN` / `SUPER_ADMIN`, comme le contrôleur.
+      '/exploitation/effets-de-bord',
       '/subjects',
       '/invitations',
       '/mon-compte/securite',
@@ -99,6 +103,7 @@ describe('AppShell', () => {
       '/sessions',
       '/claims',
       '/notifications',
+      '/notifications/preferences',
       // Le catalogue des matières est ouvert en lecture au formateur :
       // il en a besoin pour qualifier une séance (EF-ACA-006).
       '/subjects',
@@ -119,6 +124,7 @@ describe('AppShell', () => {
       '/my-attendance/early-departures',
       '/claims',
       '/notifications',
+      '/notifications/preferences',
       '/mon-compte/securite',
     ]);
   });

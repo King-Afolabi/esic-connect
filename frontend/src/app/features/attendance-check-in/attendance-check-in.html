@@ -12,6 +12,25 @@
         sous ce rôle.
       </p>
     </div>
+  } @else if (queued()) {
+    <!--
+      État distinct du succès, et délibérément : la présence n'existe pas
+      tant que le serveur ne l'a pas validée (RG-063, AC-031). Le libellé
+      ne doit jamais laisser croire à un émargement acquis.
+    -->
+    <div class="checkin__panel checkin__panel--pending" role="status">
+      <mat-icon aria-hidden="true">schedule_send</mat-icon>
+      <div>
+        <p class="checkin__panel-title">En attente de confirmation.</p>
+        <p>
+          Votre émargement a été enregistré sur cet appareil et sera envoyé dès le retour du
+          réseau. Il ne sera définitif qu’une fois validé par le serveur — le code d’émargement
+          ayant une durée de vie courte, présentez-vous à votre formateur si la confirmation
+          n’arrive pas.
+        </p>
+      </div>
+      <button mat-stroked-button type="button" (click)="reset()">Fermer</button>
+    </div>
   } @else if (successRecord(); as record) {
     <div class="checkin__panel checkin__panel--success" role="status">
       <mat-icon aria-hidden="true">check_circle</mat-icon>
@@ -43,6 +62,15 @@
       </mat-form-field>
 
       <mat-checkbox formControlName="remote">Je suis cette séance à distance</mat-checkbox>
+
+      @if (!connectivity.online()) {
+        <p class="checkin__offline" role="status">
+          <mat-icon aria-hidden="true">cloud_off</mat-icon>
+          <span>
+            Hors ligne : votre émargement sera mis en attente et envoyé au retour du réseau.
+          </span>
+        </p>
+      }
 
       @if (errorMessage()) {
         <p class="checkin__inline-error" role="alert">{{ errorMessage() }}</p>
