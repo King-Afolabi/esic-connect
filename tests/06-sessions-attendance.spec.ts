@@ -31,6 +31,29 @@ let shortCode = '';
 let studentOneDetailPath = '';
 const SESSION_TITLE = `Séance audit Playwright ${Date.now()}`;
 
+/**
+ * Heure locale (fuseau du contexte navigateur, `playwright.config.ts`
+ * `timezoneId: 'Europe/Paris'`) au format `HH:MM` exigé par le champ de
+ * l'écran de création. Calculée par rapport à l'instant réel de
+ * l'exécution — un horaire figé (ex. « 08:00 ») rendait ce test
+ * dépendant de l'heure du jour : au-delà d'une tolérance de 30 minutes
+ * après l'ouverture (docs/02 §16.4), l'émargement plus loin dans ce même
+ * parcours calcule à bon droit un retard, parfois de plusieurs centaines
+ * de minutes si la suite tourne l'après-midi ou le soir — pas un bug du
+ * produit, un défaut de ce test.
+ */
+function parisTimeHHMM(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '00';
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
 test.describe('Parcours prioritaire réel : création → ouverture → émargement → clôture', () => {
   test('1. PEDAGOGICAL_MANAGER crée une séance exceptionnelle', async ({ page }) => {
     await loginAsUi(page, ACCOUNTS.PEDAGOGICAL_MANAGER_TEACHER, '/sessions/new');
@@ -41,10 +64,14 @@ test.describe('Parcours prioritaire réel : création → ouverture → émargem
     await page.getByRole('option', { name: new RegExp(DEMO_DATA.classCode) }).click();
     await page.keyboard.press('Escape');
 
+    const now = new Date();
     const today = new Date().toISOString().slice(0, 10);
     await page.getByLabel('Date').fill(today);
-    await page.getByLabel('Début (heure locale)').fill('08:00');
-    await page.getByLabel('Fin (heure locale)').fill('09:00');
+    // Démarre 2 min avant maintenant : l'émargement qui suit dans ce même
+    // parcours reste dans la tolérance « présent » (0–15 min, docs/02
+    // §16.4) quelle que soit l'heure du jour à laquelle la suite tourne.
+    await page.getByLabel('Début (heure locale)').fill(parisTimeHHMM(new Date(now.getTime() - 2 * 60_000)));
+    await page.getByLabel('Fin (heure locale)').fill(parisTimeHHMM(new Date(now.getTime() + 60 * 60_000)));
     await page
       .getByLabel('Motif de la séance exceptionnelle')
       .fill('Séance créée par la suite Playwright d\'audit (parcours prioritaire).');
