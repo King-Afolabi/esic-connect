@@ -1,6 +1,6 @@
-import { Page, expect } from '@playwright/test';
+import { Page, expect, test } from '@playwright/test';
 import { DemoAccount } from './accounts';
-import { currentTotpCode } from './totp';
+import { claimTotpCode } from './totp';
 
 /**
  * IMPORTANT — architecture réelle observée : le jeton JWT vit uniquement dans un service Angular en
@@ -102,23 +102,75 @@ async function resolveMfaChallengeIfPresent(page: Page, account: DemoAccount): P
     );
   }
 
-  const codeInput = page.getByLabel('Code de vérification');
-  await codeInput.waitFor({ state: 'visible', timeout: 10_000 });
-  await codeInput.fill(currentTotpCode(secret));
-  await page.getByRole('button', { name: 'Valider', exact: true }).click();
-
-  if (isEnrolling) {
-    // L'enrôlement affiche les codes de récupération et attend un clic
-    // explicite avant de rediriger (mfa-challenge.ts: `finish()` n'est
-    // appelé que par ce bouton, jamais automatiquement après confirm()).
-    const continueButton = page.getByRole('button', { name: "J'ai noté mes codes, continuer" });
-    await continueButton.waitFor({ state: 'visible', timeout: 10_000 });
-    await continueButton.click();
-  }
+  await submitTotpCode(page, secret, isEnrolling);
 
   await page.waitForURL((url) => !url.pathname.startsWith('/connexion/verification'), {
     timeout: 10_000,
   });
+}
+
+/**
+ * Saisit un code TOTP et soumet le formulaire, avec une marge de sécurité
+ * contre l'anti-rejeu réel (RG-054/055) : `claimTotpCode` réserve
+ * localement un pas jamais soumis PAR CE PROCESSUS pour ce secret (les
+ * comptes ADMIN/SUPER_ADMIN sont partagés par toute la suite,
+ * `workers: 1`), mais cette réservation en mémoire ne survit pas à un
+ * redémarrage du worker Playwright après l'échec d'un test précédent —
+ * document Playwright : un test en échec fait repartir le worker suivant
+ * de zéro. Si le serveur rejette malgré tout (pas déjà consommé par un
+ * worker antérieur, ou par `scripts/seed-demo.sh` lancé juste avant), on
+ * retente UNE fois avec un nouveau pas réservé — jamais un contournement,
+ * seulement l'attente réelle et bornée (≤ 30 s) que la protection impose.
+ * Le timeout du test en cours est prolongé d'autant plutôt que dissimulé.
+ */
+async function submitTotpCode(page: Page, secret: string, isEnrolling: boolean): Promise<void> {
+  const codeInput = page.getByLabel('Code de vérification');
+  const errorAlert = page.locator('p.auth-page__error[role="alert"]');
+  const successLocator = isEnrolling
+    ? page.getByRole('button', { name: "J'ai noté mes codes, continuer" })
+    : page.locator('app-mfa-challenge');
+  const successState = isEnrolling ? 'visible' : 'detached';
+  const maxAttempts = 2;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const code = await claimTotpCode(secret, async (ms) => {
+      test.setTimeout(test.info().timeout + ms + 5_000);
+      await page.waitForTimeout(ms);
+    });
+
+    await codeInput.waitFor({ state: 'visible', timeout: 10_000 });
+    await codeInput.fill(code);
+    await page.getByRole('button', { name: 'Valider', exact: true }).click();
+
+    const outcome = await Promise.race([
+      successLocator
+        .first()
+        .waitFor({ state: successState, timeout: 10_000 })
+        .then((): 'success' => 'success')
+        .catch((): 'timeout' => 'timeout'),
+      errorAlert
+        .filter({ hasText: /.+/ })
+        .waitFor({ state: 'visible', timeout: 10_000 })
+        .then((): 'error' => 'error')
+        .catch((): 'timeout' => 'timeout'),
+    ]);
+
+    if (outcome === 'success') {
+      if (isEnrolling) {
+        // L'enrôlement affiche les codes de récupération et attend un clic
+        // explicite avant de rediriger (mfa-challenge.ts: `finish()`
+        // n'est appelé que par ce bouton, jamais automatiquement après
+        // confirm()).
+        await successLocator.click();
+      }
+      return;
+    }
+    if (attempt < maxAttempts) {
+      continue; // Le prochain `claimTotpCode` réservera un pas plus récent.
+    }
+    const detail = await errorAlert.textContent().catch(() => null);
+    throw new Error(`Échec de vérification du second facteur (tentative ${attempt}) : ${detail ?? 'inconnu'}`);
+  }
 }
 
 export async function logoutAsUi(page: Page): Promise<void> {

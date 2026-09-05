@@ -58,3 +58,49 @@ function codeAtStep(base32Secret: string, step: bigint): string {
 export function currentTotpCode(base32Secret: string, now: Date = new Date()): string {
   return codeAtStep(base32Secret, stepOf(now));
 }
+
+function millisUntilStep(targetStep: bigint, now: Date): number {
+  const targetStartMs = Number(targetStep) * STEP_SECONDS * 1000;
+  return Math.max(0, targetStartMs - now.getTime()) + 1_000; // +1s de marge.
+}
+
+/**
+ * Dernier pas de temps réclamé PAR CE PROCESSUS, par secret — la recette
+ * navigateur tourne en un seul worker (`playwright.config.ts`,
+ * `workers: 1`), donc une simple table en mémoire du processus suffit à
+ * coordonner tous les fichiers de test entre eux.
+ */
+const lastClaimedStep = new Map<string, bigint>();
+
+/**
+ * Réserve, pour {@code base32Secret}, un code TOTP qui n'a encore JAMAIS
+ * été soumis par ce processus de test — en attendant le pas suivant si le
+ * pas courant a déjà été réclamé. Les comptes de démonstration
+ * ADMIN/SUPER_ADMIN sont partagés par toute la suite (dette T-19/T-20) :
+ * sans cette coordination, deux connexions à moins de 30 s d'intervalle
+ * recalculeraient le MÊME code, que le serveur refuserait à bon droit
+ * (anti-rejeu réel, RG-054/055) — un aller-retour HTTP et jusqu'à 30 s
+ * perdus pour rien. Attendre PROACTIVEMENT le pas suivant, une seule
+ * fois, est strictement plus rapide et plus fiable qu'échouer puis
+ * retenter.
+ *
+ * `sleep` est injectable (par défaut `setTimeout`) pour que l'appelant
+ * navigateur puisse, s'il attend, prolonger le timeout Playwright du test
+ * en cours pendant l'attente plutôt que de risquer de le dépasser.
+ */
+export async function claimTotpCode(
+  base32Secret: string,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<string> {
+  const previous = lastClaimedStep.get(base32Secret);
+  let now = new Date();
+  let step = stepOf(now);
+  if (previous !== undefined && step <= previous) {
+    const target = previous + 1n;
+    await sleep(millisUntilStep(target, now));
+    now = new Date();
+    step = stepOf(now);
+  }
+  lastClaimedStep.set(base32Secret, step);
+  return codeAtStep(base32Secret, step);
+}

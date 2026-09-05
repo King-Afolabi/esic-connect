@@ -37,8 +37,13 @@ test.describe('Temps de chargement — indicatif, pas une validation de l\'objec
       });
       await expect(page.getByRole('heading', { name: 'Accès refusé' })).not.toBeVisible();
       // Seuil large : détecte une régression grossière (page qui ne charge
-      // jamais), pas une mesure de performance fine.
-      expect(elapsedMs).toBeLessThan(15_000);
+      // jamais), pas une mesure de performance fine. ADMIN exige un second
+      // facteur (RG-007) : `loginAsUi` inclut l'attente réelle et bornée
+      // (≤ 30 s) de l'anti-rejeu TOTP (RG-054/055) quand le compte de
+      // démonstration partagé vient d'être utilisé — dette T-19/T-20. Le
+      // seuil couvre ce cas dans le pire des cas plutôt que de le
+      // confondre avec une régression du produit.
+      expect(elapsedMs).toBeLessThan(45_000);
     });
   }
 });
@@ -89,9 +94,13 @@ test.describe('Accessibilité — vérifications structurelles légères (pas un
   test('navigation clavier : Tab puis Entrée soumet le formulaire de connexion', async ({
     page,
   }) => {
+    // Compte SANS second facteur obligatoire (RG-007) : ce test vérifie la
+    // navigation clavier du formulaire de connexion lui-même, pas le défi
+    // MFA (couvert séparément, `01-authentication.spec.ts`) — un compte
+    // ADMIN/SUPER_ADMIN n'atterrirait jamais directement sur /dashboard.
     await page.goto('/login');
-    await page.getByLabel('Adresse électronique').fill(ACCOUNTS.ADMIN.email);
-    await page.getByLabel('Mot de passe').fill(ACCOUNTS.ADMIN.password);
+    await page.getByLabel('Adresse électronique').fill(ACCOUNTS.STUDENT.email);
+    await page.getByLabel('Mot de passe').fill(ACCOUNTS.STUDENT.password);
     await page.getByLabel('Mot de passe').press('Tab');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 10_000 });
@@ -113,7 +122,7 @@ test.describe('Accessibilité — vérifications structurelles légères (pas un
     await page.goto('/login');
     await page.getByLabel('Adresse électronique').fill(ACCOUNTS.STUDENT.email);
     await page.getByLabel('Mot de passe').fill('faux');
-    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     // Le conteneur `role="alert"` existe en permanence (`login.html`) :
     // seul un contenu non vide prouve qu'une erreur a bien été annoncée.
     await expect(page.getByRole('alert')).not.toBeEmpty({ timeout: 10_000 });

@@ -65,6 +65,7 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+/captures/
 frontend/out-tsc/
 
 # Sauvegarde locale d'une version antérieure du dépôt, réalisée par le

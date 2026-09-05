@@ -10,8 +10,12 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
  *
  * Périmètre réel de l'application (`frontend/src/app/app.routes.ts`,
  * `core/guards/*`) : connexion email + mot de passe → JWT gardé en
- * mémoire. `docs/CURRENT-STATE.md` classe explicitement en
- * `HORS_PÉRIMÈTRE_ASSUMÉ` : mot de passe oublié, MFA, WebAuthn, Turnstile,
+ * mémoire. Le second facteur ADMIN/SUPER_ADMIN (RG-007) est désormais
+ * franchi réellement par `loginAsUi` (`tests/support/auth.ts`, dette
+ * T-19/T-20) : chaque connexion `ACCOUNTS.ADMIN`/`ACCOUNTS.SUPER_ADMIN`
+ * ci-dessous passe par le VRAI défi `/connexion/verification`, pas par un
+ * contournement. `docs/CURRENT-STATE.md` classe encore explicitement en
+ * `HORS_PÉRIMÈTRE_ASSUMÉ` : mot de passe oublié, WebAuthn, Turnstile,
  * logout serveur / révocation de session, timeout de session mesurable
  * (30 min — trop long pour un test E2E, non simulé ici). Ces sous-domaines
  * ne sont donc PAS testés ci-dessous ; voir docs/09-strategie-tests.md
@@ -53,7 +57,7 @@ test.describe('Connexion — cas d\'erreur (AC-001)', () => {
     await page.goto('/login');
     await page.getByLabel('Adresse électronique').fill(ACCOUNTS.STUDENT.email);
     await page.getByLabel('Mot de passe').fill('MauvaisMotDePasse123!');
-    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     // Le conteneur `role="alert"` existe en permanence dans le DOM
     // (`login.html`) : on attend un contenu non vide, pas la seule
     // présence du conteneur.
@@ -72,7 +76,7 @@ test.describe('Connexion — cas d\'erreur (AC-001)', () => {
     await page.getByLabel('Adresse électronique').fill('inconnu.e2e@example.test');
     await page.getByLabel('Mot de passe').fill('QuelconquePassword123!');
     const firstAttempt = page.waitForResponse('**/api/v1/auth/login');
-    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     await firstAttempt;
     await expect(page.getByRole('alert')).not.toBeEmpty({ timeout: 10_000 });
     const unknownEmailError = (await page.getByRole('alert').textContent())?.trim();
@@ -81,7 +85,7 @@ test.describe('Connexion — cas d\'erreur (AC-001)', () => {
     await page.getByLabel('Adresse électronique').fill(ACCOUNTS.STUDENT.email);
     await page.getByLabel('Mot de passe').fill('QuelconquePassword123!');
     const secondAttempt = page.waitForResponse('**/api/v1/auth/login');
-    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     await secondAttempt;
     await expect(page.getByRole('alert')).not.toBeEmpty({ timeout: 10_000 });
     const wrongPasswordError = (await page.getByRole('alert').textContent())?.trim();
@@ -100,7 +104,7 @@ test.describe('Connexion — cas d\'erreur (AC-001)', () => {
       route.continue();
     });
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     await expect(page.getByText("L'adresse électronique est obligatoire.")).toBeVisible();
     await expect(page.getByText('Le mot de passe est obligatoire.')).toBeVisible();
     expect(loginCalled).toBe(false);
@@ -133,7 +137,13 @@ test.describe('Gardes de navigation', () => {
     // via `goBack()` — une navigation interne (popstate) que le routeur
     // Angular intercepte sans recharger le document, donc sans perdre le
     // jeton en mémoire.
-    await loginAsUi(page, ACCOUNTS.ADMIN);
+    //
+    // Compte SANS second facteur obligatoire (RG-007) : un compte
+    // ADMIN/SUPER_ADMIN insère une entrée d'historique supplémentaire
+    // (`/connexion/verification`) entre `/login` et `/dashboard`, ce qui
+    // romprait l'hypothèse « un seul `goBack()` ramène à /login » — sans
+    // rapport avec ce que ce test vérifie (le garde `guestGuard`).
+    await loginAsUi(page, ACCOUNTS.STUDENT);
     await page.goBack();
     await expect(page).toHaveURL(/\/dashboard$/);
   });
