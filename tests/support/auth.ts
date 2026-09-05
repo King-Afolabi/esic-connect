@@ -28,10 +28,24 @@ import { claimTotpCode } from './totp';
  */
 export async function loginAsUi(page: Page, account: DemoAccount, targetPath?: string): Promise<void> {
   await page.goto(targetPath ?? '/login');
-  // Si `targetPath` est déjà accessible sans connexion (ne devrait pas
-  // arriver pour une route protégée), on retombe simplement sur /login.
-  if (!/\/login(\?|$)/.test(page.url())) {
-    // Improbable : la page cible s'est chargée sans redirection.
+  // `authGuard`/`roleGuard` redirigent vers /login de façon ASYNCHRONE
+  // (évaluation du routeur Angular après l'événement `load` de la
+  // navigation dure) : lire `page.url()` immédiatement après `goto` est
+  // une course réelle, gagnée par le guard la plupart du temps mais pas
+  // toujours — reproduit sur un chunk Vite jamais compilé (premier accès
+  // à la route), où la redirection prend juste assez de retard pour que
+  // la lecture synchrone voie encore l'URL cible et morde à l'hameçon
+  // « déjà accessible », sautant la connexion entière. On attend donc
+  // explicitement le passage par /login, avec une redirection déjà
+  // observée traitée comme immédiate (délai quasi nul).
+  try {
+    await page.waitForURL((url) => /\/login(\?|$)/.test(url.pathname + url.search), {
+      timeout: 3_000,
+    });
+  } catch {
+    // Toujours pas sur /login après ce délai : la page cible s'est
+    // réellement chargée sans redirection (cas improbable pour une route
+    // protégée, mais pas exclu pour un appelant sans garde).
     return;
   }
   await page.getByLabel('Adresse électronique').fill(account.email);
