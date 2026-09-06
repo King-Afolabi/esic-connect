@@ -56,9 +56,20 @@
   border-bottom: 2px solid transparent;
 }
 
+.alt__tabs a:hover {
+  color: var(--esic-ink);
+  border-bottom-color: var(--esic-line-strong);
+}
+
+.alt__tabs a:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 .alt__tabs a.alt__tab--active {
-  color: var(--esic-primary);
-  border-bottom-color: var(--esic-primary);
+  color: var(--esic-blue-700);
+  border-bottom-color: var(--esic-blue-700);
 }
 
 // Barre de filtres et blocs de résolution de contexte — cf. primitive

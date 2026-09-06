@@ -9,9 +9,9 @@
 </header>
 
 <nav class="alt__tabs" aria-label="Alternance">
-  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active">Modèles</a>
-  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active" aria-current="page">Affectations aux classes</a>
-  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Exceptions par inscription</a>
 </nav>
 
 <form class="alt__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">

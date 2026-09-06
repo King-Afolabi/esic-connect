@@ -1,6 +1,12 @@
 <nav class="academic__tabs" aria-label="Référentiels académiques">
   @for (tab of tabs; track tab.slug) {
-    <a [routerLink]="['/academic', tab.slug]">{{ tab.label }}</a>
+    <a
+      [routerLink]="['/academic', tab.slug]"
+      routerLinkActive="academic__tab--active"
+      [routerLinkActiveOptions]="{ exact: false }"
+      ariaCurrentWhenActive="page"
+      >{{ tab.label }}</a
+    >
   }
 </nav>
 

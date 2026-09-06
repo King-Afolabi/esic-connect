@@ -19,9 +19,20 @@
   border-bottom: 2px solid transparent;
 }
 
+.plan__tabs a:hover {
+  color: var(--esic-ink);
+  border-bottom-color: var(--esic-line-strong);
+}
+
+.plan__tabs a:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 .plan__tab--active {
-  color: var(--esic-primary);
-  border-bottom-color: var(--esic-primary);
+  color: var(--esic-blue-700);
+  border-bottom-color: var(--esic-blue-700);
 }
 
 .plan__title {

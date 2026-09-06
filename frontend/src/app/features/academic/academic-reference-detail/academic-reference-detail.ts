@@ -4,7 +4,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { AcademicApiService } from '../academic-api.service';
@@ -52,6 +52,7 @@ type ChildState =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
+    RouterLinkActive,
     MatCardModule,
     MatTableModule,
     MatButtonModule,

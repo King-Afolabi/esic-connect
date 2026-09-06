@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { Observable } from 'rxjs';
 
 import { NotificationService } from '../../../core/notifications/notification.service';
@@ -48,6 +48,7 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
+    RouterLinkActive,
     MatCardModule,
     MatTableModule,
     MatPaginatorModule,

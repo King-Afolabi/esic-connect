@@ -15,10 +15,25 @@
   color: var(--esic-ink-soft);
   text-decoration: none;
   padding: var(--esic-space-2) 0;
+  border-bottom: 2px solid transparent;
 }
 
 .academic__tabs a:hover {
   color: var(--esic-ink);
+  border-bottom-color: var(--esic-line-strong);
+}
+
+.academic__tabs a:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+// État sélectionné : aussi lisible que l'entrée active du rail (Lot F),
+// mais par un soulignement — jamais une copie du rail.
+.academic__tab--active {
+  color: var(--esic-blue-700);
+  border-bottom-color: var(--esic-blue-700);
 }
 
 .academic__title {
