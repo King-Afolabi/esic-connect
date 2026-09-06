@@ -68,6 +68,19 @@ app:
       secret: ${JWT_SECRET}
       issuer: esic-connect
       access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}
+      # Jeton de renouvellement de session (EF-AUTH-014, docs/02 §17.7),
+      # stocké dans Redis, remis au navigateur dans un cookie HttpOnly.
+      # - idle : durée d'inactivité, glissante (repoussée à chaque
+      #   renouvellement) — « 30 minutes d'inactivité » du cahier ;
+      # - absolute : plafond absolu, jamais repoussé — au-delà, une
+      #   nouvelle connexion est exigée.
+      refresh-token-idle-ttl: ${JWT_REFRESH_TOKEN_IDLE_TTL:PT30M}
+      refresh-token-absolute-ttl: ${JWT_REFRESH_TOKEN_ABSOLUTE_TTL:PT12H}
+    cookies:
+      # Attribut Secure du cookie de renouvellement. Vrai par défaut ;
+      # désactivé pour les seuls profils servis en clair (local,
+      # démonstration, test) via application-*.yml.
+      secure: ${APP_COOKIE_SECURE:true}
     invitation:
       # Durée de validité d'une invitation d'activation (RG-005 / RG-08 :
       # « un mois »). Configurable, doit rester strictement positive

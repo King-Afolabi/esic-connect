@@ -1,6 +1,7 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -9,11 +10,18 @@ import { apiErrorInterceptor } from './api-error.interceptor';
 describe('apiErrorInterceptor', () => {
   let http: HttpClient;
   let controller: HttpTestingController;
-  const auth = { handleUnauthorized: vi.fn() };
+  const auth = {
+    handleUnauthorized: vi.fn(),
+    refreshSession: vi.fn(),
+    accessToken: 'fresh-token',
+  };
   const notifications = { error: vi.fn(), info: vi.fn() };
 
   beforeEach(() => {
     auth.handleUnauthorized.mockReset();
+    auth.refreshSession.mockReset();
+    auth.refreshSession.mockReturnValue(of(false));
+    auth.accessToken = 'fresh-token';
     notifications.error.mockReset();
 
     TestBed.configureTestingModule({
@@ -30,19 +38,57 @@ describe('apiErrorInterceptor', () => {
 
   afterEach(() => controller.verify());
 
-  it('signals an expired session on a 401 (non-login) response and rethrows', () => {
+  it('tries a silent refresh on a 401; if it fails, signals an expired session and rethrows', () => {
+    auth.refreshSession.mockReturnValue(of(false));
     const onError = vi.fn();
     http.get('/api/v1/students').subscribe({ error: onError });
+    controller.expectOne('/api/v1/students').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(auth.refreshSession).toHaveBeenCalledOnce();
+    expect(auth.handleUnauthorized).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it('replays the original request with the new token when the silent refresh succeeds', () => {
+    auth.refreshSession.mockReturnValue(of(true));
+    auth.accessToken = 'brand-new-token';
+    const onNext = vi.fn();
+    http.get('/api/v1/students').subscribe({ next: onNext });
+
+    controller.expectOne('/api/v1/students').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    const retried = controller.expectOne('/api/v1/students');
+    expect(retried.request.headers.get('Authorization')).toBe('Bearer brand-new-token');
+    retried.flush({ ok: true });
+
+    expect(onNext).toHaveBeenCalledOnce();
+    expect(auth.handleUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it('signals an expired session if the replayed request still returns 401', () => {
+    auth.refreshSession.mockReturnValue(of(true));
+    const onError = vi.fn();
+    http.get('/api/v1/students').subscribe({ error: onError });
+
+    controller.expectOne('/api/v1/students').flush(null, { status: 401, statusText: 'Unauthorized' });
     controller.expectOne('/api/v1/students').flush(null, { status: 401, statusText: 'Unauthorized' });
 
     expect(auth.handleUnauthorized).toHaveBeenCalledOnce();
     expect(onError).toHaveBeenCalledOnce();
   });
 
+  it('does not attempt a refresh on a 401 from an auth route', () => {
+    http.post('/api/v1/auth/refresh', {}).subscribe({ error: () => undefined });
+    controller.expectOne('/api/v1/auth/refresh').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(auth.refreshSession).not.toHaveBeenCalled();
+  });
+
   it('does not treat a failed login as an expired session', () => {
     http.post('/api/v1/auth/login', {}).subscribe({ error: () => undefined });
     controller.expectOne('/api/v1/auth/login').flush(null, { status: 401, statusText: 'Unauthorized' });
 
+    expect(auth.refreshSession).not.toHaveBeenCalled();
     expect(auth.handleUnauthorized).not.toHaveBeenCalled();
   });
 
@@ -75,6 +121,7 @@ describe('apiErrorInterceptor', () => {
       .expectOne('/api/v1/account-invitations/activate')
       .flush(null, { status: 401, statusText: 'Unauthorized' });
 
+    expect(auth.refreshSession).not.toHaveBeenCalled();
     expect(auth.handleUnauthorized).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledOnce();
   });

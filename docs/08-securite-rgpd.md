@@ -234,21 +234,47 @@ Garde-fous de non-régression : `PlanningImportIntegrationTests`
 
 ## Stratégie
 
-- access token court ;
-- cookie `HttpOnly` ;
-- attribut `Secure` ;
-- `SameSite` adapté ;
-- refresh token rotatif ;
-- révocation ;
-- CSRF adapté au cookie.
+`IMPLEMENTED_AND_TESTED` (module `identity`,
+`RefreshTokenStore` / `RefreshService` / `RefreshCookies`).
+
+- **access token court** — JWT HS256 en mémoire seule côté client
+  (`JWT_ACCESS_TOKEN_TTL_SECONDS`, défaut 900 s) ;
+- **cookie `HttpOnly`** — `refresh_token`, jamais lisible par un script,
+  jamais dans `localStorage` ;
+- **attribut `Secure`** — piloté par `APP_COOKIE_SECURE` (vrai par
+  défaut ; `false` seulement pour les profils servis en clair) ;
+- **`SameSite=Strict`** — le cookie n’accompagne aucune navigation d’un
+  autre site : c’est la protection CSRF de ce cookie ;
+- **`Path=/api/v1/auth`** — jamais envoyé aux routes métier ;
+- **refresh token rotatif** — jeton opaque stocké dans Redis (une clé par
+  session, empreinte SHA-256 du secret courant), réécrit à chaque
+  renouvellement ; un secret périmé rejoué **coupe toute la famille** ;
+- **CSRF** — pas de jeton anti-CSRF distinct : `SameSite=Strict`, la
+  réponse de `/auth/refresh` ne rend le jeton d’accès que dans son corps
+  (illisible en cross-origin), et aucune route métier n’accorde
+  d’autorité par cookie (en-tête `Authorization` exigé) ;
+- **révocation** — voir Expiration.
+
+Test : `RefreshTokenIntegrationTests`, `RefreshTokenExpiryIntegrationTests`
+(back-end) ; `auth.service.spec.ts`, `api-error.interceptor.spec.ts`
+(front-end).
 
 ## Expiration
 
-- 30 minutes d’inactivité ;
-- durée absolue configurable ;
-- révocation après changement de mot de passe ;
-- révocation après suspension ;
-- révocation à la déconnexion.
+- **30 minutes d’inactivité** — durée de vie Redis glissante,
+  `JWT_REFRESH_TOKEN_IDLE_TTL` (défaut `PT30M`) ;
+- **durée absolue configurable** — `JWT_REFRESH_TOKEN_ABSOLUTE_TTL`
+  (défaut `PT12H`), inscrite dans l’entrée et jamais repoussée ;
+- **révocation après changement de mot de passe** — la famille est
+  ouverte avant `credentials_invalidated_at`, donc refusée au
+  renouvellement (même règle que `RevokedTokenValidator`) ;
+- **révocation après suspension** — le renouvellement recharge le compte
+  et refuse tout statut autre qu’`ACTIVE` ;
+- **révocation à la déconnexion** — `POST /auth/logout` supprime la
+  famille et vide le cookie ;
+- **démarrage à froid hors ligne** — non couvert : le cookie exige le
+  réseau et le jeton d’accès ne survit pas au rechargement sans lui
+  (arbitrage RG-093, dette T-14).
 
 ## Interdiction
 

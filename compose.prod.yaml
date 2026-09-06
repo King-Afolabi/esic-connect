@@ -58,6 +58,13 @@ services:
       - "${REDIS_PASSWORD}"
       - --appendonly
       - "yes"
+    environment:
+      # Fourni au conteneur pour que la sonde ci-dessous résolve le mot de
+      # passe SANS que Compose ne l'interpole dans la définition du service
+      # (il resterait alors visible dans `docker compose config`). Le `$$`
+      # protège la variable de l'interpolation Compose : elle est étendue
+      # par le shell, dans le conteneur.
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis-data:/data
     healthcheck:
@@ -109,6 +116,12 @@ services:
       JUSTIFICATION_STORAGE_PATH: /data/uploads/justifications
     volumes:
       - justification-data:/data/uploads/justifications
+    # Lié UNIQUEMENT à la boucle locale : joignable depuis un shell sur la
+    # Pi elle-même (administration, scripts/seed-demo.sh) mais jamais
+    # depuis le réseau local ni Internet — aucun port n'est ouvert sur la
+    # box par ce biais (cf. l'en-tête de ce fichier).
+    ports:
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test:
         - CMD-SHELL
@@ -133,18 +146,26 @@ services:
     networks:
       - backend-network
 
-  # Tunnel sortant vers Cloudflare : rend "frontend" joignable publiquement
-  # sous le domaine configuré dans le tableau de bord Cloudflare Zero
-  # Trust, SANS ouvrir aucun port entrant sur la box/le pare-feu. Le jeton
-  # est généré lors de la création du tunnel (dashboard Cloudflare) — un
-  # secret local, jamais dans le dépôt.
+  # Tunnel sortant vers Cloudflare : rend "frontend" joignable publiquement,
+  # SANS ouvrir aucun port entrant sur la box/le pare-feu.
+  #
+  # Mode "Quick Tunnel" (choisi ici : gratuit, aucun compte ni domaine
+  # requis) : Cloudflare attribue une URL aléatoire en *.trycloudflare.com
+  # à chaque démarrage du conteneur — elle CHANGE à chaque redémarrage.
+  # Après un `up`/redémarrage, récupérer la nouvelle adresse dans les
+  # journaux :
+  #   docker compose -f compose.prod.yaml logs cloudflared | grep trycloudflare.com
+  # puis mettre à jour APP_ACTIVATION_BASE_URL et APP_ALLOWED_ORIGINS dans
+  # .env avec cette URL et relancer "backend" pour qu'il en tienne compte.
+  #
+  # Passer à un tunnel nommé (URL stable sur un domaine possédé) reste
+  # possible plus tard : remplacer `command` par `tunnel run` et ajouter
+  # `environment: TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}`.
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: esic-connect-cloudflared
     restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --url http://frontend:80
     depends_on:
       frontend:
         condition: service_started

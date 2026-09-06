@@ -84,6 +84,72 @@ validations.
   (antivirus — configuration cible par environnement documentée dans
   `.env.example`, comportement par défaut inchangé).
 
+### 6 septembre 2026 — continuité de session au rechargement (cookie de renouvellement)
+
+Même branche `feat/demo-readiness-e2e-ui`. Défaut signalé par le porteur :
+**recharger la page déconnecte l'utilisateur**. Le jeton d'accès ne vit
+qu'en mémoire (RG-093) et rien ne le reconstruisait ; `restoreSession()`
+était un no-op explicite, en attente du back-end. La stratégie était
+déjà écrite au cahier (docs/02 §17.7, docs/03 §15.2, docs/08 §6) : jeton
+de renouvellement rotatif en cookie `HttpOnly`. Exigence non implémentée,
+pas un changement de règle.
+
+- **Back-end (module `identity` uniquement, aucun nouveau module)** :
+  - `RefreshTokenStore` — une clé Redis par session (`esic:auth:refresh:{familyId}`),
+    empreinte SHA-256 du secret courant, jamais le secret. Rotation à
+    chaque usage ; un cookie dont le secret ne correspond plus est traité
+    comme un rejeu et **coupe toute la famille**. Deux bornes : inactivité
+    glissante (`JWT_REFRESH_TOKEN_IDLE_TTL`, défaut `PT30M` — « 30 minutes
+    d'inactivité » du cahier) et plafond absolu jamais repoussé
+    (`JWT_REFRESH_TOKEN_ABSOLUTE_TTL`, défaut `PT12H`).
+  - `RefreshCookies` — `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`,
+    `Secure` piloté par `APP_COOKIE_SECURE` (vrai par défaut, y compris
+    en profil `demo` derrière le tunnel HTTPS ; `false` seulement pour
+    `local` et `test`, `localhost` restant un contexte sûr côté
+    navigateur).
+  - `RefreshService` + `RefreshController` — `POST /api/v1/auth/refresh`
+    (**route publique** : le cookie fait foi), rotation, revérification de
+    l'état du compte, réémission d'un jeton d'accès **portant les mêmes
+    `amr`** que la session d'origine (EF-AUTH-015). CSRF : `SameSite=Strict`
+    + réponse qui ne rend le jeton que dans son corps + aucune autorité
+    ambiante par cookie sur les routes métier → pas de jeton anti-CSRF
+    distinct. Tout échec → `401` nu, indistinguable (`RefreshTokenException`).
+  - Révocation globale : `refresh` recharge le compte et applique la règle
+    de `RevokedTokenValidator` — une famille ouverte avant
+    `credentials_invalidated_at` est refusée. Changement de mot de passe,
+    suspension, `logout-all` neutralisent donc aussi le renouvellement.
+    `POST /auth/logout` supprime la famille et vide le cookie.
+  - `GET /api/v1/auth/me` (docs/02 §30.2) — `{subject, email, roles}`,
+    protégé par jeton ; sert au front à réafficher l'identité après un
+    renouvellement.
+  - Les 4 chemins qui délivrent un jeton (`/login` sans MFA, `/mfa/verify`,
+    `/mfa/enroll/confirm` branche défi, `/webauthn/login`) posent le
+    cookie. Redis indisponible **à l'émission** : la connexion réussit
+    sans cookie (le jeton d'accès reste valable) ; **au renouvellement** :
+    `401`, aucune session dégradée.
+- **Front-end** :
+  - `AuthService.restoreSession()` — enchaîne `POST /auth/refresh`
+    (`withCredentials`) puis `GET /auth/me` ; sans cookie valide, démarrage
+    anonyme silencieux.
+  - `AuthService.refreshSession()` — renouvellement en cours de session,
+    **file unique** (`shareReplay`), utilisé par l'intercepteur d'erreurs :
+    un `401` métier déclenche un renouvellement puis un **rejeu unique**
+    de la requête ; l'utilisateur n'est renvoyé vers `/login` que si le
+    renouvellement échoue. Les routes `/v1/auth/*` sont exclues du rejeu
+    (pas de boucle).
+  - Aucun `localStorage`/`sessionStorage` : le cookie est `HttpOnly`, le
+    jeton d'accès reste en mémoire seule.
+- **T-14 reformulée** : le rechargement **en ligne** rétablit désormais
+  la session. Reste non couvert : un **démarrage à froid hors ligne** (le
+  cookie exige le réseau ; le jeton ne vit qu'en mémoire — RG-093).
+- **Tests** : voir §6.5. Back-end `RefreshTokenIntegrationTests` (11) +
+  `RefreshTokenExpiryIntegrationTests` (2, durées courtes via `properties`).
+  Front-end `auth.service.spec.ts` et `api-error.interceptor.spec.ts`
+  étendus (restauration OK/KO, file unique, rejeu, échec → `/login`).
+  `ModularityTests` inchangé (19 modules), schéma inchangé (V34, aucune
+  migration). **Recette navigateur non rejouée** — `NOT_PERFORMED` pour
+  le parcours « recharger la page reste connecté » (à ajouter, §10).
+
 ## Repère Git
 
 | Élément | Valeur |
@@ -1330,6 +1396,62 @@ exécution locale).
 
 ---
 
+### 6.5 Renouvellement de session (6 septembre 2026)
+
+Même environnement que §6. Aucune migration, aucun nouveau module.
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw clean test` | **142 classes / 1231 tests / 0 échec / 0 erreur** — `BUILD SUCCESS`, `ModularityTests` vert (19 modules), schéma inchangé V34 ; +13 vs §6.4 (`RefreshTokenIntegrationTests` 11, `RefreshTokenExpiryIntegrationTests` 2) |
+| `cd frontend && npm test -- --watch=false` | **95 fichiers / 786 tests / 0 échec** (+7 vs §6.4 : `restoreSession` OK/KO, `refreshSession` file unique / échec, intercepteur `401` → renouvellement → rejeu / échec → `/login`) |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm run build` | bundle produit, aucune alerte de budget |
+
+**Ce qui reste `NOT_PERFORMED`** : le parcours « recharger la page reste
+connecté » n'a **pas** été rejoué dans un vrai navigateur. Il est couvert
+par `RefreshTokenIntegrationTests` (bout en bout HTTP, cookie réellement
+posé, rotaté, rejoué, révoqué) et par les tests de composant Angular
+(`auth.service.spec.ts`, `api-error.interceptor.spec.ts`). Un scénario
+Playwright est à ajouter (§10, priorité 6).
+
+**Test d'expiration — durées réelles.** `RefreshTokenExpiryIntegrationTests`
+force `idle-ttl` et `absolute-ttl` à `PT3S` via
+`@SpringBootTest(properties = …)` et attend réellement (~3,5 s puis
+~5,5 s). Il vérifie deux règles distinctes : l'inactivité **glisse** à
+chaque usage, mais le plafond absolu ne bouge pas — un renouvellement à
+mi-parcours ne repousse pas l'échéance absolue.
+
+**Rejeu de vérification (6 septembre 2026, après-midi).** Toute la suite
+ré-exécutée avant fermeture du lot :
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw clean test` | 143 rapports Surefire — 141 classes exécutées + 2 ignorées faute de `clamd` réel (`ESIC_CLAMAV_REAL` absent) — **1231 tests / 0 échec / 0 erreur**, `BUILD SUCCESS` |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm test -- --watch=false` | **95 fichiers / 786 tests / 0 échec** |
+| `cd frontend && npx ng build --configuration production` | bundle produit, aucune alerte de budget |
+| `frontend/node_modules/.bin/tsc -p tsconfig.json --noEmit` | contrôle de type de la suite Playwright — 0 erreur |
+| `docker build ./backend` | image produite (dont l'étape `mkdir -p /data/uploads/justifications`) |
+| `docker build ./frontend` | image produite (`npm install`, `ng build`, `nginx.conf` copié) |
+| `docker compose -f compose.prod.yaml config` | valide ; `REDIS_PASSWORD` n'est plus interpolé dans la chaîne de la sonde Redis (voir ci-dessous) |
+
+**Correctif `compose.prod.yaml` — sonde Redis.** La sonde utilisait
+`redis-cli -a "${REDIS_PASSWORD}"` : Compose interpolait le mot de passe
+directement dans la définition du service (visible dans
+`docker compose config`). Rétabli en `$${REDIS_PASSWORD}` (étendu par le
+shell **dans** le conteneur), avec un bloc `environment: REDIS_PASSWORD`
+sur le seul service `redis` pour que la variable y soit résolue. Le mot
+de passe ne figure plus que là où il est indispensable
+(`--requirepass` de Redis, connexion du back-end).
+
+**Non rejoué dans ce lot** : suite Playwright complète (167 tests, ~30 min,
+exige la pile de démonstration — dernier passage vert en §6.4) ; montée
+de la pile `compose.prod.yaml` en conditions réelles avec Quick Tunnel
+(les deux images se construisent, la composition valide ; aucune
+exécution live). `NOT_PERFORMED`.
+
+---
+
 ## 7. Démonstration
 
 | Nature | Statut |
@@ -1360,7 +1482,7 @@ exécution locale).
 | T-08 | Turnstile jamais vérifié contre le service réel | aucune clé secrète dans le dépôt ; sans clé, le produit **déclare** qu'aucun contrôle n'est actif |
 | T-09 | passkeys inutilisables hors `localhost` sans domaine ni HTTPS | contrainte du standard WebAuthn, pas du produit |
 | **T-13** | **aucun service de poussée réel sollicité** (sprint 10) | le chiffrement RFC 8291 est vérifié contre le vecteur officiel de la RFC et la signature VAPID est implémentée, mais aucun message n'a jamais atteint un navigateur. Sans clés VAPID, l'API déclare `providerActive: false` — elle ne simule aucun envoi |
-| **T-14** | **consultation hors ligne limitée à une session ouverte** (sprint 10) | le jeton ne vivant qu'en mémoire (RG-093), un démarrage à froid sans réseau affiche l'écran de connexion. Lever cette limite exigerait de persister un élément de session, ce que RG-093 interdit : c'est un arbitrage, pas un oubli |
+| **T-14** | **démarrage à froid hors ligne toujours non couvert** (sprint 10 ; **rechargement en ligne levé le 6 septembre 2026**) | un rechargement **avec réseau** rétablit désormais la session via le cookie de renouvellement `HttpOnly` (voir la mise à jour du 6 septembre). Reste non couvert : ouvrir l'application **sans réseau** — le cookie exige le serveur, et le jeton d'accès ne vit qu'en mémoire (RG-093). C'est un arbitrage, pas un oubli |
 | **T-15** | **file d'actions différées non persistante** (sprint 10) | elle ne survit pas à un rechargement de page. Le code court étant un jeton (RG-093) et expirant en 30 s, la persister n'apporterait qu'un rejeu de codes périmés |
 | **T-16** | **aucun locataire Microsoft réel sollicité** (sprint 11) | `EF-INT-002` et `EF-INT-003` restent `PARTIAL`. Le port, l'adaptateur Graph (jeton d'application mis en cache, `onlineMeetings`, `events`) et l'adaptateur inactif sont écrits et couverts par des tests, mais **aucun appel n'a jamais atteint Microsoft**. Sans identifiants, `GET /api/v1/integrations/microsoft/status` déclare `meetingActive: false` — le produit ne simule aucune réunion |
 | **T-17** | **aucun fichier de logo dans le dépôt** (sprint 11) | l'en-tête des documents PDF est une **signature typographique** (bandeau, établissement, produit), pas une image. Dessiner un logo inventé serait pire que de ne pas en mettre. L'insertion d'un logo fourni par l'établissement se réduit à un `PDImageXObject` dans `PdfDocumentWriter.header` |
@@ -1414,11 +1536,13 @@ continue). Le profil `test` lit `MYSQL_TEST_DATABASE`.
    l'injecter par l'environnement, et vérifier qu'un navigateur reçoit
    réellement une notification avant de présenter `EF-NOTIF-005` comme
    livré.
-6. **Étendre la recette navigateur** aux écrans des sprints 9 et 10, et
-   au parcours d'installation de la PWA sur un contexte HTTPS. Les
-   parcours du sprint 11 ont, eux, une suite écrite
-   (`tests/11-pilotage-restitution.spec.ts`) — voir §6.1 pour son état
-   d'exécution.
+6. **Étendre la recette navigateur** aux écrans des sprints 9 et 10, au
+   parcours d'installation de la PWA sur un contexte HTTPS, et à un
+   scénario **« recharger la page reste connecté »** (renouvellement de
+   session du 6 septembre — couvert par des tests d'intégration et de
+   composant, pas encore en navigateur). Les parcours du sprint 11 ont,
+   eux, une suite écrite (`tests/11-pilotage-restitution.spec.ts`) — voir
+   §6.1 pour son état d'exécution.
 7. **Obtenir un fichier de logo de l'établissement** (T-17) pour les
    documents PDF officiels.
 8. **Arrêter la politique de rétention des pièces jointes** (T-05) avant

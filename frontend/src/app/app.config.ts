@@ -23,9 +23,9 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
     ),
-    // Tente de rétablir une session avant le premier rendu. Sans
-    // persistance client autorisée, cet appel se termine sans session
-    // aujourd'hui (voir AuthService.restoreSession).
+    // Rétablit la session avant le premier rendu : échange le cookie de
+    // renouvellement HttpOnly contre un jeton d'accès (voir
+    // AuthService.restoreSession). Sans cookie valide, démarrage anonyme.
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
     // Enregistrement du service worker (EF-PWA-001). Silencieux si le
     // navigateur ne le prend pas en charge : la PWA est un supplément,

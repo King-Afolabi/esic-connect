@@ -1251,12 +1251,25 @@ sequenceDiagram
 
 ## 15.2 Stockage
 
-Les jetons sensibles sont placés dans des cookies :
+`IMPLEMENTED_AND_TESTED` — voir `docs/CURRENT-STATE.md` (6 septembre 2026)
+et `docs/08-securite-rgpd.md` §6.
 
-- `HttpOnly` ;
-- `Secure` en HTTPS ;
-- `SameSite` adapté ;
-- durée courte.
+- **jeton d’accès** : JWT HS256, **en mémoire seule** côté client (jamais
+  `localStorage` ni `sessionStorage`, RG-093), durée courte ;
+- **jeton de renouvellement** : opaque, stocké côté serveur dans Redis
+  (une clé par session, empreinte SHA-256 du secret courant), remis au
+  navigateur dans un cookie `refresh_token` :
+  - `HttpOnly` ;
+  - `Secure` (piloté par configuration, actif hors profils servis en
+    clair) ;
+  - `SameSite=Strict`, `Path=/api/v1/auth` ;
+  - **rotatif** : réécrit à chaque `POST /api/v1/auth/refresh` ; un
+    secret périmé rejoué révoque toute la famille (détection de vol) ;
+  - deux bornes : inactivité glissante (défaut 30 min) et plafond absolu
+    (défaut 12 h) ;
+- **restauration au rechargement** : `restoreSession()` échange le cookie
+  contre un jeton d’accès puis lit `GET /api/v1/auth/me`. Sans cookie
+  valide : démarrage anonyme.
 
 ## 15.3 WebAuthn
 

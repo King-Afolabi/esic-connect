@@ -12,7 +12,13 @@ FROM node:24-alpine AS build
 WORKDIR /build
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# `npm install` plutôt que `npm ci` : certaines dépendances optionnelles
+# (bindings natifs de l'outillage de build) diffèrent selon l'architecture
+# CPU — un lockfile figé sur une machine de développement (ex. macOS
+# arm64) peut légitimement manquer les entrées nécessaires à Linux arm64
+# (Raspberry Pi). `npm install` les résout pour LA plateforme réelle du
+# build, ici toujours native (jamais d'émulation sur la cible).
+RUN npm install
 
 COPY . .
 RUN npm run build

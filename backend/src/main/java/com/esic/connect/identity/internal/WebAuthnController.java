@@ -3,6 +3,7 @@ package com.esic.connect.identity.internal;
 import com.esic.connect.shared.web.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,9 +37,11 @@ import java.util.UUID;
 public class WebAuthnController {
 
     private final WebAuthnService webAuthnService;
+    private final RefreshService refreshService;
 
-    public WebAuthnController(WebAuthnService webAuthnService) {
+    public WebAuthnController(WebAuthnService webAuthnService, RefreshService refreshService) {
         this.webAuthnService = webAuthnService;
+        this.refreshService = refreshService;
     }
 
     @PostMapping("/register/options")
@@ -59,10 +62,14 @@ public class WebAuthnController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody WebAuthnWeb.AuthenticationRequestBody body,
-                               @RequestHeader(value = AuthController.DEVICE_HEADER,
-                                       required = false) String deviceId) {
-        return webAuthnService.authenticate(body, deviceId);
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody WebAuthnWeb.AuthenticationRequestBody body,
+            @RequestHeader(value = AuthController.DEVICE_HEADER, required = false) String deviceId) {
+        LoginResponse response = webAuthnService.authenticate(body, deviceId);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+        refreshService.onAuthenticated(response, deviceId)
+                .ifPresent(cookie -> builder.header(HttpHeaders.SET_COOKIE, cookie.toString()));
+        return builder.body(response);
     }
 
     /** Passkeys du compte connecté. */

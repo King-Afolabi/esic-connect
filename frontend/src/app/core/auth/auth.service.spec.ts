@@ -135,9 +135,70 @@ describe('AuthService', () => {
     expect(service.accessToken).toBeNull();
   });
 
-  it('restoreSession completes without establishing a session (no client persistence)', async () => {
-    await expect(firstValueFrom(service.restoreSession())).resolves.toBeUndefined();
+  it('restoreSession rebuilds the session from the refresh cookie then the identity route', async () => {
+    const token = makeJwt({ sub: 'public-9', roles: ['STUDENT'], exp: futureExp });
+    const promise = firstValueFrom(service.restoreSession());
+
+    const refresh = http.expectOne('/api/v1/auth/refresh');
+    expect(refresh.request.method).toBe('POST');
+    expect(refresh.request.withCredentials).toBe(true);
+    refresh.flush({ accessToken: token, tokenType: 'Bearer', expiresInSeconds: 900 });
+
+    const me = http.expectOne('/api/v1/auth/me');
+    expect(me.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
+    me.flush({ subject: 'public-9', email: 'etudiant@esic.test', roles: ['STUDENT'] });
+
+    await promise;
+    expect(service.isAuthenticated()).toBe(true);
+    expect(service.currentUserEmail()).toBe('etudiant@esic.test');
+    expect(service.roles()).toEqual(['STUDENT']);
+  });
+
+  it('restoreSession completes without a session when there is no valid refresh cookie', async () => {
+    const promise = firstValueFrom(service.restoreSession());
+    http.expectOne('/api/v1/auth/refresh').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(promise).resolves.toBeUndefined();
     expect(service.isAuthenticated()).toBe(false);
+  });
+
+  it('refreshSession installs a new token in memory and keeps the current email', async () => {
+    await authenticate(service, http, futureExp, ['TEACHER']);
+    const newToken = makeJwt({ sub: 's', roles: ['TEACHER'], exp: futureExp });
+
+    const promise = firstValueFrom(service.refreshSession());
+    const request = http.expectOne('/api/v1/auth/refresh');
+    expect(request.request.withCredentials).toBe(true);
+    request.flush({ accessToken: newToken, tokenType: 'Bearer', expiresInSeconds: 900 });
+
+    expect(await promise).toBe(true);
+    expect(service.accessToken).toBe(newToken);
+    expect(service.currentUserEmail()).toBe('user@esic.test');
+  });
+
+  it('refreshSession folds concurrent calls into a single request', async () => {
+    const first = firstValueFrom(service.refreshSession());
+    const second = firstValueFrom(service.refreshSession());
+
+    http.expectOne('/api/v1/auth/refresh').flush({
+      accessToken: makeJwt({ sub: 's', roles: [], exp: futureExp }),
+      tokenType: 'Bearer',
+      expiresInSeconds: 900,
+    });
+
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+  });
+
+  it('refreshSession resolves false and leaves the session untouched on failure', async () => {
+    await authenticate(service, http, futureExp);
+
+    const promise = firstValueFrom(service.refreshSession());
+    http.expectOne('/api/v1/auth/refresh').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(await promise).toBe(false);
+    // La décision de renvoyer vers la connexion revient à l'intercepteur.
+    expect(service.isAuthenticated()).toBe(true);
   });
 
   it('logout tells the server to revoke the token, clears the session and returns to login', async () => {

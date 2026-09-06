@@ -4,9 +4,12 @@ import com.esic.connect.identity.SessionsRevokedEvent;
 import com.esic.connect.shared.captcha.CaptchaGuard;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,8 +17,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -43,6 +48,8 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
     private final AccessTokenRevocationService accessTokenRevocationService;
     private final SessionRevocationService sessionRevocationService;
+    private final RefreshService refreshService;
+    private final UserAccountRepository userAccountRepository;
     private final CaptchaGuard captchaGuard;
     private final String captchaSiteKey;
     private final Clock clock;
@@ -51,6 +58,8 @@ public class AuthController {
                           PasswordResetService passwordResetService,
                           AccessTokenRevocationService accessTokenRevocationService,
                           SessionRevocationService sessionRevocationService,
+                          RefreshService refreshService,
+                          UserAccountRepository userAccountRepository,
                           CaptchaGuard captchaGuard,
                           @org.springframework.beans.factory.annotation.Value(
                                   "${app.security.captcha.site-key:}") String captchaSiteKey,
@@ -59,6 +68,8 @@ public class AuthController {
         this.passwordResetService = passwordResetService;
         this.accessTokenRevocationService = accessTokenRevocationService;
         this.sessionRevocationService = sessionRevocationService;
+        this.refreshService = refreshService;
+        this.userAccountRepository = userAccountRepository;
         this.captchaGuard = captchaGuard;
         this.captchaSiteKey = captchaSiteKey == null ? "" : captchaSiteKey.trim();
         this.clock = clock;
@@ -76,11 +87,39 @@ public class AuthController {
      * par le client.
      */
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request,
-                               @RequestHeader(value = DEVICE_HEADER, required = false) String deviceId,
-                               HttpServletRequest httpRequest) {
-        return authenticationService.login(request.email(), request.password(),
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = DEVICE_HEADER, required = false) String deviceId,
+            HttpServletRequest httpRequest) {
+        LoginResponse response = authenticationService.login(request.email(), request.password(),
                 httpRequest.getRemoteAddr(), deviceId, request.captchaToken());
+        // Un succès sans second facteur porte un jeton d'accès : on ouvre
+        // alors une session de renouvellement. Un défi MFA n'en porte pas
+        // et ne pose aucun cookie — la connexion n'est pas terminée.
+        return refreshService.onAuthenticated(response, deviceId)
+                .map(cookie -> ResponseEntity.ok()
+                        .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                        .body(response))
+                .orElseGet(() -> ResponseEntity.ok(response));
+    }
+
+    /**
+     * Identité du compte connecté (docs/02 §30.2). Sert à l'interface
+     * après un renouvellement silencieux : le jeton d'accès seul ne porte
+     * pas l'adresse électronique. Route protégée — un jeton valide est
+     * requis.
+     */
+    @GetMapping("/me")
+    public MeResponse me(@AuthenticationPrincipal Jwt jwt) {
+        UserAccount account = userAccountRepository.findByPublicId(UUID.fromString(jwt.getSubject()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        return new MeResponse(account.getPublicId().toString(), account.getEmail(),
+                roles == null ? List.of() : roles);
+    }
+
+    /** @param subject identifiant public du compte (jamais l'id SQL) */
+    public record MeResponse(String subject, String email, List<String> roles) {
     }
 
     /**
@@ -130,13 +169,20 @@ public class AuthController {
     }
 
     /**
-     * Déconnecte la session courante : le jeton présenté est inscrit sur
-     * la liste de refus jusqu'à son expiration naturelle.
+     * Déconnecte la session courante : le jeton d'accès présenté est
+     * inscrit sur la liste de refus jusqu'à son expiration naturelle, et
+     * la famille de renouvellement portée par le cookie est supprimée —
+     * sans quoi un rechargement rouvrirait aussitôt la session. Le cookie
+     * du navigateur est vidé dans la réponse.
      */
     @PostMapping("/logout")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Void> logout(
+            @AuthenticationPrincipal Jwt jwt,
+            @CookieValue(value = RefreshCookies.COOKIE_NAME, required = false) String refreshCookie) {
         accessTokenRevocationService.revoke(jwt.getId(), jwt.getExpiresAt(), clock.instant());
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, refreshService.revoke(refreshCookie).toString())
+                .build();
     }
 
     /**

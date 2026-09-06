@@ -87,6 +87,13 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api/v1/auth/login",
+            // Renouvellement silencieux de session : aucun jeton d'accès
+            // n'est requis, c'est le cookie de renouvellement HttpOnly qui
+            // fait foi (EF-AUTH-014, docs/02 §17.7). Sûr sans jeton
+            // anti-CSRF : le cookie est SameSite=Strict et la réponse ne
+            // remet le jeton d'accès que dans son corps, illisible depuis
+            // une origine tierce.
+            "/api/v1/auth/refresh",
             // Mot de passe oublié : par nature accessible sans jeton. La
             // route répond de façon neutre et est limitée en débit
             // (EF-AUTH-005, EF-AUTH-012).
