@@ -1,6 +1,7 @@
-<nav class="org__tabs" aria-label="Référentiel organisationnel">
-  <a routerLink="/organization/sites" routerLinkActive="org__tab--active">Sites</a>
-</nav>
+<a class="esic-back" routerLink="/organization/sites">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux sites</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
@@ -29,7 +30,11 @@
     </div>
   }
   @case ('ready') {
-    <h1 class="org__title">{{ mode === 'edit' ? 'Modifier le site' : 'Nouveau site' }}</h1>
+    <header class="esic-page-header">
+      <div class="esic-page-header__text">
+        <h1 class="esic-page-header__title">{{ mode === 'edit' ? 'Modifier le site' : 'Nouveau site' }}</h1>
+      </div>
+    </header>
 
     <form class="org__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <mat-form-field appearance="outline">
