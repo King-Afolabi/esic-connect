@@ -67,6 +67,10 @@ temp/.claude/
 # Claude local files
 .claude/
 
+# État d'exécution local (URL publique du tunnel, etc.) — jamais versionné :
+# l'URL *.trycloudflare.com est éphémère et n'est pas une URL de production.
+/.local/
+
 # Playwright / recette e2e navigateur
 node_modules/
 /test-results/
