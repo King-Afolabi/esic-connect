@@ -142,7 +142,11 @@
   }
 }
 
-// -- Badge neutre (compteurs, catégories) — distinct des statuts ------------
+// -- Badge neutre (compteurs, catégories, statuts de cycle de vie) ----------
+// Distinct de `.esic-status` (assiduité : point + libellé). Ici une étiquette
+// compacte. Les modificateurs `--info/--success/--warning/--danger` donnent
+// une tonalité ; `[data-status]` fait la correspondance métier → tonalité en
+// un seul endroit, pour que les gabarits n'aient qu'à poser la valeur brute.
 .esic-badge {
   display: inline-flex;
   align-items: center;
@@ -155,10 +159,45 @@
   background: var(--esic-surface-sunken);
   border: 1px solid var(--esic-line);
 
-  &--info { color: var(--esic-info); background: var(--esic-info-tint); border-color: transparent; }
-  &--success { color: var(--esic-success); background: var(--esic-success-tint); border-color: transparent; }
-  &--warning { color: var(--esic-warning); background: var(--esic-warning-tint); border-color: transparent; }
-  &--danger { color: var(--esic-danger); background: var(--esic-danger-tint); border-color: transparent; }
+  &--info,
+  &[data-status="PUBLISHED"],
+  &[data-status="OPEN"],
+  &[data-status="IN_PROGRESS"] { color: var(--esic-info); background: var(--esic-info-tint); border-color: transparent; }
+
+  &--success,
+  &[data-status="ACTIVE"],
+  &[data-status="ACCEPTED"],
+  &[data-status="ACCEPTED_ABSENCE"],
+  &[data-status="RESOLVED"],
+  &[data-status="CLOSED"],
+  &[data-status="CONFIRMED"] { color: var(--esic-success); background: var(--esic-success-tint); border-color: transparent; }
+
+  &--warning,
+  &[data-status="PENDING_ACTIVATION"],
+  &[data-status="DRAFT"],
+  &[data-status="VALIDATING"],
+  &[data-status="READY_TO_PUBLISH"],
+  &[data-status="SUBMITTED"],
+  &[data-status="UNDER_REVIEW"],
+  &[data-status="WAITING_FOR_STUDENT"],
+  &[data-status="ADDITIONAL_INFORMATION_REQUIRED"],
+  &[data-status="PENDING"],
+  &[data-status="QUEUED"],
+  &[data-status="TRANSFERRED"] { color: var(--esic-warning); background: var(--esic-warning-tint); border-color: transparent; }
+
+  &--danger,
+  &[data-status="SUSPENDED"],
+  &[data-status="LOCKED"],
+  &[data-status="REJECTED"],
+  &[data-status="BLOCKING"],
+  &[data-status="BOUNCED"],
+  &[data-status="PROCESSING_FAILED"],
+  &[data-status="DEAD"] { color: var(--esic-danger); background: var(--esic-danger-tint); border-color: transparent; }
+
+  &[data-status="ARCHIVED"],
+  &[data-status="SUPERSEDED"],
+  &[data-status="EXPIRED"],
+  &[data-status="CANCELLED"] { color: var(--esic-status-company-fg); background: var(--esic-status-company-bg); border-color: transparent; }
 }
 
 // -- Enveloppe de tableau de données ---------------------------------------
@@ -312,8 +351,12 @@
   gap: var(--esic-space-3) var(--esic-space-4);
   margin-bottom: var(--esic-space-5);
 
+  // `.mat-mdc-form-field` est en largeur 100 % par le réalignement global :
+  // dans une barre de filtres en ligne, on veut des champs bornés.
   .mat-mdc-form-field {
+    width: auto;
     min-width: 12rem;
+    flex: 0 1 18rem;
   }
 
   &__actions {

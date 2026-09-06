@@ -3,15 +3,16 @@
     <mat-icon aria-hidden="true">arrow_back</mat-icon>
     <span>Retour aux apprenants</span>
   </a>
-  <header class="page__header">
-    <h1>Importer des apprenants</h1>
+  <header class="esic-page-header">
+    <div class="esic-page-header__text">
+      <h1 class="esic-page-header__title">Importer des apprenants</h1>
+      <p class="esic-page-header__description">
+        Téléversez un fichier CSV. Une <strong>simulation</strong> analyse et normalise
+        chaque ligne sans rien écrire ; vous confirmez ensuite explicitement la création
+        des comptes et des inscriptions.
+      </p>
+    </div>
   </header>
-
-  <p class="page__intro">
-    Téléversez un fichier CSV. Une <strong>simulation</strong> analyse et normalise
-    chaque ligne sans rien écrire ; vous confirmez ensuite explicitement la création
-    des comptes et des inscriptions.
-  </p>
 
   @if (!canImport()) {
     <p class="panel panel--note" role="note">
