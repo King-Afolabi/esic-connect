@@ -1,12 +1,12 @@
 @use '../../alt-common';
 
 .alt__muted {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--esic-ink-soft);
 }
 
 .alt__hint {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  color: var(--esic-ink-soft);
   margin: 0.5rem 0;
 }
 
@@ -20,9 +20,9 @@
 }
 
 .alt__context--SCHOOL {
-  color: var(--mat-sys-primary);
+  color: var(--esic-primary);
 }
 
 .alt__context--COMPANY {
-  color: var(--mat-sys-tertiary);
+  color: var(--esic-status-company-fg);
 }

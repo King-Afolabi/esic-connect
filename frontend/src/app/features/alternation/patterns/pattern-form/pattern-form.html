@@ -31,9 +31,13 @@
     </div>
   }
   @case ('ready') {
-    <h1 class="alt__title">
-      {{ mode === 'edit' ? 'Modifier le modèle de rythme' : 'Nouveau modèle de rythme' }}
-    </h1>
+    <header class="esic-page-header">
+      <div class="esic-page-header__text">
+        <h1 class="esic-page-header__title">
+          {{ mode === 'edit' ? 'Modifier le modèle de rythme' : 'Nouveau modèle de rythme' }}
+        </h1>
+      </div>
+    </header>
 
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <div class="alt__form-row">

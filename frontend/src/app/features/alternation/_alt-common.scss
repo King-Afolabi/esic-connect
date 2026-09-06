@@ -1,89 +1,140 @@
-// Styles communs aux écrans du module « Alternance ». Repris du style des
-// espaces Apprenants / Référentiels pour rester cohérent (Angular Material,
-// tokens `--mat-sys-*`, tables défilables, panneaux d'état).
+// Styles communs aux écrans du module « Alternance ».
+// Alignés sur le système de design ESIC (jetons `--esic-*`, primitives de
+// `src/styles/_primitives.scss`). Les classes `.alt__*` sont conservées mais
+// délèguent au vocabulaire commun — les gabarits n'ont pas à changer.
 
 .alt__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--esic-space-2);
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .alt__subtitle {
-  font: var(--mat-sys-title-medium);
-  margin: 1.5rem 0 0.75rem;
+  margin: var(--esic-space-6) 0 var(--esic-space-3);
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
 }
 
 .alt__intro {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0 0 1.25rem;
+  margin: 0 0 var(--esic-space-5);
+  max-width: 68ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
 }
 
 .alt-list__header {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  margin-bottom: var(--esic-space-4);
 }
 
+// Navigation à onglets de section (Modèles / Affectations / Exceptions).
 .alt__tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-  margin: 0 0 1.25rem;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  gap: var(--esic-space-2) var(--esic-space-5);
+  margin: 0 0 var(--esic-space-5);
+  border-bottom: 1px solid var(--esic-line);
 }
 
 .alt__tabs a {
-  padding: 0.5rem 0;
+  padding: var(--esic-space-2) 0;
   text-decoration: none;
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--esic-ink-soft);
   border-bottom: 2px solid transparent;
 }
 
 .alt__tabs a.alt__tab--active {
-  color: var(--mat-sys-primary);
-  border-bottom-color: var(--mat-sys-primary);
+  color: var(--esic-primary);
+  border-bottom-color: var(--esic-primary);
 }
 
-.alt__filters {
+.alt__filters,
+.alt__form {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--esic-space-3) var(--esic-space-4);
+  margin: 0 0 var(--esic-space-5);
+
+  .mat-mdc-form-field {
+    width: auto;
+    min-width: 12rem;
+  }
 }
 
 .alt__filter {
-  min-width: 13rem;
+  flex: 0 1 18rem;
+  min-width: 12rem;
 }
 
-.alt__filter-actions {
+.alt__form-field {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+.alt__filter-actions,
+.alt__form-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
+  gap: var(--esic-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+.alt__form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-4);
+  width: 100%;
 }
 
 .alt__status {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 1rem 0;
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
 }
 
 .alt__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
 .alt__table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table[mat-table] {
@@ -91,13 +142,13 @@ table[mat-table] {
 }
 
 .alt__card {
-  margin: 1rem 0;
+  margin: var(--esic-space-4) 0;
 }
 
 .alt__facts {
   display: grid;
-  grid-template-columns: minmax(10rem, max-content) 1fr;
-  gap: 0.35rem 1rem;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: var(--esic-space-2) var(--esic-space-4);
   margin: 0;
 }
 
@@ -106,57 +157,36 @@ table[mat-table] {
 }
 
 .alt__facts dt {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--esic-ink-faint);
 }
 
 .alt__facts dd {
   margin: 0;
-  font: var(--mat-sys-body-medium);
-}
-
-.alt__form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem;
-  margin: 0.5rem 0 1rem;
-}
-
-.alt__form-field {
-  min-width: 13rem;
-}
-
-.alt__form-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  width: 100%;
-}
-
-.alt__form-actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
+  color: var(--esic-ink);
 }
 
 .alt__reveal {
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 0.5rem 0;
-  background: var(--mat-sys-surface-container-lowest);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  border: 1px solid var(--esic-line);
+  border-left: 3px solid var(--esic-primary);
+  border-radius: var(--esic-radius-xs);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-3) 0;
+  background: var(--esic-surface-sunken);
 }
 
 .alt__inline-error {
-  color: var(--mat-sys-error);
-  font: var(--mat-sys-body-small);
-  margin: 0.25rem 0 0;
+  margin: var(--esic-space-1) 0 0;
+  font-size: 0.8125rem;
+  color: var(--esic-danger);
 }
 
 .alt__section {
-  margin: 2rem 0;
+  margin: var(--esic-space-7) 0;
 }
 
 .alt__sr-only {
