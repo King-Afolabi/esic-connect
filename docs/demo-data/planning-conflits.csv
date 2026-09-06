@@ -1,4 +1,4 @@
 slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code
-FXP-C1,2027-01-15,09:00,12:30,Europe/Paris,Cours A,39e33d50-1edb-419b-9d4b-adcfc70b7830,MLK-101
-FXP-C1,2027-01-15,09:00,12:30,Europe/Paris,Cours B (slot_key dupliqué),49916251-ce26-4f4b-9069-684247dee584,MLK-101
-FXP-C3,2027-01-15,09:30,12:30,Europe/Paris,Cours C (chevauchement salle),49916251-ce26-4f4b-9069-684247dee584,MLK-101
+FXP-C1,2027-01-15,09:00,12:30,Europe/Paris,Cours A,be3a6ce1-9600-4d26-a79e-33e5f0584514,MLK-101
+FXP-C1,2027-01-15,09:00,12:30,Europe/Paris,Cours B (slot_key dupliqué),08d12829-2a87-432c-8c58-0c424d8a7de7,MLK-101
+FXP-C3,2027-01-15,09:30,12:30,Europe/Paris,Cours C (chevauchement salle),08d12829-2a87-432c-8c58-0c424d8a7de7,MLK-101

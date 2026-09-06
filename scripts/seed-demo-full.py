@@ -80,11 +80,14 @@ YEAR_CODE = "AY-2026"
 PLAN_START = dt.date(2026, 8, 24)          # lundi
 PLAN_END = dt.date(2026, 11, 30)
 CYCLE_ANCHOR = dt.date(2026, 8, 31)        # lundi — ancre des cycles semaine/4
-# Les inscriptions sont créées « à la date du jour » par l'import CSV
-# (≈ 7 septembre 2026). L'émargement de démonstration ne porte donc que
-# sur des séances POSTÉRIEURES à l'inscription : fenêtre [ATT_FROM, ATT_TO).
-ATT_FROM = dt.date(2026, 9, 8)
-ATT_TO = dt.date(2026, 10, 10)
+# L'import CSV inscrit « à la date du jour ». La phase `backdate` recule
+# ensuite chaque inscription à ENROLL_START pour que l'émargement de
+# démonstration porte sur des séances RÉELLEMENT passées (antérieures à
+# l'horloge du serveur) — sans quoi les tableaux de bord, qui mesurent
+# jusqu'à « maintenant », afficheraient 0 %.
+ENROLL_START = dt.date(2026, 8, 24)
+ATT_FROM = dt.date(2026, 8, 25)
+ATT_TO = dt.date(2026, 9, 6)
 
 _HERE = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
 DEMO_DATA_DIR = os.path.join(_HERE, "..", "docs", "demo-data")
@@ -659,6 +662,32 @@ def phase_planning():
               f"publié v{pub.get('version', '?')} ({created} séances)")
 
 
+def phase_backdate():
+    print("== recul des inscriptions à " + ENROLL_START.isoformat() + " ==")
+    lot = set(STATE["classes"])
+    enr = get_all("/enrollments", status="ACTIVE")
+    moved = 0
+    for e in enr:
+        if e.get("classGroupCode") not in lot:
+            continue
+        if (e.get("startDate") or "9999") <= ENROLL_START.isoformat():
+            continue
+        eid = e["publicId"]
+        cg = e["classGroupPublicId"]
+        prof = e["studentProfilePublicId"]
+        # clôture puis recréation avec une date de début reculée
+        s, _ = api("POST", f"/enrollments/{eid}/close",
+                   {"status": "WITHDRAWN", "reason": "Recalage démo — date d'entrée réelle"})
+        if s not in (200, 204):
+            continue
+        s, _ = api("POST", "/enrollments", {"studentProfilePublicId": prof,
+                                            "classGroupPublicId": cg,
+                                            "startDate": ENROLL_START.isoformat()})
+        if s in (200, 201):
+            moved += 1
+    print(f"  {moved} inscription(s) reculée(s)")
+
+
 def phase_attendance():
     print("== scénarios d'assiduité (séances passées) ==")
     all_sessions = get_all("/sessions", sort="startsAt,asc")
@@ -910,6 +939,7 @@ def phase_pfixtures():
 
 PHASES = [("ref", phase_ref), ("sites", phase_sites), ("alt", phase_alt), ("mgr", phase_mgr),
           ("teachers", phase_teachers), ("students", phase_students),
+          ("backdate", phase_backdate),
           ("planning", phase_planning), ("attendance", phase_attendance),
           ("fixtures", phase_fixtures), ("pfixtures", phase_pfixtures), ("check", phase_check)]
 
