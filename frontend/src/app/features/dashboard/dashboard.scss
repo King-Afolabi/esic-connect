@@ -161,16 +161,59 @@
   .dashboard__grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  // Lot §2 — « Mon activité » (indicateurs) | « Mon périmètre » qui se
+  // font face. La colonne de gauche prend l'essentiel de la largeur :
+  // le bandeau d'indicateurs a besoin de place, la fiche périmètre non.
+  .dashboard__split {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  }
+
+  // Lot §2 — « Taux d'assiduité par classe » (histogramme + tableau
+  // équivalent, plus large) | « Séances à venir ». Le panneau large
+  // n'occupe plus toute la ligne dans le tableau de bord responsable.
+  .dashboard__grid--facing {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  }
+
+  .dashboard__grid--facing .dashboard__card--lead {
+    grid-column: auto;
+  }
 }
 
 // Repli si le conteneur nommé n'est pas disponible (le navigateur ne
 // connaît pas `container-name`, ou la coquille n'établit pas le contexte).
 @supports not (container-type: inline-size) {
   @media (min-width: 60rem) {
-    .dashboard__grid {
+    .dashboard__grid,
+    .dashboard__split,
+    .dashboard__grid--facing {
       grid-template-columns: 1fr 1fr;
     }
   }
+}
+
+// Lot §2 — les deux lignes en vis-à-vis : grille à une colonne par
+// défaut (pile sur petit écran / conteneur étroit), alignée en haut pour
+// qu'une carte courte reste courte.
+.dashboard__split {
+  display: grid;
+  gap: var(--esic-space-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+  margin-bottom: var(--esic-space-5);
+}
+
+// Le bandeau d'indicateurs, placé dans la colonne de gauche du vis-à-vis,
+// ne porte plus la marge basse qu'il avait en pleine largeur.
+.dashboard__split .dashboard__metrics {
+  margin-bottom: 0;
+}
+
+// La fiche « Mon périmètre » qui fait face aux indicateurs : même
+// surface Material que les autres cartes, sans hauteur imposée.
+.dashboard__card--facing {
+  align-self: start;
 }
 
 // Un panneau « large » (histogramme + tableau équivalent) occupe la

@@ -195,35 +195,42 @@
           }
 
           @if (d.manager; as m) {
-            <ul class="dashboard__metrics" aria-label="Indicateurs de mon périmètre">
-              <li class="dashboard__metric dashboard__metric--rate">
-                <span class="dashboard__metric-value">{{ percent(m.attendanceRate) }}</span>
-                <span class="dashboard__metric-label">Taux d'assiduité</span>
-              </li>
-              <li class="dashboard__metric dashboard__metric--late">
-                <span class="dashboard__metric-value">{{ m.lateCount }}</span>
-                <span class="dashboard__metric-label">Retards</span>
-              </li>
-              <li class="dashboard__metric dashboard__metric--absent">
-                <span class="dashboard__metric-value">{{ m.unjustifiedAbsenceHalfDays }}</span>
-                <span class="dashboard__metric-label">Absences non justifiées (½-journées)</span>
-              </li>
-              <li class="dashboard__metric dashboard__metric--pending">
-                <span class="dashboard__metric-value">{{ m.pendingJustifications }}</span>
-                <span class="dashboard__metric-label">Justificatifs en attente</span>
-              </li>
-              <li class="dashboard__metric">
-                <span class="dashboard__metric-value">{{ m.openClaims }}</span>
-                <span class="dashboard__metric-label">Réclamations ouvertes</span>
-              </li>
-              <li class="dashboard__metric">
-                <span class="dashboard__metric-value">{{ m.pendingActivations }}</span>
-                <span class="dashboard__metric-label">Comptes non activés</span>
-              </li>
-            </ul>
+            <!--
+              Lot §2 — sur ordinateur, deux colonnes qui se font face :
+              à gauche « Mon activité » (les indicateurs), à droite
+              « Mon périmètre ». La bascule suit `@container esic-content`
+              (largeur réelle de la colonne de contenu, donc l'état du
+              rail), jamais la fenêtre. En pile sous 52 rem.
+            -->
+            <div class="dashboard__split">
+              <ul class="dashboard__metrics" aria-label="Indicateurs de mon périmètre">
+                <li class="dashboard__metric dashboard__metric--rate">
+                  <span class="dashboard__metric-value">{{ percent(m.attendanceRate) }}</span>
+                  <span class="dashboard__metric-label">Taux d'assiduité</span>
+                </li>
+                <li class="dashboard__metric dashboard__metric--late">
+                  <span class="dashboard__metric-value">{{ m.lateCount }}</span>
+                  <span class="dashboard__metric-label">Retards</span>
+                </li>
+                <li class="dashboard__metric dashboard__metric--absent">
+                  <span class="dashboard__metric-value">{{ m.unjustifiedAbsenceHalfDays }}</span>
+                  <span class="dashboard__metric-label">Absences non justifiées (½-journées)</span>
+                </li>
+                <li class="dashboard__metric dashboard__metric--pending">
+                  <span class="dashboard__metric-value">{{ m.pendingJustifications }}</span>
+                  <span class="dashboard__metric-label">Justificatifs en attente</span>
+                </li>
+                <li class="dashboard__metric">
+                  <span class="dashboard__metric-value">{{ m.openClaims }}</span>
+                  <span class="dashboard__metric-label">Réclamations ouvertes</span>
+                </li>
+                <li class="dashboard__metric">
+                  <span class="dashboard__metric-value">{{ m.pendingActivations }}</span>
+                  <span class="dashboard__metric-label">Comptes non activés</span>
+                </li>
+              </ul>
 
-            <div class="dashboard__grid">
-              <mat-card appearance="outlined" class="dashboard__card">
+              <mat-card appearance="outlined" class="dashboard__card dashboard__card--facing">
                 <mat-card-header><mat-card-title>Mon périmètre</mat-card-title></mat-card-header>
                 <mat-card-content>
                   <dl class="dashboard__facts">
@@ -235,7 +242,15 @@
                   </p>
                 </mat-card-content>
               </mat-card>
+            </div>
 
+            <!--
+              Lot §2 — deuxième ligne : « Taux d'assiduité par classe » à
+              gauche (plus large, l'histogramme et son tableau équivalent
+              en ont besoin), « Séances à venir » à droite. Une colonne en
+              pile sous 52 rem.
+            -->
+            <div class="dashboard__grid dashboard__grid--facing">
               <!--
                 EF-REP-008 — « tout graphique dispose d'un titre, d'une
                 légende, de valeurs accessibles, d'un tableau équivalent,
@@ -245,7 +260,7 @@
                 Chaque barre porte sa valeur en texte — la couleur n'est
                 jamais le seul porteur de l'information.
               -->
-              <mat-card appearance="outlined" class="dashboard__card dashboard__card--wide">
+              <mat-card appearance="outlined" class="dashboard__card dashboard__card--lead">
                 <mat-card-header>
                   <mat-card-title>Taux d'assiduité par classe</mat-card-title>
                   <mat-card-subtitle>
