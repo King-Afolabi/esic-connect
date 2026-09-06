@@ -1,0 +1,4 @@
+slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code
+FXP-1,2027-01-11,09:00,12:30,Europe/Paris,Atelier démo 1,39e33d50-1edb-419b-9d4b-adcfc70b7830,MLK-101
+FXP-2,2027-01-11,13:30,17:00,Europe/Paris,Atelier démo 2,49916251-ce26-4f4b-9069-684247dee584,MLK-101
+FXP-3,2027-01-12,09:00,12:30,Europe/Paris,Atelier démo 3,39e33d50-1edb-419b-9d4b-adcfc70b7830,MLK-101
