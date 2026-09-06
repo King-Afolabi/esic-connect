@@ -3,11 +3,15 @@
   <span>Retour aux séances</span>
 </a>
 
-<h1 class="sessions__title">Nouvelle séance exceptionnelle</h1>
-<p class="sessions__intro">
-  Une séance est créée manuellement (sans planning) : le motif est obligatoire.
-  Elle référence un formateur actif et au moins une classe.
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Nouvelle séance exceptionnelle</h1>
+    <p class="esic-page-header__description">
+      Une séance est créée manuellement (sans planning) : le motif est obligatoire.
+      Elle référence un formateur actif et au moins une classe.
+    </p>
+  </div>
+</header>
 
 @switch (loadState().kind) {
   @case ('loading') {

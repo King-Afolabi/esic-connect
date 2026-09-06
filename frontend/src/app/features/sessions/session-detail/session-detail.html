@@ -40,10 +40,12 @@
           Vos droits de gestion sont révoqués à la fin de cette période.
         </p>
       }
-      <div class="sessions__header">
-        <h1 class="sessions__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
+        </div>
         @if (canManageCheckpoint()) {
-          <div class="sessions__form-actions">
+          <div class="esic-page-header__actions">
             @if (isPlanned()) {
               <button mat-flat-button type="button" (click)="startOpen()">Ouvrir la séance</button>
             }
@@ -57,7 +59,7 @@
             }
           </div>
         }
-      </div>
+      </header>
 
       <mat-card appearance="outlined" class="sessions__card">
         <mat-card-content>

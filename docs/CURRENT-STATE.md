@@ -230,6 +230,35 @@ total initial **568 kB brut / 132 kB transféré**. `maximumError` inchangé
 `NOT_PERFORMED` : recette Playwright (non rejouée) ; audit
 accessibilité outillé ; revue sur tablette / pliable / ultralarge réels.
 
+### 6 septembre 2026 (soir) — refonte UI : étape 6, pages métier (1/n — séances)
+
+Même branche. **`PARTIAL` : l'aire « Séances » est alignée, les autres aires
+métier restent à faire.**
+
+- **Quatre primitives ajoutées** à `src/styles/_primitives.scss`, extraites
+  du vocabulaire répété des partiels `*-common.scss` : `.esic-filters`
+  (barre de recherche + groupe d'actions au-dessus d'une liste),
+  `.esic-note` (encart d'état chargement / accès refusé / erreur, +
+  `--danger` / `--warning`), `.esic-section` (sous-section avec en-tête
+  titre + action), `.esic-reveal` (panneau dépliant pour une saisie ou une
+  confirmation en ligne).
+- **Aire « Séances » (liste, détail, formulaire)** : `_sessions-common.scss`
+  réécrit sur les jetons `--esic-*` et les primitives — les classes
+  `.sessions__*` sont conservées (gabarits quasi intacts) mais délèguent au
+  vocabulaire commun. En-têtes en `.esic-page-header` (titre serif, filet,
+  action primaire dans le créneau dédié) ; `.sessions__chip[data-status]`
+  déplacé dans le partiel commun et re-mappé sur les jetons de statut
+  d'assiduité (point + libellé) ; colonne « Statut » de la liste en
+  pastille au lieu de texte brut ; champs de filtres bornés en largeur
+  (le réalignement global met `.mat-mdc-form-field` à 100 %).
+- Aucun `.ts`, aucune logique touchés. Les specs `sessions/*` n'asseyent
+  aucun sélecteur `.sessions__*` — 0 ajustement.
+
+**Reste de l'étape 6** : apprenants, planning, alternance, organisation,
+référentiels, réclamations, suivi d'assiduité, émargement — mêmes
+primitives à appliquer aire par aire, avec point de contrôle après
+chacune.
+
 ### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
 
 Même branche `feat/ui-redesign-bootstrap-material`. Refonte **visuelle et

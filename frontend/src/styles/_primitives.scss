@@ -302,6 +302,135 @@
   margin-bottom: var(--esic-space-4);
 }
 
+// -- Barre de filtres (au-dessus d'une liste / d'un tableau) ---------------
+// Champs de recherche alignés, groupe d'actions à la fin. Repris tel quel
+// par tous les écrans de liste (séances, apprenants, alternance, planning…).
+.esic-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--esic-space-3) var(--esic-space-4);
+  margin-bottom: var(--esic-space-5);
+
+  .mat-mdc-form-field {
+    min-width: 12rem;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esic-space-2);
+    // Aligne les boutons sur la ligne de base des champs `outline`.
+    padding-top: 0.25rem;
+  }
+}
+
+// -- Encart d'état (chargement, accès refusé, erreur) ---------------------
+// Panneau au fil fin, icône en tête, un message et éventuellement une
+// action de reprise. À distinguer de `.esic-empty` (absence de données).
+.esic-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon,
+  > mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--esic-space-3);
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  &--danger {
+    border-color: transparent;
+    background: var(--esic-danger-tint);
+    color: var(--esic-red-700);
+
+    > .mat-icon,
+    > mat-icon {
+      color: var(--esic-danger);
+    }
+  }
+
+  &--warning {
+    border-color: transparent;
+    background: var(--esic-warning-tint);
+    color: var(--esic-amber-700);
+
+    > .mat-icon,
+    > mat-icon {
+      color: var(--esic-warning);
+    }
+  }
+}
+
+// -- Sous-section d'une page ---------------------------------------------
+// Rythme vertical + en-tête (titre h2 + action optionnelle à droite).
+.esic-section {
+  margin-top: var(--esic-space-7);
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--esic-space-2) var(--esic-space-4);
+    margin-bottom: var(--esic-space-4);
+  }
+
+  &__title {
+    margin: 0;
+    font-family: var(--esic-font-serif);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+}
+
+// -- Panneau dépliant (formulaire / confirmation en ligne) ---------------
+// Zone en creux qui s'ouvre sous une action, pour une saisie ou une
+// confirmation contextuelle sans quitter l'écran.
+.esic-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-3) 0;
+  border: 1px solid var(--esic-line);
+  border-left: 3px solid var(--esic-primary);
+  border-radius: var(--esic-radius-xs);
+  background: var(--esic-surface-sunken);
+
+  > p {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--esic-ink-soft);
+  }
+
+  &__error {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--esic-danger);
+  }
+}
+
 // -- Anneau de focus commun (clavier) -------------------------------------
 // Repose sur `:focus-visible` : jamais visible à la souris, toujours au clavier.
 @mixin esic-focus-ring {
