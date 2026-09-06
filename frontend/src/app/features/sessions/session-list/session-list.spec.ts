@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter } from '@angular/router';
 
 import { Role } from '../../../core/models/role';
 import { RoleContextService } from '../../../core/auth/role-context.service';
@@ -193,5 +193,33 @@ describe('SessionList', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions/new"]'),
     ).toBeNull();
+  });
+
+  it('restaure filtre / tri / page depuis les query params (Lot G)', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { effectiveRoles: signal(['ADMIN'] as Role[]) } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParams: { status: 'CANCELLED', sort: 'createdAt', dir: 'asc', page: '1' } },
+          },
+        },
+      ],
+    });
+    const local = TestBed.createComponent(SessionList);
+    const localHttp = TestBed.inject(HttpTestingController);
+    local.detectChanges();
+
+    const req = localHttp.expectOne((r) => r.url === '/api/v1/sessions');
+    expect(req.request.params.get('status')).toBe('CANCELLED');
+    expect(req.request.params.get('sort')).toBe('createdAt,asc');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush(page([]));
+    localHttp.verify();
   });
 });

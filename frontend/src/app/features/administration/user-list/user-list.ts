@@ -11,11 +11,15 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { ROLES, Role, roleLabel } from '../../../core/models/role';
+import {
+  ListQueryReader,
+  writeListQueryParams,
+} from '../../../core/navigation/list-query-params';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { AdministrationApiService } from '../administration-api.service';
 import { toAdministrationError } from '../administration-errors';
@@ -94,6 +98,8 @@ export class UserList {
   private readonly formBuilder = inject(NonNullableFormBuilder);
   private readonly roleContext = inject(RoleContextService);
   private readonly notifications = inject(NotificationService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly statuses = ACCOUNT_STATUSES;
   protected readonly roleOptions = ROLES;
@@ -163,6 +169,17 @@ export class UserList {
   });
 
   constructor() {
+    // Lot G : restaure recherche / filtres / tri / pagination depuis l'URL.
+    const params = new ListQueryReader(this.route);
+    this.filters.patchValue({
+      q: params.str('q'),
+      status: params.oneOf('status', [...ACCOUNT_STATUSES, ''] as const, ''),
+      role: params.oneOf('role', [...ROLES, ''] as const, ''),
+    });
+    this.sortField.set(params.oneOf('sort', USER_SORT_FIELDS, DEFAULT_SORT_FIELD));
+    this.sortDirection.set(params.direction('dir', DEFAULT_SORT_DIRECTION));
+    this.pageIndex.set(params.int('page', 0));
+    this.pageSize.set(params.int('size', 20));
     this.load();
   }
 
@@ -239,9 +256,23 @@ export class UserList {
     this.load();
   }
 
+  /** Lot G : reflète l'état courant dans l'URL (défauts non écrits). */
+  private syncUrl(q: string, status: string, role: string): void {
+    writeListQueryParams(this.router, this.route, {
+      q,
+      status,
+      role,
+      sort: this.sortField() === DEFAULT_SORT_FIELD ? null : this.sortField(),
+      dir: this.sortDirection() === DEFAULT_SORT_DIRECTION ? null : this.sortDirection(),
+      page: this.pageIndex(),
+      size: this.pageSize() === 20 ? null : this.pageSize(),
+    });
+  }
+
   private load(): void {
     this.state.set({ kind: 'loading' });
     const raw = this.filters.getRawValue();
+    this.syncUrl(raw.q.trim(), raw.status, raw.role);
     this.api
       .listUsers({
         q: raw.q.trim() || null,

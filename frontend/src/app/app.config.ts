@@ -21,7 +21,9 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
-      withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
+      // `enabled` : au retour arrière, la position de défilement de la
+      // liste est restaurée (Lot G) ; une navigation avant repart en haut.
+      withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
     ),
     // Rétablit la session avant le premier rendu : échange le cookie de
     // renouvellement HttpOnly contre un jeton d'accès (voir

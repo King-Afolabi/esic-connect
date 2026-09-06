@@ -5,9 +5,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/auth/auth.service';
+import {
+  ListQueryReader,
+  writeListQueryParams,
+} from '../../../core/navigation/list-query-params';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { NotificationsApiService } from '../notifications-api.service';
 import { NotificationsBadgeService } from '../notifications-badge.service';
@@ -54,6 +58,8 @@ export class NotificationList {
   private readonly toasts = inject(NotificationService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly typeLabel = notificationTypeLabel;
   protected readonly formatInstantUtc = formatInstantUtc;
@@ -90,7 +96,10 @@ export class NotificationList {
   protected readonly hasUnread = computed(() => this.items().some((n) => n.status === 'UNREAD'));
 
   constructor() {
-    this.load(0);
+    // Lot G : restaure le filtre et la page depuis l'URL.
+    const params = new ListQueryReader(this.route);
+    this.filter.set(params.oneOf('filter', ['ALL', 'UNREAD'] as const, 'ALL'));
+    this.load(params.int('page', 0));
   }
 
   protected setFilter(value: 'ALL' | 'UNREAD'): void {
@@ -159,6 +168,10 @@ export class NotificationList {
   private load(page: number): void {
     this.state.set({ kind: 'loading' });
     const status: NotificationStatus | null = this.filter() === 'UNREAD' ? 'UNREAD' : null;
+    writeListQueryParams(this.router, this.route, {
+      filter: status ? 'UNREAD' : null,
+      page,
+    });
     this.api
       .list({ status, page, size: PAGE_SIZE })
       .pipe(takeUntilDestroyed(this.destroyRef))

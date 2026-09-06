@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter } from '@angular/router';
 
 import { PageResponse, StudentProfileResponse } from '../students.models';
 import { StudentList } from './student-list';
@@ -150,5 +150,45 @@ describe('StudentList', () => {
     expectList().flush(page([PROFILE]));
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+});
+
+describe('StudentList — restauration depuis l’URL (Lot G)', () => {
+  it('reconstruit filtres, tri et page depuis les query params', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              queryParams: {
+                q: 'ESIC-2026',
+                status: 'ARCHIVED',
+                sort: 'studentNumber',
+                dir: 'asc',
+                page: '2',
+                size: '50',
+              },
+            },
+          },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(StudentList);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+
+    const req = http.expectOne((r) => r.url === '/api/v1/student-profiles');
+    expect(req.request.params.get('q')).toBe('ESIC-2026');
+    expect(req.request.params.get('status')).toBe('ARCHIVED');
+    expect(req.request.params.get('sort')).toBe('studentNumber,asc');
+    expect(req.request.params.get('page')).toBe('2');
+    expect(req.request.params.get('size')).toBe('50');
+    req.flush({ content: [], page: 2, size: 50, totalElements: 130, totalPages: 3 });
+    http.verify();
   });
 });

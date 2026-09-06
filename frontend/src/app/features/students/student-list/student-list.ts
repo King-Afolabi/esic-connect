@@ -10,9 +10,10 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
+import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { StudentsApiService } from '../students-api.service';
 import {
@@ -74,6 +75,8 @@ export class StudentList {
   private readonly api = inject(StudentsApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   /**
    * « Ajouter un apprenant » (Lot H) : visible uniquement pour les rôles
@@ -127,6 +130,19 @@ export class StudentList {
   });
 
   constructor() {
+    // Lot G : restaure filtres / tri / pagination depuis l'URL — une
+    // fiche ouverte puis « Retour » (ou une URL partagée) retrouve l'état.
+    const params = new ListQueryReader(this.route);
+    this.filters.patchValue({
+      q: params.str('q'),
+      status: params.oneOf('status', [...STUDENT_PROFILE_STATUSES, ''] as const, ''),
+    });
+    this.sortField.set(
+      params.oneOf('sort', STUDENT_PROFILE_SORT_FIELDS, DEFAULT_SORT_FIELD),
+    );
+    this.sortDirection.set(params.direction('dir', DEFAULT_SORT_DIRECTION));
+    this.pageIndex.set(params.int('page', 0));
+    this.pageSize.set(params.int('size', 20));
     this.load();
   }
 
@@ -161,9 +177,22 @@ export class StudentList {
     this.load();
   }
 
+  /** Lot G : reflète l'état courant dans l'URL (défauts non écrits). */
+  private syncUrl(q: string, status: string): void {
+    writeListQueryParams(this.router, this.route, {
+      q,
+      status,
+      sort: this.sortField() === DEFAULT_SORT_FIELD ? null : this.sortField(),
+      dir: this.sortDirection() === DEFAULT_SORT_DIRECTION ? null : this.sortDirection(),
+      page: this.pageIndex(),
+      size: this.pageSize() === 20 ? null : this.pageSize(),
+    });
+  }
+
   private load(): void {
     this.state.set({ kind: 'loading' });
     const raw = this.filters.getRawValue();
+    this.syncUrl(raw.q.trim(), raw.status);
     this.api
       .listProfiles({
         q: raw.q.trim() || null,
