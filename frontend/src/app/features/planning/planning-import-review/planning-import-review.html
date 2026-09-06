@@ -79,16 +79,16 @@
       </div>
 
       @if (confirmingPublish()) {
-        <div class="plan__confirm" role="group" aria-label="Confirmer la publication">
-          <p>
+        <div class="esic-reveal" role="group" aria-label="Confirmer la publication">
+          <p class="esic-reveal__text">
             La publication crée ou met à jour les séances de la classe et
             fige une nouvelle version du planning. Cette opération est
             atomique.
           </p>
           @if (actionError()) {
-            <p class="plan__form-error" role="alert">{{ actionError() }}</p>
+            <p class="esic-reveal__error" role="alert">{{ actionError() }}</p>
           }
-          <div class="plan__form-actions">
+          <div class="esic-reveal__actions">
             <button mat-flat-button type="button" (click)="confirmPublish()" [disabled]="submitting()">
               Publier
             </button>

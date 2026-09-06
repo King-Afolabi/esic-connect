@@ -454,9 +454,12 @@
   }
 }
 
-// -- Panneau dépliant (formulaire / confirmation en ligne) ---------------
-// Zone en creux qui s'ouvre sous une action, pour une saisie ou une
-// confirmation contextuelle sans quitter l'écran.
+// -- Panneau dépliant / dialogue en ligne -------------------------------
+// L'application n'ouvre AUCUNE fenêtre modale (pas de `MatDialog`) : une
+// confirmation ou une saisie contextuelle s'ouvre en creux sous l'action
+// qui la déclenche, dans le flux de la page. Pas de superposition, donc
+// aucun problème de `z-index` ni de piège de focus à gérer. Toujours
+// `role="group"` + `aria-label` sur le conteneur dans le gabarit.
 .esic-reveal {
   display: flex;
   flex-direction: column;
@@ -472,6 +475,35 @@
     margin: 0;
     font-size: 0.9375rem;
     color: var(--esic-ink-soft);
+  }
+
+  // Action destructrice (archivage, suppression d'un doublon…) : l'arête
+  // passe au rouge, le reste du panneau ne crie pas.
+  &--danger {
+    border-left-color: var(--esic-danger);
+  }
+
+  &__title {
+    margin: 0;
+    font-family: var(--esic-font-serif);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+
+  &__text {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--esic-ink-soft);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esic-space-2) var(--esic-space-3);
+    margin-top: var(--esic-space-1);
   }
 
   &__error {

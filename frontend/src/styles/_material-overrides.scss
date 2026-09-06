@@ -93,8 +93,30 @@
   box-shadow: var(--esic-shadow-float) !important;
 }
 
+// -- Bandeau transitoire (snack-bar) — seule surcouche « dialogue » du
+//    produit : aucune fenêtre modale n'est ouverte ailleurs. Encre claire
+//    sur fond encré, arête d'accent, action « Fermer » lisible.
 .mat-mdc-snack-bar-container {
   --mdc-snackbar-container-shape: var(--esic-radius-sm);
+  --mdc-snackbar-container-color: var(--esic-ink);
+  --mdc-snackbar-supporting-text-color: var(--esic-surface);
+  --mat-snack-bar-button-color: var(--esic-blue-200);
+
+  .mdc-snackbar__surface {
+    box-shadow: var(--esic-shadow-float);
+    border-left: 3px solid var(--esic-blue-400);
+  }
+
+  // Variante erreur (`panelClass: 'app-snackbar-error'`) : arête et fond
+  // rouges ESIC — l'information ne repose pas sur la seule couleur, le
+  // texte reste explicite et le bandeau est annoncé `assertive`.
+  &.app-snackbar-error {
+    --mdc-snackbar-container-color: var(--esic-red-700);
+
+    .mdc-snackbar__surface {
+      border-left-color: var(--esic-red-500);
+    }
+  }
 }
 
 // -- Onglets : indicateur bleu ESIC --------------------------------

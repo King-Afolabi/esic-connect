@@ -5,20 +5,8 @@
 }
 
 // Confirmation en ligne — cf. primitive `.esic-reveal`.
-.org__confirm {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--esic-space-3);
-  padding: var(--esic-space-4) var(--esic-space-5);
-  margin: var(--esic-space-3) 0;
-  border: 1px solid var(--esic-line);
-  border-left: 3px solid var(--esic-primary);
-  border-radius: var(--esic-radius-xs);
-  background: var(--esic-surface-sunken);
-  max-width: 40rem;
-}
-
+// Dialogue de confirmation en ligne — cf. primitive `.esic-reveal`
+// (`_primitives.scss`).
 .org__confirm-field {
   width: 100%;
 }
