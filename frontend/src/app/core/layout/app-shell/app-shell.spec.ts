@@ -13,7 +13,16 @@ describe('AppShell', () => {
   let fixture: ComponentFixture<AppShell>;
   const roles = signal<Role[]>(['ADMIN']);
   const currentUserEmail = signal<string | null>('admin@esic.test');
-  const auth = { roles, currentUserEmail, logout: vi.fn() };
+  // `session` / `refreshSession` / `expireSession` : requis par
+  // SessionActivityService, armé par la coquille (Lot A).
+  const auth = {
+    roles,
+    currentUserEmail,
+    logout: vi.fn(),
+    session: () => null,
+    refreshSession: vi.fn(),
+    expireSession: vi.fn(),
+  };
 
   beforeEach(async () => {
     roles.set(['ADMIN']);

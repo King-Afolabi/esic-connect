@@ -279,6 +279,36 @@ describe('AuthService', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/login'], { queryParams: { reason: 'expired' } });
   });
 
+  it('expireSession preserves the current route as ?redirect (Lot A / Lot G)', async () => {
+    await authenticate(service, http, futureExp);
+    (router as unknown as { url: string }).url = '/students/42?tab=history';
+
+    service.expireSession();
+
+    expect(service.isAuthenticated()).toBe(false);
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { reason: 'expired', redirect: '/students/42?tab=history' },
+    });
+    delete (router as unknown as { url?: string }).url;
+  });
+
+  it('expireSession does not loop when already on /login', async () => {
+    await authenticate(service, http, futureExp);
+    (router as unknown as { url: string }).url = '/login?reason=expired';
+
+    service.expireSession();
+
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { reason: 'expired' },
+    });
+    delete (router as unknown as { url?: string }).url;
+  });
+
+  it('expireSession is a no-op when there is no session', () => {
+    service.expireSession();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
   it('hasAnyRole reflects the roles carried by the session', async () => {
     expect(service.hasAnyRole(['ADMIN'])).toBe(false);
     await authenticate(service, http, futureExp, ['SCHOOL_ADMINISTRATION']);

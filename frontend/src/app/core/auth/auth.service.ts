@@ -364,11 +364,30 @@ export class AuthService {
    * locale est considérée comme expirée ou invalide.
    */
   handleUnauthorized(): void {
+    this.expireSession();
+  }
+
+  /**
+   * Termine la session locale et renvoie vers la connexion en
+   * **préservant la route de retour** (`?redirect=`), sauf si l'on est
+   * déjà sur `/login`. Sert aussi bien au parcours réactif (401 sur un
+   * appel métier) qu'au parcours proactif (expiration d'inactivité,
+   * plafond absolu — voir {@link SessionActivityService}).
+   *
+   * La préservation de la route permet à l'utilisateur de reprendre là
+   * où il était après s'être reconnecté (Lot A / Lot G).
+   */
+  expireSession(): void {
     if (this._session() === null) {
       return;
     }
     this._session.set(null);
-    void this.router.navigate(['/login'], { queryParams: { reason: 'expired' } });
+    const current = this.router.url;
+    const preserved =
+      current && current !== '/' && !current.startsWith('/login') ? current : undefined;
+    void this.router.navigate(['/login'], {
+      queryParams: { reason: 'expired', ...(preserved ? { redirect: preserved } : {}) },
+    });
   }
 
   hasAnyRole(required: readonly Role[]): boolean {

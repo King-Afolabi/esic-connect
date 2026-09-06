@@ -1,5 +1,12 @@
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,6 +19,7 @@ import { map } from 'rxjs';
 import { SkipLink } from '../../a11y/skip-link';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
+import { SessionActivityService } from '../../auth/session-activity.service';
 import { roleLabel } from '../../models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
 import { ConnectivityService } from '../../pwa/connectivity.service';
@@ -19,6 +27,7 @@ import { OfflineQueueService } from '../../pwa/offline-queue.service';
 import { PwaService } from '../../pwa/pwa.service';
 import { NotificationBell } from '../../../features/notifications/notification-bell/notification-bell';
 import { RoleContextMenu } from '../role-context-menu/role-context-menu';
+import { SessionTimeoutWarning } from '../session-timeout-warning/session-timeout-warning';
 
 /**
  * Coquille applicative authentifiée : barre supérieure, navigation
@@ -42,16 +51,29 @@ import { RoleContextMenu } from '../role-context-menu/role-context-menu';
     RoleContextMenu,
     NotificationBell,
     SkipLink,
+    SessionTimeoutWarning,
   ],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.scss',
 })
-export class AppShell {
+export class AppShell implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly pwa = inject(PwaService);
   private readonly queue = inject(OfflineQueueService);
+  private readonly sessionActivity = inject(SessionActivityService);
+
+  constructor() {
+    // La coquille n'existe que sous session ouverte : c'est le bon moment
+    // pour armer l'expiration glissante (Lot A), et sa destruction — au
+    // retour vers `/login` — pour la désarmer.
+    this.sessionActivity.start();
+  }
+
+  ngOnDestroy(): void {
+    this.sessionActivity.stop();
+  }
 
   protected readonly connectivity = inject(ConnectivityService);
   /** Nombre d'actions faites hors ligne, en attente de confirmation (AC-031). */
