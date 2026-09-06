@@ -65,6 +65,67 @@
   }
 }
 
+// -- Navigation secondaire (onglets d'un espace) --------------------------------
+// Un seul dispositif pour les sous-vues d'un même espace : Notifications
+// (liste / préférences), Suivi d'assiduité (synthèse / rapports), hub
+// Organisation & planning. Ce sont de VRAIS liens de route (`routerLink` +
+// `routerLinkActive` + `ariaCurrentWhenActive`), jamais un `startsWith`
+// ambigu. Une seule couleur d'accent (bleu ESIC) : pas de double filet
+// gris/bleu. Défile horizontalement sur mobile, jamais le `<body>`.
+// Hauteur stable : le strip ne bouge pas quand la vue change.
+.esic-subnav {
+  margin: 0 0 var(--esic-space-5);
+  border-bottom: 1px solid var(--esic-line);
+}
+
+.esic-subnav__list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--esic-space-2) var(--esic-space-5);
+  min-height: 2.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.esic-subnav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: var(--esic-space-2) 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--esic-ink-soft);
+  border-bottom: 2px solid transparent;
+}
+
+.esic-subnav__link:hover {
+  color: var(--esic-ink);
+}
+
+.esic-subnav__link:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+// Actif : un seul accent, sur le lien réellement courant. `aria-current`
+// ET la classe posée par `routerLinkActive` — les deux mènent au même
+// rendu, jamais une teinte différente.
+.esic-subnav__link--active,
+.esic-subnav__link[aria-current='page'] {
+  color: var(--esic-blue-700);
+  border-bottom-color: var(--esic-blue-700);
+}
+
+.esic-subnav__link[aria-disabled='true'] {
+  color: var(--esic-ink-faint);
+  pointer-events: none;
+}
+
 // -- Carte / panneau de contenu -------------------------------------------------
 // Surface plate, filet fin, rayon moyen. L'élévation n'est PAS le défaut :
 // une carte posée sur la page ne flotte pas. Ajouter `.esic-card--raised`

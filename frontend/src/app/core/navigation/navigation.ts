@@ -174,20 +174,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
-    // Écran livré (G1-D) : centre de notifications de l'appelant —
-    // liste paginée, filtre lu / non lu, marquage lu / tout lu.
-    // `@PreAuthorize("isAuthenticated()")` : visible par tout rôle.
+    // Écran livré (G1-D, sprint 10) : espace « Notifications » — une
+    // seule entrée latérale ouvrant deux vues internes en onglets (liste
+    // paginée avec filtre lu / non lu et marquage ; préférences par
+    // catégorie et par canal, EF-NOTIF-006). `activeNavPath` garde cette
+    // entrée — et elle seule — active sur `/notifications` comme sur
+    // `/notifications/preferences`. `@PreAuthorize("isAuthenticated()")` :
+    // visible par tout rôle.
     label: 'Notifications',
     path: '/notifications',
     icon: 'notifications',
-  },
-  {
-    // Écran livré (sprint 10) : préférences de notification par catégorie
-    // et par canal (EF-NOTIF-006). `@PreAuthorize("isAuthenticated()")` :
-    // chacun règle les siennes, le serveur dérive le propriétaire du JWT.
-    label: 'Préférences de notification',
-    path: '/notifications/preferences',
-    icon: 'tune',
   },
   {
     // Écran livré (sprint 11) : recherche globale dans le périmètre de

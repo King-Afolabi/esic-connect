@@ -75,7 +75,6 @@ describe('AppShell', () => {
       '/claims',
       '/attendance-management',
       '/notifications',
-      '/notifications/preferences',
       // Recherche globale, attestations, invitations non activées,
       // abonnement calendrier et piste d'audit : livrés au sprint 11
       // (EF-USER-009, EF-REP-006, EF-REP-010, EF-INT-001, EF-AUD-002).
@@ -121,7 +120,6 @@ describe('AppShell', () => {
       '/sessions',
       '/claims',
       '/notifications',
-      '/notifications/preferences',
       // Abonnement iCalendar (sprint 11, EF-INT-001) : propre à chaque
       // personne, donc visible quel que soit le rôle. Le formateur y
       // trouve ses séances, l'apprenant les siennes.
@@ -146,7 +144,6 @@ describe('AppShell', () => {
       '/my-attendance/early-departures',
       '/claims',
       '/notifications',
-      '/notifications/preferences',
       // Abonnement iCalendar (sprint 11, EF-INT-001).
       '/mon-compte/calendrier',
       '/mon-compte/securite',

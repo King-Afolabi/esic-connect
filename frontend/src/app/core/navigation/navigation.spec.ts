@@ -96,11 +96,12 @@ describe('visibleNavItems', () => {
     // `/mon-compte/calendrier` s'ajoute au sprint 11 : l'abonnement
     // iCalendar est propre à chaque personne, et sa route porte
     // `@PreAuthorize("isAuthenticated()")` — comme les notifications et
-    // la sécurité du compte, il ne dépend d'aucun rôle.
+    // la sécurité du compte, il ne dépend d'aucun rôle. « Préférences de
+    // notification » n'est plus une entrée latérale : c'est un onglet
+    // interne de l'espace « Notifications ».
     expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual([
       '/dashboard',
       '/notifications',
-      '/notifications/preferences',
       '/mon-compte/calendrier',
       '/mon-compte/securite',
     ]);
@@ -226,7 +227,9 @@ describe('activeNavPath (Lot C — un seul élément actif)', () => {
   });
 
   it('sur une route imbriquée, seul l’enfant est actif (le bug signalé)', () => {
-    expect(activeNavPath('/notifications/preferences', NAV_ITEMS)).toBe('/notifications/preferences');
+    // « Préférences » est un onglet interne : la seule entrée latérale
+    // « Notifications » reste active sur les deux vues de l'espace.
+    expect(activeNavPath('/notifications/preferences', NAV_ITEMS)).toBe('/notifications');
     expect(activeNavPath('/notifications', NAV_ITEMS)).toBe('/notifications');
     expect(activeNavPath('/students/import', NAV_ITEMS)).toBe('/students/import');
     expect(activeNavPath('/my-attendance/transparency', NAV_ITEMS)).toBe(

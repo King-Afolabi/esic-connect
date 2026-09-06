@@ -1,0 +1,29 @@
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Notifications</h1>
+  </div>
+</header>
+
+<nav class="esic-subnav" aria-label="Sections de l'espace notifications">
+  <div class="esic-subnav__list">
+    <a
+      class="esic-subnav__link"
+      routerLink="."
+      routerLinkActive="esic-subnav__link--active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      ariaCurrentWhenActive="page"
+    >
+      Notifications
+    </a>
+    <a
+      class="esic-subnav__link"
+      routerLink="preferences"
+      routerLinkActive="esic-subnav__link--active"
+      ariaCurrentWhenActive="page"
+    >
+      Préférences
+    </a>
+  </div>
+</nav>
+
+<router-outlet />

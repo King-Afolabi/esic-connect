@@ -1,23 +1,6 @@
-.notif__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.notif__title {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.notif__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
+// L'en-tête et le titre de page sont portés par `app-notifications-shell`
+// (`.esic-page-header` + `.esic-subnav`). Cette vue ne rend que sa barre
+// d'actions, sur la primitive `.esic-actions-row`.
 
 .notif__status {
   color: var(--esic-ink-soft);

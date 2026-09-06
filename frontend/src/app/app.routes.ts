@@ -237,27 +237,36 @@ export const routes: Routes = [
           import('./features/account/security/account-security').then((m) => m.AccountSecurity),
       },
       {
-        // Centre de notifications de l'appelant (G1-D). Aucune garde de
-        // rôle : `NotificationController` porte `@PreAuthorize("isAuthenticated()")`
-        // et l'isolation par destinataire est faite côté serveur.
+        // Espace « Notifications » : une seule entrée latérale, deux vues
+        // internes en onglets (liste / préférences). Les anciennes URL
+        // `/notifications` et `/notifications/preferences` restent valides
+        // — ce sont les chemins des enfants. Aucune garde de rôle :
+        // `NotificationController` et `NotificationPreferenceController`
+        // portent `@PreAuthorize("isAuthenticated()")` et l'isolation par
+        // destinataire est faite côté serveur.
         path: 'notifications',
-        title: `Notifications — ${APP_NAME}`,
         loadComponent: () =>
-          import('./features/notifications/notification-list/notification-list').then(
-            (m) => m.NotificationList,
+          import('./features/notifications/notifications-shell/notifications-shell').then(
+            (m) => m.NotificationsShell,
           ),
-      },
-      {
-        // Préférences de notification de l'appelant (EF-NOTIF-006).
-        // Aucune garde de rôle : `NotificationPreferenceController` porte
-        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
-        // sujet du JWT, jamais un paramètre.
-        path: 'notifications/preferences',
-        title: `Préférences de notification — ${APP_NAME}`,
-        loadComponent: () =>
-          import('./features/notifications/preferences/notification-preferences').then(
-            (m) => m.NotificationPreferences,
-          ),
+        children: [
+          {
+            path: '',
+            title: `Notifications — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/notifications/notification-list/notification-list').then(
+                (m) => m.NotificationList,
+              ),
+          },
+          {
+            path: 'preferences',
+            title: `Préférences de notification — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/notifications/preferences/notification-preferences').then(
+                (m) => m.NotificationPreferences,
+              ),
+          },
+        ],
       },
       {
         // Recherche globale (EF-USER-009 ; docs/02 §22.7). Périmètre
