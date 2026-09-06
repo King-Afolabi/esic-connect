@@ -11,6 +11,7 @@
 // droite, un filet de base. Pas de sur-titre en capitales, pas de fil d'Ariane
 // décoratif.
 .esic-page-header {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -19,6 +20,20 @@
   padding-bottom: var(--esic-space-4);
   margin-bottom: var(--esic-space-5);
   border-bottom: 1px solid var(--esic-line);
+
+  // Signature ESIC (Lot B) : un court segment bleu → vert posé sur le
+  // filet de titre, aux deux couleurs de la marque. Structurel — il
+  // ancre le titre de page —, pas décoratif, et répété sur chaque écran
+  // pour donner un rythme reconnaissable sans bruit.
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-end: -1px;
+    width: 2.75rem;
+    height: 2px;
+    background: linear-gradient(90deg, var(--esic-primary) 55%, var(--esic-secondary) 55%);
+  }
 
   &__text {
     min-width: 0;
