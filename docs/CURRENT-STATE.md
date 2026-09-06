@@ -199,13 +199,13 @@ touchés. **`PARTIAL` : socle livré, refonte écran par écran NON faite.**
   de couleur, ligne d'erreur à hauteur réservée. ~150 lignes de SCSS
   dupliquées par écran supprimées ; aucune règle métier touchée.
 
-**PAS encore fait** (prochaines étapes de la branche) : refonte écran par
-écran (pages métier, formulaires, listes/tableaux — défilement horizontal
-sur mobile à généraliser, modales) ; libellés longs du rail déplié encore
-tronqués ; favicon / icônes PWA (toujours le placeholder « E » bleu) — le
-monogramme de la barre reste une forme géométrique neutre
-(`.shell__mark`), remplaçable ; jeu de données de démonstration élargi ;
-audit accessibilité outillé. Le **tableau de bord** est fait (voir
+**Suite de la branche** : les étapes 5 à 14 ont été menées après ce lot —
+voir les entrées datées ci-dessus (tableau de bord, pages métier,
+formulaires, tableaux/listes, dialogues, responsive, icônes) et l'entrée
+« étapes 12-14 + audit final » plus bas. Restent `NOT_PERFORMED` : le jeu
+de données de démonstration élargi (relève du back-end, hors périmètre de
+cette branche UI) et l'audit accessibilité outillé. Le **tableau de bord**
+est fait (voir
 « étape 5 » ci-dessous).
 
 **Dépendance ajoutée** : `bootstrap@5.3.3` (+ `@popperjs/core` transitif,
@@ -375,6 +375,101 @@ saisies contextuelles s'ouvrent **en creux dans le flux de la page**
 **Aucun `.ts`, aucune règle métier, aucune assertion de test touchés.**
 `NOT_PERFORMED` : audit visuel piloté (back-end local injoignable) ;
 recette Playwright non rejouée ; audit accessibilité outillé.
+
+### 6 septembre 2026 (soir) — refonte UI : étapes 10 (responsive) et 11 (icônes)
+
+Même branche. Deux commits (`a330fcb`, `cf26086`), `lint` + `build` prod +
+**786 tests / 0 échec**.
+
+**Étape 10 — responsive, passe de finition.** Le socle (grilles
+`minmax(min(100%, Nrem), 1fr)`, compaction du rail, `100dvh`) était posé
+aux étapes 3-6. Ajouts, tous par largeur / orientation, jamais par modèle
+d'appareil :
+- `.shell__main` devient un **conteneur** (`container: esic-content /
+  inline-size`) : les requêtes `@container` des primitives (`.esic-kv`…)
+  se calent sur la largeur réelle de la colonne de contenu — qui varie
+  selon que le rail est déplié ou replié —, jamais sur la fenêtre.
+  `.esic-auth__card` aussi.
+- Pliable replié (`< 22rem`) : la barre supérieure ne garde que la
+  pastille de marque, lâche le mot-symbole.
+- Paysage court (`orientation: landscape` et `hauteur < 30rem`) : barre
+  supérieure resserrée à 3 rem, padding de contenu réduit.
+- Fenêtre courte en authentification (`hauteur < 34rem`) : la carte
+  s'ancre en haut et défile, au lieu d'être rognée par le centrage.
+
+**Étape 11 — favicon, icônes PWA, monogramme.** Fin du placeholder « E »
+bleu. Toutes les icônes sont dérivées du **« E » du logo ESIC officiel**
+(`public/brand/logo-esic.png`), **recadré sans déformation ni
+recoloration** (`sips`), centré sur fond blanc — la présentation même du
+logo sur les écrans d'authentification. La règle « ne jamais falsifier ni
+déformer le logo » est respectée : ce sont les pixels authentiques du
+glyphe, jamais un redessin.
+- Ajoutés / régénérés : `favicon.svg` (glyphe en raster embarqué) +
+  `favicon.ico` multi-tailles 16/32/48 ; `icons/icon-{192,512}.png`
+  (`any`) ; `icons/icon-maskable-{192,512}.png` (glyphe dans la zone de
+  sécurité centrale) ; `icons/apple-touch-icon.png` 180×180 opaque ;
+  `brand/mark-esic.png` — le monogramme du bandeau (`.shell__mark`)
+  abandonne la forme géométrique neutre pour le vrai « E ».
+- `index.html` : `rel="icon"` SVG d'abord, `.ico` en repli ;
+  `apple-touch-icon` → nouvelle image 180.
+- `manifest.webmanifest` : `theme_color` `#0d47a1`→`#134e9c` (aligné sur
+  `--esic-primary` et `<meta theme-color>`), `background_color`
+  `#fafafa`→`#f4f6f8` (`--esic-paper`), `id: "/"`, entrée maskable 192.
+- `sw.js` : `VERSION` `v1`→`v2` (rafraîchit le cache de coquille),
+  `/favicon.svg` précaché.
+
+`NOT_PERFORMED` : rendu réel des icônes dans un navigateur / à
+l'installation PWA (vérifié visuellement sur les PNG générés, pas
+in-situ) ; recette Playwright ; audit accessibilité outillé.
+
+### 6 septembre 2026 (soir) — refonte UI : étapes 12-14 + audit final
+
+Même branche. Commits `cf26086` (icônes), `<docs>` (cette entrée).
+
+**Étape 12 — données de démonstration.** Rien à faire côté branche UI. Le
+jeu de démonstration appartient au back-end (`DemoDataInitializer`,
+`scripts/seed-demo.sh`, profil `demo`) ; l'enrichir ne relève pas d'une
+refonte visuelle et **sortirait la PR UI de son périmètre** (« la PR UI
+ne contient que la refonte »). Le back-end local est par ailleurs
+injoignable depuis l'incident disque plein. `NOT_PERFORMED` — suivi
+séparément.
+
+**Étape 13 — tests.** La refonte est CSS + gabarits : **aucune logique
+nouvelle à couvrir**. Sur les ~18 commits de la branche, **une seule**
+assertion de test a été ajustée (`dashboard.spec.ts`, libellé « Comptes
+actifs », étape 5). À chaque commit : `npm run lint` vert,
+`npx ng test --watch=false` → **95 fichiers / 786 tests / 0 échec**,
+`npx ng build --configuration production` sans alerte de budget. Les
+sélecteurs sur lesquels s'appuie la recette Playwright ont été
+**délibérément conservés** : `.dashboard__chart`, `.dashboard__bar-value`,
+`table.dashboard__table caption`, `form.upload`,
+`input[formcontrolname="password"]`, `button[type="submit"]`.
+`NOT_PERFORMED` : recette Playwright (pile de démonstration requise,
+back-end injoignable) ; contrôle accessibilité outillé (axe / Lighthouse).
+
+**Étape 14 — documentation.** `docs/03-architecture.md` §9.7 « Système de
+design » réécrit : catalogue complet des primitives, règle « aucune
+fenêtre modale », `.shell__main` conteneur `@container`, stratégie
+responsive largeur/orientation, dérivation des icônes depuis le « E » du
+logo réel. `docs/CURRENT-STATE.md` tenu à jour à chaque étape (entrées
+ci-dessus).
+
+**Audit final (couche de présentation).**
+
+| Contrôle | Résultat |
+|---|---|
+| `grep -rn "mat-sys-\|#rrggbb\|rgb(0 0 0 / …)" src/app/**/*.scss` hors `_tokens`/`_esic-palette` | **0 occurrence** — `module-placeholder.scss` (composant partagé oublié à l'étape 6) corrigé ici |
+| `npm run lint` | « All files pass linting » |
+| `npx ng test --watch=false` | 95 fichiers / 786 tests / 0 échec |
+| `npx ng build --configuration production` | `styles.css` **87,6 kB brut / 7,9 kB gzip** ; total initial **577 kB / 134 kB gzip** ; aucune alerte de budget (seuil 600 kB) |
+| `.ts` touchés | **0** (hors 1 assertion de test à l'étape 5) |
+| Règles métier / contrôleurs / migrations touchés | **0** |
+
+**Reste `NOT_PERFORMED` pour clore la branche** : revue visuelle pilotée
+écran par écran (back-end local à redémarrer), recette Playwright complète,
+audit accessibilité outillé (axe-core / Lighthouse) et navigation clavier
+sur les écrans refondus. Ces trois contrôles conditionnent le passage de
+la PR #46 de brouillon à « prête ».
 
 ### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
 

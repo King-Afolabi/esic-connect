@@ -933,30 +933,73 @@ avant une vérification serveur.
 
 ## 9.7 Système de design
 
-`PARTIAL` — socle livré, refonte écran par écran en cours (branche
-`feat/ui-redesign-bootstrap-material`). Voir `docs/CURRENT-STATE.md`.
+Refonte visuelle et UX menée sur la branche
+`feat/ui-redesign-bootstrap-material` (base `feat/demo-readiness-e2e-ui`).
+**Aucune règle métier, aucun contrôleur, aucune migration touchés** :
+c'est une refonte de la couche de présentation. L'état d'avancement
+détaillé, étape par étape, est dans `docs/CURRENT-STATE.md`.
+
+**Résultat mesurable** : plus **aucune** référence `--mat-sys-*` directe
+ni couleur en dur (`#rrggbb`, `rgb(0 0 0 / …)`) dans
+`src/app/**/*.scss` hors fichiers de jetons — toute la couche de
+présentation dérive du système de design ESIC.
 
 **Identité** : `src/styles/_tokens.scss` est le **point unique** des
-couleurs (vert / bleu ESIC), espacements, rayons et ombres, exposés en
-variables CSS `--esic-*`. Reteinter le produit = modifier le bloc
-« Marque » de ce fichier.
+couleurs (vert `#1F7A4C` / bleu `#134E9C` / ambre / neutres), espacements
+(`--esic-space-1..8`), rayons, ombres (deux niveaux), et de la
+correspondance **statut d'assiduité → couleur**, exposés en variables CSS
+`--esic-*`. Reteinter le produit = modifier le bloc « Marque » de ce
+fichier, rien d'autre.
 
-**Deux briques combinées, sans mélange anarchique** :
+**Trois briques combinées, sans mélange anarchique** :
 
 | Brique | Rôle | Ne fait pas |
 |---|---|---|
-| Angular Material (M3) | tous les composants interactifs (dialogues, menus, champs, sidenav, tableaux, dates, snackbars). Reteinté par `mat.theme()` à partir d'une palette M3 générée depuis les couleurs ESIC (`_esic-palette.scss`). | — |
-| Bootstrap 5 (SCSS, **sans JavaScript**) | grille 12 colonnes, conteneurs, utilitaires responsive (affichage, flex, espacement, alignement, gap). Variables réécrites sur l'échelle ESIC. | aucun composant (`.btn`, `.card`, `.alert`, `.badge`, `.form-control` exclus) |
-| Primitives ESIC (`_primitives.scss`) | présentiel non-Material : en-tête de page, carte de contenu, **pastille de statut d'assiduité** (langage visuel signature), tableau de données, liste clé/valeur, état vide. | — |
+| Angular Material (M3) | tous les composants interactifs (menus, champs, sidenav, tableaux, dates, bandeaux transitoires). Reteinté par `mat.theme()` depuis une palette M3 générée à partir des couleurs ESIC (`_esic-palette.scss`), puis réalignement des jetons système (`--mat-sys-*`, `--mat-button-*`) sur l'échelle ESIC dans `styles.scss` et `_material-overrides.scss`. **Aucune fenêtre modale** (`MatDialog` n'est utilisé nulle part). | — |
+| Bootstrap 5 (SCSS, **sans JavaScript**) | grille 12 colonnes, conteneurs, utilitaires responsive triés (affichage, flex, espacement, alignement, gap). Variables réécrites sur l'échelle ESIC. | aucun composant (`.btn`, `.card`, `.alert`, `.badge`, `.form-control`… exclus), aucune couleur / bordure / typo / ombre Bootstrap |
+| Primitives ESIC (`_primitives.scss`) | présentiel non-Material — voir le catalogue ci-dessous. | — |
+
+**Catalogue des primitives** (`_primitives.scss`, toutes préfixées
+`.esic-`) :
+
+| Primitive | Rôle |
+|---|---|
+| `page-header` (`__text`/`__title`/`__description`/`__actions`) | en-tête de page unique : titre serif, filet de base, action primaire à droite |
+| `back` | lien de retour unique du produit (icône `arrow_back`, jamais un glyphe « ← »), placé avant l'en-tête |
+| `card` (+`--raised`/`--flush`), `card-grid` | surface de contenu plate ; grille de cartes `auto-fill` |
+| `status` (`--present/late/absent/excused/company/pending`) | **pastille d'assiduité** — langage visuel signature : point + libellé, la couleur ne porte jamais seule l'information |
+| `badge` + `badge[data-status]` | étiquette de cycle de vie ; `[data-status]` fait la correspondance **≈40 statuts métier → 5 tonalités** en un seul endroit (le gabarit ne pose que la valeur brute) |
+| `table-wrap` + `table` | enveloppe à défilement horizontal **contenu** (jamais le `<body>`) + table de données |
+| `kv` | liste clé/valeur, bascule en une colonne via `@container` |
+| `filters` (+`__actions`) | barre de recherche / filtres au-dessus d'une liste |
+| `form` (+`--wide`, `__grid`, `__row`, `__group`, `__hint`, `__required-note`, `__error`, `__actions`) | formulaire de saisie : colonne bornée, grappe de champs courts, groupe `<fieldset>`, pied à filet, erreur de **soumission** (distincte de `mat-error`) |
+| `reveal` (+`--danger`, `__title`, `__text`, `__actions`, `__error`) | **dialogue en ligne** : confirmation ou saisie contextuelle ouverte en creux dans le flux de la page, jamais en superposition — d'où l'absence de tout problème de `z-index` ou de piège de focus |
+| `note` (+`--danger`/`--warning`), `section` (`__head`/`__title`), `empty`, `actions-row` | encart d'état ; sous-section titrée ; état « aucune donnée » ; rangée d'actions |
 
 **Assemblage** (`src/styles.scss`) : palette générée → `mat.theme()` →
-jetons ESIC → pont Bootstrap → primitives → réalignement des jetons
-système Material (`--mat-sys-*`, `--mat-button-*`) sur l'échelle ESIC →
-styles d'éléments de base.
+jetons ESIC → pont Bootstrap → primitives → styles d'authentification
+(`_auth.scss`) → réalignement Material (`_material-overrides.scss`) → bloc
+`html{}` de réalignement des `--mat-sys-*` (après `mat.theme()`, pour
+gagner la cascade) → styles d'éléments de base.
+
+**Coquille applicative** (`core/layout/app-shell`) : barre supérieure fine
++ rail de navigation repliable (préférence mémorisée par appareil).
+`.shell__main` est un **conteneur** (`container-type: inline-size`) : les
+requêtes `@container` des primitives se calent sur la largeur réelle de la
+colonne de contenu, pas sur la fenêtre. Adaptatif par **largeur et
+orientation** — jamais par modèle d'appareil : compaction < 1100 px,
+< 640 px, < 22rem (pliable replié), et `orientation: landscape` +
+`max-height` (téléphone couché).
 
 **Typographie** : IBM Plex Sans (interface, corps, chiffres tabulaires
 des registres) ; IBM Plex Serif (titres de page, documents officiels —
-attestations, en-têtes de rapport).
+attestations, en-têtes de rapport) ; IBM Plex Mono (codes courts).
+
+**Marque** : le logo ESIC réel est `frontend/public/brand/logo-esic.png`
+(mot-symbole complet, écrans d'authentification). Le favicon, les icônes
+PWA (`any` + `maskable`), l'`apple-touch-icon` et le monogramme du
+bandeau (`brand/mark-esic.png`) sont **le « E » de ce logo, recadré sans
+déformation ni recoloration** — jamais un logo inventé ni redessiné.
 
 ---
 
