@@ -8,18 +8,17 @@
   <div class="esic-subnav__list">
     <a
       class="esic-subnav__link"
-      routerLink="."
-      routerLinkActive="esic-subnav__link--active"
-      [routerLinkActiveOptions]="{ exact: true }"
-      ariaCurrentWhenActive="page"
+      routerLink="/notifications/centre"
+      [class.esic-subnav__link--active]="activeTab() === 'centre'"
+      [attr.aria-current]="activeTab() === 'centre' ? 'page' : null"
     >
       Notifications
     </a>
     <a
       class="esic-subnav__link"
-      routerLink="preferences"
-      routerLinkActive="esic-subnav__link--active"
-      ariaCurrentWhenActive="page"
+      routerLink="/notifications/preferences"
+      [class.esic-subnav__link--active]="activeTab() === 'preferences'"
+      [attr.aria-current]="activeTab() === 'preferences' ? 'page' : null"
     >
       Préférences
     </a>

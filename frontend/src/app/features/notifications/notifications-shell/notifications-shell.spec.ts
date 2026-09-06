@@ -1,47 +1,78 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Component } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 
 import { NotificationsShell } from './notifications-shell';
 
-function setup() {
+@Component({ template: 'liste' })
+class StubList {}
+@Component({ template: 'prefs' })
+class StubPrefs {}
+
+function configure() {
   TestBed.configureTestingModule({
-    providers: [provideRouter([])],
+    providers: [
+      provideRouter([
+        {
+          path: 'notifications',
+          component: NotificationsShell,
+          children: [
+            { path: '', pathMatch: 'full', redirectTo: 'centre' },
+            { path: 'centre', component: StubList },
+            { path: 'preferences', component: StubPrefs },
+          ],
+        },
+      ]),
+    ],
   });
-  const fixture: ComponentFixture<NotificationsShell> =
-    TestBed.createComponent(NotificationsShell);
-  fixture.detectChanges();
-  return {
-    fixture,
-    el: fixture.nativeElement as HTMLElement,
-  };
+}
+
+/** Onglets `.esic-subnav__link` de la coquille avec leur état actif. */
+function tabs() {
+  const shell = document.querySelector('app-notifications-shell') as HTMLElement;
+  return Array.from(shell.querySelectorAll('.esic-subnav__link')).map((a) => ({
+    label: a.textContent?.trim(),
+    active: a.getAttribute('aria-current') === 'page',
+  }));
 }
 
 describe('NotificationsShell', () => {
-  it('rend un seul titre de page « Notifications »', () => {
-    const { el } = setup();
-    const headings = el.querySelectorAll('h1');
-    expect(headings.length).toBe(1);
-    expect(headings[0].textContent?.trim()).toBe('Notifications');
+  it('rend un seul titre de page et deux onglets', async () => {
+    configure();
+    await RouterTestingHarness.create('/notifications');
+    const shell = document.querySelector('app-notifications-shell') as HTMLElement;
+    expect(shell.querySelectorAll('h1').length).toBe(1);
+    expect(shell.querySelector('h1')?.textContent?.trim()).toBe('Notifications');
+    expect(tabs().map((t) => t.label)).toEqual(['Notifications', 'Préférences']);
   });
 
-  it('expose exactement deux onglets : Notifications et Préférences', () => {
-    const { el } = setup();
-    const tabs = Array.from(el.querySelectorAll('.esic-subnav__link')) as HTMLAnchorElement[];
-    expect(tabs.map((a) => a.textContent?.trim())).toEqual(['Notifications', 'Préférences']);
+  it('sur /notifications (→ centre), seul « Notifications » est actif', async () => {
+    configure();
+    await RouterTestingHarness.create('/notifications');
+    expect(tabs()).toEqual([
+      { label: 'Notifications', active: true },
+      { label: 'Préférences', active: false },
+    ]);
   });
 
-  it('l’onglet « Notifications » pointe sur la vue racine avec correspondance exacte', () => {
-    const { el } = setup();
-    const [list, prefs] = Array.from(
-      el.querySelectorAll('.esic-subnav__link'),
-    ) as HTMLAnchorElement[];
-    // `routerLink="."` : la vue liste, sans rester actif sur /preferences.
-    expect(list.getAttribute('href')).toBe('/');
-    expect(prefs.getAttribute('href')).toBe('/preferences');
+  it('sur /notifications/preferences, seul « Préférences » est actif', async () => {
+    configure();
+    const harness = await RouterTestingHarness.create('/notifications/centre');
+    await harness.navigateByUrl('/notifications/preferences');
+    expect(tabs()).toEqual([
+      { label: 'Notifications', active: false },
+      { label: 'Préférences', active: true },
+    ]);
   });
 
-  it('monte un exutoire de route pour la vue interne active', () => {
-    const { el } = setup();
-    expect(el.querySelector('router-outlet')).not.toBeNull();
+  it('retour de préférences vers la liste : l’état actif suit, aucun résidu', async () => {
+    configure();
+    const harness = await RouterTestingHarness.create('/notifications/preferences');
+    await harness.navigateByUrl('/notifications/centre');
+    expect(tabs()).toEqual([
+      { label: 'Notifications', active: true },
+      { label: 'Préférences', active: false },
+    ]);
   });
 });

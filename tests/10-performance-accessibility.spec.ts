@@ -110,7 +110,11 @@ test.describe('Accessibilité — vérifications structurelles légères (pas un
     page,
   }) => {
     await loginAsUi(page, ACCOUNTS.ADMIN);
-    const icons = page.locator('.shell__toolbar mat-icon');
+    // La barre supérieure de la coquille porte la classe `.shell__topbar`
+    // (renommée lors de la refonte du système de design) — l'ancien
+    // `.shell__toolbar` ne matchait plus rien et le test ne vérifiait donc
+    // plus rien.
+    const icons = page.locator('.shell__topbar mat-icon');
     const count = await icons.count();
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i += 1) {

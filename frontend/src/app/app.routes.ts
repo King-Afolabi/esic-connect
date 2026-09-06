@@ -250,8 +250,14 @@ export const routes: Routes = [
             (m) => m.NotificationsShell,
           ),
         children: [
+          // `/notifications` (favori historique) redirige vers la vue
+          // liste, qui porte désormais un chemin propre (`centre`) : un
+          // onglet lié à un chemin d'enfant NON vide se réévalue
+          // correctement quand seul l'enfant change (mode zoneless),
+          // contrairement à un `routerLink` vers l'enfant à chemin vide.
+          { path: '', pathMatch: 'full', redirectTo: 'centre' },
           {
-            path: '',
+            path: 'centre',
             title: `Notifications — ${APP_NAME}`,
             loadComponent: () =>
               import('./features/notifications/notification-list/notification-list').then(

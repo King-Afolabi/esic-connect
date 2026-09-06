@@ -6,46 +6,16 @@
 
 <nav class="esic-subnav" aria-label="Vues du suivi d'assiduité">
   <div class="esic-subnav__list">
-    <a
-      class="esic-subnav__link"
-      routerLink="summary"
-      routerLinkActive="esic-subnav__link--active"
-      ariaCurrentWhenActive="page"
-    >
-      Synthèse
-    </a>
-    <a
-      class="esic-subnav__link"
-      routerLink="sessions"
-      routerLinkActive="esic-subnav__link--active"
-      ariaCurrentWhenActive="page"
-    >
-      Par séance
-    </a>
-    <a
-      class="esic-subnav__link"
-      routerLink="classes"
-      routerLinkActive="esic-subnav__link--active"
-      ariaCurrentWhenActive="page"
-    >
-      Par classe
-    </a>
-    <a
-      class="esic-subnav__link"
-      routerLink="students"
-      routerLinkActive="esic-subnav__link--active"
-      ariaCurrentWhenActive="page"
-    >
-      Par apprenant
-    </a>
-    <a
-      class="esic-subnav__link"
-      routerLink="justifications"
-      routerLinkActive="esic-subnav__link--active"
-      ariaCurrentWhenActive="page"
-    >
-      Justificatifs
-    </a>
+    @for (view of views; track view) {
+      <a
+        class="esic-subnav__link"
+        [routerLink]="view"
+        [class.esic-subnav__link--active]="activeView() === view"
+        [attr.aria-current]="activeView() === view ? 'page' : null"
+      >
+        {{ label[view] }}
+      </a>
+    }
   </div>
 </nav>
 
