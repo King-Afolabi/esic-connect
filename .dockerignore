@@ -1,0 +1,56 @@
+# Garde-fou pour un éventuel build depuis la racine du dépôt.
+#
+# La composition de production (compose.prod.yaml) construit depuis des
+# contextes RESTREINTS — ./backend et ./frontend — qui ont chacun leur
+# propre .dockerignore. Ce fichier-ci ne sert qu'à empêcher un
+# `docker build .` involontaire d'aspirer tout le dépôt (dépôt Git,
+# node_modules, cibles Maven, rapports, captures…).
+
+.git/
+.gitignore
+.github/
+
+# Documentation et documents de travail
+docs/
+artifacts/
+Archives/
+*.md
+
+# Recette navigateur et ses sorties
+tests/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+playwright/.auth/
+
+# Dépendances et sorties de build
+node_modules/
+**/node_modules/
+**/target/
+**/dist/
+**/.angular/
+**/out-tsc/
+**/coverage/
+
+# Fichiers locaux Claude / IDE / OS
+.claude/
+.vscode/
+.idea/
+*.iml
+*.log
+.DS_Store
+Thumbs.db
+
+# Secrets — jamais dans un contexte de build
+.env
+.env.*
+!.env.example
+!.env.prod.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# Infra de développement uniquement
+compose.yaml

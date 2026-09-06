@@ -1,2 +1,32 @@
+# Contexte de build minimal — voir compose.prod.yaml (contexte ./backend).
+# Le build multi-étapes (Dockerfile) n'a besoin que de : .mvn/ mvnw
+# pom.xml src/. Tout le reste est exclu du contexte envoyé au démon
+# Docker (plus léger, plus rapide, pas de fuite de secret dans une couche).
+
+# Sorties de compilation Maven (~29 Mo) — reconstruites dans l'image.
 target/
+
+# Outillage et métadonnées non nécessaires à l'image
+Dockerfile
+.dockerignore
+.gitignore
+mvnw.cmd
+
+# IDE / éditeurs
+.idea/
+.vscode/
+*.iml
+*.class
+
+# Journaux et fichiers d'OS
 *.log
+.DS_Store
+Thumbs.db
+
+# Secrets — jamais copiés dans une image
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks

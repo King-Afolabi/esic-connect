@@ -10,6 +10,68 @@
 
 ## Dernière mise à jour
 
+### 6 septembre 2026 — campagne finale (checkpoint avant fusion/déploiement), branche `feat/ui-redesign-bootstrap-material`
+
+Suite de la campagne finale. Livré et vérifié dans cette passe, **aucune
+ligne de back-end, zéro migration** (schéma inchangé V34) :
+
+- **§2 — Tableau de bord, ajustement desktop.** Variante responsable
+  uniquement : ligne 1 « Mon activité » (indicateurs) | « Mon périmètre »
+  (`.dashboard__split`, `minmax(1.7fr, 1fr)`), ligne 2 « Taux d'assiduité
+  par classe » (plus large) | « Séances à venir » (`.dashboard__grid--facing`).
+  Bascule `@container esic-content` (état du rail), pile sous 52 rem,
+  repli `@media` sans container queries. Autres rôles intacts ; sélecteurs
+  E2E conservés (`.dashboard__chart`, `.dashboard__bar-value`,
+  `table.dashboard__table`). `dashboard.spec.ts` 22/22.
+- **§3 — Panneau compact « Profil » dans l'en-tête.** Nouveau composant
+  `app-profile-menu` : déclencheur (pastille + identifiant court, pastille
+  seule sous 640 px) ouvrant un `mat-menu` ancré — adresse complète,
+  rôle(s), contexte d'usage actif si multi-rôles, lien vers « Sécurité du
+  compte » (`/mon-compte/securite`, route existante). `mat-menu` fournit
+  ouverture clic + clavier, fermeture Échap + clic extérieur, piège de
+  focus, `aria-haspopup` / `aria-expanded` / `aria-controls`,
+  repositionnement près des bords. Pas de bouton « copier », aucun appel
+  réseau, aucune donnée sensible ; la déconnexion reste un contrôle
+  distinct non dupliqué. `app-shell` : adresse et rôles retirés du
+  composant et du SCSS mort. `profile-menu.spec.ts` 6/6 ; `app-shell.spec.ts`
+  mis à jour (l'adresse est désormais dans le panneau).
+- **§6 (repo) — allègement du contenu versionné.** `docs/audit/`,
+  `artifacts/report-screenshots/` (41 captures) et
+  `docs/JOURNAL-BATCH-S02A-S11.md` retirés de l'index (conservés sur
+  disque, ignorés, **sauvegardés hors dépôt** dans
+  `~/esic-connect-local-docs/2026-09-06/`). `.gitignore` : `/artifacts/`,
+  `/docs/audit/`, `/docs/JOURNAL-*.md`. `README` : section « Documents de
+  travail locaux ». Aucune dépendance CI / script vers les fichiers
+  retirés (vérifié). Aucun historique réécrit.
+- **§7 — paquet de déploiement minimal.** `.dockerignore` durcis
+  (`backend/`, `frontend/`) + nouveau `.dockerignore` racine (garde-fou
+  contre un build racine involontaire). Les Dockerfiles étaient déjà
+  multi-étapes. `docker compose -f compose.prod.yaml config` : valide.
+
+**`NOT_PERFORMED` / différé — checkpoint avant fusion et déploiement
+(choix du porteur) :**
+
+- **§4 — lot complémentaire de données pédagogiques** (BTS SIO/CIEL 1-2,
+  Bachelor CDA, ESIS 1-2, CPDIA 1-2 ; 4 familles de rythmes ; 3 mois de
+  planning sans conflit par classe ; sites Malakoff/Paris + salles ;
+  apprenants/formateurs fictifs ; jeux d'import valide/avertissement/
+  bloquant/multi-anomalies/doublons vérifiés). **Non commencé.** Chantier
+  back-end + données qui exige un back-end en profil `demo` sur
+  `esic_connect_demo`, la réinitialisation de cette base (§5 du mandat,
+  garde `ESIC_ALLOW_DEMO_RESET`), un générateur de planning déterministe
+  sans conflit et une boucle de vérification par import réel. À traiter
+  en passe dédiée.
+- **§9 — fusion** de `feat/ui-redesign-bootstrap-material` dans
+  `feat/demo-readiness-e2e-ui` (base de la PR #46) : **non faite**,
+  checkpoint demandé avant.
+- **§10 — déploiement Raspberry Pi + Quick Tunnel Cloudflare** :
+  **non fait**. Cible = Pi (choix du porteur) ; ses coordonnées SSH /
+  confirmation d'accessibilité / ARM64 restent à fournir. `cloudflared`
+  tourne comme conteneur dans `compose.prod.yaml` (aucune installation
+  hôte requise).
+- Revue visuelle pilotée des écrans §2/§3 aux points de rupture ; recette
+  Playwright ; audit accessibilité outillé.
+
 ### 6 septembre 2026 — campagne finale : D-01 tranchée (même branche `feat/ui-redesign-bootstrap-material`)
 
 **D-01 — DÉCISION PRISE : OPTION 1 (statu quo).** Validée par le porteur.
