@@ -183,6 +183,8 @@
   &[data-status="ADDITIONAL_INFORMATION_REQUIRED"],
   &[data-status="PENDING"],
   &[data-status="QUEUED"],
+  &[data-status="REOPENED"],
+  &[data-status="POSTPONED"],
   &[data-status="TRANSFERRED"] { color: var(--esic-warning); background: var(--esic-warning-tint); border-color: transparent; }
 
   &--danger,

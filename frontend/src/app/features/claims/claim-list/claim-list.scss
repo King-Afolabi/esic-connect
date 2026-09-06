@@ -1,37 +1,43 @@
+// Aligné sur le système de design ESIC. La largeur, le centrage et les marges
+// de page sont portés par la coquille (`.shell__main`) : pas de `:host` box.
+
 :host {
   display: block;
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-}
-
-.claims__title {
-  margin: 0 0 0.5rem;
-  font-size: 1.5rem;
 }
 
 .claims__subtitle {
-  margin: 1.5rem 0 0.5rem;
-  font-size: 1.15rem;
-}
-
-.claims__intro {
-  margin: 0 0 1.5rem;
-  max-width: 60ch;
-  color: var(--mat-sys-on-surface-variant, #5f6368);
+  margin: var(--esic-space-5) 0 var(--esic-space-3);
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
 }
 
 .claims__meta {
-  color: var(--mat-sys-on-surface-variant, #5f6368);
-  font-size: 0.85rem;
+  color: var(--esic-ink-faint);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.claims__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-3) var(--esic-space-4);
+  align-items: flex-start;
+  margin-bottom: var(--esic-space-5);
+
+  .mat-mdc-form-field {
+    width: auto;
+    min-width: 12rem;
+  }
 }
 
 .claims__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--esic-space-2) var(--esic-space-3);
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin: var(--esic-space-4) 0;
 }
 
 .claims__field {
@@ -41,7 +47,12 @@
 }
 
 .claims__table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -50,19 +61,30 @@ table {
 
 .claims__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid var(--mat-sys-outline-variant, #dadce0);
-  border-radius: 8px;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
 .claims__error {
-  color: var(--mat-sys-error, #b3261e);
-  margin: 0.5rem 0;
+  color: var(--esic-danger);
+  margin: var(--esic-space-2) 0;
 }
 
 .claims__section {
-  margin-top: 1.5rem;
+  margin-top: var(--esic-space-5);
 }

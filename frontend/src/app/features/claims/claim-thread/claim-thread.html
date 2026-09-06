@@ -24,12 +24,18 @@
   }
   @case ('ready') {
     @if (thread(); as t) {
-      <h1 class="claims__title">{{ t.claim.subject }}</h1>
-      <p class="claims__meta">
-        {{ categoryLabel(t.claim.category) }} · {{ audienceLabel(t.claim.audience) }} ·
-        {{ statusLabel(t.claim.status) }} · ouverte le
-        {{ formatInstantUtc(t.claim.createdAt) }}
-      </p>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">{{ t.claim.subject }}</h1>
+          <p class="esic-page-header__description">
+            {{ categoryLabel(t.claim.category) }} · {{ audienceLabel(t.claim.audience) }} ·
+            ouverte le {{ formatInstantUtc(t.claim.createdAt) }}
+          </p>
+        </div>
+        <div class="esic-page-header__actions">
+          <span class="esic-badge" [attr.data-status]="t.claim.status">{{ statusLabel(t.claim.status) }}</span>
+        </div>
+      </header>
 
       <section class="claims__section" aria-label="Fil de la conversation">
         <h2 class="claims__subtitle">Conversation</h2>
