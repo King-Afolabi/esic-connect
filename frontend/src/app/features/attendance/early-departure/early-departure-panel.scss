@@ -30,9 +30,10 @@
   margin-top: var(--esic-space-2);
 }
 
-.ed__form {
-  display: flex;
-  flex-direction: column;
+// `.ed__form` s'appuie sur la primitive `.esic-form` ; ne reste ici que le
+// resserrement propre à ce panneau contextuel (pied `.ed__actions`, pas
+// `.esic-form__actions`).
+.ed__form.esic-form {
   gap: var(--esic-space-2);
   margin-top: var(--esic-space-2);
 }

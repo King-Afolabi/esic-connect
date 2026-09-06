@@ -22,22 +22,18 @@
   margin: 0 0 var(--esic-space-5);
 }
 
-.checkin__form {
-  display: flex;
-  flex-direction: column;
+// `.checkin__form` s'appuie sur la primitive `.esic-form` ; on garde
+// seulement l'alignement à gauche (le bouton ne doit pas s'étirer) puisque
+// ce formulaire ne porte pas de pied `.esic-form__actions`.
+.checkin__form.esic-form {
   align-items: flex-start;
-  gap: var(--esic-space-3);
 }
 
 .checkin__field {
   width: 100%;
 }
 
-.checkin__inline-error {
-  color: var(--esic-danger);
-  font-size: 0.8125rem;
-  margin: 0;
-}
+// Erreur de soumission — cf. primitive `.esic-form__error`.
 
 .checkin__note {
   font-size: 0.8125rem;

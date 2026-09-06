@@ -31,7 +31,7 @@
   <mat-card appearance="outlined">
     <mat-card-content>
       <h2 class="claims__subtitle">Nouvelle réclamation</h2>
-      <form [formGroup]="form" (ngSubmit)="submit()">
+      <form class="esic-form" [formGroup]="form" (ngSubmit)="submit()">
         <mat-form-field appearance="outline" class="claims__field">
           <mat-label>Catégorie</mat-label>
           <mat-select formControlName="category">
@@ -63,9 +63,11 @@
         </mat-form-field>
 
         @if (formError(); as message) {
-          <p class="claims__error" role="alert">{{ message }}</p>
+          <p class="esic-form__error" role="alert">{{ message }}</p>
         }
-        <button mat-flat-button type="submit" [disabled]="submitting()">Ouvrir</button>
+        <div class="esic-form__actions">
+          <button mat-flat-button type="submit" [disabled]="submitting()">Ouvrir</button>
+        </div>
       </form>
     </mat-card-content>
   </mat-card>

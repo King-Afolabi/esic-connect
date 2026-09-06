@@ -80,10 +80,7 @@ table {
   }
 }
 
-.claims__error {
-  color: var(--esic-danger);
-  margin: var(--esic-space-2) 0;
-}
+// Erreur de soumission — cf. primitive `.esic-form__error`.
 
 .claims__section {
   margin-top: var(--esic-space-5);

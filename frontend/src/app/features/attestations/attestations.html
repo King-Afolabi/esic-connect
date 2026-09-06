@@ -10,21 +10,23 @@
     <mat-card appearance="outlined" class="attest__card">
       <mat-card-header><mat-card-title>Émettre une attestation</mat-card-title></mat-card-header>
       <mat-card-content>
-        <form class="attest__form" [formGroup]="issueForm" (ngSubmit)="issue()">
-          <mat-form-field appearance="outline" class="attest__field">
-            <mat-label>Identifiant du profil apprenant</mat-label>
-            <input matInput formControlName="studentProfile" autocomplete="off" required />
-            <mat-hint>Identifiant public visible sur la fiche de l'apprenant.</mat-hint>
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Du</mat-label>
-            <input matInput type="date" formControlName="from" />
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Au</mat-label>
-            <input matInput type="date" formControlName="to" />
-          </mat-form-field>
-          <div class="attest__actions">
+        <form class="attest__form esic-form" [formGroup]="issueForm" (ngSubmit)="issue()">
+          <div class="esic-form__grid">
+            <mat-form-field appearance="outline" class="attest__field esic-form__row">
+              <mat-label>Identifiant du profil apprenant</mat-label>
+              <input matInput formControlName="studentProfile" autocomplete="off" required />
+              <mat-hint>Identifiant public visible sur la fiche de l'apprenant.</mat-hint>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Du</mat-label>
+              <input matInput type="date" formControlName="from" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Au</mat-label>
+              <input matInput type="date" formControlName="to" />
+            </mat-form-field>
+          </div>
+          <div class="attest__actions esic-form__actions">
             <button mat-flat-button type="submit" [disabled]="issuing()">
               <mat-icon aria-hidden="true">description</mat-icon> Générer le PDF
             </button>
@@ -45,12 +47,12 @@
     <mat-card appearance="outlined" class="attest__card">
       <mat-card-header><mat-card-title>Vérifier un document</mat-card-title></mat-card-header>
       <mat-card-content>
-        <form class="attest__form" [formGroup]="verifyForm" (ngSubmit)="verify()">
+        <form class="attest__form esic-form" [formGroup]="verifyForm" (ngSubmit)="verify()">
           <mat-form-field appearance="outline" class="attest__field">
             <mat-label>Identifiant du document</mat-label>
             <input matInput formControlName="documentId" autocomplete="off" required />
           </mat-form-field>
-          <div class="attest__actions">
+          <div class="attest__actions esic-form__actions">
             <button mat-stroked-button type="submit">
               <mat-icon aria-hidden="true">verified</mat-icon> Vérifier
             </button>

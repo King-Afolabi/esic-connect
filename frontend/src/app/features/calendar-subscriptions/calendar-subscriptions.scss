@@ -13,22 +13,8 @@
   font-size: 0.9375rem;
 }
 
-.cal__form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.cal__field {
-  flex: 1 1 22rem;
-}
-
-.cal__actions {
-  align-items: flex-start;
-  display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-}
+// Le formulaire de création s'appuie sur la primitive `.esic-form` /
+// `.esic-form__actions` (`_primitives.scss`).
 
 .cal__fresh {
   background: var(--esic-secondary-tint);
