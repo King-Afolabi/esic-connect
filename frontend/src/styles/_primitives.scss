@@ -219,6 +219,39 @@
   -webkit-overflow-scrolling: touch;
 }
 
+// -- Indice de défilement horizontal (Lot L) ----------------------------
+// Ombre discrète au bord d'un tableau qui déborde, tant qu'il reste du
+// contenu à faire défiler de ce côté. Technique CSS pure (Lea Verou) :
+// deux couches « cache » attachées au contenu (`local`) masquent l'ombre
+// au ras du bord, deux couches « ombre » fixées à l'enveloppe (`scroll`)
+// apparaissent dès qu'il y a du hors-champ. Aucun JS ; compatible zoom.
+// Le tableau n'est jamais converti en cartes : il défile dans son
+// enveloppe, jamais le <body>.
+.esic-table-wrap,
+.table-scroll,
+.academic__table-wrapper,
+.account__table-wrapper,
+.alt__table-wrapper,
+.att__table-wrapper,
+.claims__table-wrapper,
+.duplicates__table-wrapper,
+.org__table-wrapper,
+.plan__table-wrapper,
+.profile__table-wrapper,
+.sessions__table-wrapper,
+.students__table-wrapper,
+.users__table-wrapper {
+  background:
+    linear-gradient(to right, var(--esic-surface) 30%, transparent) 0 0 / 2.5rem 100% no-repeat,
+    linear-gradient(to left, var(--esic-surface) 30%, transparent) 100% 0 / 2.5rem 100% no-repeat,
+    radial-gradient(farthest-side at 0 50%, rgb(23 33 43 / 16%), transparent) 0 0 / 0.75rem 100%
+      no-repeat,
+    radial-gradient(farthest-side at 100% 50%, rgb(23 33 43 / 16%), transparent) 100% 0 / 0.75rem
+      100% no-repeat,
+    var(--esic-surface);
+  background-attachment: local, local, scroll, scroll;
+}
+
 .esic-table {
   width: 100%;
   border-collapse: collapse;
