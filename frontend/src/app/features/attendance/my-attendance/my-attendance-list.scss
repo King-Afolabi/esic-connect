@@ -62,21 +62,16 @@
   border-bottom-color: var(--esic-primary);
 }
 
-.att__filters,
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`),
+// posée à côté de `.att__filters` dans les gabarits.
+
+// Rangée de boutons — utilisée par la barre de filtres ET par les panneaux
+// contextuels (corrections, décisions) : reste un helper autonome.
 .att__filter-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--esic-space-3) var(--esic-space-4);
+  gap: var(--esic-space-2) var(--esic-space-3);
   align-items: center;
-}
-
-.att__filters {
-  margin-bottom: var(--esic-space-5);
-
-  .mat-mdc-form-field {
-    width: auto;
-    min-width: 12rem;
-  }
 }
 
 .att__section {

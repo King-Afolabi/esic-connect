@@ -72,7 +72,7 @@
   </p>
 </form>
 
-<form class="users__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="users__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="users__filter">
     <mat-label>Nom ou adresse électronique</mat-label>
     <input matInput type="search" formControlName="q" autocomplete="off" />

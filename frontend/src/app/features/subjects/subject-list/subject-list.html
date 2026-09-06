@@ -52,6 +52,7 @@
     {{ showArchived() ? 'Masquer les matières archivées' : 'Afficher les matières archivées' }}
   </button>
 
+  <div class="esic-table-wrap">
   <table mat-table [dataSource]="subjects()" class="subjects__table">
     <ng-container matColumnDef="code">
       <th mat-header-cell *matHeaderCellDef scope="col">Code</th>
@@ -97,6 +98,7 @@
     <tr mat-header-row *matHeaderRowDef="columns"></tr>
     <tr mat-row *matRowDef="let row; columns: columns"></tr>
   </table>
+  </div>
 
   @if (subjects().length === 0 && !loading()) {
     <p>Aucune matière enregistrée.</p>

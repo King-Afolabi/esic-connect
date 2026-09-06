@@ -8,12 +8,7 @@
   font-size: 0.9375rem;
 }
 
-.audit__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`).
 .audit__actions {
   align-items: flex-start;
   display: flex;

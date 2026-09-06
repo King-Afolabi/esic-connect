@@ -19,18 +19,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.claims__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esic-space-3) var(--esic-space-4);
-  align-items: flex-start;
-  margin-bottom: var(--esic-space-5);
-
-  .mat-mdc-form-field {
-    width: auto;
-    min-width: 12rem;
-  }
-}
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`).
 
 .claims__actions {
   display: flex;

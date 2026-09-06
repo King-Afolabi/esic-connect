@@ -40,26 +40,9 @@
   margin-bottom: var(--esic-space-4);
 }
 
-// Barre de filtres — cf. `.esic-filters`. Le formulaire de séance, lui,
-// s'appuie sur la primitive `.esic-form` (`_primitives.scss`) : `.sessions__form`
-// et `.sessions__form-field` n'ajoutent plus de mise en page propre.
-.sessions__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--esic-space-3) var(--esic-space-4);
-  margin: 0 0 var(--esic-space-5);
-
-  .mat-mdc-form-field {
-    width: auto;
-  }
-}
-
-.sessions__filter {
-  flex: 0 1 18rem;
-  min-width: 12rem;
-}
-
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`),
+// posée à côté de `.sessions__filters`. Le formulaire de séance s'appuie sur
+// `.esic-form`. Ne reste ici que la rangée d'actions.
 .sessions__filter-actions {
   display: flex;
   gap: var(--esic-space-2);

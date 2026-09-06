@@ -198,7 +198,7 @@
     Le résultat (école / entreprise / indéterminé) est calculé par le serveur à partir du
     rythme affecté ; il n'est jamais déduit côté client.
   </p>
-  <form class="alt__filters" [formGroup]="contextForm" (ngSubmit)="resolveContext()">
+  <form class="alt__filters esic-filters" [formGroup]="contextForm" (ngSubmit)="resolveContext()">
     <mat-form-field appearance="outline" class="alt__form-field">
       <mat-label>Date</mat-label>
       <input matInput type="date" formControlName="date" required />

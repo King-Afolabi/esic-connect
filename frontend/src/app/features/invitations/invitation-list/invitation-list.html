@@ -22,6 +22,7 @@
       <mat-card-title>Invitations en attente d'activation</mat-card-title>
     </mat-card-header>
     <mat-card-content>
+      <div class="esic-table-wrap">
       <table mat-table [dataSource]="invitations()" class="invitations__table">
         <ng-container matColumnDef="recipient">
           <th mat-header-cell *matHeaderCellDef scope="col">Destinataire</th>
@@ -55,6 +56,7 @@
         <tr mat-header-row *matHeaderRowDef="invitationColumns"></tr>
         <tr mat-row *matRowDef="let row; columns: invitationColumns"></tr>
       </table>
+      </div>
       @if (invitations().length === 0 && !loading()) {
         <p>Aucune invitation en attente.</p>
       }
@@ -71,6 +73,7 @@
         remonte rien — c'est le cas en développement avec Mailpit — le statut de délivrabilité reste
         non renseigné.
       </p>
+      <div class="esic-table-wrap">
       <table mat-table [dataSource]="deliveries()" class="invitations__table">
         <ng-container matColumnDef="recipientMasked">
           <th mat-header-cell *matHeaderCellDef scope="col">Destinataire</th>
@@ -105,6 +108,7 @@
         <tr mat-header-row *matHeaderRowDef="deliveryColumns"></tr>
         <tr mat-row *matRowDef="let row; columns: deliveryColumns"></tr>
       </table>
+      </div>
       @if (deliveries().length === 0) {
         <p>Aucun envoi enregistré.</p>
       }

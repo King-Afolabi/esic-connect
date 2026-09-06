@@ -17,7 +17,7 @@
 
 <section class="alt__section" aria-label="Rechercher une classe">
   <h2 class="alt__subtitle">1. Rechercher une classe</h2>
-  <form class="alt__filters" [formGroup]="classSearch" (ngSubmit)="searchClasses()">
+  <form class="alt__filters esic-filters" [formGroup]="classSearch" (ngSubmit)="searchClasses()">
     <mat-form-field appearance="outline" class="alt__form-field">
       <mat-label>Code ou nom de classe</mat-label>
       <input matInput type="search" formControlName="q" autocomplete="off" />
@@ -153,7 +153,7 @@
 
 <section class="alt__section" aria-label="Ouvrir une inscription par identifiant">
   <h2 class="alt__subtitle">Ouvrir une inscription par identifiant</h2>
-  <form class="alt__filters" [formGroup]="manualForm" (ngSubmit)="openManual()">
+  <form class="alt__filters esic-filters" [formGroup]="manualForm" (ngSubmit)="openManual()">
     <mat-form-field appearance="outline" class="alt__form-field">
       <mat-label>Identifiant public d'inscription</mat-label>
       <input matInput formControlName="enrollmentPublicId" autocomplete="off" />

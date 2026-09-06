@@ -212,7 +212,7 @@
     Le contexte effectif (rythme + exceptions) est calculé par le serveur ; il n'est
     jamais reconstruit côté client.
   </p>
-  <form class="alt__filters" [formGroup]="contextForm" (ngSubmit)="resolveContext()">
+  <form class="alt__filters esic-filters" [formGroup]="contextForm" (ngSubmit)="resolveContext()">
     <mat-form-field appearance="outline" class="alt__form-field">
       <mat-label>Date</mat-label>
       <input matInput type="date" formControlName="date" required />

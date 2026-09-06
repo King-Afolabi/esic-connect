@@ -22,7 +22,7 @@
   <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
 </nav>
 
-<form class="alt__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="alt__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="alt__filter">
     <mat-label>Code ou nom</mat-label>
     <input matInput type="search" formControlName="q" autocomplete="off" />

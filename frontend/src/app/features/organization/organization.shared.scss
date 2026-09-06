@@ -26,24 +26,8 @@
   color: var(--esic-ink-soft);
 }
 
-.org__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--esic-space-3) var(--esic-space-4);
-  margin-bottom: var(--esic-space-5);
-
-  .mat-mdc-form-field {
-    width: auto;
-    min-width: 12rem;
-  }
-}
-
-.org__filter {
-  flex: 0 1 18rem;
-  min-width: 12rem;
-}
-
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`),
+// posée à côté de `.org__filters`.
 .org__filter-actions {
   display: flex;
   gap: var(--esic-space-2);
