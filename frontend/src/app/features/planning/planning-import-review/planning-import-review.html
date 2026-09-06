@@ -166,32 +166,14 @@
                 <td mat-cell *matCellDef="let row">
                   @if (job()?.status === 'SIMULATED') {
                     @if (editingRow() === row.publicId) {
-                      <div class="plan__correction">
-                        @for (field of correctableFields; track field.key) {
-                          <mat-form-field appearance="outline">
-                            <mat-label>{{ field.label }}</mat-label>
-                            <input
-                              matInput
-                              [value]="correctionValues()[field.key]"
-                              (input)="onCorrectionInput(field.key, $event)"
-                            />
-                          </mat-form-field>
-                        }
-                        <p class="plan__correction-error" role="alert" aria-live="assertive">
-                          @if (correctionError()) {
-                            <mat-icon aria-hidden="true">error</mat-icon>
-                            <span>{{ correctionError() }}</span>
-                          }
-                        </p>
-                        <button mat-flat-button color="primary" type="button"
-                                [disabled]="correcting()"
-                                (click)="submitCorrection(job()!.publicId, row)">
-                          Enregistrer
-                        </button>
-                        <button mat-button type="button" (click)="cancelCorrection()">Annuler</button>
-                      </div>
+                      <button mat-button type="button" (click)="cancelCorrection()"
+                              [attr.aria-expanded]="true"
+                              [attr.aria-label]="'Fermer la correction de la ligne ' + row.rowNumber">
+                        Fermer
+                      </button>
                     } @else {
-                      <button mat-stroked-button type="button" (click)="startCorrection(row)"
+                      <button mat-stroked-button type="button" (click)="startCorrection(row, $event)"
+                              [attr.aria-expanded]="false"
                               [attr.aria-label]="'Corriger la ligne ' + row.rowNumber">
                         Corriger
                       </button>
@@ -201,9 +183,58 @@
               </ng-container>
 
               <tr mat-header-row *matHeaderRowDef="rowColumns"></tr>
-              <tr mat-row *matRowDef="let row; columns: rowColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: rowColumns"
+                  [class.plan__row--editing]="editingRow() === row.publicId"></tr>
             </table>
           </div>
+
+          <!--
+            Éditeur de correction (Lot K) : un panneau pleine largeur SOUS
+            le tableau, jamais enfermé dans une cellule étroite — plus de
+            chevauchement ni de troncature. Grille de champs adaptative,
+            hauteur bornée avec défilement interne, `Échap` pour fermer,
+            focus déplacé à l'ouverture et rendu au bouton à la fermeture.
+          -->
+          @if (editingCorrectionRow(); as editRow) {
+            <div
+              class="plan__correction"
+              role="group"
+              [attr.aria-label]="'Correction de la ligne ' + editRow.rowNumber"
+              (keydown.escape)="cancelCorrection()"
+            >
+              <h3 class="plan__correction-title">Correction — ligne {{ editRow.rowNumber }}</h3>
+              <div class="plan__correction-grid">
+                @for (field of correctableFields; track field.key) {
+                  <mat-form-field appearance="outline">
+                    <mat-label>{{ field.label }}</mat-label>
+                    <input
+                      matInput
+                      [value]="correctionValues()[field.key]"
+                      (input)="onCorrectionInput(field.key, $event)"
+                    />
+                  </mat-form-field>
+                }
+              </div>
+              <p class="plan__correction-error" role="alert" aria-live="assertive">
+                @if (correctionError()) {
+                  <mat-icon aria-hidden="true">error</mat-icon>
+                  <span>{{ correctionError() }}</span>
+                }
+              </p>
+              <div class="plan__correction-actions">
+                <button
+                  mat-flat-button
+                  color="primary"
+                  type="button"
+                  [disabled]="correcting()"
+                  (click)="submitCorrection(job()!.publicId, editRow)"
+                >
+                  Enregistrer
+                </button>
+                <button mat-button type="button" (click)="cancelCorrection()">Annuler</button>
+              </div>
+            </div>
+          }
 
           <mat-paginator
             [length]="rowsTotal()"

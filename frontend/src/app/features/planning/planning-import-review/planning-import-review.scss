@@ -1,18 +1,62 @@
 @use '../planning.shared';
 
+// Éditeur de correction (Lot K) : panneau pleine largeur SOUS le tableau,
+// jamais enfermé dans une cellule étroite — plus de chevauchement ni de
+// troncature.
 .plan__correction {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--esic-space-2) var(--esic-space-3);
-  min-width: min(28rem, 100%);
+  margin-top: var(--esic-space-4);
+  padding: var(--esic-space-4) var(--esic-space-4) var(--esic-space-5);
+  background: var(--esic-surface-sunken);
+  border: 1px solid var(--esic-line);
+  border-left: 3px solid var(--esic-primary);
+  border-radius: var(--esic-radius-sm);
+  // Borne la hauteur : au-delà, on défile à l'intérieur du panneau plutôt
+  // que de repousser le contenu hors de l'écran.
+  max-height: min(65vh, 34rem);
+  overflow: auto;
+}
+
+.plan__correction-title {
+  margin: 0 0 var(--esic-space-3);
+  font-family: var(--esic-font-serif);
+  font-size: 1rem;
+  color: var(--esic-ink);
+}
+
+.plan__correction-grid {
+  display: grid;
+  gap: var(--esic-space-3) var(--esic-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  max-width: 60rem;
+
+  .mat-mdc-form-field {
+    width: 100%;
+  }
 }
 
 .plan__correction-error {
-  flex-basis: 100%;
   display: flex;
   align-items: center;
   gap: var(--esic-space-2);
-  margin: 0;
+  min-height: 1.5rem;
+  margin: var(--esic-space-2) 0 0;
   color: var(--esic-danger);
+  font-size: 0.875rem;
+
+  .mat-icon {
+    flex: none;
+  }
+}
+
+.plan__correction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-3);
+  margin-top: var(--esic-space-3);
+}
+
+// La ligne en cours d'édition est mise en évidence pour relier le panneau
+// à sa ligne d'origine.
+.plan__row--editing td {
+  background: var(--esic-primary-tint);
 }
