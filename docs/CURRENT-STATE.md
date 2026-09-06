@@ -10,6 +10,42 @@
 
 ## Dernière mise à jour
 
+### 6 septembre 2026 — campagne finale : D-01 tranchée (même branche `feat/ui-redesign-bootstrap-material`)
+
+**D-01 — DÉCISION PRISE : OPTION 1 (statu quo).** Validée par le porteur.
+Aucun changement de code, aucun changement de règle métier, zéro
+migration. Vérification menée dans le code, les tests et la
+documentation :
+
+- **Ouverture automatique autour de l'horaire : non.** Aucun `@Scheduled`
+  n'ouvre un point de contrôle. Seul `START` s'ouvre à l'ouverture de la
+  séance par le formateur (`CourseSessionService.open()`) ; les autres
+  s'ouvrent un par un (`AttendanceCheckpointService.open()`), sans
+  contrôle de l'état des autres points — plusieurs `OPEN` simultanés
+  restent permis.
+- **Fermeture automatique après la fenêtre : non.** `close()` est
+  manuel ; la fermeture de la séance ferme les points encore ouverts.
+  Aucun balayage temporel.
+- **Durées réelles :** `app.attendance.token-ttl` = `PT30S` (QR dynamique
+  + code court, tournés à chaque émission ; profil test `PT1H`) ;
+  `app.attendance.room-qr-open-before` = `PT15M` (QR fixe de salle
+  accepté de `début − 15 min` au début, refusé strictement après).
+- **Point resté `OPEN` après expiration de sa fenêtre :** le statut reste
+  `OPEN` jusqu'à fermeture humaine ; mais sans jeton vivant il n'accepte
+  plus rien. **`OPEN` ≠ « jeton utilisable ».**
+- **Jeton expiré inutilisable :** confirmé (`resolve()` → vide ; Redis
+  down → `503`, jamais dégradé).
+- **Jeton précédent invalidé à l'émission d'un nouveau :** confirmé
+  (bascule du pointeur d'autorité Redis ; `resolve()` n'accepte que le
+  jeton exactement pointé).
+
+Conformément au mandat, **aucune fermeture automatique n'a été inventée**.
+La distinction statut / jeton est documentée dans
+`docs/03-architecture.md` (`DEC-D01`) et `DECISIONS_NEEDED.md` (D-01,
+désormais un registre de décision prise, plus une action en attente).
+Couverture de tests inchangée — `AttendanceTokenServiceTests` (20 tests)
+couvre déjà expiration et rotation ; aucun test nouveau requis.
+
 ### 6 septembre 2026 (nuit) — passe « navigation & dashboard réorganisés » (même branche `feat/ui-redesign-bootstrap-material`)
 
 Base `45b9e09`, **7 commits** (HEAD = ce commit de documentation). **Aucune ligne de

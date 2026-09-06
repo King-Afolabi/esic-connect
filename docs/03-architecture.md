@@ -2964,6 +2964,52 @@ conformité.
 sans paire de clés VAPID, `InactiveWebPushSender` répond, et l'API
 **déclare** `providerActive: false` plutôt que de simuler un envoi.
 
+### DEC-D01 — Points de contrôle indépendants + jeton d'autorité unique (statu quo)
+
+**Contexte.** docs/02 §16.2–16.5 ; `EF-ATT-003`, `EF-ATT-004` ; RG-054,
+RG-055. Un mandat a envisagé d'imposer côté serveur l'exclusivité stricte
+et l'ordre des fenêtres d'émargement (arrivée fermée avant un
+intermédiaire, `END` interdit tant qu'un autre point est `OPEN`). Le
+cahier est **silencieux** sur cet ordre et décrit des fenêtres
+indépendantes.
+
+**Décision (porteur, 6 septembre 2026 — option 1).** Statu quo. Chaque
+point de contrôle garde son cycle de vie propre
+(`PLANNED → OPEN → CLOSED` / `CANCELLED`) ; plusieurs points peuvent être
+`OPEN` simultanément ; l'exclusion mutuelle réelle est portée par le
+**jeton d'émargement**, pas par le statut. `AttendanceTokenService` ne
+tient qu'un pointeur d'autorité par séance
+(`esic:attendance:session:{id} → token\ncode\ncheckpointId`) : émettre un
+jeton pour un autre point de contrôle invalide immédiatement le
+précédent. L'incohérence de séquence reste traitée après coup par le
+calcul journalier (`PARTIAL` / `TO_CONFIRM`).
+
+**Conséquences.**
+
+- **Aucune ouverture automatique** liée à l'horloge. Seul le premier
+  point (`START`) s'ouvre quand le formateur ouvre la séance
+  (`CourseSessionService.open()`) ; les autres s'ouvrent un par un
+  (`AttendanceCheckpointService.open()`, séance `OPEN` + point
+  `PLANNED`, sans contrôle des autres points).
+- **Aucune fermeture automatique** du statut. `close()` est manuel ; la
+  fermeture de la séance ferme les points encore `OPEN`. Aucun
+  `@Scheduled` ne balaie les fenêtres.
+- Durées réelles : `app.attendance.token-ttl` = `PT30S` (QR dynamique +
+  code court, renouvelés à chaque émission) ; `app.attendance.room-qr-open-before`
+  = `PT15M` (le QR **fixe de salle** n'est accepté que de `début − 15 min`
+  au début, refus strict après le début).
+- **`OPEN` ≠ « accepte les émargements ».** Un point `OPEN` dont le jeton
+  a expiré n'accepte plus rien par QR dynamique / code court ; il faut
+  ré-émettre (ce qui fait tourner l'autorité).
+- Un jeton expiré est refusé (`resolve()` → vide) ; Redis indisponible →
+  `503`, jamais d'acceptation dégradée.
+
+**Ce qui n'a pas été fait, et pourquoi.** Les options 2 (garde sur `END`)
+et 3 (ordre strict complet) casseraient des tests d'intégration verts
+(`DailyAttendanceIntegrationTests`, `AttendanceIntegrationTests`) et le
+modèle demi-journée du cahier §16.3. Aucune fermeture automatique n'a été
+inventée sans spécification. Trace complète : `DECISIONS_NEEDED.md` D-01.
+
 
 ## ADR à rédiger
 
