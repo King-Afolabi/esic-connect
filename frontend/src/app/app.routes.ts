@@ -819,6 +819,13 @@ export const routes: Routes = [
         canActivate: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
         canActivateChild: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
         title: `Suivi d'assiduité — ${APP_NAME}`,
+        // Coquille commune : un seul titre de page + navigation secondaire
+        // visible (`.esic-subnav`) entre les cinq vues. Les chemins des
+        // enfants sont inchangés (favoris, liens).
+        loadComponent: () =>
+          import('./features/attendance/management/attendance-management-shell').then(
+            (m) => m.AttendanceManagementShell,
+          ),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'summary' },
           {

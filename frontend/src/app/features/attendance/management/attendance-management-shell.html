@@ -1,0 +1,52 @@
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Suivi d'assiduité</h1>
+  </div>
+</header>
+
+<nav class="esic-subnav" aria-label="Vues du suivi d'assiduité">
+  <div class="esic-subnav__list">
+    <a
+      class="esic-subnav__link"
+      routerLink="summary"
+      routerLinkActive="esic-subnav__link--active"
+      ariaCurrentWhenActive="page"
+    >
+      Synthèse
+    </a>
+    <a
+      class="esic-subnav__link"
+      routerLink="sessions"
+      routerLinkActive="esic-subnav__link--active"
+      ariaCurrentWhenActive="page"
+    >
+      Par séance
+    </a>
+    <a
+      class="esic-subnav__link"
+      routerLink="classes"
+      routerLinkActive="esic-subnav__link--active"
+      ariaCurrentWhenActive="page"
+    >
+      Par classe
+    </a>
+    <a
+      class="esic-subnav__link"
+      routerLink="students"
+      routerLinkActive="esic-subnav__link--active"
+      ariaCurrentWhenActive="page"
+    >
+      Par apprenant
+    </a>
+    <a
+      class="esic-subnav__link"
+      routerLink="justifications"
+      routerLinkActive="esic-subnav__link--active"
+      ariaCurrentWhenActive="page"
+    >
+      Justificatifs
+    </a>
+  </div>
+</nav>
+
+<router-outlet />

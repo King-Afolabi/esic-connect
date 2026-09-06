@@ -1,11 +1,5 @@
-<h1 class="att__title">{{ title() }}</h1>
-<nav class="att__crumbs" aria-label="Sections">
-  <a routerLink="../summary">Synthèse</a> ·
-  <a routerLink="../sessions">Par séance</a> ·
-  <a routerLink="../classes">Par classe</a> ·
-  <a routerLink="../students">Par apprenant</a> ·
-  <a routerLink="../justifications">Justificatifs</a>
-</nav>
+<!-- Titre de page et navigation secondaire : `app-attendance-management-shell`. -->
+<h2 class="att__subtitle">{{ title() }}</h2>
 
 <form class="att__filters esic-filters" [formGroup]="filters" (ngSubmit)="apply()">
   <mat-form-field appearance="outline">

@@ -6,15 +6,9 @@
   display: block;
 }
 
-.att__title {
-  margin: 0 0 var(--esic-space-2);
-  font-family: var(--esic-font-serif);
-  font-weight: 600;
-  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: var(--esic-ink);
-}
+// `.att__title` retiré : le titre de page des écrans « mes présences » est
+// `.esic-page-header__title`, et celui du suivi d'assiduité est porté par
+// `app-attendance-management-shell`.
 
 .att__subtitle {
   margin: var(--esic-space-6) 0 var(--esic-space-3);
@@ -38,29 +32,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-// Onglets de section (gestion : synthèse / justificatifs / rapport).
-.att__crumbs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esic-space-2) var(--esic-space-5);
-  margin: 0 0 var(--esic-space-5);
-  border-bottom: 1px solid var(--esic-line);
-}
-
-.att__crumbs a {
-  padding: var(--esic-space-2) 0;
-  text-decoration: none;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--esic-ink-soft);
-  border-bottom: 2px solid transparent;
-}
-
-.att__crumbs a[aria-current='page'],
-.att__crumbs a.att__tab--active {
-  color: var(--esic-primary);
-  border-bottom-color: var(--esic-primary);
-}
+// Navigation secondaire du suivi d'assiduité : primitive partagée
+// `.esic-subnav` (`_primitives.scss`), portée par
+// `app-attendance-management-shell`. L'ancien `.att__crumbs` (liens
+// séparés par « · », sans état actif sur « Synthèse ») est supprimé.
 
 // Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`),
 // posée à côté de `.att__filters` dans les gabarits.
