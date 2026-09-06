@@ -1,0 +1,153 @@
+// =============================================================================
+// Pont Bootstrap 5 — grille et utilitaires responsive UNIQUEMENT
+// =============================================================================
+// Décision d'architecture (voir docs/03) : on combine deux briques, sans
+// mélange anarchique.
+//
+//   • Angular Material  → tous les composants interactifs (dialogues, menus,
+//     champs, sidenav, tableaux, dates, snackbars). Reteinté via `mat.theme()`.
+//   • Bootstrap 5 (SCSS, sans JavaScript) → la grille 12 colonnes, les
+//     conteneurs, et les utilitaires d'espacement / flex / affichage /
+//     alignement responsive. Aucun composant Bootstrap (pas de .btn, .card,
+//     .alert, .badge, .form-control) : ceux-là viennent de Material ou de la
+//     couche ESIC (`_primitives.scss`).
+//
+// Les variables Bootstrap sont réécrites pour produire des sorties alignées
+// sur l'échelle ESIC (espacements base 4px, points de rupture, gouttières).
+
+@use "sass:map";
+
+// -- Réécritures AVANT l'import des variables Bootstrap -----------------------
+$prefix: bs-;
+$enable-shadows: false;
+$enable-gradients: false;
+$enable-rounded: true;
+$enable-negative-margins: false; // les décalages négatifs se gèrent au composant
+$enable-smooth-scroll: false; // respecté séparément via prefers-reduced-motion
+
+// Espacement : même base 4px que `--esic-space-*`
+$spacer: 1rem;
+$spacers: (
+  0: 0,
+  1: 0.25rem,
+  2: 0.5rem,
+  3: 0.75rem,
+  4: 1rem,
+  5: 1.5rem,
+  6: 2rem,
+  7: 3rem,
+  8: 4rem,
+);
+
+// Cinq points de rupture (xxl retiré : les écrans larges / ultralarges sont
+// tenus par `--esic-content-max` qui plafonne la colonne de contenu, pas par
+// une variante d'utilitaire supplémentaire — cela allège la feuille de style).
+$grid-breakpoints: (
+  xs: 0,
+  sm: 576px,
+  md: 768px,
+  lg: 1024px,
+  xl: 1280px,
+);
+$container-max-widths: (
+  sm: 540px,
+  md: 720px,
+  lg: 960px,
+  xl: 1200px,
+);
+$grid-gutter-width: 1.5rem;
+
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+// -- Périmètre d'utilitaires généré -----------------------------------------
+// On ne conserve que les familles réellement utiles au gabarit d'une
+// application de gestion : affichage, flex et ses réglages, alignement,
+// ordre, gap, espacement (marges / paddings) et largeurs. Tout le reste est
+// retiré : soit cela doublonne la couche ESIC ou Material (couleurs,
+// bordures, typographie, ombres, rayons), soit cela se traite mieux au
+// composant (position, débordement, z-index, opacité…). Objectif : une
+// feuille de style compacte.
+$utilities: map.merge(
+  $utilities,
+  (
+    // doublons ESIC / Material
+    "float": null,
+    "text-background": null,
+    "color": null,
+    "background-color": null,
+    "gradient": null,
+    "border": null,
+    "border-top": null,
+    "border-end": null,
+    "border-bottom": null,
+    "border-start": null,
+    "border-color": null,
+    "border-width": null,
+    "border-opacity": null,
+    "subtle-background-color": null,
+    "subtle-border-color": null,
+    "emphasis-color": null,
+    "link-opacity": null,
+    "link-offset": null,
+    "link-underline": null,
+    "link-underline-opacity": null,
+    "font-family": null,
+    "font-size": null,
+    "font-style": null,
+    "font-weight": null,
+    "line-height": null,
+    "text-align": null,
+    "text-decoration": null,
+    "text-transform": null,
+    "text-wrap": null,
+    "white-space": null,
+    "word-wrap": null,
+    "text-opacity": null,
+    "shadow": null,
+    "rounded": null,
+    "rounded-top": null,
+    "rounded-end": null,
+    "rounded-bottom": null,
+    "rounded-start": null,
+    // mieux gérés au composant
+    "position": null,
+    "top": null,
+    "bottom": null,
+    "start": null,
+    "end": null,
+    "translate-middle": null,
+    "overflow": null,
+    "overflow-x": null,
+    "overflow-y": null,
+    "visibility": null,
+    "z-index": null,
+    "opacity": null,
+    "pointer-events": null,
+    "user-select": null,
+    "vertical-align": null,
+    "object-fit": null,
+    "min-viewport-width": null,
+    "viewport-height": null,
+    "viewport-width": null,
+    "min-viewport-height": null,
+    "max-height": null,
+    "min-width": null,
+    "height": null,
+    "focus-ring": null,
+    "background-opacity": null,
+    "order": null,
+    "flex-fill": null,
+  )
+);
+
+@import "bootstrap/scss/containers";
+@import "bootstrap/scss/grid";
+@import "bootstrap/scss/helpers/visually-hidden";
+@import "bootstrap/scss/helpers/ratio";
+@import "bootstrap/scss/helpers/stretched-link";
+@import "bootstrap/scss/utilities/api";

@@ -1,0 +1,108 @@
+// =============================================================================
+// Réalignement Angular Material sur l'identité ESIC — retouches de composants
+// =============================================================================
+// Les jetons système (`--mat-sys-*`) sont réalignés dans `styles.scss`, juste
+// après `mat.theme()`. Ce fichier ne porte que des retouches de composants,
+// via des classes Material publiques et documentées. Aucun `::ng-deep`,
+// aucune règle métier.
+
+@use "./primitives" as prim;
+
+// -- Boutons -------------------------------------------------------------
+// Sentence case (déjà le cas en M3), poids affirmé, rayon des contrôles,
+// hauteur de cible tactile respectée (WCAG 2.5.5).
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-outlined-button {
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: var(--esic-radius-xs);
+}
+
+.mat-mdc-button-base {
+  min-height: var(--esic-tap-min);
+}
+
+// -- Champs de formulaire ---------------------------------------------
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+// -- Carte Material = « carte de contenu » ESIC (plate, filet fin) -------
+.mat-mdc-card {
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  box-shadow: none;
+  background: var(--esic-surface);
+}
+
+// -- Tableaux Material ----------------------------------------------
+.mat-mdc-table {
+  background: var(--esic-surface);
+
+  .mat-mdc-header-row {
+    background: var(--esic-surface-sunken);
+  }
+
+  .mat-mdc-header-cell {
+    color: var(--esic-ink-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    border-bottom-color: var(--esic-line-strong);
+  }
+
+  .mat-mdc-cell {
+    border-bottom-color: var(--esic-line);
+    color: var(--esic-ink);
+  }
+
+  .mat-mdc-row:hover .mat-mdc-cell {
+    background: var(--esic-blue-100);
+  }
+}
+
+// -- Navigation : arête active structurelle -------------------------
+// L'élément courant du menu porte une arête pleine en bleu ESIC et un fond
+// teinté — information de position, pas décoration.
+.mat-mdc-nav-list .mat-mdc-list-item {
+  border-radius: var(--esic-radius-xs);
+
+  &.mdc-list-item--activated,
+  &.active {
+    background: var(--esic-blue-100);
+    box-shadow: inset 3px 0 0 var(--esic-primary);
+
+    .mdc-list-item__primary-text {
+      color: var(--esic-blue-700);
+      font-weight: 600;
+    }
+
+    .mat-icon {
+      color: var(--esic-primary);
+    }
+  }
+}
+
+// -- Surcouches : ombre « float » ESIC + rayon moyen ------------------
+.mat-mdc-menu-panel,
+.mat-mdc-dialog-surface,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel {
+  border-radius: var(--esic-radius-md) !important;
+  box-shadow: var(--esic-shadow-float) !important;
+}
+
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-shape: var(--esic-radius-sm);
+}
+
+// -- Onglets : indicateur bleu ESIC --------------------------------
+.mat-mdc-tab .mdc-tab-indicator__content--underline {
+  border-color: var(--esic-primary);
+}
+
+// -- Anneau de focus clavier homogène ------------------------------
+.mat-mdc-button-base:focus-visible {
+  @include prim.esic-focus-ring;
+}

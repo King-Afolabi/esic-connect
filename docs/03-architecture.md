@@ -931,6 +931,33 @@ La PWA doit permettre :
 Les présences hors connexion ne doivent pas être définitivement validées
 avant une vérification serveur.
 
+## 9.7 Système de design
+
+`PARTIAL` — socle livré, refonte écran par écran en cours (branche
+`feat/ui-redesign-bootstrap-material`). Voir `docs/CURRENT-STATE.md`.
+
+**Identité** : `src/styles/_tokens.scss` est le **point unique** des
+couleurs (vert / bleu ESIC), espacements, rayons et ombres, exposés en
+variables CSS `--esic-*`. Reteinter le produit = modifier le bloc
+« Marque » de ce fichier.
+
+**Deux briques combinées, sans mélange anarchique** :
+
+| Brique | Rôle | Ne fait pas |
+|---|---|---|
+| Angular Material (M3) | tous les composants interactifs (dialogues, menus, champs, sidenav, tableaux, dates, snackbars). Reteinté par `mat.theme()` à partir d'une palette M3 générée depuis les couleurs ESIC (`_esic-palette.scss`). | — |
+| Bootstrap 5 (SCSS, **sans JavaScript**) | grille 12 colonnes, conteneurs, utilitaires responsive (affichage, flex, espacement, alignement, gap). Variables réécrites sur l'échelle ESIC. | aucun composant (`.btn`, `.card`, `.alert`, `.badge`, `.form-control` exclus) |
+| Primitives ESIC (`_primitives.scss`) | présentiel non-Material : en-tête de page, carte de contenu, **pastille de statut d'assiduité** (langage visuel signature), tableau de données, liste clé/valeur, état vide. | — |
+
+**Assemblage** (`src/styles.scss`) : palette générée → `mat.theme()` →
+jetons ESIC → pont Bootstrap → primitives → réalignement des jetons
+système Material (`--mat-sys-*`, `--mat-button-*`) sur l'échelle ESIC →
+styles d'éléments de base.
+
+**Typographie** : IBM Plex Sans (interface, corps, chiffres tabulaires
+des registres) ; IBM Plex Serif (titres de page, documents officiels —
+attestations, en-têtes de rapport).
+
 ---
 
 # 10. Communication API

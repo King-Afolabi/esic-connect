@@ -21,8 +21,15 @@
 }
 
 .login__title {
-  font: var(--mat-sys-headline-small);
-  margin: 0 0 0.25rem;
+  margin: 0 0 0.5rem;
+}
+
+.login__logo {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(15rem, 100%);
+  margin: 0 auto;
 }
 
 .login__subtitle {

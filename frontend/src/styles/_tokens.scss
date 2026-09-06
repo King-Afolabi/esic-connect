@@ -1,0 +1,142 @@
+// =============================================================================
+// ESIC Connect — jetons du système de design
+// =============================================================================
+// Point unique de définition de l'identité visuelle. Toutes les couleurs,
+// espacements, rayons et ombres du produit dérivent d'ici. Modifier une
+// valeur de marque (vert / bleu ESIC) se fait dans le bloc « Marque »
+// ci-dessous et se propage à toute l'application.
+//
+// Les composants Angular Material lisent en plus les variables `--mat-sys-*`
+// produites par `mat.theme()` (voir `styles.scss`) et réalignées dans
+// `_material-overrides.scss`. Ce fichier-ci porte la couche ESIC : ce qui
+// n'est pas un composant Material (en-têtes de page, cartes de contenu,
+// pastilles de statut d'assiduité, tableaux de données).
+
+:root {
+  // ---------------------------------------------------------------------------
+  // Marque — les seules valeurs à changer pour reteinter le produit
+  // ---------------------------------------------------------------------------
+  --esic-blue-100: #eef3fb;
+  --esic-blue-200: #cfe0f6;
+  --esic-blue-400: #3f6fc0;
+  --esic-blue-600: #134e9c; // bleu ESIC — identité + action primaire
+  --esic-blue-700: #0f3f80;
+  --esic-blue-900: #0a2a56;
+
+  --esic-green-100: #e7f4ec;
+  --esic-green-200: #bfe3cd;
+  --esic-green-500: #1f7a4c; // vert ESIC — présence, validé, succès
+  --esic-green-600: #196540;
+  --esic-green-800: #0d3e27;
+
+  --esic-amber-100: #fbeed9;
+  --esic-amber-500: #b26a00; // ocre — attention sans erreur (retard, en attente)
+  --esic-amber-700: #8a5100;
+
+  --esic-red-100: #fbe6e4;
+  --esic-red-500: #b3261e; // erreur, absence non justifiée
+  --esic-red-700: #8c1a15;
+
+  // ---------------------------------------------------------------------------
+  // Neutres — surfaces et texte (bleutés, dérivés de la marque, jamais crème)
+  // ---------------------------------------------------------------------------
+  --esic-ink: #17212b; // texte principal — teinte réelle, pas un noir décoratif
+  --esic-ink-soft: #55606c; // texte secondaire
+  --esic-ink-faint: #7a8592; // texte tertiaire, méta
+  --esic-paper: #f4f6f8; // fond d'application
+  --esic-surface: #ffffff; // cartes, panneaux, barres
+  --esic-surface-sunken: #eef1f4; // zones en creux (en-tête de tableau, champs)
+  --esic-line: #d9dee4; // filets, séparateurs
+  --esic-line-strong: #b9c1cb; // filets appuyés
+
+  // ---------------------------------------------------------------------------
+  // Rôles sémantiques (indirection : les composants n'utilisent que ceux-ci)
+  // ---------------------------------------------------------------------------
+  --esic-primary: var(--esic-blue-600);
+  --esic-primary-hover: var(--esic-blue-700);
+  --esic-primary-tint: var(--esic-blue-100);
+  --esic-on-primary: #ffffff;
+
+  --esic-secondary: var(--esic-green-500);
+  --esic-secondary-tint: var(--esic-green-100);
+
+  --esic-focus-ring: var(--esic-blue-400);
+
+  --esic-success: var(--esic-green-500);
+  --esic-success-tint: var(--esic-green-100);
+  --esic-warning: var(--esic-amber-500);
+  --esic-warning-tint: var(--esic-amber-100);
+  --esic-danger: var(--esic-red-500);
+  --esic-danger-tint: var(--esic-red-100);
+  --esic-info: var(--esic-blue-600);
+  --esic-info-tint: var(--esic-blue-100);
+
+  // ---------------------------------------------------------------------------
+  // Statuts d'assiduité — le vocabulaire visuel propre au produit.
+  // Chaque état : une couleur de trait, un fond teinté. Jamais la couleur
+  // seule (une icône ou un libellé l'accompagne toujours — docs/02 §32.5).
+  // ---------------------------------------------------------------------------
+  --esic-status-present-fg: var(--esic-green-600);
+  --esic-status-present-bg: var(--esic-green-100);
+  --esic-status-late-fg: var(--esic-amber-700);
+  --esic-status-late-bg: var(--esic-amber-100);
+  --esic-status-absent-fg: var(--esic-red-700);
+  --esic-status-absent-bg: var(--esic-red-100);
+  --esic-status-excused-fg: var(--esic-blue-700);
+  --esic-status-excused-bg: var(--esic-blue-100);
+  --esic-status-company-fg: #4a545f; // alternance en entreprise — catégorie à part
+  --esic-status-company-bg: #e6e9ec;
+  --esic-status-pending-fg: var(--esic-amber-700);
+  --esic-status-pending-bg: var(--esic-amber-100);
+
+  // ---------------------------------------------------------------------------
+  // Échelle d'espacement (base 4px) — reprise par le pont Bootstrap
+  // ---------------------------------------------------------------------------
+  --esic-space-1: 0.25rem;
+  --esic-space-2: 0.5rem;
+  --esic-space-3: 0.75rem;
+  --esic-space-4: 1rem;
+  --esic-space-5: 1.5rem;
+  --esic-space-6: 2rem;
+  --esic-space-7: 3rem;
+  --esic-space-8: 4rem;
+
+  // ---------------------------------------------------------------------------
+  // Rayons — hiérarchie : petit pour les contrôles, moyen pour les surfaces,
+  // plein pour les pastilles. Pas de rayon unique sur tout.
+  // ---------------------------------------------------------------------------
+  --esic-radius-xs: 4px; // champs, boutons
+  --esic-radius-sm: 8px; // cartes de contenu, panneaux
+  --esic-radius-md: 12px; // conteneurs proéminents, dialogues
+  --esic-radius-pill: 999px; // pastilles de statut, jetons de rôle
+
+  // ---------------------------------------------------------------------------
+  // Élévation — réservée à ce qui flotte réellement (menus, dialogues,
+  // en-têtes collants). Pas d'ombre sous chaque carte.
+  // ---------------------------------------------------------------------------
+  --esic-shadow-raise: 0 1px 2px rgb(23 33 43 / 8%), 0 1px 1px rgb(23 33 43 / 4%);
+  --esic-shadow-float: 0 6px 16px rgb(23 33 43 / 12%), 0 2px 6px rgb(23 33 43 / 8%);
+
+  // ---------------------------------------------------------------------------
+  // Plans (z-index) — échelle nommée pour éviter les surenchères
+  // ---------------------------------------------------------------------------
+  --esic-z-base: 1;
+  --esic-z-sticky: 10;
+  --esic-z-drawer: 100;
+  --esic-z-overlay: 1000;
+
+  // ---------------------------------------------------------------------------
+  // Gabarits
+  // ---------------------------------------------------------------------------
+  --esic-content-max: 76rem; // largeur maximale du contenu
+  --esic-rail-width: 16rem; // rail de navigation (desktop)
+  --esic-tap-min: 44px; // cible tactile minimale (WCAG 2.5.5)
+  --esic-topbar-height: 3.75rem;
+
+  // ---------------------------------------------------------------------------
+  // Typographie — familles (définies aussi dans index.html via <link>)
+  // ---------------------------------------------------------------------------
+  --esic-font-sans: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --esic-font-serif: "IBM Plex Serif", "Iowan Old Style", Georgia, serif;
+  --esic-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}

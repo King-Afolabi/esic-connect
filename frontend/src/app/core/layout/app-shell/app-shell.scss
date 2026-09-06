@@ -7,38 +7,101 @@
   height: 100%;
 }
 
-.shell__sidenav {
-  width: 15rem;
-  border-right: 1px solid var(--mat-sys-outline-variant);
+.shell__container {
+  height: 100%;
+  background: var(--esic-paper);
 }
 
-.shell__toolbar {
+// -- Rail de navigation ---------------------------------------------------
+.shell__rail {
+  width: var(--esic-rail-width);
+  padding: var(--esic-space-3) var(--esic-space-2);
+  background: var(--esic-surface);
+  border-right: 1px solid var(--esic-line);
+}
+
+.shell__nav {
+  // La liste Material gère ses propres espacements ; on retire la marge
+  // haute quand le rail n'a pas de bandeau de marque (mode desktop).
+  margin-top: var(--esic-space-1);
+}
+
+// -- Barre supérieure ---------------------------------------------------
+.shell__topbar {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--esic-z-sticky);
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: var(--esic-space-2);
+  min-height: var(--esic-topbar-height);
+  padding: 0 var(--esic-space-4);
+  background: var(--esic-surface);
+  border-bottom: 1px solid var(--esic-line);
 }
 
+.shell__menu-btn {
+  margin-left: calc(var(--esic-space-2) * -1);
+}
+
+// -- Marque : pastille monogramme + mot-symbole ------------------------
 .shell__brand {
-  font: var(--mat-sys-title-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esic-space-2);
+  padding: var(--esic-space-1);
+  border-radius: var(--esic-radius-xs);
+  text-decoration: none;
+  color: var(--esic-ink);
+
+  &:hover {
+    color: var(--esic-ink);
+  }
+
+  &--rail {
+    margin: var(--esic-space-1) var(--esic-space-2) var(--esic-space-4);
+  }
+}
+
+.shell__mark {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex-shrink: 0;
+  border-radius: var(--esic-radius-xs);
+  background:
+    var(--esic-primary)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23fff'%3E%3Crect x='6' y='5' width='12' height='3.2' rx='1.2'/%3E%3Crect x='6' y='10.4' width='9' height='3.2' rx='1.2'/%3E%3Crect x='6' y='15.8' width='12' height='3.2' rx='1.2'/%3E%3C/g%3E%3C/svg%3E")
+    center / 68% no-repeat;
+}
+
+.shell__wordmark {
+  font-family: var(--esic-font-sans);
   font-weight: 600;
+  font-size: 1.0625rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .shell__spacer {
   flex: 1 1 auto;
 }
 
+// -- Identité de l'utilisateur connecté -------------------------------
+// Une seule ligne : adresse + rôles, alignée à droite, centrée verticalement.
+// Un filet la sépare des outils (contexte, notifications, déconnexion).
 .shell__identity {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.2;
-  margin-right: 0.5rem;
+  align-items: center;
+  gap: var(--esic-space-2);
+  min-width: 0;
+  padding-right: var(--esic-space-3);
+  border-right: 1px solid var(--esic-line);
 }
 
 .shell__email {
-  font: var(--mat-sys-body-small);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--esic-ink);
   max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -47,46 +110,98 @@
 
 .shell__roles {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.25rem;
-  justify-content: flex-end;
 }
 
-.shell__role-chip {
-  font: var(--mat-sys-label-small);
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mat-sys-on-primary) 20%, transparent);
+.shell__role {
+  font-size: 0.6875rem;
+  white-space: nowrap;
 }
 
+// Sous 1100 px, on garde l'adresse et on masque les jetons de rôle : le
+// sélecteur de contexte (multi-rôles) ou la fiche « Mon compte » les portent.
+@media (max-width: 1100px) {
+  .shell__roles {
+    display: none;
+  }
+}
+
+.shell__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--esic-space-1);
+}
+
+.shell__install .mat-icon {
+  margin-right: 0.35rem;
+}
+
+// -- Bandeaux d'état (hors ligne, actions différées) ------------------
+// L'information ne dépend jamais de la seule couleur : icône + texte
+// (docs/02 §32.5). Filet de couleur à gauche pour la catégorie.
+.shell__banner {
+  display: flex;
+  align-items: center;
+  gap: var(--esic-space-2);
+  margin: 0;
+  padding: 0.625rem var(--esic-space-4);
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--esic-line);
+
+  .mat-icon {
+    flex-shrink: 0;
+  }
+
+  &--offline {
+    color: var(--esic-ink);
+    background: var(--esic-surface-sunken);
+    box-shadow: inset 3px 0 0 var(--esic-ink-faint);
+  }
+
+  &--pending {
+    color: var(--esic-warning);
+    background: var(--esic-warning-tint);
+    box-shadow: inset 3px 0 0 var(--esic-warning);
+  }
+}
+
+// -- Zone de contenu -------------------------------------------------
 .shell__main {
   display: block;
-  padding: 1.5rem;
-  max-width: 72rem;
+  width: 100%;
+  max-width: var(--esic-content-max);
   margin: 0 auto;
+  padding: var(--esic-space-5) var(--esic-space-5) var(--esic-space-7);
   outline: none;
 }
 
-@media (max-width: 599px) {
+// -- Adaptatif -----------------------------------------------------
+@media (max-width: 1023px) {
+  .shell__main {
+    padding: var(--esic-space-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .shell__topbar {
+    padding: 0 var(--esic-space-3);
+  }
+
   .shell__identity {
     display: none;
   }
 
-  .shell__main {
-    padding: 1rem;
+  .shell__logout-label {
+    // Icône seule sur très petit écran ; le bouton garde son aria-label.
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
-}
 
-// Bandeaux d'état hors ligne et d'actions différées (EF-PWA-002/003).
-// Contraste et icône : l'information ne dépend jamais de la seule couleur
-// (docs/02 §32.5).
-.shell__offline,
-.shell__pending {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.625rem 1rem;
-  border-bottom: 1px solid rgb(0 0 0 / 20%);
-  background: rgb(0 0 0 / 6%);
+  .shell__main {
+    padding: var(--esic-space-3);
+  }
 }

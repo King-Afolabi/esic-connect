@@ -1,0 +1,275 @@
+// =============================================================================
+// Primitives ESIC — éléments présentiels non gérés par Angular Material
+// =============================================================================
+// En-têtes de page, cartes de contenu, pastilles de statut d'assiduité,
+// tableaux de données, listes clé/valeur, états vides. Toutes s'appuient
+// exclusivement sur les jetons de `_tokens.scss`.
+
+// -- En-tête de page ---------------------------------------------------------
+// Un seul dispositif structurel dans le produit : le titre en serif (registre
+// « document officiel »), une description optionnelle, l'action primaire à
+// droite, un filet de base. Pas de sur-titre en capitales, pas de fil d'Ariane
+// décoratif.
+.esic-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--esic-space-3) var(--esic-space-5);
+  padding-bottom: var(--esic-space-4);
+  margin-bottom: var(--esic-space-5);
+  border-bottom: 1px solid var(--esic-line);
+
+  &__text {
+    min-width: 0;
+  }
+
+  &__title {
+    margin: 0;
+    font-family: var(--esic-font-serif);
+    font-weight: 600;
+    font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+    line-height: 1.2;
+    color: var(--esic-ink);
+    letter-spacing: -0.01em;
+  }
+
+  &__description {
+    margin: var(--esic-space-2) 0 0;
+    max-width: 60ch;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--esic-ink-soft);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esic-space-2);
+    flex-shrink: 0;
+  }
+}
+
+// -- Carte / panneau de contenu -------------------------------------------------
+// Surface plate, filet fin, rayon moyen. L'élévation n'est PAS le défaut :
+// une carte posée sur la page ne flotte pas. Ajouter `.esic-card--raised`
+// seulement pour un élément détaché (aperçu collant, tuile d'action).
+.esic-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-4);
+  padding: var(--esic-space-5);
+  background: var(--esic-surface);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+
+  &--raised {
+    border-color: transparent;
+    box-shadow: var(--esic-shadow-raise);
+  }
+
+  &--flush {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  &__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--esic-space-3);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+
+  &__hint {
+    font-size: 0.8125rem;
+    color: var(--esic-ink-faint);
+  }
+}
+
+// Grille de cartes responsive fondée sur la largeur disponible, pas sur des
+// points de rupture d'appareil.
+.esic-card-grid {
+  display: grid;
+  gap: var(--esic-space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+
+// -- Pastille de statut d'assiduité ------------------------------------------
+// Le vocabulaire visuel signature du produit. Toujours : un point coloré + un
+// libellé. La couleur ne porte jamais seule l'information.
+.esic-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border-radius: var(--esic-radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--esic-status-present-fg);
+  background: var(--esic-status-present-bg);
+
+  &::before {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: currentcolor;
+    flex-shrink: 0;
+  }
+
+  &--present { color: var(--esic-status-present-fg); background: var(--esic-status-present-bg); }
+  &--late { color: var(--esic-status-late-fg); background: var(--esic-status-late-bg); }
+  &--absent { color: var(--esic-status-absent-fg); background: var(--esic-status-absent-bg); }
+  &--excused {
+    color: var(--esic-status-excused-fg);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px currentcolor;
+  }
+  &--company { color: var(--esic-status-company-fg); background: var(--esic-status-company-bg); }
+  &--pending {
+    color: var(--esic-status-pending-fg);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px currentcolor;
+  }
+}
+
+// -- Badge neutre (compteurs, catégories) — distinct des statuts ------------
+.esic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--esic-radius-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--esic-ink-soft);
+  background: var(--esic-surface-sunken);
+  border: 1px solid var(--esic-line);
+
+  &--info { color: var(--esic-info); background: var(--esic-info-tint); border-color: transparent; }
+  &--success { color: var(--esic-success); background: var(--esic-success-tint); border-color: transparent; }
+  &--warning { color: var(--esic-warning); background: var(--esic-warning-tint); border-color: transparent; }
+  &--danger { color: var(--esic-danger); background: var(--esic-danger-tint); border-color: transparent; }
+}
+
+// -- Enveloppe de tableau de données ---------------------------------------
+// Défilement horizontal contenu (jamais le <body>), en-tête en creux, lignes
+// séparées par un filet fin, chiffres alignés à droite via `.esic-num`.
+.esic-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+.esic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+
+  th,
+  td {
+    padding: 0.625rem 0.875rem;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--esic-surface-sunken);
+    color: var(--esic-ink-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid var(--esic-line-strong);
+  }
+
+  tbody tr + tr td {
+    border-top: 1px solid var(--esic-line);
+  }
+
+  tbody tr:hover td {
+    background: var(--esic-blue-100);
+  }
+}
+
+.esic-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+// -- Liste clé / valeur ----------------------------------------------------
+.esic-kv {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  margin: 0;
+
+  dt {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--esic-ink-faint);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--esic-ink);
+    word-break: break-word;
+  }
+
+  @container (max-width: 26rem) {
+    grid-template-columns: 1fr;
+    gap: 0.15rem var(--esic-space-4);
+
+    dt { margin-top: var(--esic-space-2); }
+  }
+}
+
+// -- État vide -----------------------------------------------------------
+.esic-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esic-space-2);
+  padding: var(--esic-space-7) var(--esic-space-5);
+  text-align: center;
+  color: var(--esic-ink-soft);
+  border: 1px dashed var(--esic-line-strong);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+
+  &__title {
+    margin: 0;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+}
+
+// -- Rangée d'actions (barre au-dessus d'un tableau ou d'un formulaire) -----
+.esic-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esic-space-2) var(--esic-space-3);
+  margin-bottom: var(--esic-space-4);
+}
+
+// -- Anneau de focus commun (clavier) -------------------------------------
+// Repose sur `:focus-visible` : jamais visible à la souris, toujours au clavier.
+@mixin esic-focus-ring {
+  outline: 3px solid var(--esic-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--esic-radius-xs);
+}

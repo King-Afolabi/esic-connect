@@ -1,102 +1,118 @@
 <app-skip-link />
 
-<mat-sidenav-container class="shell">
-  <mat-sidenav
-    #sidenav
-    class="shell__sidenav"
-    [mode]="isHandset() ? 'over' : 'side'"
-    [opened]="!isHandset()"
-    [fixedInViewport]="isHandset()"
-  >
-    <nav class="shell__nav" aria-label="Navigation principale">
-      <mat-nav-list>
-        @for (item of navItems(); track item.path) {
-          <a
-            mat-list-item
-            [routerLink]="item.path"
-            routerLinkActive
-            #link="routerLinkActive"
-            [routerLinkActiveOptions]="{ exact: false }"
-            [attr.aria-current]="link.isActive ? 'page' : null"
-            (click)="isHandset() && sidenav.close()"
-          >
-            <mat-icon matListItemIcon aria-hidden="true">{{ item.icon }}</mat-icon>
-            <span matListItemTitle>{{ item.label }}</span>
-          </a>
-        }
-      </mat-nav-list>
-    </nav>
-  </mat-sidenav>
-
-  <mat-sidenav-content class="shell__content">
-    <mat-toolbar color="primary" class="shell__toolbar">
+<div class="shell">
+  <mat-sidenav-container class="shell__container">
+    <mat-sidenav
+      #sidenav
+      class="shell__rail"
+      [mode]="isHandset() ? 'over' : 'side'"
+      [opened]="!isHandset()"
+      [fixedInViewport]="isHandset()"
+    >
       @if (isHandset()) {
-        <button
-          type="button"
-          mat-icon-button
-          aria-label="Ouvrir ou fermer la navigation"
-          (click)="sidenav.toggle()"
-        >
-          <mat-icon aria-hidden="true">menu</mat-icon>
-        </button>
+        <a class="shell__brand shell__brand--rail" routerLink="/dashboard" (click)="sidenav.close()">
+          <span class="shell__mark" aria-hidden="true"></span>
+          <span class="shell__wordmark">ESIC Connect</span>
+        </a>
       }
-      <span class="shell__brand">ESIC Connect</span>
-      <span class="shell__spacer"></span>
 
-      <div class="shell__identity">
-        @if (email(); as currentEmail) {
-          <span class="shell__email" aria-label="Utilisateur connecté">{{ currentEmail }}</span>
+      <nav class="shell__nav" aria-label="Navigation principale">
+        <mat-nav-list>
+          @for (item of navItems(); track item.path) {
+            <a
+              mat-list-item
+              [routerLink]="item.path"
+              routerLinkActive="active"
+              #link="routerLinkActive"
+              [routerLinkActiveOptions]="{ exact: false }"
+              [attr.aria-current]="link.isActive ? 'page' : null"
+              (click)="isHandset() && sidenav.close()"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ item.icon }}</mat-icon>
+              <span matListItemTitle>{{ item.label }}</span>
+            </a>
+          }
+        </mat-nav-list>
+      </nav>
+    </mat-sidenav>
+
+    <mat-sidenav-content class="shell__content">
+      <header class="shell__topbar">
+        @if (isHandset()) {
+          <button
+            type="button"
+            mat-icon-button
+            class="shell__menu-btn"
+            aria-label="Ouvrir ou fermer la navigation"
+            (click)="sidenav.toggle()"
+          >
+            <mat-icon aria-hidden="true">menu</mat-icon>
+          </button>
         }
-        @if (roles().length) {
-          <span class="shell__roles">
-            @for (role of roles(); track role) {
-              <span class="shell__role-chip">{{ roleLabel(role) }}</span>
-            }
+
+        <a class="shell__brand" routerLink="/dashboard">
+          <span class="shell__mark" aria-hidden="true"></span>
+          <span class="shell__wordmark">ESIC Connect</span>
+        </a>
+
+        <span class="shell__spacer"></span>
+
+        <div class="shell__identity">
+          @if (email(); as currentEmail) {
+            <span class="shell__email" aria-label="Utilisateur connecté">{{ currentEmail }}</span>
+          }
+          @if (roles().length) {
+            <span class="shell__roles" aria-label="Rôles du compte">
+              @for (role of roles(); track role) {
+                <span class="esic-badge shell__role">{{ roleLabel(role) }}</span>
+              }
+            </span>
+          }
+        </div>
+
+        <div class="shell__tools">
+          <app-role-context-menu />
+
+          @if (installable()) {
+            <button type="button" mat-stroked-button class="shell__install" (click)="install()">
+              <mat-icon aria-hidden="true">install_mobile</mat-icon>
+              <span>Installer</span>
+            </button>
+          }
+
+          <app-notification-bell />
+
+          <button type="button" mat-button (click)="logout()">
+            <mat-icon aria-hidden="true">logout</mat-icon>
+            <span class="shell__logout-label">Se déconnecter</span>
+          </button>
+        </div>
+      </header>
+
+      <!--
+        État du réseau et actions différées (EF-PWA-002, EF-PWA-003).
+        `role="status"` et non `alert` : information de contexte permanente,
+        pas une urgence à interrompre la lecture.
+      -->
+      @if (!connectivity.online()) {
+        <p class="shell__banner shell__banner--offline" role="status">
+          <mat-icon aria-hidden="true">cloud_off</mat-icon>
+          <span>
+            Hors ligne. Les informations affichées peuvent dater ; vos actions seront envoyées au
+            retour du réseau.
           </span>
-        }
-        <app-role-context-menu />
-      </div>
-
-      @if (installable()) {
-        <button type="button" mat-button (click)="install()">
-          <mat-icon aria-hidden="true">install_mobile</mat-icon>
-          <span>Installer</span>
-        </button>
+        </p>
+      }
+      @if (pendingActions() > 0) {
+        <p class="shell__banner shell__banner--pending" role="status">
+          <mat-icon aria-hidden="true">schedule_send</mat-icon>
+          <span>{{ pendingActions() }} action(s) en attente de confirmation par le serveur.</span>
+        </p>
       }
 
-      <app-notification-bell />
-
-      <button type="button" mat-button (click)="logout()">
-        <mat-icon aria-hidden="true">logout</mat-icon>
-        <span>Se déconnecter</span>
-      </button>
-    </mat-toolbar>
-
-    <!--
-      État du réseau et actions différées (EF-PWA-002, EF-PWA-003).
-      `role="status"` et non `alert` : c'est une information de contexte
-      permanente, pas une urgence à interrompre la lecture.
-    -->
-    @if (!connectivity.online()) {
-      <p class="shell__offline" role="status">
-        <mat-icon aria-hidden="true">cloud_off</mat-icon>
-        <span>
-          Hors ligne. Les informations affichées peuvent dater ; vos actions seront envoyées au
-          retour du réseau.
-        </span>
-      </p>
-    }
-    @if (pendingActions() > 0) {
-      <p class="shell__pending" role="status">
-        <mat-icon aria-hidden="true">schedule_send</mat-icon>
-        <span>
-          {{ pendingActions() }} action(s) en attente de confirmation par le serveur.
-        </span>
-      </p>
-    }
-
-    <main id="main-content" class="shell__main" tabindex="-1">
-      <router-outlet />
-    </main>
-  </mat-sidenav-content>
-</mat-sidenav-container>
+      <main id="main-content" class="shell__main" tabindex="-1">
+        <router-outlet />
+      </main>
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+</div>

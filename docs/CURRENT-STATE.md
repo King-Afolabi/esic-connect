@@ -150,6 +150,72 @@ pas un changement de règle.
   migration). **Recette navigateur non rejouée** — `NOT_PERFORMED` pour
   le parcours « recharger la page reste connecté » (à ajouter, §10).
 
+### 6 septembre 2026 (après-midi) — refonte UI : socle du système de design
+
+Branche **`feat/ui-redesign-bootstrap-material`** (base
+`feat/demo-readiness-e2e-ui`, non fusionnée). Refonte **visuelle et UX**
+uniquement — aucune règle métier, aucun contrôleur, aucune migration
+touchés. **`PARTIAL` : socle livré, refonte écran par écran NON faite.**
+
+**Livré dans ce lot** :
+- `src/styles/_tokens.scss` — point unique de l'identité (couleurs vert /
+  bleu ESIC, espacements, rayons, ombres, statuts d'assiduité) en
+  variables `--esic-*`.
+- `src/styles/_esic-palette.scss` — palette Material 3 générée
+  (`ng generate @angular/material:m3-theme`) depuis primaire `#134E9C`,
+  secondaire `#1F7A4C`, tertiaire `#B26A00`, erreur `#B3261E`.
+- `src/styles/_bootstrap-bridge.scss` — Bootstrap 5.3.3 (SCSS, **sans
+  JS**) : grille + conteneurs + utilitaires responsive **triés** (pas de
+  composant Bootstrap, pas de couleurs/bordures/typo/ombres), variables
+  réécrites sur l'échelle ESIC, 5 points de rupture.
+- `src/styles/_primitives.scss` — en-tête de page, carte de contenu,
+  **pastille de statut** (`.esic-status--present/late/absent/excused/company/pending`),
+  badge, tableau de données, liste clé/valeur, état vide.
+- `src/styles/_material-overrides.scss` + bloc `html` de `styles.scss` —
+  réalignement des jetons système Material (`--mat-sys-*`,
+  `--mat-button-*-container-shape`) sur ESIC : surfaces, filets, rayons
+  (boutons en capsule → rayon de contrôle 4 px), élévations (2 ombres),
+  arête active structurelle du menu.
+- `index.html` — polices IBM Plex Sans (interface) + IBM Plex Serif
+  (titres, documents), `theme-color` `#134e9c`.
+- **Coquille applicative** (`app-shell`, `role-context-menu`) : barre
+  supérieure blanche fine + pastille monogramme + mot-symbole ; rail de
+  navigation avec arête active bleue ; identité sur une ligne ;
+  compactage responsive (contexte et déconnexion en icône seule,
+  jetons de rôle masqués sous 1100 px). Aucun débordement horizontal à
+  390 px.
+
+**PAS encore fait** (prochaines étapes de la branche) : regroupement de
+la navigation (21 entrées à plat, libellés tronqués) ; refonte écran par
+écran (connexion, tableau de bord, formulaires, listes/tableaux —
+défilement horizontal sur mobile à revoir, modales) ; favicon / icônes
+PWA (toujours le placeholder « E » bleu) ; **aucun vrai logo ESIC dans le
+dépôt** — le monogramme actuel est une forme géométrique neutre,
+remplaçable via `.shell__mark` ; jeu de données de démonstration élargi ;
+audit accessibilité complet.
+
+**Dépendance ajoutée** : `bootstrap@5.3.3` (+ `@popperjs/core` transitif,
+non utilisé). `npm audit` : 0 vulnérabilité.
+
+**Budget de bundle** : `maximumWarning` initial relevé de `500kB` à
+`600kB` dans `angular.json`. Justification : la feuille de style passe à
+**78,7 kB brut / 6,6 kB transféré (gzip)** avec la grille Bootstrap ;
+total initial **568 kB brut / 132 kB transféré**. `maximumError` inchangé
+(1 MB).
+
+**Tests** (branche `feat/ui-redesign-bootstrap-material`, 6 septembre
+2026, même environnement que §6) :
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm test -- --watch=false` | **95 fichiers / 786 tests / 0 échec** |
+| `cd frontend && npx ng build --configuration production` | bundle produit, **aucune alerte de budget** (seuil 600 kB) |
+| Revue visuelle pilotée (Chromium 1440 px et 390 px, connexion démo `responsable@example.test`) | connexion, tableau de bord, liste des séances : identité ESIC appliquée, aucun débordement horizontal, barre supérieure compacte sur mobile |
+
+`NOT_PERFORMED` : recette Playwright (non rejouée) ; audit
+accessibilité outillé ; revue sur tablette / pliable / ultralarge réels.
+
 ## Repère Git
 
 | Élément | Valeur |
