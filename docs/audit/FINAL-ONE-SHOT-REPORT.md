@@ -8,8 +8,10 @@
 
 ## 2. HEAD final
 
-`0deba76` — `docs(deployment): runbook Raspberry Pi + revue sécurité (Lots O, P)`.
-14 commits ajoutés. Aucun `push`, `merge` ni déploiement.
+HEAD au moment de ce rapport : `f167b41`
+(`docs(audit): rapport final…`). **15 commits ajoutés** (dont ce
+rapport) — voir §3 pour les 14 commits fonctionnels. Aucun `push`,
+`merge` ni déploiement.
 
 ## 3. Commits créés (ordre chronologique)
 
@@ -221,13 +223,14 @@ conteneur de tableau, jamais un descendant du `<table>`).
 ## 13. Tests back-end exacts
 
 `cd backend && ./mvnw clean test` (variables du `.env` sourcées, base
-`esic_test`) — **lancé pendant cette campagne ; résultat en cours de
-consignation** (voir la mise à jour de `docs/CURRENT-STATE.md` du même
-commit). **Aucune ligne de back-end n'a été modifiée** : le résultat
-attendu est identique à la dernière exécution consignée
-(`docs/CURRENT-STATE.md` §6.5 : 143 rapports Surefire, 1231 tests, 0
-échec). Si un écart apparaît, il est indépendant des changements de
-cette campagne.
+`esic_test`), exécuté pendant cette campagne :
+
+**143 rapports Surefire — Tests run: 1231, Failures: 0, Errors: 0,
+Skipped: 0.** `BUILD SUCCESS`.
+
+Identique à la dernière exécution consignée (`docs/CURRENT-STATE.md`
+§6.5) — attendu, **aucune ligne de back-end n'a été modifiée** par cette
+campagne (0 fichier Java, 0 migration).
 
 ## 14. Tests front-end exacts
 
@@ -383,7 +386,8 @@ runbook.
    basculement du back-end local en profil `demo` (arrêt de l'instance
    `local`, `db-reset.sh esic_connect_demo`) pour rejouer la suite.
 4. **Fusion** — la branche `feat/ui-redesign-bootstrap-material` reste
-   locale (14 commits d'avance sur son origine) ; décider de la fusion
+   locale (25 commits d'avance sur son origine : 9 antérieurs + 16 de
+   cette campagne) ; décider de la fusion
    dans `batch/S02A-S11` puis `main`.
 5. **Déploiement Pi** — fournir la cible (matériel, accès), les secrets
    manquants (`ESIC_DEMO_TOTP_SECRET`), et l'autorisation explicite.
@@ -392,7 +396,7 @@ runbook.
 
 ```
 Sur la branche feat/ui-redesign-bootstrap-material
-Votre branche est en avance sur 'origin/feat/ui-redesign-bootstrap-material' de 14 commits.
+Votre branche est en avance sur 'origin/feat/ui-redesign-bootstrap-material' de 25 commits.
 rien à valider, la copie de travail est propre
 ```
 

@@ -10,6 +10,63 @@
 
 ## Dernière mise à jour
 
+### 6 septembre 2026 (nuit) — campagne « one-shot » Lots A→P (branche `feat/ui-redesign-bootstrap-material`)
+
+Base `314476b`, HEAD `f167b41`, **16 commits**, 83 fichiers
+(+3692/−135). **Aucune ligne de back-end, zéro migration** (schéma
+inchangé V34). Non fusionné, non poussé, non déployé. Détail complet :
+`docs/audit/FINAL-ONE-SHOT-REPORT.md` (23 sections) + `docs/audit/LOT-A`,
+`LOT-B`, `LOT-O` + `DECISIONS_NEEDED.md` (D-01).
+
+- **A** — expiration de session glissante pilotée par l'activité
+  (`SessionActivityService`, `session-timeout-warning`), avertissement
+  accessible, multi-onglets, route de retour préservée. Front-end seul.
+- **C** — un seul élément de navigation latéral actif (`activeNavPath`).
+- **J** — anomalies d'import apprenants : filtre `BLOCKING` retiré (ne
+  matchait aucune ligne), bloquantes/non bloquantes scindées, message
+  « aucune anomalie », compteur réévalué après correction.
+- **I** — **règle des fenêtres d'émargement NON modifiée** : le dépôt
+  autorise plusieurs points de contrôle `OPEN` (le jeton unique est la
+  vraie exclusion). Conflit avec l'hypothèse du mandat consigné dans
+  `DECISIONS_NEEDED.md` D-01, 3 options. UI : explique la fenêtre active.
+- **H** — création manuelle d'un apprenant (`/students/nouveau`,
+  ADMIN/SUPER_ADMIN) : enchaîne 3 endpoints existants, non atomique,
+  reprise guidée. Vérifié absent avant écriture.
+- **G** — filtres / tri / pagination persistés dans l'URL sur 5 listes
+  (`list-query-params`), restauration de défilement au retour.
+- **D** — raccourcis du tableau de bord en grille compacte.
+- **E** — connexion responsive (portrait compact, paysage court en 2
+  colonnes).
+- **F** — onglets de section : `RouterLinkActive` réellement importé
+  (planning ne surlignait jamais), `ariaCurrentWhenActive`, styles
+  actif/hover/focus.
+- **K** — éditeur de correction de planning en panneau pleine largeur
+  sous le tableau (plus de chevauchement/troncature).
+- **L** — indice de défilement horizontal (CSS) sur les enveloppes de
+  tableau.
+- **B** — `PARTIAL` : signature ESIC (segment bleu→vert) sur l'en-tête
+  de page ; passe de direction artistique écran par écran **NON faite**
+  (inventaire : 297 `mat-card` identiques ; `docs/audit/LOT-B`).
+- **O** — revue sécurité (`docs/audit/LOT-O`) : aucun secret, pas d'XSS,
+  `npm audit` 0 vuln.
+- **P** — `compose.prod.yaml` durci (rotation journaux ×5, healthcheck
+  frontend) + `docs/deployment/{RASPBERRY-PI,PRE-FLIGHT,ROLLBACK,SECRETS}.md`.
+  Jamais monté sur Pi.
+
+**Tests** : back-end `./mvnw clean test` → **1231 tests / 0 échec**
+(143 rapports Surefire ; identique, aucun code back-end touché).
+Front-end **99 fichiers / 835 tests / 0 échec** (+49 nets), lint vert,
+build production sans alerte de budget. Playwright
+`tests/13-accessibility-axe.spec.ts` → **20/20** : axe WCAG 2.0/2.1 A+AA
+0 violation critique/sérieuse sur les écrans publics, clavier + focus,
+zoom 200 %. 15 captures publiques dans `artifacts/report-screenshots/`.
+
+**`NOT_PERFORMED`** : recette Playwright complète (`tests/01..12`),
+axe + captures des écrans **authentifiés**, Lighthouse. Motif : le
+back-end en cours tourne en profil `local` (aucun compte de
+démonstration) ; la pile `demo` exige un basculement du back-end.
+Commande dans `FINAL-ONE-SHOT-REPORT.md` §15.
+
 ```text
 5 septembre 2026 — sprint 11 terminé : tableaux de bord complets,
 exports Excel et PDF, attestation d'assiduité identifiable, recherche
