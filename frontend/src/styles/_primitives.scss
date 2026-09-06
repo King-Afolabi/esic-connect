@@ -175,6 +175,7 @@
   &--warning,
   &[data-status="PENDING_ACTIVATION"],
   &[data-status="DRAFT"],
+  &[data-status="SIMULATED"],
   &[data-status="VALIDATING"],
   &[data-status="READY_TO_PUBLISH"],
   &[data-status="SUBMITTED"],
@@ -192,6 +193,7 @@
   &[data-status="LOCKED"],
   &[data-status="REJECTED"],
   &[data-status="BLOCKING"],
+  &[data-status="FAILED"],
   &[data-status="BOUNCED"],
   &[data-status="PROCESSING_FAILED"],
   &[data-status="DEAD"] { color: var(--esic-danger); background: var(--esic-danger-tint); border-color: transparent; }

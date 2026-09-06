@@ -4,15 +4,15 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
-  min-width: 28rem;
+  gap: var(--esic-space-2) var(--esic-space-3);
+  min-width: min(28rem, 100%);
 }
 
 .plan__correction-error {
   flex-basis: 100%;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
   margin: 0;
-  color: var(--mat-sys-error, #b3261e);
+  color: var(--esic-danger);
 }

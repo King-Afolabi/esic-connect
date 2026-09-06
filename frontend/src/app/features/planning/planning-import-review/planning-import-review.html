@@ -35,7 +35,7 @@
     <mat-card appearance="outlined">
       <mat-card-content>
         <dl class="plan__facts">
-          <div><dt>Statut</dt><dd>{{ statusLabel(job()!.status) }}</dd></div>
+          <div><dt>Statut</dt><dd><span class="esic-badge" [attr.data-status]="job()!.status">{{ statusLabel(job()!.status) }}</span></dd></div>
           <div><dt>Lignes</dt><dd>{{ job()!.totalRows }}</dd></div>
           <div><dt>Valides</dt><dd>{{ job()!.validRows }}</dd></div>
           <div><dt>Avertissements</dt><dd>{{ job()!.warningRows }}</dd></div>
