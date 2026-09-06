@@ -340,6 +340,13 @@
               </mat-select>
             </mat-form-field>
 
+            @if (multipleCheckpointsOpen()) {
+              <p class="sessions__status" role="status">
+                Un seul point de contrôle accepte les émargements à la fois. Afficher un code pour
+                un autre point de contrôle ferme immédiatement celui en cours.
+              </p>
+            }
+
             @if (tokenError()) {
               <div class="sessions__panel" role="alert">
                 <mat-icon aria-hidden="true">error_outline</mat-icon>
@@ -354,6 +361,9 @@
               <div class="sessions__qr">
                 <app-qr-display [value]="attendanceToken()!.token"></app-qr-display>
                 <div class="sessions__qr-meta">
+                  <p class="sessions__meta">
+                    Émargement actif : « {{ selectedCheckpoint()?.label }} »
+                  </p>
                   <p class="sessions__meta">Code court</p>
                   <p class="sessions__code" aria-label="Code court d'émargement">{{ attendanceToken()!.shortCode }}</p>
                   <p class="sessions__meta">Expire le {{ formatInstantUtc(attendanceToken()!.expiresAt) }}</p>
