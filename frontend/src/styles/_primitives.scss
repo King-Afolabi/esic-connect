@@ -1,0 +1,754 @@
+// =============================================================================
+// Primitives ESIC — éléments présentiels non gérés par Angular Material
+// =============================================================================
+// En-têtes de page, cartes de contenu, pastilles de statut d'assiduité,
+// tableaux de données, listes clé/valeur, états vides. Toutes s'appuient
+// exclusivement sur les jetons de `_tokens.scss`.
+
+// -- En-tête de page ---------------------------------------------------------
+// Un seul dispositif structurel dans le produit : le titre en serif (registre
+// « document officiel »), une description optionnelle, l'action primaire à
+// droite, un filet de base. Pas de sur-titre en capitales, pas de fil d'Ariane
+// décoratif.
+.esic-page-header {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--esic-space-3) var(--esic-space-5);
+  padding-bottom: var(--esic-space-4);
+  margin-bottom: var(--esic-space-5);
+  border-bottom: 1px solid var(--esic-line);
+
+  // Signature ESIC (Lot B) : un court segment bleu → vert posé sur le
+  // filet de titre, aux deux couleurs de la marque. Structurel — il
+  // ancre le titre de page —, pas décoratif, et répété sur chaque écran
+  // pour donner un rythme reconnaissable sans bruit.
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-end: -1px;
+    width: 2.75rem;
+    height: 2px;
+    background: linear-gradient(90deg, var(--esic-primary) 55%, var(--esic-secondary) 55%);
+  }
+
+  &__text {
+    min-width: 0;
+  }
+
+  &__title {
+    margin: 0;
+    font-family: var(--esic-font-serif);
+    font-weight: 600;
+    font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+    line-height: 1.2;
+    color: var(--esic-ink);
+    letter-spacing: -0.01em;
+  }
+
+  &__description {
+    margin: var(--esic-space-2) 0 0;
+    max-width: 60ch;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--esic-ink-soft);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esic-space-2);
+    flex-shrink: 0;
+  }
+}
+
+// -- Navigation secondaire (onglets d'un espace) --------------------------------
+// Un seul dispositif pour les sous-vues d'un même espace : Notifications
+// (liste / préférences), Suivi d'assiduité (synthèse / rapports), hub
+// Organisation & planning. Ce sont de VRAIS liens de route (`routerLink` +
+// `routerLinkActive` + `ariaCurrentWhenActive`), jamais un `startsWith`
+// ambigu. Une seule couleur d'accent (bleu ESIC) : pas de double filet
+// gris/bleu. Défile horizontalement sur mobile, jamais le `<body>`.
+// Hauteur stable : le strip ne bouge pas quand la vue change.
+.esic-subnav {
+  margin: 0 0 var(--esic-space-5);
+  border-bottom: 1px solid var(--esic-line);
+}
+
+.esic-subnav__list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--esic-space-2) var(--esic-space-5);
+  min-height: 2.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.esic-subnav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: var(--esic-space-2) 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--esic-ink-soft);
+  border-bottom: 2px solid transparent;
+}
+
+.esic-subnav__link:hover {
+  color: var(--esic-ink);
+}
+
+.esic-subnav__link:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+// Actif : un seul accent, sur le lien réellement courant. `aria-current`
+// ET la classe posée par `routerLinkActive` — les deux mènent au même
+// rendu, jamais une teinte différente.
+.esic-subnav__link--active,
+.esic-subnav__link[aria-current='page'] {
+  color: var(--esic-blue-700);
+  border-bottom-color: var(--esic-blue-700);
+}
+
+.esic-subnav__link[aria-disabled='true'] {
+  color: var(--esic-ink-faint);
+  pointer-events: none;
+}
+
+// -- Carte / panneau de contenu -------------------------------------------------
+// Surface plate, filet fin, rayon moyen. L'élévation n'est PAS le défaut :
+// une carte posée sur la page ne flotte pas. Ajouter `.esic-card--raised`
+// seulement pour un élément détaché (aperçu collant, tuile d'action).
+.esic-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-4);
+  padding: var(--esic-space-5);
+  background: var(--esic-surface);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+
+  &--raised {
+    border-color: transparent;
+    box-shadow: var(--esic-shadow-raise);
+  }
+
+  &--flush {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  &__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--esic-space-3);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+
+  &__hint {
+    font-size: 0.8125rem;
+    color: var(--esic-ink-faint);
+  }
+}
+
+// Grille de cartes responsive fondée sur la largeur disponible, pas sur des
+// points de rupture d'appareil.
+.esic-card-grid {
+  display: grid;
+  gap: var(--esic-space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+
+// -- Pastille de statut d'assiduité ------------------------------------------
+// Le vocabulaire visuel signature du produit. Toujours : un point coloré + un
+// libellé. La couleur ne porte jamais seule l'information.
+.esic-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border-radius: var(--esic-radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--esic-status-present-fg);
+  background: var(--esic-status-present-bg);
+
+  &::before {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: currentcolor;
+    flex-shrink: 0;
+  }
+
+  &--present { color: var(--esic-status-present-fg); background: var(--esic-status-present-bg); }
+  &--late { color: var(--esic-status-late-fg); background: var(--esic-status-late-bg); }
+  &--absent { color: var(--esic-status-absent-fg); background: var(--esic-status-absent-bg); }
+  &--excused {
+    color: var(--esic-status-excused-fg);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px currentcolor;
+  }
+  &--company { color: var(--esic-status-company-fg); background: var(--esic-status-company-bg); }
+  &--pending {
+    color: var(--esic-status-pending-fg);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px currentcolor;
+  }
+}
+
+// -- Badge neutre (compteurs, catégories, statuts de cycle de vie) ----------
+// Distinct de `.esic-status` (assiduité : point + libellé). Ici une étiquette
+// compacte. Les modificateurs `--info/--success/--warning/--danger` donnent
+// une tonalité ; `[data-status]` fait la correspondance métier → tonalité en
+// un seul endroit, pour que les gabarits n'aient qu'à poser la valeur brute.
+.esic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--esic-radius-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--esic-ink-soft);
+  background: var(--esic-surface-sunken);
+  border: 1px solid var(--esic-line);
+
+  &--info,
+  &[data-status="PUBLISHED"],
+  &[data-status="OPEN"],
+  &[data-status="SENT_TO_PROVIDER"],
+  &[data-status="IN_PROGRESS"] { color: var(--esic-info); background: var(--esic-info-tint); border-color: transparent; }
+
+  &--success,
+  &[data-status="ACTIVE"],
+  &[data-status="ACCEPTED"],
+  &[data-status="ACCEPTED_ABSENCE"],
+  &[data-status="DELIVERED"],
+  &[data-status="RESOLVED"],
+  &[data-status="CLOSED"],
+  &[data-status="CONFIRMED"] { color: var(--esic-success); background: var(--esic-success-tint); border-color: transparent; }
+
+  &--warning,
+  &[data-status="PENDING_ACTIVATION"],
+  &[data-status="DRAFT"],
+  &[data-status="SIMULATED"],
+  &[data-status="VALIDATING"],
+  &[data-status="READY_TO_PUBLISH"],
+  &[data-status="SUBMITTED"],
+  &[data-status="UNDER_REVIEW"],
+  &[data-status="WAITING_FOR_STUDENT"],
+  &[data-status="ADDITIONAL_INFORMATION_REQUIRED"],
+  &[data-status="PENDING"],
+  &[data-status="QUEUED"],
+  &[data-status="REOPENED"],
+  &[data-status="POSTPONED"],
+  &[data-status="TRANSFERRED"] { color: var(--esic-warning); background: var(--esic-warning-tint); border-color: transparent; }
+
+  &--danger,
+  &[data-status="SUSPENDED"],
+  &[data-status="LOCKED"],
+  &[data-status="REJECTED"],
+  &[data-status="BLOCKING"],
+  &[data-status="FAILED"],
+  &[data-status="BOUNCED"],
+  &[data-status="COMPLAINED"],
+  &[data-status="PROCESSING_FAILED"],
+  &[data-status="DEAD"] { color: var(--esic-danger); background: var(--esic-danger-tint); border-color: transparent; }
+
+  &[data-status="ARCHIVED"],
+  &[data-status="SUPERSEDED"],
+  &[data-status="EXPIRED"],
+  &[data-status="CANCELLED"] { color: var(--esic-status-company-fg); background: var(--esic-status-company-bg); border-color: transparent; }
+}
+
+// -- Enveloppe de tableau de données ---------------------------------------
+// Défilement horizontal contenu (jamais le <body>), en-tête en creux, lignes
+// séparées par un filet fin, chiffres alignés à droite via `.esic-num`.
+.esic-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+// -- Indice de défilement horizontal (Lot L) ----------------------------
+// Ombre discrète au bord d'un tableau qui déborde, tant qu'il reste du
+// contenu à faire défiler de ce côté. Technique CSS pure (Lea Verou) :
+// deux couches « cache » attachées au contenu (`local`) masquent l'ombre
+// au ras du bord, deux couches « ombre » fixées à l'enveloppe (`scroll`)
+// apparaissent dès qu'il y a du hors-champ. Aucun JS ; compatible zoom.
+// Le tableau n'est jamais converti en cartes : il défile dans son
+// enveloppe, jamais le <body>.
+.esic-table-wrap,
+.table-scroll,
+.academic__table-wrapper,
+.account__table-wrapper,
+.alt__table-wrapper,
+.att__table-wrapper,
+.claims__table-wrapper,
+.duplicates__table-wrapper,
+.org__table-wrapper,
+.plan__table-wrapper,
+.profile__table-wrapper,
+.sessions__table-wrapper,
+.students__table-wrapper,
+.users__table-wrapper {
+  background:
+    linear-gradient(to right, var(--esic-surface) 30%, transparent) 0 0 / 2.5rem 100% no-repeat,
+    linear-gradient(to left, var(--esic-surface) 30%, transparent) 100% 0 / 2.5rem 100% no-repeat,
+    radial-gradient(farthest-side at 0 50%, rgb(23 33 43 / 16%), transparent) 0 0 / 0.75rem 100%
+      no-repeat,
+    radial-gradient(farthest-side at 100% 50%, rgb(23 33 43 / 16%), transparent) 100% 0 / 0.75rem
+      100% no-repeat,
+    var(--esic-surface);
+  background-attachment: local, local, scroll, scroll;
+}
+
+.esic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+
+  th,
+  td {
+    padding: 0.625rem 0.875rem;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--esic-surface-sunken);
+    color: var(--esic-ink-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid var(--esic-line-strong);
+  }
+
+  tbody tr + tr td {
+    border-top: 1px solid var(--esic-line);
+  }
+
+  tbody tr:hover td {
+    background: var(--esic-blue-100);
+  }
+}
+
+.esic-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+// -- Liste clé / valeur ----------------------------------------------------
+.esic-kv {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  margin: 0;
+
+  dt {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--esic-ink-faint);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--esic-ink);
+    word-break: break-word;
+  }
+
+  @container (max-width: 26rem) {
+    grid-template-columns: 1fr;
+    gap: 0.15rem var(--esic-space-4);
+
+    dt { margin-top: var(--esic-space-2); }
+  }
+}
+
+// -- État vide -----------------------------------------------------------
+.esic-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esic-space-2);
+  padding: var(--esic-space-7) var(--esic-space-5);
+  text-align: center;
+  color: var(--esic-ink-soft);
+  border: 1px dashed var(--esic-line-strong);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+
+  &__title {
+    margin: 0;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+}
+
+// -- Lien de retour --------------------------------------------------------
+// Un seul dispositif de navigation arrière dans tout le produit : un lien
+// simple (pas un fil d'Ariane — une seule cible), icône `arrow_back` en tête
+// (jamais un glyphe « ← » en texte), placé juste avant l'en-tête de page.
+.esic-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: var(--esic-space-4);
+  padding: 0.25rem 0.25rem 0.25rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--esic-ink-soft);
+  text-decoration: none;
+  border-radius: var(--esic-radius-xs);
+
+  .mat-icon,
+  mat-icon {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    font-size: 1.125rem;
+    line-height: 1;
+  }
+
+  &:hover {
+    color: var(--esic-primary);
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--esic-focus-ring);
+    outline-offset: 2px;
+    text-decoration: none;
+  }
+}
+
+// -- Rangée d'actions (barre au-dessus d'un tableau ou d'un formulaire) -----
+.esic-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esic-space-2) var(--esic-space-3);
+  margin-bottom: var(--esic-space-4);
+}
+
+// -- Barre de filtres (au-dessus d'une liste / d'un tableau) ---------------
+// Champs de recherche alignés, groupe d'actions à la fin. Repris tel quel
+// par tous les écrans de liste (séances, apprenants, alternance, planning…).
+.esic-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--esic-space-3) var(--esic-space-4);
+  margin-bottom: var(--esic-space-5);
+
+  // `.mat-mdc-form-field` est en largeur 100 % par le réalignement global :
+  // dans une barre de filtres en ligne, on veut des champs bornés.
+  .mat-mdc-form-field {
+    width: auto;
+    min-width: 12rem;
+    flex: 0 1 18rem;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esic-space-2);
+    // Aligne les boutons sur la ligne de base des champs `outline`.
+    padding-top: 0.25rem;
+  }
+}
+
+// -- Encart d'état (chargement, accès refusé, erreur) ---------------------
+// Panneau au fil fin, icône en tête, un message et éventuellement une
+// action de reprise. À distinguer de `.esic-empty` (absence de données).
+.esic-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon,
+  > mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--esic-space-3);
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  &--danger {
+    border-color: transparent;
+    background: var(--esic-danger-tint);
+    color: var(--esic-red-700);
+
+    > .mat-icon,
+    > mat-icon {
+      color: var(--esic-danger);
+    }
+  }
+
+  &--warning {
+    border-color: transparent;
+    background: var(--esic-warning-tint);
+    color: var(--esic-amber-700);
+
+    > .mat-icon,
+    > mat-icon {
+      color: var(--esic-warning);
+    }
+  }
+
+  &--warning {
+    border-color: transparent;
+    background: var(--esic-warning-tint);
+    color: var(--esic-amber-700);
+
+    > .mat-icon,
+    > mat-icon {
+      color: var(--esic-warning);
+    }
+  }
+}
+
+// -- Sous-section d'une page ---------------------------------------------
+// Rythme vertical + en-tête (titre h2 + action optionnelle à droite).
+.esic-section {
+  margin-top: var(--esic-space-7);
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--esic-space-2) var(--esic-space-4);
+    margin-bottom: var(--esic-space-4);
+  }
+
+  &__title {
+    margin: 0;
+    font-family: var(--esic-font-serif);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+}
+
+// -- Panneau dépliant / dialogue en ligne -------------------------------
+// L'application n'ouvre AUCUNE fenêtre modale (pas de `MatDialog`) : une
+// confirmation ou une saisie contextuelle s'ouvre en creux sous l'action
+// qui la déclenche, dans le flux de la page. Pas de superposition, donc
+// aucun problème de `z-index` ni de piège de focus à gérer. Toujours
+// `role="group"` + `aria-label` sur le conteneur dans le gabarit.
+.esic-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-3) 0;
+  border: 1px solid var(--esic-line);
+  border-left: 3px solid var(--esic-primary);
+  border-radius: var(--esic-radius-xs);
+  background: var(--esic-surface-sunken);
+
+  > p {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--esic-ink-soft);
+  }
+
+  // Action destructrice (archivage, suppression d'un doublon…) : l'arête
+  // passe au rouge, le reste du panneau ne crie pas.
+  &--danger {
+    border-left-color: var(--esic-danger);
+  }
+
+  &__title {
+    margin: 0;
+    font-family: var(--esic-font-serif);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+
+  &__text {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--esic-ink-soft);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esic-space-2) var(--esic-space-3);
+    margin-top: var(--esic-space-1);
+  }
+
+  &__error {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--esic-danger);
+  }
+}
+
+// -- Formulaire ----------------------------------------------------------
+// Un formulaire de saisie est une colonne : un champ par ligne, libellé
+// toujours au-dessus (Material `appearance="outline"`), largeur bornée — un
+// champ très large est plus lent à lire et à remplir. Les écrans denses à
+// champs courts (site, modèle de rythme…) regroupent leurs champs dans
+// `.esic-form__grid`. Ne s'applique PAS aux barres de filtres : voir
+// `.esic-filters`.
+.esic-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  max-width: 42rem;
+
+  // `.mat-mdc-form-field` est déjà en largeur 100 % (réalignement global) :
+  // dans une colonne, aucune surcharge par écran n'est nécessaire.
+
+  &--wide {
+    max-width: 52rem;
+  }
+}
+
+// Grappe de champs courts, disposée selon la largeur disponible (jamais des
+// points de rupture d'appareil).
+.esic-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--esic-space-3) var(--esic-space-4);
+  align-items: start;
+}
+
+// Champ qui occupe toute la largeur de la grille (zone de texte, sélecteur
+// multiple, motif obligatoire).
+.esic-form__row {
+  grid-column: 1 / -1;
+}
+
+// Groupe de champs nommé — `<fieldset>` remis à zéro puis redécoré : filet
+// fin, légende en serif posée sur le filet. Sert le regroupement fonctionnel
+// attendu (docs/02 §34.1).
+.esic-form__group {
+  min-width: 0;
+  margin: var(--esic-space-2) 0 0;
+  padding: var(--esic-space-4) var(--esic-space-5) var(--esic-space-5);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+
+  > legend {
+    padding: 0 var(--esic-space-2);
+    margin-left: calc(var(--esic-space-2) * -1);
+    font-family: var(--esic-font-serif);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+}
+
+// Aide autonome (hors `mat-hint`, qui reste le bon outil pour l'aide
+// attachée à un champ) : une phrase sous l'en-tête ou au-dessus d'un groupe.
+.esic-form__hint {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
+}
+
+// Rappel des champs obligatoires. Material appose déjà « * » après le libellé
+// d'un champ requis ; cette ligne l'explicite une fois pour le formulaire.
+.esic-form__required-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+
+  &::before {
+    content: "* ";
+    color: var(--esic-danger);
+    font-weight: 700;
+  }
+}
+
+// Erreur de soumission — niveau formulaire, pas niveau champ. Toujours
+// `role="alert"` dans le gabarit. Distincte de `mat-error` (un champ précis).
+.esic-form__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: var(--esic-space-2) 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--esic-danger);
+
+  .mat-icon,
+  mat-icon {
+    flex-shrink: 0;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    font-size: 1.125rem;
+  }
+}
+
+// Pied de formulaire : action primaire + échappatoire, séparées des champs
+// par un filet. Action primaire `mat-flat-button`, annulation `mat-button`.
+.esic-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esic-space-2) var(--esic-space-3);
+  margin-top: var(--esic-space-4);
+  padding-top: var(--esic-space-4);
+  border-top: 1px solid var(--esic-line);
+}
+
+// -- Anneau de focus commun (clavier) -------------------------------------
+// Repose sur `:focus-visible` : jamais visible à la souris, toujours au clavier.
+@mixin esic-focus-ring {
+  outline: 3px solid var(--esic-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--esic-radius-xs);
+}

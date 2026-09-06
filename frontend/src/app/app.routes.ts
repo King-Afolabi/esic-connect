@@ -237,27 +237,42 @@ export const routes: Routes = [
           import('./features/account/security/account-security').then((m) => m.AccountSecurity),
       },
       {
-        // Centre de notifications de l'appelant (G1-D). Aucune garde de
-        // rôle : `NotificationController` porte `@PreAuthorize("isAuthenticated()")`
-        // et l'isolation par destinataire est faite côté serveur.
+        // Espace « Notifications » : une seule entrée latérale, deux vues
+        // internes en onglets (liste / préférences). Les anciennes URL
+        // `/notifications` et `/notifications/preferences` restent valides
+        // — ce sont les chemins des enfants. Aucune garde de rôle :
+        // `NotificationController` et `NotificationPreferenceController`
+        // portent `@PreAuthorize("isAuthenticated()")` et l'isolation par
+        // destinataire est faite côté serveur.
         path: 'notifications',
-        title: `Notifications — ${APP_NAME}`,
         loadComponent: () =>
-          import('./features/notifications/notification-list/notification-list').then(
-            (m) => m.NotificationList,
+          import('./features/notifications/notifications-shell/notifications-shell').then(
+            (m) => m.NotificationsShell,
           ),
-      },
-      {
-        // Préférences de notification de l'appelant (EF-NOTIF-006).
-        // Aucune garde de rôle : `NotificationPreferenceController` porte
-        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
-        // sujet du JWT, jamais un paramètre.
-        path: 'notifications/preferences',
-        title: `Préférences de notification — ${APP_NAME}`,
-        loadComponent: () =>
-          import('./features/notifications/preferences/notification-preferences').then(
-            (m) => m.NotificationPreferences,
-          ),
+        children: [
+          // `/notifications` (favori historique) redirige vers la vue
+          // liste, qui porte désormais un chemin propre (`centre`) : un
+          // onglet lié à un chemin d'enfant NON vide se réévalue
+          // correctement quand seul l'enfant change (mode zoneless),
+          // contrairement à un `routerLink` vers l'enfant à chemin vide.
+          { path: '', pathMatch: 'full', redirectTo: 'centre' },
+          {
+            path: 'centre',
+            title: `Notifications — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/notifications/notification-list/notification-list').then(
+                (m) => m.NotificationList,
+              ),
+          },
+          {
+            path: 'preferences',
+            title: `Préférences de notification — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/notifications/preferences/notification-preferences').then(
+                (m) => m.NotificationPreferences,
+              ),
+          },
+        ],
       },
       {
         // Recherche globale (EF-USER-009 ; docs/02 §22.7). Périmètre
@@ -428,6 +443,19 @@ export const routes: Routes = [
               import('./features/students/student-list/student-list').then((m) => m.StudentList),
           },
           {
+            // Déclaré AVANT `:publicId` (sinon `nouveau` serait pris pour
+            // un identifiant). Création manuelle d'un apprenant (Lot H) :
+            // `POST /api/v1/users` exige `ADMIN` / `SUPER_ADMIN` côté
+            // serveur, d'où ce garde plus restrictif que le parent.
+            path: 'nouveau',
+            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+            title: `Ajouter un apprenant — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/students/student-create/student-create').then(
+                (m) => m.StudentCreate,
+              ),
+          },
+          {
             path: ':publicId',
             title: `Fiche apprenant — ${APP_NAME}`,
             loadComponent: () =>
@@ -436,6 +464,22 @@ export const routes: Routes = [
               ),
           },
         ],
+      },
+      {
+        // Point d'entrée « Organisation & planning » : une seule entrée
+        // latérale rassemblant les quatre sous-sections ci-dessous
+        // (référentiels, organisation, planning, alternance). Aucune route
+        // n'est déplacée — ce hub ne fait que lancer. Périmètre : union
+        // des rôles de lecture des quatre, le serveur restant l'autorité.
+        path: 'organisation-planning',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Organisation & planning — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/organisation-planning/organisation-planning-hub').then(
+            (m) => m.OrganisationPlanningHub,
+          ),
       },
       {
         // Consultation en LECTURE SEULE du référentiel académique
@@ -797,6 +841,13 @@ export const routes: Routes = [
         canActivate: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
         canActivateChild: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
         title: `Suivi d'assiduité — ${APP_NAME}`,
+        // Coquille commune : un seul titre de page + navigation secondaire
+        // visible (`.esic-subnav`) entre les cinq vues. Les chemins des
+        // enfants sont inchangés (favoris, liens).
+        loadComponent: () =>
+          import('./features/attendance/management/attendance-management-shell').then(
+            (m) => m.AttendanceManagementShell,
+          ),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'summary' },
           {

@@ -5,7 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
@@ -38,6 +38,7 @@ const MAX_BYTES = 2 * 1024 * 1024;
   imports: [
     ReactiveFormsModule,
     RouterLink,
+    RouterLinkActive,
     MatFormFieldModule,
     MatSelectModule,
     MatButtonModule,

@@ -1,9 +1,16 @@
 <app-skip-link />
-<main class="login" id="main-content">
-  <section class="login__card" aria-labelledby="login-title">
-    <header class="login__header">
-      <h1 id="login-title" class="login__title">ESIC Connect</h1>
-      <p class="login__subtitle">Connectez-vous avec votre adresse électronique.</p>
+<main class="esic-auth" id="main-content">
+  <section class="esic-auth__card" aria-labelledby="login-title">
+    <img
+      class="esic-auth__brand"
+      src="brand/logo-esic.png"
+      alt="ESIC Connect"
+      width="1472"
+      height="700"
+    />
+    <header class="esic-auth__header">
+      <h1 id="login-title" class="esic-auth__title">Connexion</h1>
+      <p class="esic-auth__subtitle">Connectez-vous avec votre adresse électronique.</p>
     </header>
 
     @if (submitting()) {
@@ -11,19 +18,23 @@
     }
 
     @if (reason() === 'expired') {
-      <p class="login__notice" role="status">
-        Votre session a expiré. Merci de vous reconnecter.
+      <p class="esic-auth__notice" role="status">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>Votre session a expiré. Merci de vous reconnecter.</span>
       </p>
     }
 
     @if (reason() === 'password-changed') {
-      <p class="login__notice" role="status">
-        Votre mot de passe a été modifié et toutes vos sessions ont été fermées. Connectez-vous
-        avec votre nouveau mot de passe.
+      <p class="esic-auth__notice esic-auth__notice--warning" role="status">
+        <mat-icon aria-hidden="true">lock_reset</mat-icon>
+        <span>
+          Votre mot de passe a été modifié et toutes vos sessions ont été fermées. Connectez-vous
+          avec votre nouveau mot de passe.
+        </span>
       </p>
     }
 
-    <form class="login__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <form class="esic-auth__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <mat-form-field appearance="outline">
         <mat-label>Adresse électronique</mat-label>
         <input
@@ -56,7 +67,7 @@
         }
       </mat-form-field>
 
-      <p class="login__error" role="alert" aria-live="assertive">
+      <p class="esic-auth__error" role="alert" aria-live="assertive">
         @if (errorMessage()) {
           <mat-icon aria-hidden="true">error</mat-icon>
           <span>{{ errorMessage() }}</span>
@@ -69,7 +80,7 @@
         mat-flat-button
         color="primary"
         type="submit"
-        class="login__submit"
+        class="esic-auth__submit"
         [disabled]="submitting()"
         [attr.aria-busy]="submitting()"
       >
@@ -80,7 +91,7 @@
         <button
           mat-stroked-button
           type="button"
-          class="login__submit"
+          class="esic-auth__submit"
           [disabled]="submitting()"
           (click)="loginWithPasskey()"
         >
@@ -88,7 +99,7 @@
         </button>
       }
 
-      <a routerLink="/mot-de-passe-oublie" class="login__link">Mot de passe oublié ?</a>
+      <a routerLink="/mot-de-passe-oublie" class="esic-auth__link">Mot de passe oublié ?</a>
     </form>
   </section>
 </main>

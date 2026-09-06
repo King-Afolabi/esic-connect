@@ -9,7 +9,12 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+
+import {
+  ListQueryReader,
+  writeListQueryParams,
+} from '../../../core/navigation/list-query-params';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { Role } from '../../../core/models/role';
@@ -87,6 +92,9 @@ export class SiteList {
     this.roleContext.effectiveRoles().some((r) => SITE_WRITE_ROLES.includes(r)),
   );
 
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
   protected readonly filters = this.formBuilder.group({
     q: this.formBuilder.control(''),
     status: this.formBuilder.control<OrganizationStatus | ''>(''),
@@ -116,6 +124,16 @@ export class SiteList {
   });
 
   constructor() {
+    // Lot G : restaure l'état de la liste depuis l'URL.
+    const params = new ListQueryReader(this.route);
+    this.filters.patchValue({
+      q: params.str('q'),
+      status: params.oneOf('status', [...ORGANIZATION_STATUSES, ''] as const, ''),
+    });
+    this.sortField.set(params.oneOf('sort', SORT_FIELDS, DEFAULT_SORT.field));
+    this.sortDirection.set(params.direction('dir', DEFAULT_SORT.direction));
+    this.pageIndex.set(params.int('page', 0));
+    this.pageSize.set(params.int('size', 20));
     this.load();
   }
 
@@ -150,9 +168,22 @@ export class SiteList {
     this.load();
   }
 
+  /** Lot G : reflète l'état courant dans l'URL (défauts non écrits). */
+  private syncUrl(q: string, status: string): void {
+    writeListQueryParams(this.router, this.route, {
+      q,
+      status,
+      sort: this.sortField() === DEFAULT_SORT.field ? null : this.sortField(),
+      dir: this.sortDirection() === DEFAULT_SORT.direction ? null : this.sortDirection(),
+      page: this.pageIndex(),
+      size: this.pageSize() === 20 ? null : this.pageSize(),
+    });
+  }
+
   private load(): void {
     this.state.set({ kind: 'loading' });
     const raw = this.filters.getRawValue();
+    this.syncUrl(raw.q.trim(), raw.status);
     const query: OrganizationListQuery = {
       q: raw.q.trim() || null,
       status: raw.status || null,

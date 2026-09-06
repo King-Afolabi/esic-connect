@@ -23,7 +23,7 @@
  * de la personne précédente.
  */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `esic-shell-${VERSION}`;
 const DATA_CACHE = `esic-data-${VERSION}`;
 
@@ -33,7 +33,13 @@ const DATA_CACHE = `esic-data-${VERSION}`;
  * énumérer ici serait faux dès la version suivante. Ils sont donc mis en
  * cache à l'usage (voir `handleAsset`).
  */
-const SHELL_URLS = ['/', '/index.html', '/manifest.webmanifest', '/favicon.ico'];
+const SHELL_URLS = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/favicon.ico',
+  '/favicon.svg',
+];
 
 /**
  * Préfixes d'API consultables hors ligne (§29.2 : « le planning récent,

@@ -1,4 +1,8 @@
 <main class="checkin">
+  <a class="esic-back" routerLink="/dashboard">
+    <mat-icon aria-hidden="true">arrow_back</mat-icon>
+    <span>Retour au tableau de bord</span>
+  </a>
   <h1 class="checkin__title">Émargement</h1>
   <p class="checkin__intro">
     Saisissez le code court affiché par votre formateur pour confirmer votre présence.
@@ -44,7 +48,7 @@
       <button mat-stroked-button type="button" (click)="reset()">Nouvel émargement</button>
     </div>
   } @else {
-    <form class="checkin__form" [formGroup]="form" (ngSubmit)="submit()">
+    <form class="checkin__form esic-form" [formGroup]="form" (ngSubmit)="submit()">
       <mat-form-field appearance="outline" class="checkin__field">
         <mat-label>Code court</mat-label>
         <input
@@ -73,7 +77,7 @@
       }
 
       @if (errorMessage()) {
-        <p class="checkin__inline-error" role="alert">{{ errorMessage() }}</p>
+        <p class="esic-form__error" role="alert">{{ errorMessage() }}</p>
       }
 
       <button mat-flat-button type="submit" [disabled]="submitting()">
@@ -95,7 +99,7 @@
         Passé l'heure de début, demandez le code au formateur.
       </p>
 
-      <form class="checkin__form" [formGroup]="roomForm" (ngSubmit)="submitRoomQr()" novalidate>
+      <form class="checkin__form esic-form" [formGroup]="roomForm" (ngSubmit)="submitRoomQr()" novalidate>
         <mat-form-field appearance="outline" class="checkin__field">
           <mat-label>Code du QR de salle</mat-label>
           <input
@@ -117,7 +121,4 @@
     </section>
   }
 
-  <p class="checkin__back">
-    <a routerLink="/dashboard">Retour au tableau de bord</a>
-  </p>
 </main>

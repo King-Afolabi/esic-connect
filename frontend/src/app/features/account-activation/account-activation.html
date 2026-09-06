@@ -1,14 +1,14 @@
 <app-skip-link />
-<main class="activation" id="main-content">
-  <section class="activation__card" aria-labelledby="activation-title">
-    <header class="activation__header">
-      <h1 id="activation-title" class="activation__title">ESIC Connect</h1>
-      <p class="activation__subtitle">Activation de votre compte</p>
+<main class="esic-auth" id="main-content">
+  <section class="esic-auth__card" aria-labelledby="activation-title">
+    <img class="esic-auth__brand" src="brand/logo-esic.png" alt="ESIC Connect" width="1472" height="700" />
+    <header class="esic-auth__header">
+      <h1 id="activation-title" class="esic-auth__title">Activer mon compte</h1>
     </header>
 
     @switch (view().kind) {
       @case ('validating') {
-        <div class="activation__status" role="status">
+        <div class="esic-auth__status" role="status">
           <mat-progress-spinner
             mode="indeterminate"
             diameter="40"
@@ -19,7 +19,7 @@
       }
 
       @case ('form') {
-        <p class="activation__intro">
+        <p class="esic-auth__hint">
           Choisissez un mot de passe pour activer votre compte, puis connectez-vous.
         </p>
 
@@ -27,7 +27,7 @@
           <mat-progress-bar mode="indeterminate" aria-label="Activation en cours"></mat-progress-bar>
         }
 
-        <form class="activation__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <form class="esic-auth__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
           <mat-form-field appearance="outline">
             <mat-label>Nouveau mot de passe</mat-label>
             <input
@@ -43,7 +43,6 @@
               matSuffix
               mat-icon-button
               type="button"
-              class="activation__toggle"
               (click)="togglePassword()"
               [attr.aria-label]="
                 showPassword() ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
@@ -66,7 +65,7 @@
             }
           </mat-form-field>
 
-          <p class="activation__error" role="alert" aria-live="assertive">
+          <p class="esic-auth__error" role="alert" aria-live="assertive">
             @if (submitError()) {
               <mat-icon aria-hidden="true">error</mat-icon>
               <span>{{ submitError() }}</span>
@@ -77,7 +76,7 @@
             mat-flat-button
             color="primary"
             type="submit"
-            class="activation__submit"
+            class="esic-auth__submit"
             [disabled]="submitting() || form.invalid"
             [attr.aria-busy]="submitting()"
           >
@@ -87,22 +86,26 @@
       }
 
       @case ('invalid-link') {
-        <p class="activation__message" role="alert">
-          Ce lien d'activation n'est pas valide. Il est peut-être inconnu, expiré ou déjà utilisé.
-          Demandez un nouveau lien à votre administrateur.
+        <p class="esic-auth__notice esic-auth__notice--warning" role="alert">
+          <mat-icon aria-hidden="true">link_off</mat-icon>
+          <span>
+            Ce lien d'activation n'est pas valide. Il est peut-être inconnu, expiré ou déjà
+            utilisé. Demandez un nouveau lien à votre administrateur.
+          </span>
         </p>
-        <a mat-stroked-button routerLink="/login" class="activation__action">Aller à la connexion</a>
+        <a mat-stroked-button routerLink="/login" class="esic-auth__submit">Aller à la connexion</a>
       }
 
       @case ('validation-error') {
-        <p class="activation__message" role="alert">
-          Impossible de vérifier votre lien d'activation pour le moment.
+        <p class="esic-auth__notice esic-auth__notice--warning" role="alert">
+          <mat-icon aria-hidden="true">error_outline</mat-icon>
+          <span>Impossible de vérifier votre lien d'activation pour le moment.</span>
         </p>
         <button
           mat-flat-button
           color="primary"
           type="button"
-          class="activation__action"
+          class="esic-auth__submit"
           (click)="retryValidation()"
         >
           Réessayer
@@ -110,13 +113,13 @@
       }
 
       @case ('success') {
-        <div class="activation__status" role="status">
-          <mat-icon class="activation__success-icon" aria-hidden="true">check_circle</mat-icon>
-          <p class="activation__message">
+        <div class="esic-auth__status" role="status">
+          <mat-icon class="esic-auth__status-icon" aria-hidden="true">check_circle</mat-icon>
+          <p>
             Votre compte est activé. Vous pouvez maintenant vous connecter.
           </p>
         </div>
-        <a mat-flat-button color="primary" routerLink="/login" class="activation__action">
+        <a mat-flat-button color="primary" routerLink="/login" class="esic-auth__submit">
           Se connecter
         </a>
       }

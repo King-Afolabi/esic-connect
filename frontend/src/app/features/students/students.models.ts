@@ -95,6 +95,45 @@ export interface UserIdentitySummary {
   lastName: string;
 }
 
+// -------------------------------------------------------------------
+// Création manuelle d'un apprenant (Lot H) — enchaîne trois routes
+// existantes, chacune contrôlée côté serveur :
+//   1. POST /api/v1/users            (ADMIN / SUPER_ADMIN)  — compte + invitation
+//   2. POST /api/v1/student-profiles (EnrollmentWeb.MANAGE_ROLES) — profil
+//   3. POST /api/v1/enrollments      (EnrollmentWeb.MANAGE_ROLES) — inscription
+// Aucun champ inventé : ils reprennent CreateUserRequest,
+// StudentProfileRequests.Create et EnrollmentRequests.Enroll.
+// -------------------------------------------------------------------
+
+/** Corps de `POST /api/v1/users` — `role` fixé à `STUDENT` par l'écran. */
+export interface CreateStudentAccountRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'STUDENT';
+}
+
+/** Réponse `UserDetailResponse` — seul `publicId` est consommé ici. */
+export interface CreatedUserResponse {
+  publicId: string;
+}
+
+/** Corps de `POST /api/v1/student-profiles`. */
+export interface CreateStudentProfileRequest {
+  userPublicId: string;
+  studentNumber: string;
+  birthDate?: string | null;
+  workStudy?: boolean;
+  companyName?: string | null;
+}
+
+/** Corps de `POST /api/v1/enrollments` (`EnrollmentRequests.Enroll`). */
+export interface EnrollStudentRequest {
+  studentProfilePublicId: string;
+  classGroupPublicId: string;
+  startDate?: string | null;
+}
+
 /**
  * Champs de tri réellement acceptés par `GET /api/v1/student-profiles`
  * (liste blanche `StudentProfileService.SORTABLE` ; toute autre valeur →

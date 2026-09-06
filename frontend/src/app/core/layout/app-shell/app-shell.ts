@@ -1,24 +1,40 @@
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { map } from 'rxjs';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationSkipped,
+  Router,
+  RouterLink,
+  RouterOutlet,
+} from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 
 import { SkipLink } from '../../a11y/skip-link';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
-import { roleLabel } from '../../models/role';
-import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
+import { SessionActivityService } from '../../auth/session-activity.service';
+import { activeNavPath, NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
 import { ConnectivityService } from '../../pwa/connectivity.service';
 import { OfflineQueueService } from '../../pwa/offline-queue.service';
 import { PwaService } from '../../pwa/pwa.service';
 import { NotificationBell } from '../../../features/notifications/notification-bell/notification-bell';
+import { ProfileMenu } from '../profile-menu/profile-menu';
 import { RoleContextMenu } from '../role-context-menu/role-context-menu';
+import { SessionTimeoutWarning } from '../session-timeout-warning/session-timeout-warning';
 
 /**
  * Coquille applicative authentifiée : barre supérieure, navigation
@@ -33,35 +49,47 @@ import { RoleContextMenu } from '../role-context-menu/role-context-menu';
   imports: [
     RouterOutlet,
     RouterLink,
-    RouterLinkActive,
-    MatToolbarModule,
     MatSidenavModule,
     MatListModule,
     MatIconModule,
     MatButtonModule,
+    MatTooltipModule,
+    ProfileMenu,
     RoleContextMenu,
     NotificationBell,
     SkipLink,
+    SessionTimeoutWarning,
   ],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.scss',
 })
-export class AppShell {
+export class AppShell implements OnDestroy {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly pwa = inject(PwaService);
   private readonly queue = inject(OfflineQueueService);
+  private readonly sessionActivity = inject(SessionActivityService);
+
+  constructor() {
+    // La coquille n'existe que sous session ouverte : c'est le bon moment
+    // pour armer l'expiration glissante (Lot A), et sa destruction — au
+    // retour vers `/login` — pour la désarmer.
+    this.sessionActivity.start();
+  }
+
+  ngOnDestroy(): void {
+    this.sessionActivity.stop();
+  }
 
   protected readonly connectivity = inject(ConnectivityService);
   /** Nombre d'actions faites hors ligne, en attente de confirmation (AC-031). */
   protected readonly pendingActions = this.queue.pendingCount;
   protected readonly installable = this.pwa.installable;
 
-  protected readonly roleLabel = roleLabel;
-
-  protected readonly email = this.auth.currentUserEmail;
-  protected readonly roles = this.auth.roles;
+  // L'adresse et les rôles ne sont plus affichés à plat dans l'en-tête :
+  // ils sont regroupés dans le panneau compact `app-profile-menu` (Lot §3).
   // Navigation filtrée selon le contexte d'utilisation actif (docs/02 §6.1) :
   // le rôle choisi restreint les entrées visibles, sans jamais élargir les
   // droits — l'autorisation reste côté Spring Security.
@@ -69,10 +97,65 @@ export class AppShell {
     visibleNavItems(NAV_ITEMS, this.roleContext.effectiveRoles()),
   );
 
+  /**
+   * `path` de l'unique entrée de navigation active (Lot C). Recalculé à
+   * chaque navigation qui se pose : une seule entrée porte `.active` et
+   * `aria-current="page"`, y compris sur une route imbriquée ou une fiche
+   * de détail hors menu.
+   *
+   * On lit `router.url` (toujours à jour) sur `NavigationEnd` **mais
+   * aussi** `NavigationSkipped` / `NavigationCancel` : une vue de liste
+   * qui réécrit ses filtres dans l'URL au chargement (Lot G) déclenche
+   * une navigation « même URL » qui supplante et annule celle du rail,
+   * sans émettre `NavigationEnd` — ce qui figeait l'entrée active sur la
+   * page précédente en mode zoneless.
+   */
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter(
+        (event) =>
+          event instanceof NavigationEnd ||
+          event instanceof NavigationSkipped ||
+          event instanceof NavigationCancel,
+      ),
+      map(() => this.router.url),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  protected readonly activeNavPath = computed(() =>
+    activeNavPath(this.currentUrl(), this.navItems()),
+  );
+
   protected readonly isHandset = toSignal(
     this.breakpointObserver.observe(Breakpoints.Handset).pipe(map((result) => result.matches)),
     { initialValue: false },
   );
+
+  // Rail de navigation replié en bande d'icônes (desktop). Préférence par
+  // appareil : `localStorage` est ici une commodité d'affichage, jamais un
+  // jeton (RG-093). Lecture et écriture protégées — un navigateur peut
+  // refuser l'accès (fenêtre privée, cookies bloqués).
+  private readonly railKey = 'esic.rail.collapsed';
+  protected readonly railCollapsed = signal(this.readRailPreference());
+
+  protected toggleRail(): void {
+    const next = !this.railCollapsed();
+    this.railCollapsed.set(next);
+    try {
+      localStorage.setItem(this.railKey, next ? '1' : '0');
+    } catch {
+      // Préférence non persistée : sans effet sur la session en cours.
+    }
+  }
+
+  private readRailPreference(): boolean {
+    try {
+      return localStorage.getItem(this.railKey) === '1';
+    } catch {
+      return false;
+    }
+  }
 
   protected install(): void {
     void this.pwa.promptInstall();

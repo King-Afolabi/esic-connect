@@ -1,14 +1,19 @@
-<nav class="att__crumbs" aria-label="Fil d'Ariane">
-  <a routerLink="/my-attendance">← Retour à mes présences</a>
-</nav>
+<a class="esic-back" routerLink="/my-attendance">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour à mes présences</span>
+</a>
 
-<h1 class="att__title">Départs anticipés</h1>
-<p class="att__intro">
-  Signalez à votre formateur que vous devez quitter une séance avant la fin.
-  Un signalement n'est pas une autorisation : tant que votre formateur ou
-  votre responsable pédagogique n'a pas tranché, la journée reste
-  <strong>à confirmer</strong>.
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Départs anticipés</h1>
+    <p class="esic-page-header__description">
+      Signalez à votre formateur que vous devez quitter une séance avant la fin.
+      Un signalement n'est pas une autorisation : tant que votre formateur ou
+      votre responsable pédagogique n'a pas tranché, la journée reste
+      <strong>à confirmer</strong>.
+    </p>
+  </div>
+</header>
 
 <mat-card appearance="outlined">
   <mat-card-content>
@@ -82,7 +87,7 @@
             <ng-container matColumnDef="status">
               <th mat-header-cell *matHeaderCellDef scope="col">État</th>
               <td mat-cell *matCellDef="let r">
-                {{ statusLabel(r.status) }}
+                <span class="esic-badge" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
                 @if (r.teacherOpinion) {
                   <span class="att__meta"> — {{ opinionLabel(r.teacherOpinion) }}</span>
                 }

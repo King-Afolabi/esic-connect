@@ -1,6 +1,7 @@
-<nav class="org__tabs" aria-label="Référentiel organisationnel">
-  <a routerLink="/organization/sites" routerLinkActive="org__tab--active">Sites</a>
-</nav>
+<a class="esic-back" routerLink="/organization/sites">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux sites</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
@@ -29,9 +30,16 @@
     </div>
   }
   @case ('ready') {
-    <h1 class="org__title">{{ mode === 'edit' ? 'Modifier le site' : 'Nouveau site' }}</h1>
+    <header class="esic-page-header">
+      <div class="esic-page-header__text">
+        <h1 class="esic-page-header__title">{{ mode === 'edit' ? 'Modifier le site' : 'Nouveau site' }}</h1>
+      </div>
+    </header>
 
-    <form class="org__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
+
+    <form class="esic-form esic-form--wide" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="esic-form__grid">
       <mat-form-field appearance="outline">
         <mat-label>Code</mat-label>
         <input matInput formControlName="code" maxlength="50" required autocomplete="off" />
@@ -95,12 +103,13 @@
           <mat-error>{{ form.controls.countryCode.getError('server') }}</mat-error>
         }
       </mat-form-field>
+      </div>
 
       @if (submitError()) {
-        <p class="org__form-error" role="alert">{{ submitError() }}</p>
+        <p class="esic-form__error" role="alert">{{ submitError() }}</p>
       }
 
-      <div class="org__form-actions">
+      <div class="esic-form__actions">
         <button mat-flat-button type="submit" [disabled]="submitting()">
           {{ mode === 'edit' ? 'Enregistrer' : 'Créer le site' }}
         </button>

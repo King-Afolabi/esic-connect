@@ -1,3 +1,5 @@
+// Aligné sur le système de design ESIC (jetons `--esic-*`).
+
 .pending {
   display: block;
 }
@@ -5,21 +7,21 @@
 .pending__intro,
 .pending__count,
 .pending__empty {
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-body-medium);
+  color: var(--esic-ink-soft);
+  font-size: 0.9375rem;
 }
 
 .pending__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding-bottom: 0.75rem;
+  gap: var(--esic-space-2);
+  padding-bottom: var(--esic-space-3);
 }
 
 .pending__panel {
   align-items: center;
   display: flex;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
 }
 
 .pending__table {
@@ -28,15 +30,23 @@
 
   th,
   td {
-    border-bottom: 1px solid rgb(0 0 0 / 12%);
-    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--esic-line);
+    padding: 0.5rem 0.625rem;
     text-align: left;
+  }
+
+  thead th {
+    background: var(--esic-surface-sunken);
+    color: var(--esic-ink-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
   }
 }
 
 .pending__caption {
   caption-side: top;
   font-weight: 600;
-  padding-bottom: 0.4rem;
+  padding-bottom: var(--esic-space-2);
   text-align: left;
+  color: var(--esic-ink-soft);
 }

@@ -10,6 +10,226 @@
 
 ## Dernière mise à jour
 
+### 6 septembre 2026 — campagne finale (checkpoint avant fusion/déploiement), branche `feat/ui-redesign-bootstrap-material`
+
+Suite de la campagne finale. Livré et vérifié dans cette passe, **aucune
+ligne de back-end, zéro migration** (schéma inchangé V34) :
+
+- **§2 — Tableau de bord, ajustement desktop.** Variante responsable
+  uniquement : ligne 1 « Mon activité » (indicateurs) | « Mon périmètre »
+  (`.dashboard__split`, `minmax(1.7fr, 1fr)`), ligne 2 « Taux d'assiduité
+  par classe » (plus large) | « Séances à venir » (`.dashboard__grid--facing`).
+  Bascule `@container esic-content` (état du rail), pile sous 52 rem,
+  repli `@media` sans container queries. Autres rôles intacts ; sélecteurs
+  E2E conservés (`.dashboard__chart`, `.dashboard__bar-value`,
+  `table.dashboard__table`). `dashboard.spec.ts` 22/22.
+- **§3 — Panneau compact « Profil » dans l'en-tête.** Nouveau composant
+  `app-profile-menu` : déclencheur (pastille + identifiant court, pastille
+  seule sous 640 px) ouvrant un `mat-menu` ancré — adresse complète,
+  rôle(s), contexte d'usage actif si multi-rôles, lien vers « Sécurité du
+  compte » (`/mon-compte/securite`, route existante). `mat-menu` fournit
+  ouverture clic + clavier, fermeture Échap + clic extérieur, piège de
+  focus, `aria-haspopup` / `aria-expanded` / `aria-controls`,
+  repositionnement près des bords. Pas de bouton « copier », aucun appel
+  réseau, aucune donnée sensible ; la déconnexion reste un contrôle
+  distinct non dupliqué. `app-shell` : adresse et rôles retirés du
+  composant et du SCSS mort. `profile-menu.spec.ts` 6/6 ; `app-shell.spec.ts`
+  mis à jour (l'adresse est désormais dans le panneau).
+- **§6 (repo) — allègement du contenu versionné.** `docs/audit/`,
+  `artifacts/report-screenshots/` (41 captures) et
+  `docs/JOURNAL-BATCH-S02A-S11.md` retirés de l'index (conservés sur
+  disque, ignorés, **sauvegardés hors dépôt** dans
+  `~/esic-connect-local-docs/2026-09-06/`). `.gitignore` : `/artifacts/`,
+  `/docs/audit/`, `/docs/JOURNAL-*.md`. `README` : section « Documents de
+  travail locaux ». Aucune dépendance CI / script vers les fichiers
+  retirés (vérifié). Aucun historique réécrit.
+- **§7 — paquet de déploiement minimal.** `.dockerignore` durcis
+  (`backend/`, `frontend/`) + nouveau `.dockerignore` racine (garde-fou
+  contre un build racine involontaire). Les Dockerfiles étaient déjà
+  multi-étapes. `docker compose -f compose.prod.yaml config` : valide.
+
+**`NOT_PERFORMED` / différé — checkpoint avant fusion et déploiement
+(choix du porteur) :**
+
+- **§4 — lot complémentaire de données pédagogiques** (BTS SIO/CIEL 1-2,
+  Bachelor CDA, ESIS 1-2, CPDIA 1-2 ; 4 familles de rythmes ; 3 mois de
+  planning sans conflit par classe ; sites Malakoff/Paris + salles ;
+  apprenants/formateurs fictifs ; jeux d'import valide/avertissement/
+  bloquant/multi-anomalies/doublons vérifiés). **Non commencé.** Chantier
+  back-end + données qui exige un back-end en profil `demo` sur
+  `esic_connect_demo`, la réinitialisation de cette base (§5 du mandat,
+  garde `ESIC_ALLOW_DEMO_RESET`), un générateur de planning déterministe
+  sans conflit et une boucle de vérification par import réel. À traiter
+  en passe dédiée.
+- **§9 — fusion** de `feat/ui-redesign-bootstrap-material` dans
+  `feat/demo-readiness-e2e-ui` (base de la PR #46) : **non faite**,
+  checkpoint demandé avant.
+- **§10 — déploiement Raspberry Pi + Quick Tunnel Cloudflare** :
+  **non fait**. Cible = Pi (choix du porteur) ; ses coordonnées SSH /
+  confirmation d'accessibilité / ARM64 restent à fournir. `cloudflared`
+  tourne comme conteneur dans `compose.prod.yaml` (aucune installation
+  hôte requise).
+- Revue visuelle pilotée des écrans §2/§3 aux points de rupture ; recette
+  Playwright ; audit accessibilité outillé.
+
+### 6 septembre 2026 — campagne finale : D-01 tranchée (même branche `feat/ui-redesign-bootstrap-material`)
+
+**D-01 — DÉCISION PRISE : OPTION 1 (statu quo).** Validée par le porteur.
+Aucun changement de code, aucun changement de règle métier, zéro
+migration. Vérification menée dans le code, les tests et la
+documentation :
+
+- **Ouverture automatique autour de l'horaire : non.** Aucun `@Scheduled`
+  n'ouvre un point de contrôle. Seul `START` s'ouvre à l'ouverture de la
+  séance par le formateur (`CourseSessionService.open()`) ; les autres
+  s'ouvrent un par un (`AttendanceCheckpointService.open()`), sans
+  contrôle de l'état des autres points — plusieurs `OPEN` simultanés
+  restent permis.
+- **Fermeture automatique après la fenêtre : non.** `close()` est
+  manuel ; la fermeture de la séance ferme les points encore ouverts.
+  Aucun balayage temporel.
+- **Durées réelles :** `app.attendance.token-ttl` = `PT30S` (QR dynamique
+  + code court, tournés à chaque émission ; profil test `PT1H`) ;
+  `app.attendance.room-qr-open-before` = `PT15M` (QR fixe de salle
+  accepté de `début − 15 min` au début, refusé strictement après).
+- **Point resté `OPEN` après expiration de sa fenêtre :** le statut reste
+  `OPEN` jusqu'à fermeture humaine ; mais sans jeton vivant il n'accepte
+  plus rien. **`OPEN` ≠ « jeton utilisable ».**
+- **Jeton expiré inutilisable :** confirmé (`resolve()` → vide ; Redis
+  down → `503`, jamais dégradé).
+- **Jeton précédent invalidé à l'émission d'un nouveau :** confirmé
+  (bascule du pointeur d'autorité Redis ; `resolve()` n'accepte que le
+  jeton exactement pointé).
+
+Conformément au mandat, **aucune fermeture automatique n'a été inventée**.
+La distinction statut / jeton est documentée dans
+`docs/03-architecture.md` (`DEC-D01`) et `DECISIONS_NEEDED.md` (D-01,
+désormais un registre de décision prise, plus une action en attente).
+Couverture de tests inchangée — `AttendanceTokenServiceTests` (20 tests)
+couvre déjà expiration et rotation ; aucun test nouveau requis.
+
+### 6 septembre 2026 (nuit) — passe « navigation & dashboard réorganisés » (même branche `feat/ui-redesign-bootstrap-material`)
+
+Base `45b9e09`, **7 commits** (HEAD = ce commit de documentation). **Aucune ligne de
+back-end, zéro migration** (schéma inchangé V34). Non fusionné, non
+poussé, **non déployé**. Détail complet :
+`docs/audit/FINAL-DEPLOYED-UI-REPORT.md` (22 sections) + INDEX des
+captures `artifacts/report-screenshots/INDEX.md`.
+
+- **§1 Notifications** — une seule entrée latérale « Notifications » →
+  coquille `NotificationsShell` à deux vues internes en onglets
+  (`centre` / `preferences`). `/notifications` et
+  `/notifications/preferences` restent valides (redirection).
+- **§2 Suivi d'assiduité** — coquille `AttendanceManagementShell` :
+  titre unique + navigation secondaire visible `.esic-subnav`,
+  « Synthèse » listée et en premier. Cinq routes enfants inchangées.
+- **§3 Tableau de bord** — « Accès rapides » remonté sous la bande
+  d'identité ; grille de détail à **deux colonnes** dès ≈ 52 rem de
+  largeur de contenu (`@container esic-content`), une colonne en pile en
+  dessous ; listes de cartes bornées en hauteur. Restructuration 2×2
+  littérale par rôle **non faite** (4 variantes + sélecteurs e2e figés) —
+  arbitrage assumé dans le rapport.
+- **§4 Organisation & planning** — quatre entrées latérales
+  (Référentiels, Organisation, Planning, Alternance) fusionnées en une ;
+  nouveau hub `/organisation-planning` ; `NavItem.matchPaths` +
+  `activeNavPath` étendu. **Aucune route déplacée** — `/academic`,
+  `/organization`, `/planning`, `/alternation` restent adressables.
+- **Correctif (commits 5 & 6)** — état actif résiduel des onglets **et**
+  du rail : une vue enfant qui réécrit ses filtres dans l'URL au
+  chargement (Lot G) déclenche une navigation « même URL » terminée en
+  `NavigationCancel` + `NavigationSkipped`, **sans `NavigationEnd`** ;
+  `routerLinkActive` (et tout code ne filtrant que `NavigationEnd`)
+  restait figé en mode zoneless. Corrigé en dérivant l'état de
+  `router.url` sur `NavigationEnd` / `NavigationSkipped` /
+  `NavigationCancel`. **Limite restante** : `aria-current` du rail n'est
+  fiable qu'après une navigation client, pas au premier chargement d'une
+  URL profonde (`.active` visible OK).
+
+**Tests** : front-end `npx ng lint` vert · `npx ng test --watch=false`
+→ **102 fichiers / 838 tests / 0 échec** · `npx ng build --configuration
+production` sans alerte de budget (581,71 kB / 136,29 kB gzip) · typecheck
+de la suite Playwright 0 erreur. Back-end **non rejoué** (0 fichier Java,
+0 migration ; dernier résultat consigné §6.5 : 1231 tests).
+
+**Recette navigateur (pile locale `demo`, `ESIC_DEMO_TOTP_SECRET` =
+valeur d'exemple)** : nouveau `tests/14-report-screenshots.spec.ts`
+**7 / 7** — Notifications et Suivi d'assiduité : exactement un onglet
+actif, le bon, aucun résidu après aller-retour ; hub Organisation &
+planning : entrée de rail groupée surlignée, maintenue sur `/academic` et
+`/planning/import`. `tests/02` (libellés de navigation mis à jour),
+`03` (routes regroupées en URL directe), `07` (coquille assiduité),
+`08` (notifications + dashboard), `10` (correctif sélecteur
+`.shell__topbar`) : **tous verts** après purge du seau
+`LOGIN_ORIGIN_LIMIT` (les enchaînements longs saturent le compteur de
+connexions — 18 « échecs » d'un run combiné, tous « Trop de tentatives »,
+→ 18/18 au rejeu ; couplage d'environnement connu, `§6.1`).
+
+**`NOT_PERFORMED`** : déploiement (aucune cible démo/recette — Pi, tunnel,
+URL, `.env` de prod, `CLOUDFLARE_TUNNEL_TOKEN` absents ; paquet
+`compose.prod.yaml` **prêt et valide**, documenté jusqu'à la dernière
+commande) ; suite Playwright complète `tests/01..13` ; axe sur les écrans
+authentifiés refondus ; Lighthouse ; **lot complémentaire** (référentiels
+BTS/CIEL/CDA/ESIS/CPDIA, rythmes, plannings 3 mois, jeux d'import +
+validation) — chantier back-end + scripts + données différé sur décision
+de cadrage.
+
+### 6 septembre 2026 (nuit) — campagne « one-shot » Lots A→P (branche `feat/ui-redesign-bootstrap-material`)
+
+Base `314476b`, HEAD `f167b41`, **16 commits**, 83 fichiers
+(+3692/−135). **Aucune ligne de back-end, zéro migration** (schéma
+inchangé V34). Non fusionné, non poussé, non déployé. Détail complet :
+`docs/audit/FINAL-ONE-SHOT-REPORT.md` (23 sections) + `docs/audit/LOT-A`,
+`LOT-B`, `LOT-O` + `DECISIONS_NEEDED.md` (D-01).
+
+- **A** — expiration de session glissante pilotée par l'activité
+  (`SessionActivityService`, `session-timeout-warning`), avertissement
+  accessible, multi-onglets, route de retour préservée. Front-end seul.
+- **C** — un seul élément de navigation latéral actif (`activeNavPath`).
+- **J** — anomalies d'import apprenants : filtre `BLOCKING` retiré (ne
+  matchait aucune ligne), bloquantes/non bloquantes scindées, message
+  « aucune anomalie », compteur réévalué après correction.
+- **I** — **règle des fenêtres d'émargement NON modifiée** : le dépôt
+  autorise plusieurs points de contrôle `OPEN` (le jeton unique est la
+  vraie exclusion). Conflit avec l'hypothèse du mandat consigné dans
+  `DECISIONS_NEEDED.md` D-01, 3 options. UI : explique la fenêtre active.
+- **H** — création manuelle d'un apprenant (`/students/nouveau`,
+  ADMIN/SUPER_ADMIN) : enchaîne 3 endpoints existants, non atomique,
+  reprise guidée. Vérifié absent avant écriture.
+- **G** — filtres / tri / pagination persistés dans l'URL sur 5 listes
+  (`list-query-params`), restauration de défilement au retour.
+- **D** — raccourcis du tableau de bord en grille compacte.
+- **E** — connexion responsive (portrait compact, paysage court en 2
+  colonnes).
+- **F** — onglets de section : `RouterLinkActive` réellement importé
+  (planning ne surlignait jamais), `ariaCurrentWhenActive`, styles
+  actif/hover/focus.
+- **K** — éditeur de correction de planning en panneau pleine largeur
+  sous le tableau (plus de chevauchement/troncature).
+- **L** — indice de défilement horizontal (CSS) sur les enveloppes de
+  tableau.
+- **B** — `PARTIAL` : signature ESIC (segment bleu→vert) sur l'en-tête
+  de page ; passe de direction artistique écran par écran **NON faite**
+  (inventaire : 297 `mat-card` identiques ; `docs/audit/LOT-B`).
+- **O** — revue sécurité (`docs/audit/LOT-O`) : aucun secret, pas d'XSS,
+  `npm audit` 0 vuln.
+- **P** — `compose.prod.yaml` durci (rotation journaux ×5, healthcheck
+  frontend) + `docs/deployment/{RASPBERRY-PI,PRE-FLIGHT,ROLLBACK,SECRETS}.md`.
+  Jamais monté sur Pi.
+
+**Tests** : back-end `./mvnw clean test` → **1231 tests / 0 échec**
+(143 rapports Surefire ; identique, aucun code back-end touché).
+Front-end **99 fichiers / 835 tests / 0 échec** (+49 nets), lint vert,
+build production sans alerte de budget. Playwright
+`tests/13-accessibility-axe.spec.ts` → **20/20** : axe WCAG 2.0/2.1 A+AA
+0 violation critique/sérieuse sur les écrans publics, clavier + focus,
+zoom 200 %. 15 captures publiques dans `artifacts/report-screenshots/`.
+
+**`NOT_PERFORMED`** : recette Playwright complète (`tests/01..12`),
+axe + captures des écrans **authentifiés**, Lighthouse. Motif : le
+back-end en cours tourne en profil `local` (aucun compte de
+démonstration) ; la pile `demo` exige un basculement du back-end.
+Commande dans `FINAL-ONE-SHOT-REPORT.md` §15.
+
 ```text
 5 septembre 2026 — sprint 11 terminé : tableaux de bord complets,
 exports Excel et PDF, attestation d'assiduité identifiable, recherche
@@ -149,6 +369,404 @@ pas un changement de règle.
   `ModularityTests` inchangé (19 modules), schéma inchangé (V34, aucune
   migration). **Recette navigateur non rejouée** — `NOT_PERFORMED` pour
   le parcours « recharger la page reste connecté » (à ajouter, §10).
+
+### 6 septembre 2026 (après-midi) — refonte UI : socle du système de design
+
+Branche **`feat/ui-redesign-bootstrap-material`** (base
+`feat/demo-readiness-e2e-ui`, non fusionnée). Refonte **visuelle et UX**
+uniquement — aucune règle métier, aucun contrôleur, aucune migration
+touchés. **`PARTIAL` : socle livré, refonte écran par écran NON faite.**
+
+**Livré dans ce lot** :
+- `src/styles/_tokens.scss` — point unique de l'identité (couleurs vert /
+  bleu ESIC, espacements, rayons, ombres, statuts d'assiduité) en
+  variables `--esic-*`.
+- `src/styles/_esic-palette.scss` — palette Material 3 générée
+  (`ng generate @angular/material:m3-theme`) depuis primaire `#134E9C`,
+  secondaire `#1F7A4C`, tertiaire `#B26A00`, erreur `#B3261E`.
+- `src/styles/_bootstrap-bridge.scss` — Bootstrap 5.3.3 (SCSS, **sans
+  JS**) : grille + conteneurs + utilitaires responsive **triés** (pas de
+  composant Bootstrap, pas de couleurs/bordures/typo/ombres), variables
+  réécrites sur l'échelle ESIC, 5 points de rupture.
+- `src/styles/_primitives.scss` — en-tête de page, carte de contenu,
+  **pastille de statut** (`.esic-status--present/late/absent/excused/company/pending`),
+  badge, tableau de données, liste clé/valeur, état vide.
+- `src/styles/_material-overrides.scss` + bloc `html` de `styles.scss` —
+  réalignement des jetons système Material (`--mat-sys-*`,
+  `--mat-button-*-container-shape`) sur ESIC : surfaces, filets, rayons
+  (boutons en capsule → rayon de contrôle 4 px), élévations (2 ombres),
+  arête active structurelle du menu.
+- `index.html` — polices IBM Plex Sans (interface) + IBM Plex Serif
+  (titres, documents), `theme-color` `#134e9c`.
+- **Coquille applicative** (`app-shell`, `role-context-menu`) : barre
+  supérieure blanche fine + pastille monogramme + mot-symbole ; rail de
+  navigation avec arête active bleue ; identité sur une ligne ;
+  compactage responsive (contexte et déconnexion en icône seule,
+  jetons de rôle masqués sous 1100 px). Aucun débordement horizontal à
+  390 px.
+- **Rail de navigation repliable** (desktop) : bascule dépliée (16 rem,
+  icône + libellé) ↔ repliée (3,5 rem, bande d'icônes). Préférence
+  mémorisée par appareil (`localStorage` protégé, RG-093 — commodité
+  d'affichage, jamais un jeton). Repliée : libellés dans le DOM pour les
+  technologies d'assistance + infobulle au survol / focus.
+  `mat-sidenav-container [autosize]` pour que le contenu se recale.
+- **Vrai logo ESIC** : trouvé non suivi à la racine du dépôt
+  (`logo esic 1.png`), déplacé dans `frontend/public/brand/logo-esic.png`.
+- **Écrans publics d'authentification** (connexion, second facteur, mot de
+  passe oublié, réinitialisation, activation) : mise en page **partagée**
+  dans `src/styles/_auth.scss` (namespace `.esic-auth`) — carte unique,
+  logo ESIC, titre serif, encarts d'information / d'avertissement à filet
+  de couleur, ligne d'erreur à hauteur réservée. ~150 lignes de SCSS
+  dupliquées par écran supprimées ; aucune règle métier touchée.
+
+**Suite de la branche** : les étapes 5 à 14 ont été menées après ce lot —
+voir les entrées datées ci-dessus (tableau de bord, pages métier,
+formulaires, tableaux/listes, dialogues, responsive, icônes) et l'entrée
+« étapes 12-14 + audit final » plus bas. Restent `NOT_PERFORMED` : le jeu
+de données de démonstration élargi (relève du back-end, hors périmètre de
+cette branche UI) et l'audit accessibilité outillé. Le **tableau de bord**
+est fait (voir
+« étape 5 » ci-dessous).
+
+**Dépendance ajoutée** : `bootstrap@5.3.3` (+ `@popperjs/core` transitif,
+non utilisé). `npm audit` : 0 vulnérabilité.
+
+**Budget de bundle** : `maximumWarning` initial relevé de `500kB` à
+`600kB` dans `angular.json`. Justification : la feuille de style passe à
+**78,7 kB brut / 6,6 kB transféré (gzip)** avec la grille Bootstrap ;
+total initial **568 kB brut / 132 kB transféré**. `maximumError` inchangé
+(1 MB).
+
+**Tests** (branche `feat/ui-redesign-bootstrap-material`, 6 septembre
+2026, même environnement que §6) :
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npm test -- --watch=false` | **95 fichiers / 786 tests / 0 échec** |
+| `cd frontend && npx ng build --configuration production` | bundle produit, **aucune alerte de budget** (seuil 600 kB) |
+| Revue visuelle pilotée (Chromium 1440 px et 390 px, connexion démo `responsable@example.test`) | connexion, tableau de bord, liste des séances : identité ESIC appliquée, aucun débordement horizontal, barre supérieure compacte sur mobile |
+
+`NOT_PERFORMED` : recette Playwright (non rejouée) ; audit
+accessibilité outillé ; revue sur tablette / pliable / ultralarge réels.
+
+### 6 septembre 2026 (soir) — refonte UI : étape 6, pages métier
+
+Même branche. **`PARTIAL` : toutes les aires métier sont alignées sur le
+système de design ; l'audit visuel écran par écran des aires 2 à 9 reste
+`NOT_PERFORMED` (voir plus bas).**
+
+Neuf lots (`34472a4` → `e48fedd`), une aire à la fois, `lint` + `build`
+prod + **786 tests / 0 échec** vérifiés à chaque commit :
+
+| Lot | Aire | Écrans |
+|---|---|---|
+| 1 | Séances | liste, détail, formulaire |
+| 2 | Apprenants | liste, fiche, import, revue d'import |
+| 3 | Alternance | modèles (liste/fiche/formulaire), affectations classe, exceptions inscription, aperçu de cycle |
+| 4 | Organisation + Référentiels | sites (liste/fiche/formulaire), référentiels académiques (liste/fiche) |
+| 5 | Réclamations | liste, fil |
+| 6 | Assiduité | mes présences ×4, gestion ×3, émargement, panneau départs anticipés |
+| 7 | Planning | import, revue d'import, calendrier, versions |
+| 8 | Administration + Invitations | comptes (liste/fiche), doublons, invitations, invitations non activées |
+| 9 | Transverses | sécurité du compte, attestations, audit, abonnement calendrier, notifications (+ préférences), effets de bord, recherche globale, matières |
+
+**Méthode.** Quatre primitives ajoutées à `_primitives.scss` : `.esic-filters`
+(barre de recherche + actions), `.esic-note` (encart d'état, `--danger` /
+`--warning`), `.esic-section` (sous-section titrée), `.esic-reveal`
+(panneau dépliant). Correspondance **statut métier → tonalité** centralisée
+dans `.esic-badge[data-status]` (ACTIVE, PUBLISHED, PENDING…, SUSPENDED,
+ARCHIVED, FAILED, DELIVERED, REOPENED… — une seule table, les gabarits
+posent la valeur brute). Chaque partiel `_*-common.scss` (ou SCSS d'écran
+isolé) réécrit sur les jetons `--esic-*` **en conservant les classes
+`.area__*`** : les gabarits ne changent que pour l'en-tête
+(`.esic-page-header`, titre serif + filet), la pastille de statut et
+l'enveloppe de table à défilement contenu. Le lien de retour est le
+primitif unique `.esic-back` (lot `f606636`, 13 écrans + 4 ajoutés ici).
+
+**Résultat mesurable.** Plus **aucune** référence `--mat-sys-*` directe ni
+couleur en dur dans `src/app/**/*.scss` (hors fichiers de jetons) — toute
+la couche de présentation dérive du système de design ESIC.
+
+**Aucun `.ts`, aucune logique métier touchés.** Une seule assertion de
+test ajustée (`dashboard.spec.ts`, libellé « Comptes actifs »).
+
+`NOT_PERFORMED` : audit visuel piloté écran par écran des aires 2 à 9
+(le back-end local est devenu injoignable après un incident disque plein
+en cours de session — les captures des aires 1 « Séances » et du tableau
+de bord ont été faites ; les autres écrans partagent les mêmes primitives
+déjà vérifiées mais n'ont pas été re-capturés). Recette Playwright non
+rejouée. Audit accessibilité outillé non fait.
+
+### 6 septembre 2026 (soir) — refonte UI : étape 7, formulaires
+
+Même branche. **`PARTIAL` : les formulaires de saisie dédiés sont alignés
+sur une primitive commune ; audit visuel piloté `NOT_PERFORMED` (back-end
+local toujours injoignable).**
+
+Deux lots (`4e673a1`, `3926d4a`), `lint` + `build` prod + **786 tests /
+0 échec** à chaque commit.
+
+**Primitive `.esic-form*`** ajoutée à `_primitives.scss` : colonne bornée
+(`max-width` 42 rem, `--wide` 52 rem), `.esic-form__grid` (grappe de
+champs courts, `auto-fit` sur la largeur disponible), `.esic-form__row`
+(champ pleine largeur), `.esic-form__group` (`<fieldset>` remis à zéro
+puis redécoré, légende serif — regroupement fonctionnel, docs/02 §34.1),
+`.esic-form__hint` (aide autonome, distincte de `mat-hint`),
+`.esic-form__required-note` (« * » explicité une fois par formulaire —
+Material appose déjà l'astérisque sur le libellé d'un champ requis),
+`.esic-form__error` (erreur de **soumission**, niveau formulaire, toujours
+`role="alert"` — distincte de `mat-error`), `.esic-form__actions` (pied à
+filet : action primaire `mat-flat-button` + échappatoire `mat-button`).
+
+**Appliquée** en conservant les classes `.area__*` (mêmes gabarits, à
+l'en-tête / la grille / le pied près) :
+
+| Lot | Formulaires |
+|---|---|
+| 1 | séance exceptionnelle, modèle de rythme (`<fieldset>` → `.esic-form__group`), affectation de rythme, exception d'inscription, site (8 champs courts → grille), ajout de matière, création de compte |
+| 2 | ouverture de réclamation + réponse/transfert/décision/réouverture du fil, attestations (émettre / vérifier), abonnement calendrier, émargement (code court + QR de salle), départs anticipés (transmettre / décider) |
+
+Les blocs `.X__form`, `.X__form-actions`, `.X__inline-error` /
+`.X__form-error` des SCSS communs et isolés (`_sessions-common`,
+`_alt-common`, `organization.shared`, `pattern-form`, `site-form`,
+`user-list`, `subject-list`, `claim-list`, `attestations`,
+`calendar-subscriptions`, `attendance-check-in`, `early-departure-panel`)
+sont réduits à une **délégation** vers la primitive.
+
+**Aucun `.ts`, aucune logique métier, aucune assertion de test touchés.**
+
+**Non repris, signalés tels quels** : `student-import-home` et
+`planning-import` (formulaires-**panneau** à gabarit propre — bordure,
+fond, `padding` —, déjà sur jetons) ; `account-security` (motif « champ +
+bouton en ligne » délibéré) ; les **barres de filtres** `.X__filters`
+(relèvent de l'étape 8, tableaux / listes).
+
+`NOT_PERFORMED` : audit visuel piloté (back-end local injoignable) ;
+recette Playwright non rejouée ; audit accessibilité outillé non fait.
+
+### 6 septembre 2026 (soir) — refonte UI : étapes 8 (tableaux/listes) et 9 (dialogues)
+
+Même branche. Deux commits (`a365bda`, `8869379`), `lint` + `build` prod +
+**786 tests / 0 échec**.
+
+**Étape 8 — tableaux et listes.**
+- **Barres de filtres** consolidées sur la primitive `.esic-filters` : les
+  **17** formulaires `.X__filters` de l'application (séances, sites,
+  alternance ×5, apprenants, comptes, réclamations, audit, assiduité ×4,
+  référentiels) portent désormais aussi `esic-filters` ; les blocs
+  réimplémentés à l'identique dans 9 SCSS (`_sessions-common`,
+  `_alt-common`, `organization.shared`, `claim-list`, `user-list`,
+  `student-list`, `academic-reference-list`, `audit-trail`,
+  `my-attendance-list`) sont retirés. Ne restent que les rangées d'actions
+  `.X__filter-actions`, en helper autonome (réutilisées hors filtres dans
+  l'aire assiduité — corrections, décisions).
+- **Défilement horizontal contenu** généralisé : les `mat-table` de
+  `subject-list` et les deux de `invitation-list` — seules encore sans
+  enveloppe — sont posées dans `.esic-table-wrap`. La page ne défile
+  jamais horizontalement ; la table, si, dans son conteneur. Toutes les
+  autres listes avaient déjà leur enveloppe (`.X__table-wrapper` ou
+  `.esic-table-wrap`, étape 6).
+- Tri (`matSort`) et pagination (`mat-paginator`) : composants Material,
+  déjà réalignés par les jetons système (`_material-overrides.scss`) —
+  rien de spécifique ajouté.
+
+**Étape 9 — dialogues.** Constat : l'application n'ouvre **aucune fenêtre
+modale** — `MatDialog` n'est utilisé nulle part. Les confirmations et
+saisies contextuelles s'ouvrent **en creux dans le flux de la page**
+(`role="group"` + `aria-label`), pas en superposition : aucun problème de
+`z-index`, aucun piège de focus à gérer (aligné sur le mandat).
+- **`.esic-reveal`** complétée dans `_primitives.scss` : `__title` (serif),
+  `__text`, `__actions`, modificateur `--danger` (arête rouge pour une
+  action destructrice). Commentaire d'en-tête qui fige la règle « pas de
+  modal ».
+- **Bandeau transitoire** (`MatSnackBar`, seule surcouche du produit) :
+  stylé ESIC dans `_material-overrides.scss` — encre claire sur fond
+  encré, ombre « float », arête d'accent, action « Fermer » lisible ; la
+  variante erreur (`panelClass: 'app-snackbar-error'`), jusqu'ici sans
+  aucun style, devient rouge ESIC et distincte du bandeau d'information.
+- Confirmations `org__confirm` (archivage de site, `--danger`) et
+  `plan__confirm` (publication de planning) convergées sur `.esic-reveal`,
+  blocs SCSS dupliqués supprimés. Les panneaux de saisie contextuels
+  (`sessions__reveal`, `alt__reveal`, `att__reveal`…) gardent leur nom —
+  ils délèguent déjà au même vocabulaire de jetons (étape 6) ; un
+  renommage complet serait purement cosmétique.
+
+**Aucun `.ts`, aucune règle métier, aucune assertion de test touchés.**
+`NOT_PERFORMED` : audit visuel piloté (back-end local injoignable) ;
+recette Playwright non rejouée ; audit accessibilité outillé.
+
+### 6 septembre 2026 (soir) — refonte UI : étapes 10 (responsive) et 11 (icônes)
+
+Même branche. Deux commits (`a330fcb`, `cf26086`), `lint` + `build` prod +
+**786 tests / 0 échec**.
+
+**Étape 10 — responsive, passe de finition.** Le socle (grilles
+`minmax(min(100%, Nrem), 1fr)`, compaction du rail, `100dvh`) était posé
+aux étapes 3-6. Ajouts, tous par largeur / orientation, jamais par modèle
+d'appareil :
+- `.shell__main` devient un **conteneur** (`container: esic-content /
+  inline-size`) : les requêtes `@container` des primitives (`.esic-kv`…)
+  se calent sur la largeur réelle de la colonne de contenu — qui varie
+  selon que le rail est déplié ou replié —, jamais sur la fenêtre.
+  `.esic-auth__card` aussi.
+- Pliable replié (`< 22rem`) : la barre supérieure ne garde que la
+  pastille de marque, lâche le mot-symbole.
+- Paysage court (`orientation: landscape` et `hauteur < 30rem`) : barre
+  supérieure resserrée à 3 rem, padding de contenu réduit.
+- Fenêtre courte en authentification (`hauteur < 34rem`) : la carte
+  s'ancre en haut et défile, au lieu d'être rognée par le centrage.
+
+**Étape 11 — favicon, icônes PWA, monogramme.** Fin du placeholder « E »
+bleu. Toutes les icônes sont dérivées du **« E » du logo ESIC officiel**
+(`public/brand/logo-esic.png`), **recadré sans déformation ni
+recoloration** (`sips`), centré sur fond blanc — la présentation même du
+logo sur les écrans d'authentification. La règle « ne jamais falsifier ni
+déformer le logo » est respectée : ce sont les pixels authentiques du
+glyphe, jamais un redessin.
+- Ajoutés / régénérés : `favicon.svg` (glyphe en raster embarqué) +
+  `favicon.ico` multi-tailles 16/32/48 ; `icons/icon-{192,512}.png`
+  (`any`) ; `icons/icon-maskable-{192,512}.png` (glyphe dans la zone de
+  sécurité centrale) ; `icons/apple-touch-icon.png` 180×180 opaque ;
+  `brand/mark-esic.png` — le monogramme du bandeau (`.shell__mark`)
+  abandonne la forme géométrique neutre pour le vrai « E ».
+- `index.html` : `rel="icon"` SVG d'abord, `.ico` en repli ;
+  `apple-touch-icon` → nouvelle image 180.
+- `manifest.webmanifest` : `theme_color` `#0d47a1`→`#134e9c` (aligné sur
+  `--esic-primary` et `<meta theme-color>`), `background_color`
+  `#fafafa`→`#f4f6f8` (`--esic-paper`), `id: "/"`, entrée maskable 192.
+- `sw.js` : `VERSION` `v1`→`v2` (rafraîchit le cache de coquille),
+  `/favicon.svg` précaché.
+
+`NOT_PERFORMED` : rendu réel des icônes dans un navigateur / à
+l'installation PWA (vérifié visuellement sur les PNG générés, pas
+in-situ) ; recette Playwright ; audit accessibilité outillé.
+
+### 6 septembre 2026 (soir) — refonte UI : étapes 12-14 + audit final
+
+Même branche. Commits `cf26086` (icônes), `<docs>` (cette entrée).
+
+**Étape 12 — données de démonstration.** Rien à faire côté branche UI. Le
+jeu de démonstration appartient au back-end (`DemoDataInitializer`,
+`scripts/seed-demo.sh`, profil `demo`) ; l'enrichir ne relève pas d'une
+refonte visuelle et **sortirait la PR UI de son périmètre** (« la PR UI
+ne contient que la refonte »). Le back-end local est par ailleurs
+injoignable depuis l'incident disque plein. `NOT_PERFORMED` — suivi
+séparément.
+
+**Étape 13 — tests.** La refonte est CSS + gabarits : **aucune logique
+nouvelle à couvrir**. Sur les ~18 commits de la branche, **une seule**
+assertion de test a été ajustée (`dashboard.spec.ts`, libellé « Comptes
+actifs », étape 5). À chaque commit : `npm run lint` vert,
+`npx ng test --watch=false` → **95 fichiers / 786 tests / 0 échec**,
+`npx ng build --configuration production` sans alerte de budget. Les
+sélecteurs sur lesquels s'appuie la recette Playwright ont été
+**délibérément conservés** : `.dashboard__chart`, `.dashboard__bar-value`,
+`table.dashboard__table caption`, `form.upload`,
+`input[formcontrolname="password"]`, `button[type="submit"]`.
+`NOT_PERFORMED` : recette Playwright (pile de démonstration requise,
+back-end injoignable) ; contrôle accessibilité outillé (axe / Lighthouse).
+
+**Étape 14 — documentation.** `docs/03-architecture.md` §9.7 « Système de
+design » réécrit : catalogue complet des primitives, règle « aucune
+fenêtre modale », `.shell__main` conteneur `@container`, stratégie
+responsive largeur/orientation, dérivation des icônes depuis le « E » du
+logo réel. `docs/CURRENT-STATE.md` tenu à jour à chaque étape (entrées
+ci-dessus).
+
+**Audit final (couche de présentation).**
+
+| Contrôle | Résultat |
+|---|---|
+| `grep -rn "mat-sys-\|#rrggbb\|rgb(0 0 0 / …)" src/app/**/*.scss` hors `_tokens`/`_esic-palette` | **0 occurrence** — `module-placeholder.scss` (composant partagé oublié à l'étape 6) corrigé ici |
+| `npm run lint` | « All files pass linting » |
+| `npx ng test --watch=false` | 95 fichiers / 786 tests / 0 échec |
+| `npx ng build --configuration production` | `styles.css` **87,6 kB brut / 7,9 kB gzip** ; total initial **577 kB / 134 kB gzip** ; aucune alerte de budget (seuil 600 kB) |
+| `.ts` touchés | **0** (hors 1 assertion de test à l'étape 5) |
+| Règles métier / contrôleurs / migrations touchés | **0** |
+
+**Reste `NOT_PERFORMED` pour clore la branche** : revue visuelle pilotée
+écran par écran (back-end local à redémarrer), recette Playwright complète,
+audit accessibilité outillé (axe-core / Lighthouse) et navigation clavier
+sur les écrans refondus. Ces trois contrôles conditionnent le passage de
+la PR #46 de brouillon à « prête ».
+
+### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
+
+Même branche `feat/ui-redesign-bootstrap-material`. Refonte **visuelle et
+UX** du tableau de bord des quatre rôles ; aucun champ, endpoint, rôle ni
+règle métier touché — `dashboard-api.service.ts` et `dashboard.models.ts`
+inchangés.
+
+- **Trois registres visuels distincts** au lieu d'une pile de cartes
+  identiques : (1) *bande d'identité* — compte / identifiant / expiration
+  + jetons de rôle + phrase de contexte, sur un simple filet de base,
+  jamais accentuée ; (2) *bandeau d'indicateurs* — les chiffres clés en
+  grand (chasse tabulaire), un seul bloc bordé divisé par des filets,
+  point d'entrée du regard ; (3) *cartes de détail* — surface Material
+  réalignée.
+- **Le bandeau d'indicateurs réutilise le vocabulaire de couleur des
+  statuts d'assiduité** (`_tokens.scss`) : chaque cellule d'assiduité
+  porte le point + le filet supérieur de son statut — présences en vert,
+  retards en ocre, absences en rouge, excusées en bleu, en attente en
+  ocre. La couleur ne porte jamais seule l'information : libellé + point
+  (docs/02 §32.5).
+- **Défaut fonctionnel corrigé** : `.dashboard__card { height: 100% }` +
+  `grid auto-fit` étirait toutes les cartes d'une rangée à la hauteur de
+  la plus grande — d'où les panneaux « Session » / « Rôles » hauts et
+  vides des captures précédentes. La grille est désormais
+  `align-items: start` et la règle `height: 100%` supprimée : une carte
+  courte reste courte.
+- **Tableaux équivalents** (EF-REP-008) enveloppés dans `.esic-table-wrap`
+  (défilement horizontal contenu, jamais le `<body>`) et portant la
+  classe `.esic-table` des primitives ; l'histogramme passe aux jetons
+  (piste en creux, remplissage bleu ESIC, barre fine). Le graphique et la
+  table lisent toujours la **même liste** ; chaque barre garde sa valeur
+  en toutes lettres.
+- En-tête `.esic-page-header` (titre serif), sous-titres de section en
+  serif, listes de séances en lignes compactes séparées d'un filet.
+- Carte « Comptes » de l'administration **retirée** : elle dupliquait à
+  l'identique le bandeau d'indicateurs. Le test
+  `dashboard.spec.ts` correspondant a été ajusté au nouveau libellé
+  (« Comptes actifs », « En attente d'activation »).
+
+**Liens de retour unifiés.** Les écrans de détail portaient jusqu'ici
+**cinq** implémentations distinctes du lien « Retour » (`<nav>` étiqueté
+à tort « Fil d'Ariane » + glyphe `←`, `<a mat-stroked-button>` avec `←`,
+`<p class="X__back">` avec `<mat-icon>`, `<a mat-button>`…). Nouveau
+primitif unique `.esic-back` (`_primitives.scss`) : lien simple, icône
+`arrow_back` en tête (plus de glyphe texte), placé avant l'en-tête de
+page, anneau de focus clavier. Appliqué à **13 écrans** (séances,
+réclamations, apprenants, imports, comptes, doublons, alternance, mes
+présences) ; classes par écran (`sessions__crumbs`, `alt__back`,
+`profile__back`, `account__back`, `duplicates__back`, `att__crumbs`
+orphelin) et leur SCSS supprimés. Restent hors de ce lot : le lien
+« Retour au tableau de bord » en pied de l'écran d'émargement
+(`attendance-check-in`, à traiter à l'étape 6) et les navigations à
+onglets `att__crumbs` / `plan__tabs` / `alt__tabs` (ce ne sont pas des
+liens de retour).
+
+**Budget de style par composant** : `anyComponentStyle.maximumWarning`
+relevé de `4 kB` à `8 kB` et `maximumError` de `8 kB` à `12 kB` dans
+`angular.json`. Le SCSS *scopé* du tableau de bord (4 variantes de rôle,
+bandeau, histogramme, adaptatif) compile à **~5,3 kB** — le seuil par
+défaut de 4 kB d'Angular est serré pour un écran de cette densité.
+`styles.scss` global inchangé (81 kB), budget initial (600 kB) intact.
+
+**Tests** (même environnement que §6) :
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **95 fichiers / 786 tests / 0 échec** (dont `dashboard.spec.ts` 22/22) |
+| `cd frontend && npx ng build --configuration production` | bundle produit, **aucune alerte de budget** |
+| Revue visuelle pilotée (Chromium, `local` sur `esic_connect`) | tableau de bord *responsable* 1440 px et 390 px, tableau de bord *apprenant* 1440 px : hiérarchie appliquée, bandeau d'indicateurs aux couleurs de statut, cartes à hauteur naturelle, `body.scrollWidth === clientWidth` (aucun débordement) aux deux largeurs |
+
+`NOT_PERFORMED` : tableau de bord *administration* et *formateur* en
+navigateur (mêmes primitives que *responsable*, non re-capturés) ;
+recette Playwright `tests/11-pilotage-restitution.spec.ts` (sélecteurs
+`.dashboard__chart` / `.dashboard__bar-value` / `table.dashboard__table`
+**conservés**, suite non rejouée) ; audit accessibilité outillé.
 
 ## Repère Git
 

@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
@@ -50,6 +50,7 @@ type DetailState =
   imports: [
     ReactiveFormsModule,
     RouterLink,
+    RouterLinkActive,
     MatCardModule,
     MatTableModule,
     MatFormFieldModule,

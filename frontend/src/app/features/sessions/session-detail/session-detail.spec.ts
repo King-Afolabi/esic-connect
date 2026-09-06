@@ -436,6 +436,26 @@ describe('SessionDetail', () => {
     expect(text()).not.toContain('OPAQUE-SERVER-TOKEN');
   });
 
+  it('explains that only one checkpoint accepts émargements when several are OPEN (Lot I)', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    initialLoad(http, {
+      ...OPEN_SESSION,
+      checkpoints: [
+        CP_OPEN,
+        {
+          ...CP_OPEN,
+          publicId: 'cp-2',
+          label: 'Retour de pause',
+          type: 'MORNING_BREAK_RETURN',
+          displayOrder: 1,
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(text()).toContain('Un seul point de contrôle accepte les émargements à la fois');
+  });
+
   it('renews the token shortly before expiry and replaces the previous one', () => {
     vi.useFakeTimers();
     ({ fixture, http, internals } = setup(['ADMIN']));

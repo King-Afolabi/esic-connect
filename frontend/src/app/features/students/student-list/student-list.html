@@ -1,11 +1,23 @@
-<h1 class="students__title">Apprenants</h1>
-<p class="students__intro">
-  Profils apprenants enregistrés. La recherche porte sur le
-  <strong>numéro étudiant</strong> ; sélectionnez un apprenant pour consulter sa fiche et
-  l'historique de ses inscriptions.
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Apprenants</h1>
+    <p class="esic-page-header__description">
+      Profils apprenants enregistrés. La recherche porte sur le
+      <strong>numéro étudiant</strong> ; sélectionnez un apprenant pour consulter sa fiche et
+      l'historique de ses inscriptions.
+    </p>
+  </div>
+  @if (canCreateStudent()) {
+    <div class="esic-page-header__actions">
+      <a mat-flat-button routerLink="/students/nouveau">
+        <mat-icon aria-hidden="true">person_add</mat-icon>
+        <span>Ajouter un apprenant</span>
+      </a>
+    </div>
+  }
+</header>
 
-<form class="students__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="students__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="students__filter">
     <mat-label>Numéro étudiant</mat-label>
     <input
@@ -90,7 +102,9 @@
 
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef>Statut</th>
-          <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+          <td mat-cell *matCellDef="let row">
+            <span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span>
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="createdAt">

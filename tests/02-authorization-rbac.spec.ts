@@ -126,8 +126,11 @@ test.describe('Cas ciblés du cahier des charges', () => {
     page,
   }) => {
     await loginAsUi(page, ACCOUNTS.TEACHER);
-    await expect(sidebar(page).getByRole('link', { name: 'Organisation' })).toHaveCount(0);
-    await expect(sidebar(page).getByRole('link', { name: 'Planning' })).toHaveCount(0);
+    // Regroupement : une seule entrée « Organisation & planning », masquée
+    // pour un TEACHER sans rôle de gestion.
+    await expect(
+      sidebar(page).getByRole('link', { name: 'Organisation & planning' }),
+    ).toHaveCount(0);
     // En revanche « Séances » doit être visible (SESSION_READ_ROLES l'inclut).
     await expect(sidebar(page).getByRole('link', { name: 'Séances' })).toBeVisible();
   });
@@ -139,10 +142,9 @@ test.describe('Cas ciblés du cahier des charges', () => {
       'Administration',
       'Apprenants',
       'Import apprenants',
-      'Référentiels',
-      'Organisation',
-      'Planning',
-      'Alternance',
+      // Regroupement (Lot §4) : une entrée pour référentiels, organisation,
+      // planning et alternance. Les routes restent adressables directement.
+      'Organisation & planning',
       'Séances',
       "Suivi d'assiduité",
       'Notifications',

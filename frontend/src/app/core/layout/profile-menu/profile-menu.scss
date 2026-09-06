@@ -1,0 +1,84 @@
+.profile-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.profile-menu__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex-shrink: 0;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-primary-tint);
+  color: var(--esic-blue-700);
+
+  .mat-icon {
+    font-size: 1.125rem;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+}
+
+.profile-menu__name {
+  min-width: 0;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+// Sous 640 px, le déclencheur devient la pastille seule : le nom court
+// reste dans le DOM pour les technologies d'assistance.
+@media (max-width: 640px) {
+  .profile-menu__name,
+  .profile-menu__caret {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+// -- Panneau (surcouche `mat-menu`) ----------------------------------
+// En-tête d'informations statiques, puis le lien de gestion du compte
+// comme entrée de menu focusable. Le panneau reste compact.
+.profile-menu__body {
+  padding: var(--esic-space-4) var(--esic-space-4) var(--esic-space-3);
+  min-width: 15rem;
+  max-width: 20rem;
+}
+
+.profile-menu__facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  align-items: baseline;
+
+  dt {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--esic-ink-faint);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--esic-ink);
+    overflow-wrap: anywhere;
+  }
+}
+
+.profile-menu__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}

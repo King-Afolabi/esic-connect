@@ -177,7 +177,7 @@ describe('Dashboard', () => {
     }
   });
 
-  it('offers Référentiels as a quick link only for the roles behind AcademicWeb.READ_ROLES', () => {
+  it('offers Organisation & planning as a quick link only for its sub-section read roles', () => {
     for (const held of [
       ['ADMIN'],
       ['SUPER_ADMIN'],
@@ -186,37 +186,17 @@ describe('Dashboard', () => {
     ] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
-      ).not.toBeNull();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('a[href="/organisation-planning"]')).not.toBeNull();
+      // Les anciennes entrées séparées ne sont plus des raccourcis.
+      expect(el.querySelector('a[href="/academic"]')).toBeNull();
+      expect(el.querySelector('a[href="/alternation"]')).toBeNull();
     }
     for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
       expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
-      ).toBeNull();
-    }
-  });
-
-  it('offers Alternance as a quick link only for the alternation read roles', () => {
-    for (const held of [
-      ['ADMIN'],
-      ['SUPER_ADMIN'],
-      ['SCHOOL_ADMINISTRATION'],
-      ['PEDAGOGICAL_MANAGER'],
-    ] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
-      ).not.toBeNull();
-    }
-    for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/organisation-planning"]'),
       ).toBeNull();
     }
   });
@@ -261,6 +241,18 @@ describe('Dashboard', () => {
     expect(text()).toContain("Aucun autre écran n'est disponible");
   });
 
+  it('renders the quick links as a labelled grid of shortcut tiles, not a nav list (Lot D)', () => {
+    roles.set(['ADMIN']);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const grid = host.querySelector('nav.dashboard__shortcuts');
+    expect(grid).not.toBeNull();
+    expect(grid?.getAttribute('aria-label')).toBe('Raccourcis');
+    expect(host.querySelectorAll('.dashboard__shortcut').length).toBeGreaterThan(1);
+    // Plus de liste de navigation Material (qui dupliquait le rail).
+    expect(host.querySelector('mat-nav-list')).toBeNull();
+  });
+
   // --- Tableau de bord par rôle (bloc G1-F) ---------------------
 
   const reload = (payload: Record<string, unknown>) => {
@@ -270,9 +262,9 @@ describe('Dashboard', () => {
   };
 
   it('renders the administration counts from the server payload', () => {
-    expect(text()).toContain('Actifs');
+    expect(text()).toContain('Comptes actifs');
     expect(text()).toContain('12');
-    expect(text()).toContain('En attente');
+    expect(text()).toContain("En attente d'activation");
   });
 
   it('renders a STUDENT card without any /sessions link', () => {

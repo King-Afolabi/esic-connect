@@ -11,17 +11,17 @@
 .cycle-preview__grid caption {
   caption-side: top;
   text-align: left;
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  color: var(--esic-ink-soft);
   margin-bottom: 0.5rem;
 }
 
 .cycle-preview__grid th,
 .cycle-preview__grid td {
-  border: 1px solid var(--mat-sys-outline-variant);
+  border: 1px solid var(--esic-line);
   padding: 0.4rem 0.6rem;
   text-align: center;
-  font: var(--mat-sys-body-small);
+  font-size: 0.8125rem;
 }
 
 .cycle-preview__grid th[scope='row'] {
@@ -30,15 +30,15 @@
 }
 
 .cycle-preview__cell--SCHOOL {
-  background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent);
+  background: var(--esic-primary-tint);
 }
 
 .cycle-preview__cell--COMPANY {
-  background: color-mix(in srgb, var(--mat-sys-tertiary) 16%, transparent);
+  background: var(--esic-status-company-bg);
 }
 
 .cycle-preview__cell--UNKNOWN {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--esic-ink-soft);
 }
 
 .cycle-preview__legend {
@@ -48,7 +48,7 @@
   gap: 1rem;
   padding: 0;
   margin: 0.75rem 0 0;
-  font: var(--mat-sys-body-small);
+  font-size: 0.8125rem;
 }
 
 .cycle-preview__legend li {
@@ -60,15 +60,15 @@
 .cycle-preview__swatch {
   width: 0.9rem;
   height: 0.9rem;
-  border: 1px solid var(--mat-sys-outline);
-  border-radius: 0.2rem;
+  border: 1px solid var(--esic-line-strong);
+  border-radius: var(--esic-radius-xs);
   display: inline-block;
 }
 
 .cycle-preview__swatch--SCHOOL {
-  background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent);
+  background: var(--esic-primary-tint);
 }
 
 .cycle-preview__swatch--COMPANY {
-  background: color-mix(in srgb, var(--mat-sys-tertiary) 16%, transparent);
+  background: var(--esic-status-company-bg);
 }

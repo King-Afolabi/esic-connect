@@ -1,0 +1,64 @@
+// Hub « Organisation & planning ». Largeur / centrage portés par la
+// coquille (`.shell__main`). Jetons ESIC uniquement.
+
+:host {
+  display: block;
+}
+
+.ophub__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--esic-space-3);
+}
+
+.ophub__link {
+  display: flex;
+  align-items: center;
+  gap: var(--esic-space-4);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  text-decoration: none;
+  color: var(--esic-ink);
+}
+
+.ophub__link:hover {
+  border-color: var(--esic-line-strong);
+  background: var(--esic-surface-sunken);
+}
+
+.ophub__link:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 2px;
+}
+
+.ophub__icon {
+  flex-shrink: 0;
+  color: var(--esic-primary);
+}
+
+.ophub__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.ophub__label {
+  font-weight: 600;
+}
+
+.ophub__summary {
+  font-size: 0.875rem;
+  color: var(--esic-ink-soft);
+}
+
+.ophub__chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--esic-ink-faint);
+}

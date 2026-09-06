@@ -1,26 +1,20 @@
+// Aligné sur le système de design ESIC (jetons `--esic-*`).
+
 .page {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-}
-
-.page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--esic-space-5);
 }
 
 .page__meta {
   margin: 0;
-  color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.7));
+  color: var(--esic-ink-soft);
 }
 
 .cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--esic-space-3);
 }
 
 .card {
@@ -28,69 +22,88 @@
   flex-direction: column;
   align-items: center;
   min-width: 7rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
-  border-radius: 0.5rem;
+  padding: var(--esic-space-3) var(--esic-space-4);
+  border: 1px solid var(--esic-line);
+  border-top: 3px solid var(--esic-line-strong);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
 }
 
 .card__value {
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--esic-ink);
 }
 
 .card--warn {
-  border-color: var(--mat-sys-tertiary, #7d5260);
+  border-top-color: var(--esic-warning);
 }
 
 .card--error {
-  border-color: var(--mat-sys-error, #b3261e);
+  border-top-color: var(--esic-danger);
 }
 
 .panel {
   margin: 0;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  padding: var(--esic-space-3) var(--esic-space-4);
+  border-radius: var(--esic-radius-sm);
+  border: 1px solid var(--esic-line);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
 }
 
 .panel--error {
-  background: var(--mat-sys-error-container, #f9dedc);
-  color: var(--mat-sys-on-error-container, #410e0b);
+  border-color: transparent;
+  background: var(--esic-danger-tint);
+  color: var(--esic-red-700);
 }
 
 .panel--warn {
-  background: var(--mat-sys-tertiary-container, #ffd8e4);
-  color: var(--mat-sys-on-tertiary-container, #31111d);
+  border-color: transparent;
+  background: var(--esic-warning-tint);
+  color: var(--esic-amber-700);
 }
 
 .panel--ok {
-  background: var(--mat-sys-secondary-container, #e8def8);
-  color: var(--mat-sys-on-secondary-container, #1d192b);
+  border-color: transparent;
+  background: var(--esic-success-tint);
+  color: var(--esic-green-800);
 }
 
 .panel--note {
-  background: var(--mat-sys-surface-variant, #e7e0ec);
-  color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.7));
+  background: var(--esic-surface-sunken);
 }
 
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--esic-space-3);
 }
 
 .confirm-panel {
-  border: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--esic-line);
 }
 
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--esic-space-3) var(--esic-space-4);
   align-items: center;
+
+  .mat-mdc-form-field {
+    width: auto;
+    min-width: 12rem;
+  }
 }
 
 .table-scroll {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -100,19 +113,21 @@ table {
 .chip {
   display: inline-block;
   padding: 0.15rem 0.6rem;
-  border-radius: 1rem;
-  background: var(--mat-sys-surface-variant, #e7e0ec);
-  font-size: 0.85rem;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-surface-sunken);
+  color: var(--esic-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .chip--error {
-  background: var(--mat-sys-error-container, #f9dedc);
-  color: var(--mat-sys-on-error-container, #410e0b);
+  background: var(--esic-danger-tint);
+  color: var(--esic-red-700);
 }
 
 .chip--warning {
-  background: var(--mat-sys-tertiary-container, #ffd8e4);
-  color: var(--mat-sys-on-tertiary-container, #31111d);
+  background: var(--esic-warning-tint);
+  color: var(--esic-amber-700);
 }
 
 .detail-row td {
@@ -120,22 +135,30 @@ table {
 }
 
 .issue-list {
-  margin: 0.5rem 0;
+  margin: var(--esic-space-2) 0;
+}
+
+// Ligne d'explication : que faire — ou pourquoi rien à faire — face à
+// une anomalie (Lot J).
+.issue-hint {
+  margin: var(--esic-space-2) 0 0;
+  color: var(--esic-ink-soft);
+  font-size: 0.875rem;
 }
 
 .row-correction {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.75rem;
-  margin-block: 0.75rem;
+  gap: var(--esic-space-3);
+  margin-block: var(--esic-space-3);
 }
 
 .row-correction__error {
   flex-basis: 100%;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
   margin: 0;
-  color: var(--mat-sys-error, #b3261e);
+  color: var(--esic-danger);
 }

@@ -1,6 +1,14 @@
+// Écran d'attente d'un module non encore livré. Aligné sur le système de
+// design ESIC (jetons `--esic-*`), comme le reste de la couche de présentation.
+
 .placeholder__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 1rem;
+  margin: 0 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .placeholder__card {
@@ -10,24 +18,26 @@
 .placeholder__content {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 1rem;
+  gap: var(--esic-space-3);
+  padding-top: var(--esic-space-4);
 }
 
 .placeholder__icon {
   width: 2.5rem;
   height: 2.5rem;
   font-size: 2.5rem;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--esic-ink-faint);
 }
 
 .placeholder__text {
-  font: var(--mat-sys-body-large);
   margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--esic-ink);
 }
 
 .placeholder__ref {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
   margin: 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-soft);
 }

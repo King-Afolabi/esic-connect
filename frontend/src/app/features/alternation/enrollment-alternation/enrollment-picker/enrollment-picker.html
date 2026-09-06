@@ -1,19 +1,23 @@
-<h1 class="alt__title">Exceptions individuelles de calendrier</h1>
-<p class="alt__intro">
-  Choisissez une inscription pour consulter et gérer ses exceptions (période en
-  entreprise, présence à l'école requise, suivi à distance autorisé, indisponibilité
-  validée).
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Exceptions individuelles de calendrier</h1>
+    <p class="esic-page-header__description">
+      Choisissez une inscription pour consulter et gérer ses exceptions (période en
+      entreprise, présence à l'école requise, suivi à distance autorisé, indisponibilité
+      validée).
+    </p>
+  </div>
+</header>
 
 <nav class="alt__tabs" aria-label="Alternance">
-  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active">Modèles</a>
-  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
-  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" aria-current="page">Exceptions par inscription</a>
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Exceptions par inscription</a>
 </nav>
 
 <section class="alt__section" aria-label="Rechercher une classe">
   <h2 class="alt__subtitle">1. Rechercher une classe</h2>
-  <form class="alt__filters" [formGroup]="classSearch" (ngSubmit)="searchClasses()">
+  <form class="alt__filters esic-filters" [formGroup]="classSearch" (ngSubmit)="searchClasses()">
     <mat-form-field appearance="outline" class="alt__form-field">
       <mat-label>Code ou nom de classe</mat-label>
       <input matInput type="search" formControlName="q" autocomplete="off" />
@@ -149,7 +153,7 @@
 
 <section class="alt__section" aria-label="Ouvrir une inscription par identifiant">
   <h2 class="alt__subtitle">Ouvrir une inscription par identifiant</h2>
-  <form class="alt__filters" [formGroup]="manualForm" (ngSubmit)="openManual()">
+  <form class="alt__filters esic-filters" [formGroup]="manualForm" (ngSubmit)="openManual()">
     <mat-form-field appearance="outline" class="alt__form-field">
       <mat-label>Identifiant public d'inscription</mat-label>
       <input matInput formControlName="enrollmentPublicId" autocomplete="off" />

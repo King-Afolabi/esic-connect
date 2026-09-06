@@ -1,11 +1,12 @@
 <app-skip-link />
-<main class="auth-page" id="main-content">
-  <section class="auth-page__card" aria-labelledby="mfa-title">
-    <header class="auth-page__header">
-      <h1 id="mfa-title" class="auth-page__title">
+<main class="esic-auth" id="main-content">
+  <section class="esic-auth__card" aria-labelledby="mfa-title">
+    <img class="esic-auth__brand" src="brand/logo-esic.png" alt="ESIC Connect" width="1472" height="700" />
+    <header class="esic-auth__header">
+      <h1 id="mfa-title" class="esic-auth__title">
         {{ mustEnroll() ? 'Ajoutez votre second facteur' : 'Vérification en deux étapes' }}
       </h1>
-      <p class="auth-page__subtitle">
+      <p class="esic-auth__subtitle">
         @if (mustEnroll()) {
           Vos rôles imposent un second facteur d'authentification. Enregistrez-le maintenant pour
           accéder à votre espace.
@@ -32,7 +33,7 @@
             <li><code>{{ code }}</code></li>
           }
         </ul>
-        <button mat-flat-button color="primary" type="button" class="auth-page__submit"
+        <button mat-flat-button color="primary" type="button" class="esic-auth__submit"
                 (click)="finish()">
           J'ai noté mes codes, continuer
         </button>
@@ -49,7 +50,7 @@
         </div>
       }
 
-      <form class="auth-page__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <form class="esic-auth__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <mat-form-field appearance="outline">
           <mat-label>Code de vérification</mat-label>
           <input
@@ -65,7 +66,7 @@
           }
         </mat-form-field>
 
-        <p class="auth-page__error" role="alert" aria-live="assertive">
+        <p class="esic-auth__error" role="alert" aria-live="assertive">
           @if (errorMessage()) {
             <mat-icon aria-hidden="true">error</mat-icon>
             <span>{{ errorMessage() }}</span>
@@ -76,14 +77,14 @@
           mat-flat-button
           color="primary"
           type="submit"
-          class="auth-page__submit"
+          class="esic-auth__submit"
           [disabled]="submitting()"
           [attr.aria-busy]="submitting()"
         >
           {{ submitting() ? 'Vérification…' : 'Valider' }}
         </button>
 
-        <button mat-button type="button" class="auth-page__link" (click)="cancel()">
+        <button mat-button type="button" class="esic-auth__link" (click)="cancel()">
           Annuler et revenir à la connexion
         </button>
       </form>

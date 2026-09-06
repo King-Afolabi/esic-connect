@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { Observable } from 'rxjs';
 
 import { NotificationService } from '../../../core/notifications/notification.service';
@@ -48,6 +48,7 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
+    RouterLinkActive,
     MatCardModule,
     MatTableModule,
     MatPaginatorModule,
@@ -105,9 +106,29 @@ export class PlanningImportReview {
   protected readonly correctionError = signal<string | null>(null);
   protected readonly correcting = signal(false);
 
+  /**
+   * Ligne actuellement éditée (Lot K) : l'éditeur est un panneau pleine
+   * largeur SOUS le tableau, plus une cellule étroite qui débordait sous
+   * la ligne du dessus.
+   */
+  protected readonly editingCorrectionRow = computed<PlanningRowResponse | null>(() => {
+    const id = this.editingRow();
+    if (!id) {
+      return null;
+    }
+    const current = this.rowsState();
+    return current.kind === 'ready'
+      ? (current.page.content.find((r) => r.publicId === id) ?? null)
+      : null;
+  });
+
+  /** Bouton « Corriger » à l'origine de l'édition — le focus y revient à la fermeture. */
+  private correctionTrigger: HTMLElement | null = null;
+
   /** Ouvre l'édition d'une ligne, préremplie de ses valeurs actuelles. */
-  protected startCorrection(row: PlanningRowResponse): void {
+  protected startCorrection(row: PlanningRowResponse, event?: Event): void {
     this.correctionError.set(null);
+    this.correctionTrigger = (event?.currentTarget as HTMLElement) ?? null;
     this.editingRow.set(row.publicId);
     this.correctionValues.set({
       session_date: row.sessionDate ?? '',
@@ -117,12 +138,18 @@ export class PlanningImportReview {
       room_code: row.roomCode ?? '',
       teacher_public_id: row.teacherPublicId ?? '',
     });
+    // Déplace le focus dans le premier champ une fois le panneau rendu.
+    queueMicrotask(() =>
+      document.querySelector<HTMLInputElement>('.plan__correction .plan__correction-grid input')?.focus(),
+    );
   }
 
   protected cancelCorrection(): void {
     this.editingRow.set(null);
     this.correctionValues.set({});
     this.correctionError.set(null);
+    this.correctionTrigger?.focus?.();
+    this.correctionTrigger = null;
   }
 
   protected onCorrectionInput(field: string, event: Event): void {

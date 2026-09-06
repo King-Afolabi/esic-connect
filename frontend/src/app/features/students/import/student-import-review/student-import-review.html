@@ -1,7 +1,12 @@
 <section class="page">
-  <header class="page__header">
-    <h1>Revue d'un import</h1>
-    <a mat-stroked-button routerLink="/students/import">← Retour à la liste des imports</a>
+  <a class="esic-back" routerLink="/students/import">
+    <mat-icon aria-hidden="true">arrow_back</mat-icon>
+    <span>Retour aux imports</span>
+  </a>
+  <header class="esic-page-header">
+    <div class="esic-page-header__text">
+      <h1 class="esic-page-header__title">Revue d'un import</h1>
+    </div>
   </header>
 
   @switch (jobState().kind) {
@@ -32,24 +37,66 @@
           <div class="card"><span class="card__value">{{ j.summary.plannedUpdate }}</span><span>À mettre à jour</span></div>
           <div class="card"><span class="card__value">{{ j.summary.plannedTransfer }}</span><span>À transférer</span></div>
           <div class="card"><span class="card__value">{{ j.summary.plannedNoop }}</span><span>Sans changement</span></div>
-          <div class="card card--warn"><span class="card__value">{{ j.summary.warning }}</span><span>Avertissements</span></div>
-          <div class="card card--error"><span class="card__value">{{ j.summary.error }}</span><span>Erreurs</span></div>
+          <!--
+            Ces trois compteurs mesurent des choses distinctes, d'où les
+            libellés explicites (Lot J) : « avertissement » et « erreur »
+            comptent des LIGNES (au plus fort de leurs anomalies) ;
+            « bloquante » compte des anomalies de FICHIER, celles qui
+            interdisent la confirmation.
+          -->
+          <div class="card card--warn"><span class="card__value">{{ j.summary.warning }}</span><span>Lignes en avertissement</span></div>
+          <div class="card card--error"><span class="card__value">{{ j.summary.error }}</span><span>Lignes en erreur</span></div>
+          @if (j.summary.blocking > 0) {
+            <div class="card card--error"><span class="card__value">{{ j.summary.blocking }}</span><span>Anomalies bloquantes</span></div>
+          }
         </div>
 
-        @if (j.issues.length > 0) {
-          <div class="panel panel--warn" role="note">
-            <strong>Anomalies globales</strong>
+        @if (hasNoAnomaly()) {
+          <p class="panel panel--ok" role="status">
+            Aucune anomalie détectée. Les {{ j.summary.total }} ligne(s) sont exploitables ;
+            l'import peut être confirmé.
+          </p>
+        }
+
+        @if (blockingIssues().length > 0) {
+          <div class="panel panel--error" role="alert">
+            <strong>Anomalies bloquantes — la confirmation est impossible tant qu'elles subsistent</strong>
             <ul>
-              @for (issue of j.issues; track issue.code + issue.message) {
-                <li>[{{ severityLabel(issue.severity) }}] {{ issue.message }}</li>
+              @for (issue of blockingIssues(); track issue.code + issue.message) {
+                <li>
+                  <strong>[{{ severityLabel(issue.severity) }}]</strong>
+                  @if (issue.columnName) { <em>{{ issue.columnName }}</em> — }
+                  {{ issue.message }}
+                </li>
               }
             </ul>
+            <p class="issue-hint">
+              Ces anomalies portent sur le fichier lui-même : elles se corrigent dans le fichier
+              source, puis en relançant un import — pas ligne à ligne.
+            </p>
           </div>
         }
 
-        @if (!confirmable() && j.status === 'SIMULATED') {
+        @if (nonBlockingGlobalIssues().length > 0) {
+          <div class="panel panel--warn" role="note">
+            <strong>Anomalies globales non bloquantes</strong>
+            <ul>
+              @for (issue of nonBlockingGlobalIssues(); track issue.code + issue.message) {
+                <li>
+                  <strong>[{{ severityLabel(issue.severity) }}]</strong>
+                  @if (issue.columnName) { <em>{{ issue.columnName }}</em> — }
+                  {{ issue.message }}
+                </li>
+              }
+            </ul>
+            <p class="issue-hint">L'import reste confirmable ; ces points sont signalés à titre d'information.</p>
+          </div>
+        }
+
+        @if (!confirmable() && j.status === 'SIMULATED' && blockingIssues().length === 0) {
           <p class="panel panel--note" role="note">
-            Cette simulation n'est pas confirmable en l'état : corrigez le fichier et relancez un import.
+            Cette simulation n'est pas confirmable :
+            {{ j.summary.error }} ligne(s) en erreur restent à corriger ci-dessous, ou relancez un import.
           </p>
         }
 
@@ -122,6 +169,11 @@
 
   <!-- Table des lignes -->
   <h2>Lignes</h2>
+
+  @if (correctionOutcome(); as outcome) {
+    <p class="panel panel--ok" role="status">{{ outcome }}</p>
+  }
+
   <form class="filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
     <mat-form-field appearance="outline">
       <mat-label>Statut de ligne</mat-label>
@@ -230,6 +282,14 @@
                     </li>
                   }
                 </ul>
+                <p class="issue-hint">
+                  @if (row.rowStatus === 'ERROR') {
+                    Cette ligne ne sera pas appliquée tant qu'une erreur subsiste
+                    @if (canWrite() && job()?.status === 'SIMULATED') { — corrigez-la ci-dessous }.
+                  } @else {
+                    Anomalies non bloquantes : la ligne sera appliquée telle quelle.
+                  }
+                </p>
 
                 <!--
                   Correction sur place (EF-IMP-006, docs/02 §13.6) :

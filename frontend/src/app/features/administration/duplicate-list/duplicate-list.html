@@ -1,14 +1,18 @@
-<a mat-button routerLink="/administration" class="duplicates__back">
+<a class="esic-back" routerLink="/administration">
   <mat-icon aria-hidden="true">arrow_back</mat-icon>
-  Retour aux comptes
+  <span>Retour aux comptes</span>
 </a>
 
-<h1 class="duplicates__title">Doublons détectés</h1>
-<p class="duplicates__intro">
-  Comptes rapprochés par nom complet normalisé (accents et casse neutralisés) ou par numéro de
-  téléphone. Ceci est un <strong>signalement</strong> : aucune fusion ni suppression n'est proposée
-  ici — consultez chaque fiche pour décider (docs/02 §9.5).
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Doublons détectés</h1>
+    <p class="esic-page-header__description">
+      Comptes rapprochés par nom complet normalisé (accents et casse neutralisés) ou par numéro de
+      téléphone. Ceci est un <strong>signalement</strong> : aucune fusion ni suppression n'est proposée
+      ici — consultez chaque fiche pour décider (docs/02 §9.5).
+    </p>
+  </div>
+</header>
 
 @if (state().kind === 'loading') {
   <mat-progress-bar mode="indeterminate" aria-label="Chargement des doublons"></mat-progress-bar>
@@ -55,7 +59,7 @@
                 <tr>
                   <td>{{ candidate.email }}</td>
                   <td>{{ candidate.firstName }} {{ candidate.lastName }}</td>
-                  <td>{{ statusLabel(candidate.status) }}</td>
+                  <td><span class="esic-badge" [attr.data-status]="candidate.status">{{ statusLabel(candidate.status) }}</span></td>
                   <td>{{ candidate.createdAt | date: 'dd/MM/yyyy' }}</td>
                   <td>
                     <a

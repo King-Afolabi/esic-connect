@@ -1,76 +1,100 @@
+// Aligné sur le système de design ESIC (jetons `--esic-*`, primitives).
+
 .academic__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .academic__subtitle {
-  font: var(--mat-sys-title-large);
-  margin: 1.5rem 0 1rem;
+  margin: var(--esic-space-6) 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
 }
 
+// Navigation à onglets de section (formations / niveaux / promotions…).
 .academic__tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
-  padding-bottom: 0.5rem;
+  gap: var(--esic-space-2) var(--esic-space-5);
+  border-bottom: 1px solid var(--esic-line);
+  padding-bottom: var(--esic-space-2);
 }
 
 .academic__tabs a {
-  font: var(--mat-sys-label-large);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--esic-ink-soft);
   text-decoration: none;
-  padding: 0.25rem 0.25rem 0.5rem;
+  padding: var(--esic-space-2) 0;
   border-bottom: 2px solid transparent;
 }
 
 .academic__tabs a:hover {
-  color: var(--mat-sys-on-surface);
+  color: var(--esic-ink);
+  border-bottom-color: var(--esic-line-strong);
+}
+
+.academic__tabs a:focus-visible {
+  outline: 2px solid var(--esic-focus-ring);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 .academic__tab--active {
-  color: var(--mat-sys-primary);
-  border-bottom-color: var(--mat-sys-primary);
+  color: var(--esic-blue-700);
+  border-bottom-color: var(--esic-blue-700);
 }
 
-.academic__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.academic__filter {
-  min-width: 14rem;
-}
-
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`).
 .academic__filter-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
+  gap: var(--esic-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
 }
 
 .academic__status {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 1rem 0;
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
 }
 
 .academic__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
 .academic__table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table[mat-table] {

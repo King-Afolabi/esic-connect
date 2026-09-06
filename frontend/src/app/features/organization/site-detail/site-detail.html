@@ -1,6 +1,7 @@
-<nav class="org__tabs" aria-label="Référentiel organisationnel">
-  <a routerLink="/organization/sites" routerLinkActive="org__tab--active">Sites</a>
-</nav>
+<a class="esic-back" routerLink="/organization/sites">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux sites</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
@@ -29,7 +30,11 @@
     </div>
   }
   @case ('ready') {
-    <h1 class="org__title">Site {{ site()!.code }}</h1>
+    <header class="esic-page-header">
+      <div class="esic-page-header__text">
+        <h1 class="esic-page-header__title">Site {{ site()!.code }}</h1>
+      </div>
+    </header>
 
     <mat-card class="org__card" appearance="outlined">
       <mat-card-content>
@@ -62,9 +67,9 @@
       </div>
 
       @if (pendingSite(); as action) {
-        <div class="org__confirm" role="group" [attr.aria-label]="action.kind === 'archive' ? 'Archiver le site' : 'Restaurer le site'">
+        <div class="esic-reveal" [class.esic-reveal--danger]="action.kind === 'archive'" role="group" [attr.aria-label]="action.kind === 'archive' ? 'Archiver le site' : 'Restaurer le site'">
           @if (action.kind === 'archive') {
-            <p>Le site sera archivé. Les bâtiments et salles actifs doivent être archivés au préalable.</p>
+            <p class="esic-reveal__text">Le site sera archivé. Les bâtiments et salles actifs doivent être archivés au préalable.</p>
             <mat-form-field appearance="outline" class="org__confirm-field">
               <mat-label>Motif</mat-label>
               <input
@@ -78,12 +83,12 @@
               }
             </mat-form-field>
           } @else {
-            <p>Le site sera de nouveau actif.</p>
+            <p class="esic-reveal__text">Le site sera de nouveau actif.</p>
           }
           @if (actionError()) {
-            <p class="org__form-error" role="alert">{{ actionError() }}</p>
+            <p class="esic-reveal__error" role="alert">{{ actionError() }}</p>
           }
-          <div class="org__form-actions">
+          <div class="esic-reveal__actions">
             <button mat-flat-button type="button" (click)="confirmSiteAction()" [disabled]="submitting()">
               {{ action.kind === 'archive' ? 'Archiver' : 'Restaurer' }}
             </button>
@@ -153,7 +158,7 @@
               </ng-container>
               <ng-container matColumnDef="status">
                 <th mat-header-cell *matHeaderCellDef>Statut</th>
-                <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+                <td mat-cell *matCellDef="let row"><span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span></td>
               </ng-container>
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef><span class="org__sr-only">Actions</span></th>
@@ -265,7 +270,7 @@
               </ng-container>
               <ng-container matColumnDef="status">
                 <th mat-header-cell *matHeaderCellDef>Statut</th>
-                <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+                <td mat-cell *matCellDef="let row"><span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span></td>
               </ng-container>
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef><span class="org__sr-only">Actions</span></th>

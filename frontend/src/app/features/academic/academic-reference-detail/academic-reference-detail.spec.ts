@@ -246,6 +246,25 @@ describe('AcademicReferenceDetail', () => {
     http.verify();
   });
 
+  it('marks the current section tab as active, with aria-current, on a detail route (Lot F)', async () => {
+    const { harness, http, oneReq } = await setup('class-groups');
+    oneReq(`/api/v1/class-groups/${ID}`).flush({ ...CLASS_GROUP, publicId: ID });
+    harness.detectChanges();
+
+    const tabLinks = Array.from(
+      harness.routeNativeElement?.querySelectorAll('nav.academic__tabs a') ?? [],
+    ) as HTMLAnchorElement[];
+    const active = tabLinks.filter((a) => a.classList.contains('academic__tab--active'));
+    expect(active).toHaveLength(1);
+    expect(active[0].textContent?.trim()).toBe('Classes');
+    expect(active[0].getAttribute('aria-current')).toBe('page');
+    // Les autres onglets ne portent ni la classe active ni aria-current.
+    for (const link of tabLinks.filter((a) => a !== active[0])) {
+      expect(link.getAttribute('aria-current')).toBeNull();
+    }
+    http.verify();
+  });
+
   it('writes nothing to browser storage', async () => {
     const { harness, http, oneReq } = await setup('programs');
     oneReq(`/api/v1/programs/${ID}`).flush(PROGRAM);

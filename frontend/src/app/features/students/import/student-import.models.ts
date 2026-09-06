@@ -147,6 +147,17 @@ export const ROW_STATUSES: readonly RowStatus[] = ['VALID', 'WARNING', 'ERROR'];
 
 export const ISSUE_SEVERITIES: readonly IssueSeverity[] = ['INFO', 'WARNING', 'ERROR', 'BLOCKING'];
 
+/**
+ * Gravités qu'une anomalie de **ligne** peut réellement porter. Le
+ * back-end ne construit les anomalies de ligne qu'en `INFO` / `WARNING` /
+ * `ERROR` (`StudentImportIssueDrafts`) ; `BLOCKING` est structurellement
+ * une anomalie de **fichier** (globale, `JobResponse.issues`), jamais de
+ * ligne. Proposer `BLOCKING` dans le filtre de gravité des lignes
+ * renverrait toujours zéro résultat et laisserait croire à l'absence
+ * d'anomalie bloquante (Lot J — plus d'état trompeur).
+ */
+export const ROW_ISSUE_SEVERITIES: readonly IssueSeverity[] = ['INFO', 'WARNING', 'ERROR'];
+
 export const PLANNED_ACTIONS: readonly PlannedAction[] = [
   'CREATE_ACCOUNT_AND_ENROLL',
   'ENROLL_EXISTING',

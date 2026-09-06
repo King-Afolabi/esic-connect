@@ -1,6 +1,7 @@
-<nav class="sessions__crumbs" aria-label="Fil d'Ariane">
-  <a routerLink="/sessions">← Retour à la liste des séances</a>
-</nav>
+<a class="esic-back" routerLink="/sessions">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux séances</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
@@ -39,10 +40,12 @@
           Vos droits de gestion sont révoqués à la fin de cette période.
         </p>
       }
-      <div class="sessions__header">
-        <h1 class="sessions__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
+        </div>
         @if (canManageCheckpoint()) {
-          <div class="sessions__form-actions">
+          <div class="esic-page-header__actions">
             @if (isPlanned()) {
               <button mat-flat-button type="button" (click)="startOpen()">Ouvrir la séance</button>
             }
@@ -56,7 +59,7 @@
             }
           </div>
         }
-      </div>
+      </header>
 
       <mat-card appearance="outlined" class="sessions__card">
         <mat-card-content>
@@ -337,6 +340,13 @@
               </mat-select>
             </mat-form-field>
 
+            @if (multipleCheckpointsOpen()) {
+              <p class="sessions__status" role="status">
+                Un seul point de contrôle accepte les émargements à la fois. Afficher un code pour
+                un autre point de contrôle ferme immédiatement celui en cours.
+              </p>
+            }
+
             @if (tokenError()) {
               <div class="sessions__panel" role="alert">
                 <mat-icon aria-hidden="true">error_outline</mat-icon>
@@ -351,6 +361,9 @@
               <div class="sessions__qr">
                 <app-qr-display [value]="attendanceToken()!.token"></app-qr-display>
                 <div class="sessions__qr-meta">
+                  <p class="sessions__meta">
+                    Émargement actif : « {{ selectedCheckpoint()?.label }} »
+                  </p>
                   <p class="sessions__meta">Code court</p>
                   <p class="sessions__code" aria-label="Code court d'émargement">{{ attendanceToken()!.shortCode }}</p>
                   <p class="sessions__meta">Expire le {{ formatInstantUtc(attendanceToken()!.expiresAt) }}</p>

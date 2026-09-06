@@ -1,0 +1,22 @@
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Suivi d'assiduité</h1>
+  </div>
+</header>
+
+<nav class="esic-subnav" aria-label="Vues du suivi d'assiduité">
+  <div class="esic-subnav__list">
+    @for (view of views; track view) {
+      <a
+        class="esic-subnav__link"
+        [routerLink]="view"
+        [class.esic-subnav__link--active]="activeView() === view"
+        [attr.aria-current]="activeView() === view ? 'page' : null"
+      >
+        {{ label[view] }}
+      </a>
+    }
+  </div>
+</nav>
+
+<router-outlet />

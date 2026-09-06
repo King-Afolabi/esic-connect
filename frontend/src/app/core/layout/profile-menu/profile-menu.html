@@ -1,0 +1,42 @@
+<button
+  type="button"
+  mat-button
+  class="profile-menu__trigger"
+  [matMenuTriggerFor]="menu"
+  aria-haspopup="menu"
+  [attr.aria-label]="'Profil — ' + (email() ?? 'compte connecté')"
+>
+  <span class="profile-menu__avatar" aria-hidden="true">
+    <mat-icon>person</mat-icon>
+  </span>
+  <span class="profile-menu__name">{{ shortName() }}</span>
+  <mat-icon aria-hidden="true" class="profile-menu__caret">arrow_drop_down</mat-icon>
+</button>
+
+<mat-menu #menu="matMenu" class="profile-menu__panel" aria-label="Profil du compte">
+  <div class="profile-menu__body">
+    <dl class="profile-menu__facts">
+      @if (email(); as address) {
+        <dt>Adresse</dt>
+        <dd>{{ address }}</dd>
+      }
+      @if (roles().length) {
+        <dt>{{ roles().length > 1 ? 'Rôles' : 'Rôle' }}</dt>
+        <dd class="profile-menu__roles">
+          @for (role of roles(); track role) {
+            <span class="esic-badge">{{ roleLabel(role) }}</span>
+          }
+        </dd>
+      }
+      @if (contextLabel(); as label) {
+        <dt>Contexte actif</dt>
+        <dd>{{ label }}</dd>
+      }
+    </dl>
+  </div>
+
+  <a mat-menu-item [routerLink]="securityLink">
+    <mat-icon aria-hidden="true">shield_person</mat-icon>
+    <span>Sécurité du compte</span>
+  </a>
+</mat-menu>

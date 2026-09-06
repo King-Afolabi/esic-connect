@@ -931,6 +931,76 @@ La PWA doit permettre :
 Les présences hors connexion ne doivent pas être définitivement validées
 avant une vérification serveur.
 
+## 9.7 Système de design
+
+Refonte visuelle et UX menée sur la branche
+`feat/ui-redesign-bootstrap-material` (base `feat/demo-readiness-e2e-ui`).
+**Aucune règle métier, aucun contrôleur, aucune migration touchés** :
+c'est une refonte de la couche de présentation. L'état d'avancement
+détaillé, étape par étape, est dans `docs/CURRENT-STATE.md`.
+
+**Résultat mesurable** : plus **aucune** référence `--mat-sys-*` directe
+ni couleur en dur (`#rrggbb`, `rgb(0 0 0 / …)`) dans
+`src/app/**/*.scss` hors fichiers de jetons — toute la couche de
+présentation dérive du système de design ESIC.
+
+**Identité** : `src/styles/_tokens.scss` est le **point unique** des
+couleurs (vert `#1F7A4C` / bleu `#134E9C` / ambre / neutres), espacements
+(`--esic-space-1..8`), rayons, ombres (deux niveaux), et de la
+correspondance **statut d'assiduité → couleur**, exposés en variables CSS
+`--esic-*`. Reteinter le produit = modifier le bloc « Marque » de ce
+fichier, rien d'autre.
+
+**Trois briques combinées, sans mélange anarchique** :
+
+| Brique | Rôle | Ne fait pas |
+|---|---|---|
+| Angular Material (M3) | tous les composants interactifs (menus, champs, sidenav, tableaux, dates, bandeaux transitoires). Reteinté par `mat.theme()` depuis une palette M3 générée à partir des couleurs ESIC (`_esic-palette.scss`), puis réalignement des jetons système (`--mat-sys-*`, `--mat-button-*`) sur l'échelle ESIC dans `styles.scss` et `_material-overrides.scss`. **Aucune fenêtre modale** (`MatDialog` n'est utilisé nulle part). | — |
+| Bootstrap 5 (SCSS, **sans JavaScript**) | grille 12 colonnes, conteneurs, utilitaires responsive triés (affichage, flex, espacement, alignement, gap). Variables réécrites sur l'échelle ESIC. | aucun composant (`.btn`, `.card`, `.alert`, `.badge`, `.form-control`… exclus), aucune couleur / bordure / typo / ombre Bootstrap |
+| Primitives ESIC (`_primitives.scss`) | présentiel non-Material — voir le catalogue ci-dessous. | — |
+
+**Catalogue des primitives** (`_primitives.scss`, toutes préfixées
+`.esic-`) :
+
+| Primitive | Rôle |
+|---|---|
+| `page-header` (`__text`/`__title`/`__description`/`__actions`) | en-tête de page unique : titre serif, filet de base, action primaire à droite |
+| `back` | lien de retour unique du produit (icône `arrow_back`, jamais un glyphe « ← »), placé avant l'en-tête |
+| `card` (+`--raised`/`--flush`), `card-grid` | surface de contenu plate ; grille de cartes `auto-fill` |
+| `status` (`--present/late/absent/excused/company/pending`) | **pastille d'assiduité** — langage visuel signature : point + libellé, la couleur ne porte jamais seule l'information |
+| `badge` + `badge[data-status]` | étiquette de cycle de vie ; `[data-status]` fait la correspondance **≈40 statuts métier → 5 tonalités** en un seul endroit (le gabarit ne pose que la valeur brute) |
+| `table-wrap` + `table` | enveloppe à défilement horizontal **contenu** (jamais le `<body>`) + table de données |
+| `kv` | liste clé/valeur, bascule en une colonne via `@container` |
+| `filters` (+`__actions`) | barre de recherche / filtres au-dessus d'une liste |
+| `form` (+`--wide`, `__grid`, `__row`, `__group`, `__hint`, `__required-note`, `__error`, `__actions`) | formulaire de saisie : colonne bornée, grappe de champs courts, groupe `<fieldset>`, pied à filet, erreur de **soumission** (distincte de `mat-error`) |
+| `reveal` (+`--danger`, `__title`, `__text`, `__actions`, `__error`) | **dialogue en ligne** : confirmation ou saisie contextuelle ouverte en creux dans le flux de la page, jamais en superposition — d'où l'absence de tout problème de `z-index` ou de piège de focus |
+| `note` (+`--danger`/`--warning`), `section` (`__head`/`__title`), `empty`, `actions-row` | encart d'état ; sous-section titrée ; état « aucune donnée » ; rangée d'actions |
+
+**Assemblage** (`src/styles.scss`) : palette générée → `mat.theme()` →
+jetons ESIC → pont Bootstrap → primitives → styles d'authentification
+(`_auth.scss`) → réalignement Material (`_material-overrides.scss`) → bloc
+`html{}` de réalignement des `--mat-sys-*` (après `mat.theme()`, pour
+gagner la cascade) → styles d'éléments de base.
+
+**Coquille applicative** (`core/layout/app-shell`) : barre supérieure fine
++ rail de navigation repliable (préférence mémorisée par appareil).
+`.shell__main` est un **conteneur** (`container-type: inline-size`) : les
+requêtes `@container` des primitives se calent sur la largeur réelle de la
+colonne de contenu, pas sur la fenêtre. Adaptatif par **largeur et
+orientation** — jamais par modèle d'appareil : compaction < 1100 px,
+< 640 px, < 22rem (pliable replié), et `orientation: landscape` +
+`max-height` (téléphone couché).
+
+**Typographie** : IBM Plex Sans (interface, corps, chiffres tabulaires
+des registres) ; IBM Plex Serif (titres de page, documents officiels —
+attestations, en-têtes de rapport) ; IBM Plex Mono (codes courts).
+
+**Marque** : le logo ESIC réel est `frontend/public/brand/logo-esic.png`
+(mot-symbole complet, écrans d'authentification). Le favicon, les icônes
+PWA (`any` + `maskable`), l'`apple-touch-icon` et le monogramme du
+bandeau (`brand/mark-esic.png`) sont **le « E » de ce logo, recadré sans
+déformation ni recoloration** — jamais un logo inventé ni redessiné.
+
 ---
 
 # 10. Communication API
@@ -2893,6 +2963,52 @@ conformité.
 **Limite assumée.** Aucun service de poussée réel n'a été sollicité :
 sans paire de clés VAPID, `InactiveWebPushSender` répond, et l'API
 **déclare** `providerActive: false` plutôt que de simuler un envoi.
+
+### DEC-D01 — Points de contrôle indépendants + jeton d'autorité unique (statu quo)
+
+**Contexte.** docs/02 §16.2–16.5 ; `EF-ATT-003`, `EF-ATT-004` ; RG-054,
+RG-055. Un mandat a envisagé d'imposer côté serveur l'exclusivité stricte
+et l'ordre des fenêtres d'émargement (arrivée fermée avant un
+intermédiaire, `END` interdit tant qu'un autre point est `OPEN`). Le
+cahier est **silencieux** sur cet ordre et décrit des fenêtres
+indépendantes.
+
+**Décision (porteur, 6 septembre 2026 — option 1).** Statu quo. Chaque
+point de contrôle garde son cycle de vie propre
+(`PLANNED → OPEN → CLOSED` / `CANCELLED`) ; plusieurs points peuvent être
+`OPEN` simultanément ; l'exclusion mutuelle réelle est portée par le
+**jeton d'émargement**, pas par le statut. `AttendanceTokenService` ne
+tient qu'un pointeur d'autorité par séance
+(`esic:attendance:session:{id} → token\ncode\ncheckpointId`) : émettre un
+jeton pour un autre point de contrôle invalide immédiatement le
+précédent. L'incohérence de séquence reste traitée après coup par le
+calcul journalier (`PARTIAL` / `TO_CONFIRM`).
+
+**Conséquences.**
+
+- **Aucune ouverture automatique** liée à l'horloge. Seul le premier
+  point (`START`) s'ouvre quand le formateur ouvre la séance
+  (`CourseSessionService.open()`) ; les autres s'ouvrent un par un
+  (`AttendanceCheckpointService.open()`, séance `OPEN` + point
+  `PLANNED`, sans contrôle des autres points).
+- **Aucune fermeture automatique** du statut. `close()` est manuel ; la
+  fermeture de la séance ferme les points encore `OPEN`. Aucun
+  `@Scheduled` ne balaie les fenêtres.
+- Durées réelles : `app.attendance.token-ttl` = `PT30S` (QR dynamique +
+  code court, renouvelés à chaque émission) ; `app.attendance.room-qr-open-before`
+  = `PT15M` (le QR **fixe de salle** n'est accepté que de `début − 15 min`
+  au début, refus strict après le début).
+- **`OPEN` ≠ « accepte les émargements ».** Un point `OPEN` dont le jeton
+  a expiré n'accepte plus rien par QR dynamique / code court ; il faut
+  ré-émettre (ce qui fait tourner l'autorité).
+- Un jeton expiré est refusé (`resolve()` → vide) ; Redis indisponible →
+  `503`, jamais d'acceptation dégradée.
+
+**Ce qui n'a pas été fait, et pourquoi.** Les options 2 (garde sur `END`)
+et 3 (ordre strict complet) casseraient des tests d'intégration verts
+(`DailyAttendanceIntegrationTests`, `AttendanceIntegrationTests`) et le
+modèle demi-journée du cahier §16.3. Aucune fermeture automatique n'a été
+inventée sans spécification. Trace complète : `DECISIONS_NEEDED.md` D-01.
 
 
 ## ADR à rédiger

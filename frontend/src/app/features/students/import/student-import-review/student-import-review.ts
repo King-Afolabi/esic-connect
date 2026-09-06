@@ -18,12 +18,13 @@ import { StudentImportApiService } from '../student-import-api.service';
 import { toStudentImportError } from '../student-import-errors';
 import {
   ConfirmationResultResponse,
-  ISSUE_SEVERITIES,
   IssueSeverity,
+  JobIssueResponse,
   JobResponse,
   PLANNED_ACTIONS,
   PageResponse,
   PlannedAction,
+  ROW_ISSUE_SEVERITIES,
   ROW_STATUSES,
   RowResponse,
   RowStatus,
@@ -94,7 +95,9 @@ export class StudentImportReview {
   private readonly publicId = inject(ActivatedRoute).snapshot.paramMap.get('publicId') ?? '';
 
   protected readonly rowStatuses = ROW_STATUSES;
-  protected readonly severities = ISSUE_SEVERITIES;
+  // `BLOCKING` exclu : c'est une gravité d'anomalie de fichier, jamais de
+  // ligne — la proposer renverrait toujours zéro ligne (Lot J).
+  protected readonly severities = ROW_ISSUE_SEVERITIES;
   protected readonly plannedActions = PLANNED_ACTIONS;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   protected readonly plannedActionLabel = plannedActionLabel;
@@ -168,6 +171,39 @@ export class StudentImportReview {
     const j = this.job();
     return !!j && j.status === 'SIMULATED' && j.confirmable && this.confirmState().kind !== 'stale';
   });
+
+  /**
+   * Anomalies globales (au fichier), séparées selon qu'elles **bloquent**
+   * la confirmation (`BLOCKING`) ou non. Le back-end n'attache jamais de
+   * gravité `BLOCKING` à une ligne : elle relève toujours du fichier
+   * (`JobResponse.issues`).
+   */
+  protected readonly blockingIssues = computed<JobIssueResponse[]>(
+    () => this.job()?.issues.filter((issue) => issue.severity === 'BLOCKING') ?? [],
+  );
+  protected readonly nonBlockingGlobalIssues = computed<JobIssueResponse[]>(
+    () => this.job()?.issues.filter((issue) => issue.severity !== 'BLOCKING') ?? [],
+  );
+
+  /**
+   * Vrai quand la simulation ne porte **aucune** anomalie — ni de ligne,
+   * ni de fichier. Sert à afficher une affirmation explicite plutôt que
+   * de laisser l'utilisateur déduire « rien » d'une grille de zéros
+   * (Lot J — « message quand aucune anomalie n'existe »).
+   */
+  protected readonly hasNoAnomaly = computed(() => {
+    const j = this.job();
+    return (
+      !!j &&
+      j.summary.warning === 0 &&
+      j.summary.error === 0 &&
+      j.summary.blocking === 0 &&
+      j.issues.length === 0
+    );
+  });
+
+  /** Message transitoire affiché après une correction de ligne réussie. */
+  protected readonly correctionOutcome = signal<string | null>(null);
 
   constructor() {
     this.loadJob();
@@ -280,6 +316,7 @@ export class StudentImportReview {
   /** Ouvre l'édition d'une ligne, préremplie de ses valeurs actuelles. */
   protected startCorrection(row: RowResponse): void {
     this.correctionError.set(null);
+    this.correctionOutcome.set(null);
     this.editingRow.set(row.publicId);
     this.correctionValues.set({
       last_name: row.lastName ?? '',
@@ -318,8 +355,13 @@ export class StudentImportReview {
       next: () => {
         this.correcting.set(false);
         this.cancelCorrection();
+        // Le serveur rejoue toute la validation : on recharge la synthèse
+        // ET les lignes, jamais un état local recalculé (qui divergerait).
         this.loadJob();
         this.loadRows();
+        this.correctionOutcome.set(
+          `Ligne ${row.rowNumber} corrigée — synthèse et anomalies réévaluées.`,
+        );
       },
       error: (error: unknown) => {
         this.correcting.set(false);

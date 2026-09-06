@@ -19,12 +19,25 @@ name: esic-connect
 #   docker compose -f compose.prod.yaml exec backend true   # (aucune action, juste pour vérifier)
 #   API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD=... ESIC_DEMO_TOTP_SECRET=... \
 #     bash scripts/seed-demo.sh
+#
+# Exploitation (installation, mise à jour, rollback, sauvegarde,
+# restauration) : docs/deployment/RASPBERRY-PI.md.
+
+# Rotation des journaux : indispensable sur la carte SD d'une Raspberry
+# Pi — sans quoi le pilote json-file de Docker grossit sans limite. 3
+# fichiers de 10 Mo par conteneur au maximum.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   mysql:
     image: mysql:8.4
     container_name: esic-connect-mysql
     restart: unless-stopped
+    logging: *default-logging
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -52,6 +65,7 @@ services:
     image: redis:7.4-alpine
     container_name: esic-connect-redis
     restart: unless-stopped
+    logging: *default-logging
     command:
       - redis-server
       - --requirepass
@@ -84,6 +98,7 @@ services:
       dockerfile: Dockerfile
     container_name: esic-connect-backend
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       mysql:
         condition: service_healthy
@@ -140,9 +155,18 @@ services:
       dockerfile: Dockerfile
     container_name: esic-connect-frontend
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://localhost:80/ > /dev/null || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - backend-network
 
@@ -165,6 +189,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: esic-connect-cloudflared
     restart: unless-stopped
+    logging: *default-logging
     command: tunnel --no-autoupdate --url http://frontend:80
     depends_on:
       frontend:

@@ -1,0 +1,3 @@
+last_name,first_name,email,formation_code,class_code,academic_year,student_number,birth_date,work_study,company_name
+Test,Alice,fx.alice@example.test,BTS-SIO,BTS-SIO-1,AY-2026,FX-001,2005-03-04,true,Atos
+Test,Bruno,fx.bruno@example.test,BTS-SIO,BTS-SIO-1,AY-2026,FX-002,2005-06-11,false,
