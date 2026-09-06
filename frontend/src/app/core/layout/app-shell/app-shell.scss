@@ -207,8 +207,12 @@
     padding: 0 var(--esic-space-3);
   }
 
+  // Le panneau « Profil » reste joignable sur mobile : le déclencheur se
+  // réduit à sa pastille (le nom court et le chevron sont masqués par
+  // `profile-menu.scss`), le filet de séparation disparaît.
   .shell__identity {
-    display: none;
+    padding-right: 0;
+    border-right: 0;
   }
 }
 
