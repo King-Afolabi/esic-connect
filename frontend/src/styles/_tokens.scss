@@ -129,7 +129,8 @@
   // Gabarits
   // ---------------------------------------------------------------------------
   --esic-content-max: 76rem; // largeur maximale du contenu
-  --esic-rail-width: 16rem; // rail de navigation (desktop)
+  --esic-rail-width: 16rem; // rail de navigation (desktop, déplié)
+  --esic-rail-width-collapsed: 3.5rem; // rail replié en bande d'icônes
   --esic-tap-min: 44px; // cible tactile minimale (WCAG 2.5.5)
   --esic-topbar-height: 3.75rem;
 

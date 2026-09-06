@@ -1,10 +1,11 @@
 <app-skip-link />
 
 <div class="shell">
-  <mat-sidenav-container class="shell__container">
+  <mat-sidenav-container class="shell__container" [autosize]="!isHandset()">
     <mat-sidenav
       #sidenav
       class="shell__rail"
+      [class.shell__rail--collapsed]="railCollapsed() && !isHandset()"
       [mode]="isHandset() ? 'over' : 'side'"
       [opened]="!isHandset()"
       [fixedInViewport]="isHandset()"
@@ -26,6 +27,9 @@
               #link="routerLinkActive"
               [routerLinkActiveOptions]="{ exact: false }"
               [attr.aria-current]="link.isActive ? 'page' : null"
+              [matTooltip]="item.label"
+              matTooltipPosition="right"
+              [matTooltipDisabled]="!railCollapsed() || isHandset()"
               (click)="isHandset() && sidenav.close()"
             >
               <mat-icon matListItemIcon aria-hidden="true">{{ item.icon }}</mat-icon>
@@ -47,6 +51,17 @@
             (click)="sidenav.toggle()"
           >
             <mat-icon aria-hidden="true">menu</mat-icon>
+          </button>
+        } @else {
+          <button
+            type="button"
+            mat-icon-button
+            class="shell__menu-btn"
+            [attr.aria-label]="railCollapsed() ? 'Déplier la navigation' : 'Replier la navigation'"
+            [attr.aria-expanded]="!railCollapsed()"
+            (click)="toggleRail()"
+          >
+            <mat-icon aria-hidden="true">{{ railCollapsed() ? 'menu' : 'menu_open' }}</mat-icon>
           </button>
         }
 

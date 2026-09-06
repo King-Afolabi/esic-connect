@@ -184,15 +184,24 @@ touchés. **`PARTIAL` : socle livré, refonte écran par écran NON faite.**
   compactage responsive (contexte et déconnexion en icône seule,
   jetons de rôle masqués sous 1100 px). Aucun débordement horizontal à
   390 px.
+- **Rail de navigation repliable** (desktop) : bascule dépliée (16 rem,
+  icône + libellé) ↔ repliée (3,5 rem, bande d'icônes). Préférence
+  mémorisée par appareil (`localStorage` protégé, RG-093 — commodité
+  d'affichage, jamais un jeton). Repliée : libellés dans le DOM pour les
+  technologies d'assistance + infobulle au survol / focus.
+  `mat-sidenav-container [autosize]` pour que le contenu se recale.
+- **Vrai logo ESIC** : trouvé non suivi à la racine du dépôt
+  (`logo esic 1.png`), déplacé dans `frontend/public/brand/logo-esic.png`
+  et affiché sur l'écran de connexion (remplace le titre texte).
 
-**PAS encore fait** (prochaines étapes de la branche) : regroupement de
-la navigation (21 entrées à plat, libellés tronqués) ; refonte écran par
-écran (connexion, tableau de bord, formulaires, listes/tableaux —
-défilement horizontal sur mobile à revoir, modales) ; favicon / icônes
-PWA (toujours le placeholder « E » bleu) ; **aucun vrai logo ESIC dans le
-dépôt** — le monogramme actuel est une forme géométrique neutre,
-remplaçable via `.shell__mark` ; jeu de données de démonstration élargi ;
-audit accessibilité complet.
+**PAS encore fait** (prochaines étapes de la branche) : refonte écran par
+écran (connexion — encore sobre, tableau de bord — cartes trop hautes,
+formulaires, listes/tableaux — défilement horizontal sur mobile à
+revoir, modales) ; libellés longs du rail déplié encore tronqués ;
+favicon / icônes PWA (toujours le placeholder « E » bleu) — le
+monogramme de la barre reste une forme géométrique neutre
+(`.shell__mark`), remplaçable ; jeu de données de démonstration élargi ;
+audit accessibilité outillé.
 
 **Dépendance ajoutée** : `bootstrap@5.3.3` (+ `@popperjs/core` transitif,
 non utilisé). `npm audit` : 0 vulnérabilité.

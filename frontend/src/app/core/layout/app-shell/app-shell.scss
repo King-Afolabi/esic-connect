@@ -18,12 +18,44 @@
   padding: var(--esic-space-3) var(--esic-space-2);
   background: var(--esic-surface);
   border-right: 1px solid var(--esic-line);
+  transition: width 160ms ease;
+  overflow-x: hidden;
 }
 
 .shell__nav {
   // La liste Material gère ses propres espacements ; on retire la marge
   // haute quand le rail n'a pas de bandeau de marque (mode desktop).
   margin-top: var(--esic-space-1);
+}
+
+// -- Rail replié : bande d'icônes (desktop) --------------------------
+// Les libellés restent dans le DOM (arbre d'accessibilité) mais sont
+// masqués visuellement ; une infobulle les rend au survol / focus.
+.shell__rail--collapsed {
+  width: var(--esic-rail-width-collapsed);
+  padding-left: 0;
+  padding-right: 0;
+
+  .mat-mdc-list-item {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .mdc-list-item__content {
+    justify-content: center;
+  }
+
+  .mdc-list-item__primary-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .mat-mdc-list-item-icon {
+    margin-right: 0 !important;
+  }
 }
 
 // -- Barre supérieure ---------------------------------------------------

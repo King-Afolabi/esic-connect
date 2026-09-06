@@ -1,10 +1,11 @@
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 
@@ -37,6 +38,7 @@ import { RoleContextMenu } from '../role-context-menu/role-context-menu';
     MatListModule,
     MatIconModule,
     MatButtonModule,
+    MatTooltipModule,
     RoleContextMenu,
     NotificationBell,
     SkipLink,
@@ -71,6 +73,31 @@ export class AppShell {
     this.breakpointObserver.observe(Breakpoints.Handset).pipe(map((result) => result.matches)),
     { initialValue: false },
   );
+
+  // Rail de navigation replié en bande d'icônes (desktop). Préférence par
+  // appareil : `localStorage` est ici une commodité d'affichage, jamais un
+  // jeton (RG-093). Lecture et écriture protégées — un navigateur peut
+  // refuser l'accès (fenêtre privée, cookies bloqués).
+  private readonly railKey = 'esic.rail.collapsed';
+  protected readonly railCollapsed = signal(this.readRailPreference());
+
+  protected toggleRail(): void {
+    const next = !this.railCollapsed();
+    this.railCollapsed.set(next);
+    try {
+      localStorage.setItem(this.railKey, next ? '1' : '0');
+    } catch {
+      // Préférence non persistée : sans effet sur la session en cours.
+    }
+  }
+
+  private readRailPreference(): boolean {
+    try {
+      return localStorage.getItem(this.railKey) === '1';
+    } catch {
+      return false;
+    }
+  }
 
   protected install(): void {
     void this.pwa.promptInstall();
