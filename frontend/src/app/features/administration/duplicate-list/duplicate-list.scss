@@ -1,44 +1,69 @@
+// Aligné sur le système de design ESIC (jetons `--esic-*`).
+
 .duplicates__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--esic-space-2);
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .duplicates__intro {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0 0 1.5rem;
+  margin: 0 0 var(--esic-space-5);
   max-width: 70ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
 }
 
 .duplicates__status {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 1rem 0;
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
 }
 
 .duplicates__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
 .duplicates__group {
-  margin-block-end: 1.5rem;
+  margin-block-end: var(--esic-space-5);
 }
 
 .duplicates__group-title {
-  font: var(--mat-sys-title-medium);
-  margin: 0 0 0.5rem;
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin: 0 0 var(--esic-space-2);
+  color: var(--esic-ink);
 }
 
 .duplicates__table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 .duplicates__table {
@@ -48,9 +73,16 @@
   th,
   td {
     text-align: left;
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--mat-sys-outline-variant);
-    font: var(--mat-sys-body-medium);
+    padding: 0.625rem 0.875rem;
+    border-bottom: 1px solid var(--esic-line);
+    font-size: 0.9375rem;
+  }
+
+  thead th {
+    background: var(--esic-surface-sunken);
+    color: var(--esic-ink-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
   }
 }
 

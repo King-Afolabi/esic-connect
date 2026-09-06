@@ -35,7 +35,11 @@
 
   @case ('ready') {
     @if (user(); as currentUser) {
-      <h1 class="account__title">{{ currentUser.firstName }} {{ currentUser.lastName }}</h1>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">{{ currentUser.firstName }} {{ currentUser.lastName }}</h1>
+        </div>
+      </header>
 
       <mat-card appearance="outlined" class="account__card">
         <mat-card-header>
@@ -53,7 +57,7 @@
             </div>
             <div>
               <dt>Statut</dt>
-              <dd>{{ statusLabel(currentUser.status) }}</dd>
+              <dd><span class="esic-badge" [attr.data-status]="currentUser.status">{{ statusLabel(currentUser.status) }}</span></dd>
             </div>
             <div>
               <dt>Adresse vérifiée le</dt>

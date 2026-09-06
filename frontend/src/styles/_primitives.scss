@@ -162,12 +162,14 @@
   &--info,
   &[data-status="PUBLISHED"],
   &[data-status="OPEN"],
+  &[data-status="SENT_TO_PROVIDER"],
   &[data-status="IN_PROGRESS"] { color: var(--esic-info); background: var(--esic-info-tint); border-color: transparent; }
 
   &--success,
   &[data-status="ACTIVE"],
   &[data-status="ACCEPTED"],
   &[data-status="ACCEPTED_ABSENCE"],
+  &[data-status="DELIVERED"],
   &[data-status="RESOLVED"],
   &[data-status="CLOSED"],
   &[data-status="CONFIRMED"] { color: var(--esic-success); background: var(--esic-success-tint); border-color: transparent; }
@@ -195,6 +197,7 @@
   &[data-status="BLOCKING"],
   &[data-status="FAILED"],
   &[data-status="BOUNCED"],
+  &[data-status="COMPLAINED"],
   &[data-status="PROCESSING_FAILED"],
   &[data-status="DEAD"] { color: var(--esic-danger); background: var(--esic-danger-tint); border-color: transparent; }
 

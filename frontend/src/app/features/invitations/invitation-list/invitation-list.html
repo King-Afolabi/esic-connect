@@ -82,11 +82,15 @@
         </ng-container>
         <ng-container matColumnDef="internalStatus">
           <th mat-header-cell *matHeaderCellDef scope="col">Envoi</th>
-          <td mat-cell *matCellDef="let delivery">{{ internalLabel(delivery.internalStatus) }}</td>
+          <td mat-cell *matCellDef="let delivery">
+            <span class="esic-badge" [attr.data-status]="delivery.internalStatus">{{ internalLabel(delivery.internalStatus) }}</span>
+          </td>
         </ng-container>
         <ng-container matColumnDef="providerStatus">
           <th mat-header-cell *matHeaderCellDef scope="col">Délivrabilité</th>
-          <td mat-cell *matCellDef="let delivery">{{ providerLabel(delivery.providerStatus) }}</td>
+          <td mat-cell *matCellDef="let delivery">
+            <span class="esic-badge" [attr.data-status]="delivery.providerStatus">{{ providerLabel(delivery.providerStatus) }}</span>
+          </td>
         </ng-container>
         <ng-container matColumnDef="attempts">
           <th mat-header-cell *matHeaderCellDef scope="col">Tentatives</th>
