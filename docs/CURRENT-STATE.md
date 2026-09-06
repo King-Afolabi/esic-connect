@@ -230,34 +230,53 @@ total initial **568 kB brut / 132 kB transféré**. `maximumError` inchangé
 `NOT_PERFORMED` : recette Playwright (non rejouée) ; audit
 accessibilité outillé ; revue sur tablette / pliable / ultralarge réels.
 
-### 6 septembre 2026 (soir) — refonte UI : étape 6, pages métier (1/n — séances)
+### 6 septembre 2026 (soir) — refonte UI : étape 6, pages métier
 
-Même branche. **`PARTIAL` : l'aire « Séances » est alignée, les autres aires
-métier restent à faire.**
+Même branche. **`PARTIAL` : toutes les aires métier sont alignées sur le
+système de design ; l'audit visuel écran par écran des aires 2 à 9 reste
+`NOT_PERFORMED` (voir plus bas).**
 
-- **Quatre primitives ajoutées** à `src/styles/_primitives.scss`, extraites
-  du vocabulaire répété des partiels `*-common.scss` : `.esic-filters`
-  (barre de recherche + groupe d'actions au-dessus d'une liste),
-  `.esic-note` (encart d'état chargement / accès refusé / erreur, +
-  `--danger` / `--warning`), `.esic-section` (sous-section avec en-tête
-  titre + action), `.esic-reveal` (panneau dépliant pour une saisie ou une
-  confirmation en ligne).
-- **Aire « Séances » (liste, détail, formulaire)** : `_sessions-common.scss`
-  réécrit sur les jetons `--esic-*` et les primitives — les classes
-  `.sessions__*` sont conservées (gabarits quasi intacts) mais délèguent au
-  vocabulaire commun. En-têtes en `.esic-page-header` (titre serif, filet,
-  action primaire dans le créneau dédié) ; `.sessions__chip[data-status]`
-  déplacé dans le partiel commun et re-mappé sur les jetons de statut
-  d'assiduité (point + libellé) ; colonne « Statut » de la liste en
-  pastille au lieu de texte brut ; champs de filtres bornés en largeur
-  (le réalignement global met `.mat-mdc-form-field` à 100 %).
-- Aucun `.ts`, aucune logique touchés. Les specs `sessions/*` n'asseyent
-  aucun sélecteur `.sessions__*` — 0 ajustement.
+Neuf lots (`34472a4` → `e48fedd`), une aire à la fois, `lint` + `build`
+prod + **786 tests / 0 échec** vérifiés à chaque commit :
 
-**Reste de l'étape 6** : apprenants, planning, alternance, organisation,
-référentiels, réclamations, suivi d'assiduité, émargement — mêmes
-primitives à appliquer aire par aire, avec point de contrôle après
-chacune.
+| Lot | Aire | Écrans |
+|---|---|---|
+| 1 | Séances | liste, détail, formulaire |
+| 2 | Apprenants | liste, fiche, import, revue d'import |
+| 3 | Alternance | modèles (liste/fiche/formulaire), affectations classe, exceptions inscription, aperçu de cycle |
+| 4 | Organisation + Référentiels | sites (liste/fiche/formulaire), référentiels académiques (liste/fiche) |
+| 5 | Réclamations | liste, fil |
+| 6 | Assiduité | mes présences ×4, gestion ×3, émargement, panneau départs anticipés |
+| 7 | Planning | import, revue d'import, calendrier, versions |
+| 8 | Administration + Invitations | comptes (liste/fiche), doublons, invitations, invitations non activées |
+| 9 | Transverses | sécurité du compte, attestations, audit, abonnement calendrier, notifications (+ préférences), effets de bord, recherche globale, matières |
+
+**Méthode.** Quatre primitives ajoutées à `_primitives.scss` : `.esic-filters`
+(barre de recherche + actions), `.esic-note` (encart d'état, `--danger` /
+`--warning`), `.esic-section` (sous-section titrée), `.esic-reveal`
+(panneau dépliant). Correspondance **statut métier → tonalité** centralisée
+dans `.esic-badge[data-status]` (ACTIVE, PUBLISHED, PENDING…, SUSPENDED,
+ARCHIVED, FAILED, DELIVERED, REOPENED… — une seule table, les gabarits
+posent la valeur brute). Chaque partiel `_*-common.scss` (ou SCSS d'écran
+isolé) réécrit sur les jetons `--esic-*` **en conservant les classes
+`.area__*`** : les gabarits ne changent que pour l'en-tête
+(`.esic-page-header`, titre serif + filet), la pastille de statut et
+l'enveloppe de table à défilement contenu. Le lien de retour est le
+primitif unique `.esic-back` (lot `f606636`, 13 écrans + 4 ajoutés ici).
+
+**Résultat mesurable.** Plus **aucune** référence `--mat-sys-*` directe ni
+couleur en dur dans `src/app/**/*.scss` (hors fichiers de jetons) — toute
+la couche de présentation dérive du système de design ESIC.
+
+**Aucun `.ts`, aucune logique métier touchés.** Une seule assertion de
+test ajustée (`dashboard.spec.ts`, libellé « Comptes actifs »).
+
+`NOT_PERFORMED` : audit visuel piloté écran par écran des aires 2 à 9
+(le back-end local est devenu injoignable après un incident disque plein
+en cours de session — les captures des aires 1 « Séances » et du tableau
+de bord ont été faites ; les autres écrans partagent les mêmes primitives
+déjà vérifiées mais n'ont pas été re-capturés). Recette Playwright non
+rejouée. Audit accessibilité outillé non fait.
 
 ### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
 
