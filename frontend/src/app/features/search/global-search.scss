@@ -7,8 +7,8 @@
 .search__note,
 .search__empty,
 .search__count {
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-body-medium);
+  color: var(--esic-ink-soft);
+  font-size: 0.9375rem;
 }
 
 .search__form {
@@ -40,7 +40,7 @@
 
   th,
   td {
-    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    border-bottom: 1px solid var(--esic-line);
     padding: 0.4rem 0.5rem;
     text-align: left;
   }
