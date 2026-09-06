@@ -20,6 +20,14 @@ interface Internals {
   confirm: () => void;
   cancel: () => void;
   filters: { setValue: (v: { rowStatus: string; severity: string; action: string }) => void };
+  severities: readonly string[];
+  hasNoAnomaly: () => boolean;
+  blockingIssues: () => unknown[];
+  nonBlockingGlobalIssues: () => unknown[];
+  correctionOutcome: () => string | null;
+  startCorrection: (row: RowResponse) => void;
+  correctionValues: { set: (v: Record<string, string>) => void };
+  submitCorrection: (jobId: string, row: RowResponse) => void;
 }
 
 const JOB_URL = '/api/v1/student-imports/job-1';
@@ -84,7 +92,7 @@ function rowsPage(content: RowResponse[]): PageResponse<RowResponse> {
   return { content, page: 0, size: 50, totalElements: content.length, totalPages: 1 };
 }
 
-function setup(roles: Role[] = ['ADMIN']) {
+function setup(roles: Role[] = ['ADMIN'], job: JobResponse = JOB, rows: RowResponse[] = [ROW]) {
   localStorage.clear();
   sessionStorage.clear();
   const effectiveRoles: WritableSignal<Role[]> = signal(roles);
@@ -103,12 +111,14 @@ function setup(roles: Role[] = ['ADMIN']) {
   const fixture = TestBed.createComponent(StudentImportReview);
   const http = TestBed.inject(HttpTestingController);
   fixture.detectChanges();
-  http.expectOne(JOB_URL).flush(JOB);
-  http.expectOne((r) => r.url === ROWS_URL).flush(rowsPage([ROW]));
+  http.expectOne(JOB_URL).flush(job);
+  http.expectOne((r) => r.url === ROWS_URL).flush(rowsPage(rows));
+  fixture.detectChanges();
   return {
     fixture,
     http,
     effectiveRoles,
+    text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
     internals: fixture.componentInstance as unknown as Internals,
   };
 }
@@ -228,5 +238,112 @@ describe('StudentImportReview', () => {
     setup();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  // --- Lot J : lisibilité et cohérence des anomalies -------------------
+
+  it('states explicitly when there is no anomaly at all', () => {
+    const { internals, text } = setup(); // JOB par défaut : tout à zéro, issues []
+    expect(internals.hasNoAnomaly()).toBe(true);
+    expect(text()).toContain('Aucune anomalie détectée');
+  });
+
+  it('shows a file-level BLOCKING issue as blocking, not as a mere warning', () => {
+    const blockingJob: JobResponse = {
+      ...JOB,
+      confirmable: false,
+      summary: { ...JOB.summary, valid: 2, error: 0, blocking: 1 },
+      issues: [
+        {
+          severity: 'BLOCKING',
+          code: 'IMP_MISSING_REQUIRED_COLUMN',
+          message: 'La colonne obligatoire « email » est absente.',
+          columnName: 'email',
+        },
+      ],
+    };
+    const { internals, text } = setup(['ADMIN'], blockingJob);
+    expect(internals.blockingIssues().length).toBe(1);
+    expect(internals.nonBlockingGlobalIssues().length).toBe(0);
+    expect(internals.hasNoAnomaly()).toBe(false);
+    expect(internals.confirmable()).toBe(false);
+    const body = text();
+    expect(body).toContain('Anomalies bloquantes');
+    expect(body).toContain('La colonne obligatoire « email » est absente.');
+    expect(body).toContain('email');
+  });
+
+  it('keeps the import confirmable for a non-blocking global issue', () => {
+    const warnJob: JobResponse = {
+      ...JOB,
+      confirmable: true,
+      issues: [
+        {
+          severity: 'WARNING',
+          code: 'IMP_UNUSUAL_HEADER',
+          message: 'En-tête inhabituel toléré.',
+          columnName: null,
+        },
+      ],
+    };
+    const { internals, text } = setup(['ADMIN'], warnJob);
+    expect(internals.blockingIssues().length).toBe(0);
+    expect(internals.nonBlockingGlobalIssues().length).toBe(1);
+    expect(internals.hasNoAnomaly()).toBe(false);
+    expect(internals.confirmable()).toBe(true);
+    expect(text()).toContain('non bloquantes');
+  });
+
+  it('does not offer BLOCKING in the row-level severity filter (it can never match a row)', () => {
+    const { internals } = setup();
+    expect([...internals.severities]).toEqual(['INFO', 'WARNING', 'ERROR']);
+  });
+
+  it('after a row correction, confirms success and reloads the summary and the rows', () => {
+    const errorRow: RowResponse = {
+      ...ROW,
+      publicId: 'r-1',
+      rowNumber: 4,
+      rowStatus: 'ERROR',
+      classCode: 'ZZ',
+      issues: [
+        {
+          severity: 'ERROR',
+          code: 'IMP_UNKNOWN_CLASS',
+          message: 'Classe « ZZ » inconnue.',
+          columnName: 'class_code',
+          receivedValue: 'ZZ',
+          suggestedValue: null,
+        },
+      ],
+    };
+    const errorJob: JobResponse = {
+      ...JOB,
+      confirmable: false,
+      summary: { ...JOB.summary, valid: 2, error: 1 },
+    };
+    const { internals, http, text, fixture } = setup(['ADMIN'], errorJob, [errorRow]);
+    expect(internals.confirmable()).toBe(false);
+
+    internals.startCorrection(errorRow);
+    internals.correctionValues.set({ class_code: 'C1' });
+    internals.submitCorrection('job-1', errorRow);
+
+    http
+      .expectOne((r) => r.url === `${ROWS_URL}/r-1` && r.method === 'POST')
+      .flush({ ...errorRow, rowStatus: 'VALID', classCode: 'C1', issues: [] });
+
+    // Rechargement : la synthèse ET les lignes, jamais un état local recalculé.
+    http.expectOne(JOB_URL).flush({
+      ...JOB,
+      confirmable: true,
+      summary: { ...JOB.summary, valid: 3, error: 0 },
+    });
+    http.expectOne((r) => r.url === ROWS_URL).flush(rowsPage([{ ...errorRow, rowStatus: 'VALID', issues: [] }]));
+
+    fixture.detectChanges();
+    expect(internals.correctionOutcome()).toContain('corrigée');
+    expect(internals.confirmable()).toBe(true);
+    expect(text()).toContain('réévaluées');
   });
 });

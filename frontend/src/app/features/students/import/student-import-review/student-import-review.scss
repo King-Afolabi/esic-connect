@@ -138,6 +138,14 @@ table {
   margin: var(--esic-space-2) 0;
 }
 
+// Ligne d'explication : que faire — ou pourquoi rien à faire — face à
+// une anomalie (Lot J).
+.issue-hint {
+  margin: var(--esic-space-2) 0 0;
+  color: var(--esic-ink-soft);
+  font-size: 0.875rem;
+}
+
 .row-correction {
   display: flex;
   flex-wrap: wrap;

@@ -94,7 +94,10 @@
         <ng-container matColumnDef="summary">
           <th mat-header-cell *matHeaderCellDef>Lignes</th>
           <td mat-cell *matCellDef="let job">
-            {{ job.summary.total }} ({{ job.summary.error }} erreur(s))
+            {{ job.summary.total }}
+            @if (job.summary.error > 0) { · {{ job.summary.error }} en erreur }
+            @if (job.summary.warning > 0) { · {{ job.summary.warning }} en avertissement }
+            @if (job.summary.blocking > 0) { · {{ job.summary.blocking }} bloquante(s) }
           </td>
         </ng-container>
         <ng-container matColumnDef="createdAt">
