@@ -10,6 +10,71 @@
 
 ## Dernière mise à jour
 
+### 6 septembre 2026 (nuit) — passe « navigation & dashboard réorganisés » (même branche `feat/ui-redesign-bootstrap-material`)
+
+Base `45b9e09`, **7 commits** (HEAD = ce commit de documentation). **Aucune ligne de
+back-end, zéro migration** (schéma inchangé V34). Non fusionné, non
+poussé, **non déployé**. Détail complet :
+`docs/audit/FINAL-DEPLOYED-UI-REPORT.md` (22 sections) + INDEX des
+captures `artifacts/report-screenshots/INDEX.md`.
+
+- **§1 Notifications** — une seule entrée latérale « Notifications » →
+  coquille `NotificationsShell` à deux vues internes en onglets
+  (`centre` / `preferences`). `/notifications` et
+  `/notifications/preferences` restent valides (redirection).
+- **§2 Suivi d'assiduité** — coquille `AttendanceManagementShell` :
+  titre unique + navigation secondaire visible `.esic-subnav`,
+  « Synthèse » listée et en premier. Cinq routes enfants inchangées.
+- **§3 Tableau de bord** — « Accès rapides » remonté sous la bande
+  d'identité ; grille de détail à **deux colonnes** dès ≈ 52 rem de
+  largeur de contenu (`@container esic-content`), une colonne en pile en
+  dessous ; listes de cartes bornées en hauteur. Restructuration 2×2
+  littérale par rôle **non faite** (4 variantes + sélecteurs e2e figés) —
+  arbitrage assumé dans le rapport.
+- **§4 Organisation & planning** — quatre entrées latérales
+  (Référentiels, Organisation, Planning, Alternance) fusionnées en une ;
+  nouveau hub `/organisation-planning` ; `NavItem.matchPaths` +
+  `activeNavPath` étendu. **Aucune route déplacée** — `/academic`,
+  `/organization`, `/planning`, `/alternation` restent adressables.
+- **Correctif (commits 5 & 6)** — état actif résiduel des onglets **et**
+  du rail : une vue enfant qui réécrit ses filtres dans l'URL au
+  chargement (Lot G) déclenche une navigation « même URL » terminée en
+  `NavigationCancel` + `NavigationSkipped`, **sans `NavigationEnd`** ;
+  `routerLinkActive` (et tout code ne filtrant que `NavigationEnd`)
+  restait figé en mode zoneless. Corrigé en dérivant l'état de
+  `router.url` sur `NavigationEnd` / `NavigationSkipped` /
+  `NavigationCancel`. **Limite restante** : `aria-current` du rail n'est
+  fiable qu'après une navigation client, pas au premier chargement d'une
+  URL profonde (`.active` visible OK).
+
+**Tests** : front-end `npx ng lint` vert · `npx ng test --watch=false`
+→ **102 fichiers / 838 tests / 0 échec** · `npx ng build --configuration
+production` sans alerte de budget (581,71 kB / 136,29 kB gzip) · typecheck
+de la suite Playwright 0 erreur. Back-end **non rejoué** (0 fichier Java,
+0 migration ; dernier résultat consigné §6.5 : 1231 tests).
+
+**Recette navigateur (pile locale `demo`, `ESIC_DEMO_TOTP_SECRET` =
+valeur d'exemple)** : nouveau `tests/14-report-screenshots.spec.ts`
+**7 / 7** — Notifications et Suivi d'assiduité : exactement un onglet
+actif, le bon, aucun résidu après aller-retour ; hub Organisation &
+planning : entrée de rail groupée surlignée, maintenue sur `/academic` et
+`/planning/import`. `tests/02` (libellés de navigation mis à jour),
+`03` (routes regroupées en URL directe), `07` (coquille assiduité),
+`08` (notifications + dashboard), `10` (correctif sélecteur
+`.shell__topbar`) : **tous verts** après purge du seau
+`LOGIN_ORIGIN_LIMIT` (les enchaînements longs saturent le compteur de
+connexions — 18 « échecs » d'un run combiné, tous « Trop de tentatives »,
+→ 18/18 au rejeu ; couplage d'environnement connu, `§6.1`).
+
+**`NOT_PERFORMED`** : déploiement (aucune cible démo/recette — Pi, tunnel,
+URL, `.env` de prod, `CLOUDFLARE_TUNNEL_TOKEN` absents ; paquet
+`compose.prod.yaml` **prêt et valide**, documenté jusqu'à la dernière
+commande) ; suite Playwright complète `tests/01..13` ; axe sur les écrans
+authentifiés refondus ; Lighthouse ; **lot complémentaire** (référentiels
+BTS/CIEL/CDA/ESIS/CPDIA, rythmes, plannings 3 mois, jeux d'import +
+validation) — chantier back-end + scripts + données différé sur décision
+de cadrage.
+
 ### 6 septembre 2026 (nuit) — campagne « one-shot » Lots A→P (branche `feat/ui-redesign-bootstrap-material`)
 
 Base `314476b`, HEAD `f167b41`, **16 commits**, 83 fichiers

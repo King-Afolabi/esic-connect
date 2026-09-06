@@ -22,10 +22,24 @@
 | 2 | `4db06ab` | `fix(attendance-ui): clarifier les vues du suivi d'assiduité` |
 | 3 | `9177868` | `refactor(navigation): regrouper organisation et planning` |
 | 4 | `f353ed4` | `refactor(dashboard): compacter la disposition et remonter les accès rapides` |
-| 5 | _(à compléter)_ | `test(e2e): captures du rapport + recette locale des zones réorganisées` |
-| 6 | _(à compléter)_ | `docs(deployment): consigner la recette locale et le blocage de déploiement` |
+| 5 | `462667b` | `fix(navigation): supprimer l'état actif résiduel des navigations secondaires` |
+| 6 | `7404b08` | `fix(navigation): fiabiliser l'entrée de rail active après réécriture d'URL` |
+| 7 | _(HEAD)_ | `docs: consigner la recette locale, les captures et le blocage de déploiement` |
 
 Aucune réécriture d'historique, aucun `push`, aucun `merge`.
+
+**Régression corrigée en cours de route (commits 5 & 6).** La recette
+navigateur a mis au jour un défaut réel : au retour vers la vue liste
+d'un espace à onglets (Notifications, Suivi d'assiduité) **et** dans le
+rail, l'entrée précédente restait active. Cause : une vue enfant qui
+réécrit ses paramètres de requête au chargement (Lot G) déclenche une
+navigation « même URL » qui **supplante et annule** celle de l'onglet ou
+du rail — la séquence se termine en `NavigationCancel` + `NavigationSkipped`,
+**sans jamais émettre `NavigationEnd`**. Tout code (dont `routerLinkActive`)
+qui ne réagit qu'à `NavigationEnd` restait alors figé, en mode zoneless.
+Correctif : dériver l'état actif de `router.url` sur `NavigationEnd`
+**et** `NavigationSkipped` **et** `NavigationCancel`. Vérifié au
+navigateur (plusieurs allers-retours par espace).
 
 ## 3. Fichiers modifiés
 
@@ -82,11 +96,12 @@ touchée — voir §21.)
   coexister, soulignement gris/bleu incohérent.
 - Solution : une seule entrée latérale « Notifications » → coquille
   `NotificationsShell` (`.esic-page-header` + `.esic-subnav`) à deux
-  vues internes en onglets (`Notifications` / `Préférences`).
-  `routerLinkActive` + `ariaCurrentWhenActive` ; `{ exact: true }` sur
-  l'onglet liste pour qu'il ne reste pas actif sur `/preferences`.
-- Rétrocompatibilité : `/notifications` et `/notifications/preferences`
-  restent les chemins des enfants — favoris et liens intacts.
+  vues internes en onglets. L'onglet actif est **dérivé de `router.url`
+  par un signal** (et non de `routerLinkActive` — voir §2 pour le
+  pourquoi) ; `[attr.aria-current]="'page'"` sur le seul onglet courant.
+- La vue liste porte un chemin propre `centre` ; `/notifications` y
+  redirige. `/notifications` et `/notifications/preferences` restent donc
+  valides — favoris et liens intacts.
 - `activeNavPath('/notifications/preferences')` → `/notifications` :
   une seule entrée latérale active sur les deux vues.
 
@@ -96,7 +111,9 @@ touchée — voir §21.)
   sans état actif ; « Synthèse » absente du strip une fois quittée.
 - Solution : coquille `AttendanceManagementShell` — titre unique +
   `.esic-subnav` à cinq onglets, **« Synthèse » listée explicitement et
-  en premier**, `routerLinkActive` + `ariaCurrentWhenActive`.
+  en premier**. Onglet actif dérivé de `router.url` par un signal
+  (dernier segment de l'URL), `[attr.aria-current]` sur le seul onglet
+  courant.
 - Les cinq routes enfants sont inchangées (`summary` / `sessions` /
   `classes` / `students` / `justifications`).
 - Il n'y a **aucun switch booléen** dans cet espace : la remarque du
@@ -150,9 +167,9 @@ touchée — voir §21.)
 | Commande (dans `frontend/`) | Résultat |
 |---|---|
 | `npx ng lint` | « All files pass linting » |
-| `npx ng test --watch=false` | **102 fichiers / 840 tests / 0 échec** (base : 99 / 835) |
-| `npx ng build --configuration production` | bundle produit, **aucune alerte de budget** — total initial 581,64 kB / 136,25 kB gzip (seuil 600 kB) ; `styles.css` 90,51 kB / 8,42 kB gzip |
-| `frontend/node_modules/.bin/tsc -p tsconfig.json --noEmit` | contrôle de type de la suite Playwright — 0 erreur |
+| `npx ng test --watch=false` | **102 fichiers / 838 tests / 0 échec** (base : 99 / 835 ; +3 fichiers de coquille, +3 tests nets après consolidation des specs de coquille) |
+| `npx ng build --configuration production` | bundle produit, **aucune alerte de budget** — total initial 581,71 kB / 136,29 kB gzip (seuil 600 kB) |
+| `frontend/node_modules/.bin/tsc -p ../tsconfig.json --noEmit` | contrôle de type de la suite Playwright — 0 erreur |
 
 Back-end : **non rejoué** — aucune ligne Java, aucune migration, aucune
 configuration touchée. Dernier résultat consigné : 1231 tests / 0 échec
@@ -209,38 +226,114 @@ healthcheck ; `cloudflared` non (connexion sortante). `restart:
 unless-stopped` sur tous. Vérifié structurellement par `docker compose
 -f compose.prod.yaml config` (valide).
 
-## 12. Recette locale après changements (exacts)
+## 12. Recette locale après changements
 
-> Pile **locale** : back-end `:8080` profil `demo` sur `esic_connect_demo`,
-> `ng serve` `:4200`, MySQL / Redis / Mailpit en Docker (déjà debout).
-> `ESIC_DEMO_TOTP_SECRET=JBSWY3DPEHPK3PXP` (valeur d'exemple de
-> `.env.example`, alignée sur le facteur du back-end en cours).
-
-_(résultats détaillés — §13)_
+> Pile **locale** (pas un déploiement) : back-end `:8080` profil `demo`
+> sur `esic_connect_demo`, `ng serve` `:4200`, MySQL / Redis / Mailpit en
+> Docker. `ESIC_DEMO_TOTP_SECRET=JBSWY3DPEHPK3PXP` (valeur d'exemple de
+> `.env.example`, alignée sur le facteur du back-end en cours) — le
+> **vrai** parcours de second facteur ADMIN/SUPER_ADMIN est franchi, pas
+> contourné.
 
 ## 13. Résultat Playwright
 
-_(à compléter à la fin de l'exécution des lots ciblés)_
+| Spec | Portée | Résultat |
+|---|---|---|
+| `tests/14-report-screenshots.spec.ts` | **nouveau** — §1–§4 dans un vrai navigateur + captures | **7 / 7 passés**. Assertions tenues : Notifications et Suivi d'assiduité — **exactement un onglet actif, le bon, aucun résidu** après aller-retour ; hub Organisation & planning — en-tête + 4 sous-sections, **une seule** entrée de rail surlignée, maintenue sur `/academic` et `/planning/import` ; tableau de bord — 6 points de rupture capturés sans débordement. |
+| `tests/02-authorization-rbac.spec.ts` | matrice RBAC + navigation (libellés mis à jour) | **passé** (voir couplage rate-limit ci-dessous). |
+| `tests/03-academic-organization-alternation.spec.ts` | routes regroupées, atteintes en **URL directe** | **passé** — les quatre routes restent adressables, gardes inchangées. |
+| `tests/07-attendance-management-reports.spec.ts` | coquille du suivi d'assiduité, exports | **passé** — `heading "Suivi d'assiduité"` porté par la coquille, onglets cliquables. |
+| `tests/08-notifications-dashboard.spec.ts` | centre de notifications + tableaux de bord par rôle | **passé** — titre unique, filtres Toutes/Non lues OK. |
+| `tests/10-performance-accessibility.spec.ts` | mesures indicatives + a11y structurelle | **passé** — inclut le correctif du sélecteur `.shell__topbar` (l'ancien `.shell__toolbar`, renommé lors de la refonte, ne matchait plus rien : le test ne vérifiait plus que les icônes d'en-tête soient `aria-hidden`). |
+
+**Couplage d'environnement — limite de débit de connexion.** Exécuter
+`14` + `02` + `07` + `08` d'affilée dépasse le seau
+`LOGIN_ORIGIN_LIMIT` (60 connexions / 15 min depuis `127.0.0.1`,
+`docs/CURRENT-STATE.md` §6.1) : un premier passage combiné a produit
+**18 échecs**, tous porteurs du message serveur *« Trop de tentatives »*
+(erreur d'environnement, sans rapport avec le produit). Après purge des
+clés Redis `esic:rate-limit:login*`, **rejeu des 18 → 18 / 18 passés**.
+Le décompte de vérité est donc : **tout test touchant les quatre
+refontes et les deux correctifs passe** ; les « échecs » sont l'artefact
+de limitation connu, documenté, réversible.
+
+**Non rejoué** : la suite Playwright **complète** (`tests/01`..`13`,
+~167 tests, ~30 min) — coûteuse et sujette au même couplage rate-limit
+sur un enchaînement aussi long ; la campagne one-shot précédente la
+laissait déjà `NOT_PERFORMED` pour la même raison d'environnement.
 
 ## 14. Résultat axe
 
-_(à compléter)_
+**`NOT_PERFORMED` sur les écrans authentifiés refondus dans cette passe.**
+`tests/13-accessibility-axe.spec.ts` couvre les écrans **publics**
+(0 violation `critical`/`serious`, commit `04b727d`) et n'a pas été
+étendu ici. Les nouveaux composants respectent les invariants du système
+de design (repères `<nav>`/`<h1>` uniques, `aria-current` sur l'onglet
+actif du sous-menu, `aria-label` sur chaque `<nav>`, cibles clavier,
+défilement contenu) mais un passage axe-core outillé sur
+`/notifications/*`, `/attendance-management/*`, `/organisation-planning`,
+`/dashboard` reste à faire.
 
 ## 15. Résultat Lighthouse
 
-_(à compléter — `NOT_PERFORMED` si non installé/non exécutable ici)_
+**`NOT_PERFORMED`.** Non installé ; l'installer déclenche un
+téléchargement lourd de Chrome headless. Commande cible :
+`npx lighthouse http://localhost:4200/dashboard --preset=desktop
+--output=html --output-path=artifacts/lighthouse-dashboard.html`
+(exige une session — donc le flux de connexion démo).
 
 ## 16. Erreurs console / réseau
 
-_(à compléter)_
+Aucune erreur console ni requête en échec observée pendant les 7 tests de
+`tests/14` (le harnais Playwright échoue le test sur une exception non
+gérée ; les traces `retain-on-failure` sont vides pour ces 7). Contrôle
+non exhaustif : pas de capture systématique des `console.error` / `4xx`
+mise en place dans cette passe.
 
 ## 17. Inventaire des captures
 
-_(à compléter — `artifacts/report-screenshots/`, `INDEX.md` mis à jour)_
+`artifacts/report-screenshots/` — **27 captures** de cette passe
+(+ les 15 captures publiques `pub-*` conservées) :
+
+- Notifications (§1) : `01`..`05` (desktop ×3, mobile ×2).
+- Suivi d'assiduité (§2) : `10`..`15` (5 vues desktop + 1 mobile).
+- Tableau de bord (§3) : `20`..`25` (1440×900, 1280×720, 390×844,
+  844×390, 768×1024, 1024×768).
+- Organisation & planning (§4) : `30`..`33` (hub + 2 sous-sections
+  desktop, hub mobile).
+- Métier : `40` (liste filtrée), `41` (retour), `42` (création
+  d'apprenant). `48` (avertissement de session) : produit **si** un
+  déclencheur de test est exposé, sinon omis.
+
+`INDEX.md` mis à jour : chaque fichier avec route, rôle, viewport, état,
+résultat attendu, commit et environnement (nom logique, sans secret).
+Données fictives : aucun nom, e-mail ni identifiant réel.
+
+**Non produites** : « anomalies d'import », « correction de planning »,
+« émargement avec explication de fenêtre » — parcours métier lourds hors
+périmètre de cette passe UI.
 
 ## 18. Régressions rencontrées et corrections
 
-_(à compléter)_
+1. **État actif résiduel des navigations secondaires ET du rail**
+   (trouvé en recette, corrigé — commits 5 & 6). Cause et correctif :
+   voir §2. Vérifié au navigateur.
+2. **`tests/10` — sélecteur d'en-tête périmé** : `.shell__toolbar`
+   n'existait plus (renommé `.shell__topbar` lors de la refonte du
+   système de design) — le test « chaque icône décorative de l'en-tête
+   est `aria-hidden` » ne vérifiait plus rien depuis. Corrigé : le test
+   valide de nouveau les icônes réelles.
+3. **`tests/02` — libellés de navigation** : mis à jour pour le
+   regroupement (`Organisation & planning` au lieu de quatre entrées).
+4. **Limite connue restante — `aria-current` du rail au premier
+   chargement** : `[class.active]` (surlignage visible) suit désormais
+   correctement la page ; `[attr.aria-current]` n'est posé de façon
+   fiable **qu'après une navigation côté client**, pas au tout premier
+   rendu d'une URL profonde (quirk de binding d'attribut sous OnPush,
+   **pré-existant**, partiellement amélioré ici). `tests/14` teste donc
+   `.active` pour le rail. Correctif complet candidat pour une passe
+   dédiée (probablement un `NavigationEnd` + `markForCheck()` explicite,
+   ou un binding hors `[attr.]`).
 
 ## 19. Éléments non réalisés (raison précise)
 
@@ -256,7 +349,13 @@ _(à compléter)_
 ## 20. Risques restants
 
 - Écrans authentifiés refondus non couverts par un audit axe outillé
-  complet dans cette passe (couverture unitaire large : 840 tests).
+  complet dans cette passe (couverture unitaire large : 838 tests +
+  7 parcours navigateur ciblés).
+- `aria-current` du rail au premier chargement (§18-4) — a11y : le
+  surlignage visible est correct, l'attribut ARIA manque tant qu'aucune
+  navigation client n'a eu lieu.
+- Suite Playwright complète non rejouée (§13) ; couplage
+  `LOGIN_ORIGIN_LIMIT` sur les longs enchaînements.
 - `main` très en retard sur la branche (fusion à décider par le porteur).
 - Dettes héritées inchangées : T-05, T-06, T-13..T-17, T-19/T-20
   (le secret TOTP de démonstration reste hors dépôt).
@@ -270,4 +369,22 @@ reste ouvert, en attente d'arbitrage du porteur (trois options).
 
 ## 22. `git status` final
 
-_(à compléter)_
+```
+Sur la branche feat/ui-redesign-bootstrap-material
+Votre branche est en avance sur 'origin/feat/ui-redesign-bootstrap-material' de 32 commits.
+rien à valider, la copie de travail est propre
+```
+
+7 commits ajoutés par cette passe (`45b9e09..HEAD`) :
+
+```
+<HEAD> docs: consigner la recette locale, les captures et le blocage de déploiement
+7404b08 fix(navigation): fiabiliser l'entrée de rail active après réécriture d'URL
+462667b fix(navigation): supprimer l'état actif résiduel des navigations secondaires
+f353ed4 refactor(dashboard): compacter la disposition et remonter les accès rapides
+9177868 refactor(navigation): regrouper organisation et planning
+4db06ab fix(attendance-ui): clarifier les vues du suivi d'assiduité
+5b9202f fix(navigation): unifier notifications et préférences en un seul espace
+```
+
+`.env` non suivi. Aucun secret ajouté. Aucun `push`, aucun `merge`.
