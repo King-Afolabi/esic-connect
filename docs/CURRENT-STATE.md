@@ -325,6 +325,57 @@ bouton en ligne » délibéré) ; les **barres de filtres** `.X__filters`
 `NOT_PERFORMED` : audit visuel piloté (back-end local injoignable) ;
 recette Playwright non rejouée ; audit accessibilité outillé non fait.
 
+### 6 septembre 2026 (soir) — refonte UI : étapes 8 (tableaux/listes) et 9 (dialogues)
+
+Même branche. Deux commits (`a365bda`, `8869379`), `lint` + `build` prod +
+**786 tests / 0 échec**.
+
+**Étape 8 — tableaux et listes.**
+- **Barres de filtres** consolidées sur la primitive `.esic-filters` : les
+  **17** formulaires `.X__filters` de l'application (séances, sites,
+  alternance ×5, apprenants, comptes, réclamations, audit, assiduité ×4,
+  référentiels) portent désormais aussi `esic-filters` ; les blocs
+  réimplémentés à l'identique dans 9 SCSS (`_sessions-common`,
+  `_alt-common`, `organization.shared`, `claim-list`, `user-list`,
+  `student-list`, `academic-reference-list`, `audit-trail`,
+  `my-attendance-list`) sont retirés. Ne restent que les rangées d'actions
+  `.X__filter-actions`, en helper autonome (réutilisées hors filtres dans
+  l'aire assiduité — corrections, décisions).
+- **Défilement horizontal contenu** généralisé : les `mat-table` de
+  `subject-list` et les deux de `invitation-list` — seules encore sans
+  enveloppe — sont posées dans `.esic-table-wrap`. La page ne défile
+  jamais horizontalement ; la table, si, dans son conteneur. Toutes les
+  autres listes avaient déjà leur enveloppe (`.X__table-wrapper` ou
+  `.esic-table-wrap`, étape 6).
+- Tri (`matSort`) et pagination (`mat-paginator`) : composants Material,
+  déjà réalignés par les jetons système (`_material-overrides.scss`) —
+  rien de spécifique ajouté.
+
+**Étape 9 — dialogues.** Constat : l'application n'ouvre **aucune fenêtre
+modale** — `MatDialog` n'est utilisé nulle part. Les confirmations et
+saisies contextuelles s'ouvrent **en creux dans le flux de la page**
+(`role="group"` + `aria-label`), pas en superposition : aucun problème de
+`z-index`, aucun piège de focus à gérer (aligné sur le mandat).
+- **`.esic-reveal`** complétée dans `_primitives.scss` : `__title` (serif),
+  `__text`, `__actions`, modificateur `--danger` (arête rouge pour une
+  action destructrice). Commentaire d'en-tête qui fige la règle « pas de
+  modal ».
+- **Bandeau transitoire** (`MatSnackBar`, seule surcouche du produit) :
+  stylé ESIC dans `_material-overrides.scss` — encre claire sur fond
+  encré, ombre « float », arête d'accent, action « Fermer » lisible ; la
+  variante erreur (`panelClass: 'app-snackbar-error'`), jusqu'ici sans
+  aucun style, devient rouge ESIC et distincte du bandeau d'information.
+- Confirmations `org__confirm` (archivage de site, `--danger`) et
+  `plan__confirm` (publication de planning) convergées sur `.esic-reveal`,
+  blocs SCSS dupliqués supprimés. Les panneaux de saisie contextuels
+  (`sessions__reveal`, `alt__reveal`, `att__reveal`…) gardent leur nom —
+  ils délèguent déjà au même vocabulaire de jetons (étape 6) ; un
+  renommage complet serait purement cosmétique.
+
+**Aucun `.ts`, aucune règle métier, aucune assertion de test touchés.**
+`NOT_PERFORMED` : audit visuel piloté (back-end local injoignable) ;
+recette Playwright non rejouée ; audit accessibilité outillé.
+
 ### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
 
 Même branche `feat/ui-redesign-bootstrap-material`. Refonte **visuelle et
