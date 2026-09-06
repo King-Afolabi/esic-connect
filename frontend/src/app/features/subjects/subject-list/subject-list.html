@@ -18,28 +18,32 @@
 
   <mat-card>
     <mat-card-content>
-      <form class="subjects__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <mat-form-field appearance="outline">
-          <mat-label>Code</mat-label>
-          <input matInput formControlName="code" maxlength="40" required />
-          @if (form.controls.code.touched && form.controls.code.invalid) {
-            <mat-error>Le code est obligatoire (40 caractères maximum).</mat-error>
-          }
-        </mat-form-field>
-        <mat-form-field appearance="outline">
-          <mat-label>Intitulé</mat-label>
-          <input matInput formControlName="name" maxlength="200" required />
-          @if (form.controls.name.touched && form.controls.name.invalid) {
-            <mat-error>L'intitulé est obligatoire.</mat-error>
-          }
-        </mat-form-field>
-        <mat-form-field appearance="outline">
-          <mat-label>Volume horaire (indicatif)</mat-label>
-          <input matInput type="number" formControlName="hourlyVolume" min="1" />
-        </mat-form-field>
-        <button mat-flat-button color="primary" type="submit" [disabled]="loading()">
-          Ajouter
-        </button>
+      <form class="subjects__form esic-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="esic-form__grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Code</mat-label>
+            <input matInput formControlName="code" maxlength="40" required />
+            @if (form.controls.code.touched && form.controls.code.invalid) {
+              <mat-error>Le code est obligatoire (40 caractères maximum).</mat-error>
+            }
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Intitulé</mat-label>
+            <input matInput formControlName="name" maxlength="200" required />
+            @if (form.controls.name.touched && form.controls.name.invalid) {
+              <mat-error>L'intitulé est obligatoire.</mat-error>
+            }
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Volume horaire (indicatif)</mat-label>
+            <input matInput type="number" formControlName="hourlyVolume" min="1" />
+          </mat-form-field>
+        </div>
+        <div class="esic-form__actions">
+          <button mat-flat-button color="primary" type="submit" [disabled]="loading()">
+            Ajouter
+          </button>
+        </div>
       </form>
     </mat-card-content>
   </mat-card>

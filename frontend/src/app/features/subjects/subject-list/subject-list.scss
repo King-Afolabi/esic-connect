@@ -21,11 +21,15 @@
   color: var(--esic-danger);
 }
 
-.subjects__form {
-  display: flex;
-  gap: 1rem;
-  align-items: baseline;
-  flex-wrap: wrap;
+// Le formulaire d'ajout s'appuie sur la primitive `.esic-form` /
+// `.esic-form__grid` ; il occupe la largeur de sa carte (le conteneur
+// `.subjects` aligne ses enfants à gauche).
+.subjects > mat-card {
+  align-self: stretch;
+}
+
+.subjects__form.esic-form {
+  max-width: 40rem;
 }
 
 .subjects__table {

@@ -70,40 +70,22 @@ table[mat-table] {
   border: 0;
 }
 
+// Le formulaire de création de compte s'appuie sur la primitive `.esic-form`
+// (`_primitives.scss`) : mise en page, grille de champs, pied et erreur de
+// soumission (`.esic-form__error`, posée à côté de `.users__create-error`).
 .users__create {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--esic-space-3) var(--esic-space-4);
   margin-block-end: var(--esic-space-4);
-
-  .mat-mdc-form-field {
-    width: auto;
-    min-width: 12rem;
-    flex: 1 1 16rem;
-  }
-}
-
-.users__create-title,
-.users__create-hint {
-  flex-basis: 100%;
-  margin: 0;
 }
 
 .users__create-title {
+  margin: 0;
   font-family: var(--esic-font-serif);
   font-size: 1.0625rem;
   font-weight: 600;
   color: var(--esic-ink);
 }
 
-.users__create-hint {
-  font-size: 0.875rem;
-  color: var(--esic-ink-soft);
-  max-width: 70ch;
-}
-
-.users__create-error,
+// Erreur de l'aperçu des opérations de masse — cf. `.esic-form__error`.
 .users__inline-error {
   display: flex;
   align-items: center;

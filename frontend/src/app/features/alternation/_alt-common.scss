@@ -61,8 +61,10 @@
   border-bottom-color: var(--esic-primary);
 }
 
-.alt__filters,
-.alt__form {
+// Barre de filtres — cf. `.esic-filters`. Les formulaires de saisie de l'aire
+// (modèle de rythme, affectation, exception) s'appuient sur la primitive
+// `.esic-form` ; ne restent ici que les helpers partagés avec les filtres.
+.alt__filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -80,6 +82,8 @@
   min-width: 12rem;
 }
 
+// Champ de largeur bornée — utilisé aussi bien dans un formulaire que dans un
+// bloc de résolution de contexte (filtre).
 .alt__form-field {
   flex: 1 1 16rem;
   min-width: 12rem;
@@ -179,11 +183,7 @@ table[mat-table] {
   background: var(--esic-surface-sunken);
 }
 
-.alt__inline-error {
-  margin: var(--esic-space-1) 0 0;
-  font-size: 0.8125rem;
-  color: var(--esic-danger);
-}
+// Erreur de soumission — cf. primitive `.esic-form__error`.
 
 .alt__section {
   margin: var(--esic-space-7) 0;

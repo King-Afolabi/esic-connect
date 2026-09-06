@@ -1,8 +1,5 @@
 @use '../organization.shared';
 
-.org__form-error {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--esic-danger);
-  font-size: 0.875rem;
-}
+// Le formulaire dédié de site s'appuie entièrement sur la primitive
+// `.esic-form` (`_primitives.scss`) : mise en page, groupe de champs, erreur
+// de soumission et pied de formulaire. Aucun style propre.

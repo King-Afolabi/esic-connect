@@ -1,20 +1,11 @@
 @use '../../alt-common';
 
+// `.alt__form-field--wide` (champ pleine largeur) et `.alt__fieldset` (groupe
+// de champs) délèguent aux primitives `.esic-form__row` / `.esic-form__group`,
+// posées à côté dans le gabarit.
 .alt__form-field--wide {
   width: 100%;
   max-width: 40rem;
-}
-
-.alt__fieldset {
-  border: 1px solid var(--esic-line);
-  border-radius: var(--esic-radius-sm);
-  padding: 1rem;
-  margin: 1rem 0;
-}
-
-.alt__fieldset legend {
-  font-weight: 600; font-size: 0.9375rem;
-  padding: 0 0.5rem;
 }
 
 .alt__hint {

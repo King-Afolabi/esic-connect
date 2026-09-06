@@ -132,7 +132,7 @@
             </button>
           </div>
           @if (closeError()) {
-            <p class="alt__inline-error" role="alert">{{ closeError() }}</p>
+            <p class="esic-form__error" role="alert">{{ closeError() }}</p>
           }
         </form>
       }
@@ -141,7 +141,8 @@
     <!-- Nouvelle affectation -->
     <section class="alt__section" aria-label="Affecter un rythme">
       <h2 class="alt__subtitle">Affecter un rythme</h2>
-      <form [formGroup]="assignForm" (ngSubmit)="submitAssign()" novalidate>
+      <p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
+      <form class="esic-form esic-form--wide" [formGroup]="assignForm" (ngSubmit)="submitAssign()" novalidate>
         <div class="alt__form-row">
           <mat-form-field appearance="outline" class="alt__form-field">
             <mat-label>Modèle de rythme (actif)</mat-label>
@@ -179,11 +180,11 @@
             <mat-hint>Vide = affectation ouverte.</mat-hint>
           </mat-form-field>
         </div>
-        <div class="alt__form-actions">
+        <div class="esic-form__actions">
           <button mat-flat-button type="submit" [disabled]="assignSubmitting()">Affecter</button>
         </div>
         @if (assignError()) {
-          <p class="alt__inline-error" role="alert">{{ assignError() }}</p>
+          <p class="esic-form__error" role="alert">{{ assignError() }}</p>
         }
       </form>
     </section>

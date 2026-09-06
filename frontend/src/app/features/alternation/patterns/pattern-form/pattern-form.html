@@ -39,7 +39,9 @@
       </div>
     </header>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
+
+    <form class="esic-form esic-form--wide" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <div class="alt__form-row">
         <mat-form-field appearance="outline" class="alt__form-field">
           <mat-label>Code</mat-label>
@@ -78,7 +80,7 @@
       </mat-form-field>
 
       <!-- Configuration selon le type -->
-      <fieldset class="alt__fieldset">
+      <fieldset class="alt__fieldset esic-form__group">
         <legend>Configuration du rythme</legend>
 
         @switch (selectedType()) {
@@ -211,10 +213,10 @@
       </section>
 
       @if (submitError()) {
-        <p class="alt__inline-error" role="alert">{{ submitError() }}</p>
+        <p class="esic-form__error" role="alert">{{ submitError() }}</p>
       }
 
-      <div class="alt__form-actions">
+      <div class="esic-form__actions">
         <button mat-flat-button type="submit" [disabled]="submitting() || clientErrors().length > 0">
           {{ mode === 'edit' ? 'Enregistrer' : 'Créer le modèle' }}
         </button>

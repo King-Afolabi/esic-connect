@@ -92,6 +92,9 @@
   word-break: break-word;
 }
 
+// Formulaires embarqués de la fiche site (bâtiment, salle, plage réseau).
+// Le formulaire *dédié* de création/édition d'un site, lui, s'appuie sur la
+// primitive `.esic-form` (`_primitives.scss`).
 .org__form {
   display: flex;
   flex-wrap: wrap;

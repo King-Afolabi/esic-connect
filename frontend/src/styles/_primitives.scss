@@ -481,6 +481,118 @@
   }
 }
 
+// -- Formulaire ----------------------------------------------------------
+// Un formulaire de saisie est une colonne : un champ par ligne, libellé
+// toujours au-dessus (Material `appearance="outline"`), largeur bornée — un
+// champ très large est plus lent à lire et à remplir. Les écrans denses à
+// champs courts (site, modèle de rythme…) regroupent leurs champs dans
+// `.esic-form__grid`. Ne s'applique PAS aux barres de filtres : voir
+// `.esic-filters`.
+.esic-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  max-width: 42rem;
+
+  // `.mat-mdc-form-field` est déjà en largeur 100 % (réalignement global) :
+  // dans une colonne, aucune surcharge par écran n'est nécessaire.
+
+  &--wide {
+    max-width: 52rem;
+  }
+}
+
+// Grappe de champs courts, disposée selon la largeur disponible (jamais des
+// points de rupture d'appareil).
+.esic-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--esic-space-3) var(--esic-space-4);
+  align-items: start;
+}
+
+// Champ qui occupe toute la largeur de la grille (zone de texte, sélecteur
+// multiple, motif obligatoire).
+.esic-form__row {
+  grid-column: 1 / -1;
+}
+
+// Groupe de champs nommé — `<fieldset>` remis à zéro puis redécoré : filet
+// fin, légende en serif posée sur le filet. Sert le regroupement fonctionnel
+// attendu (docs/02 §34.1).
+.esic-form__group {
+  min-width: 0;
+  margin: var(--esic-space-2) 0 0;
+  padding: var(--esic-space-4) var(--esic-space-5) var(--esic-space-5);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+
+  > legend {
+    padding: 0 var(--esic-space-2);
+    margin-left: calc(var(--esic-space-2) * -1);
+    font-family: var(--esic-font-serif);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--esic-ink);
+  }
+}
+
+// Aide autonome (hors `mat-hint`, qui reste le bon outil pour l'aide
+// attachée à un champ) : une phrase sous l'en-tête ou au-dessus d'un groupe.
+.esic-form__hint {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
+}
+
+// Rappel des champs obligatoires. Material appose déjà « * » après le libellé
+// d'un champ requis ; cette ligne l'explicite une fois pour le formulaire.
+.esic-form__required-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+
+  &::before {
+    content: "* ";
+    color: var(--esic-danger);
+    font-weight: 700;
+  }
+}
+
+// Erreur de soumission — niveau formulaire, pas niveau champ. Toujours
+// `role="alert"` dans le gabarit. Distincte de `mat-error` (un champ précis).
+.esic-form__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: var(--esic-space-2) 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--esic-danger);
+
+  .mat-icon,
+  mat-icon {
+    flex-shrink: 0;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    font-size: 1.125rem;
+  }
+}
+
+// Pied de formulaire : action primaire + échappatoire, séparées des champs
+// par un filet. Action primaire `mat-flat-button`, annulation `mat-button`.
+.esic-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esic-space-2) var(--esic-space-3);
+  margin-top: var(--esic-space-4);
+  padding-top: var(--esic-space-4);
+  border-top: 1px solid var(--esic-line);
+}
+
 // -- Anneau de focus commun (clavier) -------------------------------------
 // Repose sur `:focus-visible` : jamais visible à la souris, toujours au clavier.
 @mixin esic-focus-ring {
