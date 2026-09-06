@@ -270,9 +270,9 @@ describe('Dashboard', () => {
   };
 
   it('renders the administration counts from the server payload', () => {
-    expect(text()).toContain('Actifs');
+    expect(text()).toContain('Comptes actifs');
     expect(text()).toContain('12');
-    expect(text()).toContain('En attente');
+    expect(text()).toContain("En attente d'activation");
   });
 
   it('renders a STUDENT card without any /sessions link', () => {

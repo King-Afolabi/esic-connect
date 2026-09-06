@@ -1,81 +1,45 @@
-<h1 class="dashboard__title">Tableau de bord</h1>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Tableau de bord</h1>
+    @if (session()) {
+      <p class="esic-page-header__description">
+        Bienvenue. Votre session locale est active (établie après votre connexion).
+      </p>
+    }
+  </div>
+</header>
 
 @if (session(); as currentSession) {
-  <p class="dashboard__intro">
-    Bienvenue. Votre session locale est active (établie après votre connexion).
-  </p>
+  <div class="dashboard__identity">
+    <dl class="esic-kv dashboard__identity-facts">
+      <dt>Compte</dt>
+      <dd>{{ currentSession.email }}</dd>
+      <dt>Identifiant public</dt>
+      <dd>{{ currentSession.subject ?? 'non communiqué' }}</dd>
+      <dt>Expiration</dt>
+      <dd>{{ expiresLabel() }}</dd>
+    </dl>
 
-  <div class="dashboard__grid">
-    <mat-card appearance="outlined" class="dashboard__card">
-      <mat-card-header>
-        <mat-card-title>Session</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <dl class="dashboard__facts">
-          <div>
-            <dt>Compte</dt>
-            <dd>{{ currentSession.email }}</dd>
-          </div>
-          <div>
-            <dt>Identifiant public</dt>
-            <dd>{{ currentSession.subject ?? 'non communiqué' }}</dd>
-          </div>
-          <div>
-            <dt>Expiration</dt>
-            <dd>{{ expiresLabel() }}</dd>
-          </div>
-        </dl>
-      </mat-card-content>
-    </mat-card>
-
-    <mat-card appearance="outlined" class="dashboard__card">
-      <mat-card-header>
-        <mat-card-title>Rôles</mat-card-title>
-        <mat-card-subtitle>Déterminent les écrans accessibles</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        @if (roles().length) {
-          <ul class="dashboard__roles">
-            @for (role of roles(); track role) {
-              <li class="dashboard__role-chip">{{ roleLabel(role) }}</li>
-            }
-          </ul>
-          @if (hasContextChoice()) {
-            <p class="dashboard__context">
-              Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il choisit le rôle
-              affiché (navigation et « Mon activité », vérifié côté serveur) ; vos
-              autorisations restent inchangées.
-            </p>
+    <div class="dashboard__identity-roles">
+      @if (roles().length) {
+        <ul class="dashboard__roles" aria-label="Rôles actifs du compte">
+          @for (role of roles(); track role) {
+            <li class="dashboard__role-chip">{{ roleLabel(role) }}</li>
           }
-        } @else {
-          <p class="dashboard__empty">
-            Aucun rôle actif n'est associé à votre compte. Contactez un administrateur.
+        </ul>
+        @if (hasContextChoice()) {
+          <p class="dashboard__context">
+            Contexte actif : <strong>{{ activeContextLabel() }}</strong>. Il choisit le rôle
+            affiché (navigation et « Mon activité », vérifié côté serveur) ; vos autorisations
+            restent inchangées.
           </p>
         }
-      </mat-card-content>
-    </mat-card>
-
-    <mat-card appearance="outlined" class="dashboard__card">
-      <mat-card-header>
-        <mat-card-title>Accès rapides</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        @if (quickLinks().length) {
-          <mat-nav-list>
-            @for (link of quickLinks(); track link.path) {
-              <a mat-list-item [routerLink]="link.path">
-                <mat-icon matListItemIcon aria-hidden="true">{{ link.icon }}</mat-icon>
-                <span matListItemTitle>{{ link.label }}</span>
-              </a>
-            }
-          </mat-nav-list>
-        } @else {
-          <p class="dashboard__empty">
-            Aucun autre écran n'est disponible pour vos rôles actuels.
-          </p>
-        }
-      </mat-card-content>
-    </mat-card>
+      } @else {
+        <p class="dashboard__empty">
+          Aucun rôle actif n'est associé à votre compte. Contactez un administrateur.
+        </p>
+      }
+    </div>
   </div>
 
   <section class="dashboard__role" aria-label="Tableau de bord par rôle">
@@ -99,28 +63,45 @@
       @case ('ready') {
         @if (dash(); as d) {
           @if (d.student; as s) {
+            <ul class="dashboard__metrics" aria-label="Indicateurs d'assiduité">
+              <li class="dashboard__metric dashboard__metric--present">
+                <span class="dashboard__metric-value">{{ s.present }}</span>
+                <span class="dashboard__metric-label">Présences</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--late">
+                <span class="dashboard__metric-value">{{ s.late }}</span>
+                <span class="dashboard__metric-label">Retards</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--absent">
+                <span class="dashboard__metric-value">{{ s.absent }}</span>
+                <span class="dashboard__metric-label">Absences</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--excused">
+                <span class="dashboard__metric-value">{{ s.excused }}</span>
+                <span class="dashboard__metric-label">Absences excusées</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--pending">
+                <span class="dashboard__metric-value">{{ s.pendingJustifications }}</span>
+                <span class="dashboard__metric-label">Justificatifs en attente</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ s.rejectedJustifications }}</span>
+                <span class="dashboard__metric-label">Justificatifs refusés</span>
+              </li>
+            </ul>
+
             <div class="dashboard__grid">
-              <mat-card appearance="outlined" class="dashboard__card">
-                <mat-card-header><mat-card-title>Assiduité</mat-card-title></mat-card-header>
-                <mat-card-content>
-                  <dl class="dashboard__facts">
-                    <div><dt>Présences</dt><dd>{{ s.present }}</dd></div>
-                    <div><dt>Retards</dt><dd>{{ s.late }}</dd></div>
-                    <div><dt>Absences</dt><dd>{{ s.absent }}</dd></div>
-                    <div><dt>Absences excusées</dt><dd>{{ s.excused }}</dd></div>
-                    <div><dt>Justificatifs en attente</dt><dd>{{ s.pendingJustifications }}</dd></div>
-                    <div><dt>Justificatifs refusés</dt><dd>{{ s.rejectedJustifications }}</dd></div>
-                  </dl>
-                </mat-card-content>
-              </mat-card>
-              <mat-card appearance="outlined" class="dashboard__card">
+              <mat-card appearance="outlined" class="dashboard__card dashboard__card--wide">
                 <mat-card-header><mat-card-title>Mes prochains cours</mat-card-title></mat-card-header>
                 <mat-card-content>
                   @if (s.weekSessions.length) {
                     <ul class="dashboard__list">
                       @for (line of s.weekSessions; track line.sessionPublicId) {
-                        <li>{{ line.title || 'Séance' }} — {{ shortInstant(line.startsAt) }}
-                          <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span></li>
+                        <li>
+                          <span>{{ line.title || 'Séance' }}</span>
+                          <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
+                          <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span>
+                        </li>
                       }
                     </ul>
                   } @else {
@@ -132,6 +113,17 @@
           }
 
           @if (d.teacher; as t) {
+            <ul class="dashboard__metrics" aria-label="Indicateurs de mes séances">
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ t.upcoming.length }}</span>
+                <span class="dashboard__metric-label">Séances à venir</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--pending">
+                <span class="dashboard__metric-value">{{ t.toOpen.length }}</span>
+                <span class="dashboard__metric-label">Séances à ouvrir</span>
+              </li>
+            </ul>
+
             <div class="dashboard__grid">
               <mat-card appearance="outlined" class="dashboard__card">
                 <mat-card-header><mat-card-title>Séances à venir</mat-card-title></mat-card-header>
@@ -143,9 +135,9 @@
                           @if (canLinkSessions()) {
                             <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
                           } @else {
-                            {{ line.title || 'Séance' }}
+                            <span>{{ line.title || 'Séance' }}</span>
                           }
-                          — {{ shortInstant(line.startsAt) }}
+                          <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
                         </li>
                       }
                     </ul>
@@ -164,9 +156,9 @@
                           @if (canLinkSessions()) {
                             <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
                           } @else {
-                            {{ line.title || 'Séance' }}
+                            <span>{{ line.title || 'Séance' }}</span>
                           }
-                          — {{ shortInstant(line.startsAt) }}
+                          <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
                         </li>
                       }
                     </ul>
@@ -179,20 +171,40 @@
           }
 
           @if (d.manager; as m) {
+            <ul class="dashboard__metrics" aria-label="Indicateurs de mon périmètre">
+              <li class="dashboard__metric dashboard__metric--rate">
+                <span class="dashboard__metric-value">{{ percent(m.attendanceRate) }}</span>
+                <span class="dashboard__metric-label">Taux d'assiduité</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--late">
+                <span class="dashboard__metric-value">{{ m.lateCount }}</span>
+                <span class="dashboard__metric-label">Retards</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--absent">
+                <span class="dashboard__metric-value">{{ m.unjustifiedAbsenceHalfDays }}</span>
+                <span class="dashboard__metric-label">Absences non justifiées (½-journées)</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--pending">
+                <span class="dashboard__metric-value">{{ m.pendingJustifications }}</span>
+                <span class="dashboard__metric-label">Justificatifs en attente</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ m.openClaims }}</span>
+                <span class="dashboard__metric-label">Réclamations ouvertes</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ m.pendingActivations }}</span>
+                <span class="dashboard__metric-label">Comptes non activés</span>
+              </li>
+            </ul>
+
             <div class="dashboard__grid">
               <mat-card appearance="outlined" class="dashboard__card">
                 <mat-card-header><mat-card-title>Mon périmètre</mat-card-title></mat-card-header>
                 <mat-card-content>
                   <dl class="dashboard__facts">
-                    <div><dt>Classes</dt><dd>{{ m.classCount }}</dd></div>
-                    <div><dt>Codes</dt><dd>{{ m.classCodes.join(', ') || '—' }}</dd></div>
-                    <div><dt>Taux d'assiduité</dt><dd>{{ percent(m.attendanceRate) }}</dd></div>
-                    <div><dt>Retards</dt><dd>{{ m.lateCount }}</dd></div>
-                    <div><dt>Absences non justifiées</dt>
-                      <dd>{{ m.unjustifiedAbsenceHalfDays }} demi-journée(s)</dd></div>
-                    <div><dt>Justificatifs en attente</dt><dd>{{ m.pendingJustifications }}</dd></div>
-                    <div><dt>Réclamations ouvertes</dt><dd>{{ m.openClaims }}</dd></div>
-                    <div><dt>Comptes non activés</dt><dd>{{ m.pendingActivations }}</dd></div>
+                    <dt>Classes</dt><dd>{{ m.classCount }}</dd>
+                    <dt>Codes</dt><dd>{{ m.classCodes.join(', ') || '—' }}</dd>
                   </dl>
                   <p class="dashboard__meta">
                     Période mesurée : du {{ shortDate(m.periodFrom) }} au {{ shortDate(m.periodTo) }}.
@@ -230,33 +242,35 @@
                         </li>
                       }
                     </ul>
-                    <table class="dashboard__table">
-                      <caption>Tableau équivalent — assiduité par classe, en demi-journées</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Classe</th>
-                          <th scope="col">Attendues</th>
-                          <th scope="col">Suivies</th>
-                          <th scope="col">Absentes</th>
-                          <th scope="col">Excusées</th>
-                          <th scope="col">Retards</th>
-                          <th scope="col">Taux</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (rate of m.classRates; track rate.label) {
+                    <div class="esic-table-wrap">
+                      <table class="esic-table dashboard__table">
+                        <caption>Tableau équivalent — assiduité par classe, en demi-journées</caption>
+                        <thead>
                           <tr>
-                            <th scope="row">{{ rate.label }}</th>
-                            <td>{{ rate.expectedHalfDays }}</td>
-                            <td>{{ rate.presentHalfDays }}</td>
-                            <td>{{ rate.absentHalfDays }}</td>
-                            <td>{{ rate.excusedHalfDays }}</td>
-                            <td>{{ rate.lateCount }}</td>
-                            <td>{{ percent(rate.attendanceRate) }}</td>
+                            <th scope="col">Classe</th>
+                            <th scope="col" class="esic-num">Attendues</th>
+                            <th scope="col" class="esic-num">Suivies</th>
+                            <th scope="col" class="esic-num">Absentes</th>
+                            <th scope="col" class="esic-num">Excusées</th>
+                            <th scope="col" class="esic-num">Retards</th>
+                            <th scope="col" class="esic-num">Taux</th>
                           </tr>
-                        }
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          @for (rate of m.classRates; track rate.label) {
+                            <tr>
+                              <th scope="row">{{ rate.label }}</th>
+                              <td class="esic-num">{{ rate.expectedHalfDays }}</td>
+                              <td class="esic-num">{{ rate.presentHalfDays }}</td>
+                              <td class="esic-num">{{ rate.absentHalfDays }}</td>
+                              <td class="esic-num">{{ rate.excusedHalfDays }}</td>
+                              <td class="esic-num">{{ rate.lateCount }}</td>
+                              <td class="esic-num">{{ percent(rate.attendanceRate) }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
                   } @else {
                     <p class="dashboard__empty">Aucune donnée d'assiduité sur la période.</p>
                   }
@@ -272,9 +286,9 @@
                           @if (canLinkSessions()) {
                             <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
                           } @else {
-                            {{ line.title || 'Séance' }}
+                            <span>{{ line.title || 'Séance' }}</span>
                           }
-                          — {{ shortInstant(line.startsAt) }}
+                          <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
                           <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span>
                         </li>
                       }
@@ -288,37 +302,49 @@
           }
 
           @if (d.administration; as a) {
-            <div class="dashboard__grid">
-              <mat-card appearance="outlined" class="dashboard__card">
-                <mat-card-header><mat-card-title>Comptes</mat-card-title></mat-card-header>
-                <mat-card-content>
-                  <dl class="dashboard__facts">
-                    <div><dt>Actifs</dt><dd>{{ a.activeAccounts }}</dd></div>
-                    <div><dt>Suspendus</dt><dd>{{ a.suspendedAccounts }}</dd></div>
-                    <div><dt>En attente d'activation</dt><dd>{{ a.pendingActivation }}</dd></div>
-                    <div><dt>Archivés</dt><dd>{{ a.archivedAccounts }}</dd></div>
-                    <div><dt>Invitations expirées</dt><dd>{{ a.expiredInvitations }}</dd></div>
-                    <div><dt>Taux d'assiduité global</dt><dd>{{ percent(a.globalAttendanceRate) }}</dd></div>
-                  </dl>
-                </mat-card-content>
-              </mat-card>
+            <ul class="dashboard__metrics" aria-label="Indicateurs de l'établissement">
+              <li class="dashboard__metric dashboard__metric--rate">
+                <span class="dashboard__metric-value">{{ percent(a.globalAttendanceRate) }}</span>
+                <span class="dashboard__metric-label">Taux d'assiduité global</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ a.activeAccounts }}</span>
+                <span class="dashboard__metric-label">Comptes actifs</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ a.suspendedAccounts }}</span>
+                <span class="dashboard__metric-label">Comptes suspendus</span>
+              </li>
+              <li class="dashboard__metric dashboard__metric--pending">
+                <span class="dashboard__metric-value">{{ a.pendingActivation }}</span>
+                <span class="dashboard__metric-label">En attente d'activation</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ a.archivedAccounts }}</span>
+                <span class="dashboard__metric-label">Comptes archivés</span>
+              </li>
+              <li class="dashboard__metric">
+                <span class="dashboard__metric-value">{{ a.expiredInvitations }}</span>
+                <span class="dashboard__metric-label">Invitations expirées</span>
+              </li>
+            </ul>
 
+            <div class="dashboard__grid">
               <mat-card appearance="outlined" class="dashboard__card">
                 <mat-card-header><mat-card-title>Justificatifs</mat-card-title></mat-card-header>
                 <mat-card-content>
                   <dl class="dashboard__facts">
-                    <div><dt>En attente</dt><dd>{{ a.pendingJustifications }}</dd></div>
-                    <div><dt>Examinés sur la période</dt><dd>{{ a.decidedJustifications }}</dd></div>
-                    <div><dt>Délai médian de décision</dt>
-                      <dd>
-                        @if (a.medianDecisionDelayHours !== null) {
-                          {{ a.medianDecisionDelayHours }} h
-                        } @else {
-                          <!-- « 0 h » ferait croire à un traitement instantané. -->
-                          Aucun dossier traité sur la période
-                        }
-                      </dd>
-                    </div>
+                    <dt>En attente</dt><dd>{{ a.pendingJustifications }}</dd>
+                    <dt>Examinés sur la période</dt><dd>{{ a.decidedJustifications }}</dd>
+                    <dt>Délai médian de décision</dt>
+                    <dd>
+                      @if (a.medianDecisionDelayHours !== null) {
+                        {{ a.medianDecisionDelayHours }} h
+                      } @else {
+                        <!-- « 0 h » ferait croire à un traitement instantané. -->
+                        Aucun dossier traité sur la période
+                      }
+                    </dd>
                   </dl>
                   <p class="dashboard__meta">
                     Période mesurée : du {{ shortDate(a.periodFrom) }} au {{ shortDate(a.periodTo) }}.
@@ -347,33 +373,35 @@
                         </li>
                       }
                     </ul>
-                    <table class="dashboard__table">
-                      <caption>Tableau équivalent — assiduité par formation, en demi-journées</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Formation</th>
-                          <th scope="col">Attendues</th>
-                          <th scope="col">Suivies</th>
-                          <th scope="col">Absentes</th>
-                          <th scope="col">Excusées</th>
-                          <th scope="col">Retards</th>
-                          <th scope="col">Taux</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (rate of a.programRates; track rate.label) {
+                    <div class="esic-table-wrap">
+                      <table class="esic-table dashboard__table">
+                        <caption>Tableau équivalent — assiduité par formation, en demi-journées</caption>
+                        <thead>
                           <tr>
-                            <th scope="row">{{ rate.label }}</th>
-                            <td>{{ rate.expectedHalfDays }}</td>
-                            <td>{{ rate.presentHalfDays }}</td>
-                            <td>{{ rate.absentHalfDays }}</td>
-                            <td>{{ rate.excusedHalfDays }}</td>
-                            <td>{{ rate.lateCount }}</td>
-                            <td>{{ percent(rate.attendanceRate) }}</td>
+                            <th scope="col">Formation</th>
+                            <th scope="col" class="esic-num">Attendues</th>
+                            <th scope="col" class="esic-num">Suivies</th>
+                            <th scope="col" class="esic-num">Absentes</th>
+                            <th scope="col" class="esic-num">Excusées</th>
+                            <th scope="col" class="esic-num">Retards</th>
+                            <th scope="col" class="esic-num">Taux</th>
                           </tr>
-                        }
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          @for (rate of a.programRates; track rate.label) {
+                            <tr>
+                              <th scope="row">{{ rate.label }}</th>
+                              <td class="esic-num">{{ rate.expectedHalfDays }}</td>
+                              <td class="esic-num">{{ rate.presentHalfDays }}</td>
+                              <td class="esic-num">{{ rate.absentHalfDays }}</td>
+                              <td class="esic-num">{{ rate.excusedHalfDays }}</td>
+                              <td class="esic-num">{{ rate.lateCount }}</td>
+                              <td class="esic-num">{{ percent(rate.attendanceRate) }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
                   } @else {
                     <p class="dashboard__empty">Aucune donnée d'assiduité sur la période.</p>
                   }
@@ -385,8 +413,11 @@
                   @if (a.recentImports.length) {
                     <ul class="dashboard__list">
                       @for (imp of a.recentImports; track imp.publicId) {
-                        <li>{{ imp.status }} — {{ imp.totalRows }} lignes
-                          <span class="dashboard__meta">{{ shortInstant(imp.createdAt) }}</span></li>
+                        <li>
+                          <span>{{ imp.status }}</span>
+                          <span class="dashboard__meta">{{ imp.totalRows }} lignes</span>
+                          <span class="dashboard__meta">{{ shortInstant(imp.createdAt) }}</span>
+                        </li>
                       }
                     </ul>
                   } @else {
@@ -404,9 +435,9 @@
                           @if (canLinkSessions()) {
                             <a [routerLink]="['/sessions', line.sessionPublicId]">{{ line.title || 'Séance' }}</a>
                           } @else {
-                            {{ line.title || 'Séance' }}
+                            <span>{{ line.title || 'Séance' }}</span>
                           }
-                          — {{ shortInstant(line.startsAt) }}
+                          <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
                         </li>
                       }
                     </ul>
@@ -426,8 +457,11 @@
                   @if (a.recentExports.length) {
                     <ul class="dashboard__list">
                       @for (line of a.recentExports; track line.occurredAt + line.action) {
-                        <li>{{ line.actor || 'Système' }} — {{ line.result }}
-                          <span class="dashboard__meta">{{ shortInstant(line.occurredAt) }}</span></li>
+                        <li>
+                          <span>{{ line.actor || 'Système' }}</span>
+                          <span class="dashboard__meta">{{ line.result }}</span>
+                          <span class="dashboard__meta">{{ shortInstant(line.occurredAt) }}</span>
+                        </li>
                       }
                     </ul>
                   } @else {
@@ -441,8 +475,11 @@
                   @if (a.recentAuditOperations.length) {
                     <ul class="dashboard__list">
                       @for (line of a.recentAuditOperations; track line.occurredAt + line.action) {
-                        <li>{{ line.action }} — {{ line.result }}
-                          <span class="dashboard__meta">{{ shortInstant(line.occurredAt) }}</span></li>
+                        <li>
+                          <span>{{ line.action }}</span>
+                          <span class="dashboard__meta">{{ line.result }}</span>
+                          <span class="dashboard__meta">{{ shortInstant(line.occurredAt) }}</span>
+                        </li>
                       }
                     </ul>
                     <p class="dashboard__meta">
@@ -462,6 +499,28 @@
         }
       }
     }
+  </section>
+
+  <section class="dashboard__role" aria-label="Accès rapides">
+    <h2 class="dashboard__subtitle">Accès rapides</h2>
+    <mat-card appearance="outlined" class="dashboard__card">
+      <mat-card-content>
+        @if (quickLinks().length) {
+          <mat-nav-list>
+            @for (link of quickLinks(); track link.path) {
+              <a mat-list-item [routerLink]="link.path">
+                <mat-icon matListItemIcon aria-hidden="true">{{ link.icon }}</mat-icon>
+                <span matListItemTitle>{{ link.label }}</span>
+              </a>
+            }
+          </mat-nav-list>
+        } @else {
+          <p class="dashboard__empty">
+            Aucun autre écran n'est disponible pour vos rôles actuels.
+          </p>
+        }
+      </mat-card-content>
+    </mat-card>
   </section>
 } @else {
   <p class="dashboard__empty" role="status">Session introuvable. Redirection vers la connexion…</p>

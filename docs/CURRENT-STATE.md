@@ -200,13 +200,13 @@ touchés. **`PARTIAL` : socle livré, refonte écran par écran NON faite.**
   dupliquées par écran supprimées ; aucune règle métier touchée.
 
 **PAS encore fait** (prochaines étapes de la branche) : refonte écran par
-écran (tableau de bord — cartes trop hautes, formulaires,
-listes/tableaux — défilement horizontal sur mobile à revoir, modales) ;
-libellés longs du rail déplié encore tronqués ;
-favicon / icônes PWA (toujours le placeholder « E » bleu) — le
+écran (pages métier, formulaires, listes/tableaux — défilement horizontal
+sur mobile à généraliser, modales) ; libellés longs du rail déplié encore
+tronqués ; favicon / icônes PWA (toujours le placeholder « E » bleu) — le
 monogramme de la barre reste une forme géométrique neutre
 (`.shell__mark`), remplaçable ; jeu de données de démonstration élargi ;
-audit accessibilité outillé.
+audit accessibilité outillé. Le **tableau de bord** est fait (voir
+« étape 5 » ci-dessous).
 
 **Dépendance ajoutée** : `bootstrap@5.3.3` (+ `@popperjs/core` transitif,
 non utilisé). `npm audit` : 0 vulnérabilité.
@@ -229,6 +229,67 @@ total initial **568 kB brut / 132 kB transféré**. `maximumError` inchangé
 
 `NOT_PERFORMED` : recette Playwright (non rejouée) ; audit
 accessibilité outillé ; revue sur tablette / pliable / ultralarge réels.
+
+### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
+
+Même branche `feat/ui-redesign-bootstrap-material`. Refonte **visuelle et
+UX** du tableau de bord des quatre rôles ; aucun champ, endpoint, rôle ni
+règle métier touché — `dashboard-api.service.ts` et `dashboard.models.ts`
+inchangés.
+
+- **Trois registres visuels distincts** au lieu d'une pile de cartes
+  identiques : (1) *bande d'identité* — compte / identifiant / expiration
+  + jetons de rôle + phrase de contexte, sur un simple filet de base,
+  jamais accentuée ; (2) *bandeau d'indicateurs* — les chiffres clés en
+  grand (chasse tabulaire), un seul bloc bordé divisé par des filets,
+  point d'entrée du regard ; (3) *cartes de détail* — surface Material
+  réalignée.
+- **Le bandeau d'indicateurs réutilise le vocabulaire de couleur des
+  statuts d'assiduité** (`_tokens.scss`) : chaque cellule d'assiduité
+  porte le point + le filet supérieur de son statut — présences en vert,
+  retards en ocre, absences en rouge, excusées en bleu, en attente en
+  ocre. La couleur ne porte jamais seule l'information : libellé + point
+  (docs/02 §32.5).
+- **Défaut fonctionnel corrigé** : `.dashboard__card { height: 100% }` +
+  `grid auto-fit` étirait toutes les cartes d'une rangée à la hauteur de
+  la plus grande — d'où les panneaux « Session » / « Rôles » hauts et
+  vides des captures précédentes. La grille est désormais
+  `align-items: start` et la règle `height: 100%` supprimée : une carte
+  courte reste courte.
+- **Tableaux équivalents** (EF-REP-008) enveloppés dans `.esic-table-wrap`
+  (défilement horizontal contenu, jamais le `<body>`) et portant la
+  classe `.esic-table` des primitives ; l'histogramme passe aux jetons
+  (piste en creux, remplissage bleu ESIC, barre fine). Le graphique et la
+  table lisent toujours la **même liste** ; chaque barre garde sa valeur
+  en toutes lettres.
+- En-tête `.esic-page-header` (titre serif), sous-titres de section en
+  serif, listes de séances en lignes compactes séparées d'un filet.
+- Carte « Comptes » de l'administration **retirée** : elle dupliquait à
+  l'identique le bandeau d'indicateurs. Le test
+  `dashboard.spec.ts` correspondant a été ajusté au nouveau libellé
+  (« Comptes actifs », « En attente d'activation »).
+
+**Budget de style par composant** : `anyComponentStyle.maximumWarning`
+relevé de `4 kB` à `8 kB` et `maximumError` de `8 kB` à `12 kB` dans
+`angular.json`. Le SCSS *scopé* du tableau de bord (4 variantes de rôle,
+bandeau, histogramme, adaptatif) compile à **~5,3 kB** — le seuil par
+défaut de 4 kB d'Angular est serré pour un écran de cette densité.
+`styles.scss` global inchangé (81 kB), budget initial (600 kB) intact.
+
+**Tests** (même environnement que §6) :
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **95 fichiers / 786 tests / 0 échec** (dont `dashboard.spec.ts` 22/22) |
+| `cd frontend && npx ng build --configuration production` | bundle produit, **aucune alerte de budget** |
+| Revue visuelle pilotée (Chromium, `local` sur `esic_connect`) | tableau de bord *responsable* 1440 px et 390 px, tableau de bord *apprenant* 1440 px : hiérarchie appliquée, bandeau d'indicateurs aux couleurs de statut, cartes à hauteur naturelle, `body.scrollWidth === clientWidth` (aucun débordement) aux deux largeurs |
+
+`NOT_PERFORMED` : tableau de bord *administration* et *formateur* en
+navigateur (mêmes primitives que *responsable*, non re-capturés) ;
+recette Playwright `tests/11-pilotage-restitution.spec.ts` (sélecteurs
+`.dashboard__chart` / `.dashboard__bar-value` / `table.dashboard__table`
+**conservés**, suite non rejouée) ; audit accessibilité outillé.
 
 ## Repère Git
 

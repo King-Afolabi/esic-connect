@@ -1,40 +1,39 @@
-.dashboard__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.5rem;
+// Tableau de bord — trois registres visuels distincts (pas une pile de cartes
+// identiques) : bande d'identité (filet seul), bandeau d'indicateurs (chiffres
+// en grand, point d'entrée du regard), cartes de détail (surface Material).
+// Toutes les couleurs viennent de `_tokens.scss`.
+
+:host {
+  display: block;
 }
 
-.dashboard__intro {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0 0 1.5rem;
+// -- Bande d'identité : information utilitaire, filet de base, pas d'accent ----
+.dashboard__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--esic-space-3) var(--esic-space-6);
+  padding-bottom: var(--esic-space-4);
+  margin-bottom: var(--esic-space-6);
+  border-bottom: 1px solid var(--esic-line);
+  font-size: 0.875rem;
 }
 
-.dashboard__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: 1rem;
-}
-
-.dashboard__card {
-  height: 100%;
-}
-
-.dashboard__facts {
+.dashboard__identity-facts {
   margin: 0;
+
+  dt {
+    color: var(--esic-ink-faint);
+  }
+}
+
+.dashboard__identity-roles {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-}
-
-.dashboard__facts dt {
-  font: var(--mat-sys-label-medium);
-  color: var(--mat-sys-on-surface-variant);
-}
-
-.dashboard__facts dd {
-  margin: 0;
-  font: var(--mat-sys-body-medium);
-  word-break: break-word;
+  gap: var(--esic-space-2);
+  align-items: flex-end;
+  text-align: right;
 }
 
 .dashboard__roles {
@@ -43,100 +42,262 @@
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
+  justify-content: flex-end;
 }
 
 .dashboard__role-chip {
-  font: var(--mat-sys-label-large);
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-primary-tint);
+  color: var(--esic-blue-700);
 }
 
 .dashboard__context {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0.75rem 0 0;
-}
-
-.dashboard__empty {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
   margin: 0;
+  max-width: 46ch;
 }
 
-/*
- * Histogramme et tableau équivalent (EF-REP-008).
- *
- * La barre n'est jamais le seul porteur de l'information : chaque ligne
- * affiche sa valeur en toutes lettres à droite, et le tableau qui suit
- * reprend les mêmes chiffres. Une personne qui ne distingue pas les
- * couleurs, ou qui navigue au lecteur d'écran, lit exactement la même
- * chose (docs/02 §22.6, §32.5).
- */
+// -- Section « Mon activité » / « Accès rapides » ---------------------------
+.dashboard__role {
+  margin-top: var(--esic-space-6);
+}
+
+.dashboard__subtitle {
+  margin: 0 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--esic-ink);
+}
+
+// -- Bandeau d'indicateurs : un bloc bordé divisé par des filets, pas N cartes.
+// Chaque cellule d'assiduité porte le point de couleur de son statut ; la
+// couleur ne porte jamais seule l'information (docs/02 §32.5).
+.dashboard__metrics {
+  list-style: none;
+  margin: 0 0 var(--esic-space-5);
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  overflow: hidden;
+}
+
+.dashboard__metric {
+  flex: 1 1 8.5rem;
+  min-width: 0;
+  padding: var(--esic-space-4) var(--esic-space-5);
+  border-top: 3px solid transparent;
+  border-left: 1px solid var(--esic-line);
+
+  &:first-child {
+    border-left: 0;
+  }
+}
+
+.dashboard__metric-value {
+  display: block;
+  font-size: clamp(1.5rem, 1.3rem + 1vw, 1.875rem);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--esic-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard__metric-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: var(--esic-space-2);
+  font-size: 0.8125rem;
+  color: var(--esic-ink-soft);
+
+  &::before {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--_dot, transparent);
+  }
+}
+
+.dashboard__metric--present { --_dot: var(--esic-status-present-fg); border-top-color: var(--esic-status-present-fg); }
+.dashboard__metric--late    { --_dot: var(--esic-status-late-fg);    border-top-color: var(--esic-status-late-fg); }
+.dashboard__metric--absent  { --_dot: var(--esic-status-absent-fg);  border-top-color: var(--esic-status-absent-fg); }
+.dashboard__metric--excused { --_dot: var(--esic-status-excused-fg); border-top-color: var(--esic-status-excused-fg); }
+.dashboard__metric--pending { --_dot: var(--esic-warning);           border-top-color: var(--esic-warning); }
+.dashboard__metric--rate    { border-top-color: var(--esic-primary); }
+
+// -- Grille de détail : `auto-fill` sur la largeur, alignée en haut. Une carte
+// courte reste courte (le `height: 100%` d'origine gonflait les panneaux).
+.dashboard__grid {
+  display: grid;
+  gap: var(--esic-space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  align-items: start;
+  margin-bottom: var(--esic-space-5);
+}
+
 .dashboard__card--wide {
   grid-column: 1 / -1;
 }
 
+.dashboard__facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  align-items: baseline;
+
+  dt {
+    font-size: 0.8125rem;
+    color: var(--esic-ink-soft);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--esic-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    word-break: break-word;
+  }
+}
+
+// -- Listes de séances : lignes compactes séparées d'un filet ---------------
+.dashboard__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem var(--esic-space-3);
+    padding: var(--esic-space-3) 0;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  li + li {
+    border-top: 1px solid var(--esic-line);
+  }
+
+  a {
+    font-weight: 600;
+  }
+
+  .dashboard__meta {
+    margin: 0;
+  }
+}
+
+.dashboard__meta {
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+  font-variant-numeric: tabular-nums;
+  margin: var(--esic-space-3) 0 0;
+}
+
+.dashboard__empty {
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
+  margin: 0;
+}
+
+// -- Histogramme + tableau équivalent (EF-REP-008) : la barre ne porte jamais
+// seule l'information — la valeur en chiffres suit, et le tableau reprend les
+// mêmes nombres. Couleurs issues des jetons.
 .dashboard__chart {
   list-style: none;
-  margin: 0 0 1rem;
+  margin: 0 0 var(--esic-space-5);
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
 }
 
 .dashboard__bar-row {
-  align-items: center;
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(6rem, 10rem) 1fr minmax(4.5rem, auto);
-  margin-bottom: 0.35rem;
+  grid-template-columns: minmax(6rem, 12rem) 1fr minmax(4.5rem, auto);
+  align-items: center;
+  gap: var(--esic-space-3);
 }
 
 .dashboard__bar-label {
+  font-size: 0.875rem;
   font-weight: 600;
+  color: var(--esic-ink);
   overflow-wrap: anywhere;
 }
 
 .dashboard__bar-track {
-  background: rgb(0 0 0 / 8%);
-  border-radius: 0.2rem;
   display: block;
-  height: 0.9rem;
+  height: 0.5rem;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-surface-sunken);
   overflow: hidden;
 }
 
 .dashboard__bar-fill {
-  background: #0b3d7a;
   display: block;
   height: 100%;
+  border-radius: inherit;
+  background: var(--esic-primary);
 }
 
 .dashboard__bar-value {
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  color: var(--esic-ink);
 }
 
+// Table équivalente : classe `.esic-table` (styles de `_primitives`), dans une
+// enveloppe à défilement horizontal contenu pour tenir sur un téléphone.
 .dashboard__table {
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  width: 100%;
+  font-size: 0.875rem;
 
   caption {
     caption-side: top;
+    text-align: left;
     font-weight: 600;
-    padding-bottom: 0.4rem;
+    font-size: 0.8125rem;
+    color: var(--esic-ink-soft);
+    padding: var(--esic-space-3) var(--esic-space-3) 0;
+  }
+}
+
+// -- Adaptatif : sous 640 px, l'identité et les indicateurs passent en pleine
+// largeur. Le filet gauche remplace le filet supérieur pour séparer les cellules
+// empilées (l'accent de statut, porté par `border-top`, reste visible).
+@media (max-width: 640px) {
+  .dashboard__identity-roles {
+    align-items: flex-start;
     text-align: left;
   }
 
-  th,
-  td {
-    border-bottom: 1px solid rgb(0 0 0 / 12%);
-    padding: 0.35rem 0.5rem;
-    text-align: left;
+  .dashboard__roles {
+    justify-content: flex-start;
   }
 
-  td {
-    font-variant-numeric: tabular-nums;
+  .dashboard__metric {
+    flex-basis: 100%;
+    border-left: 0;
+    border-bottom: 1px solid var(--esic-line);
+
+    &:last-child {
+      border-bottom: 0;
+    }
   }
 }
