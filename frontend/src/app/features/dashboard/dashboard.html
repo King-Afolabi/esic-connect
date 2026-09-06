@@ -42,6 +42,30 @@
     </div>
   </div>
 
+  <!--
+    Accès rapides remontés (Lot §3) : juste sous l'identité, avant le
+    détail par rôle — visibles sans faire défiler la page, quel que soit
+    le nombre de cartes du rôle. Grille compacte, distincte du rail
+    (Lot D), jamais une copie du menu latéral.
+  -->
+  <section class="dashboard__role dashboard__role--shortcuts" aria-label="Accès rapides">
+    <h2 class="dashboard__subtitle">Accès rapides</h2>
+    @if (quickLinks().length) {
+      <nav class="dashboard__shortcuts" aria-label="Raccourcis">
+        @for (link of quickLinks(); track link.path) {
+          <a class="dashboard__shortcut" [routerLink]="link.path">
+            <mat-icon aria-hidden="true">{{ link.icon }}</mat-icon>
+            <span>{{ link.label }}</span>
+          </a>
+        }
+      </nav>
+    } @else {
+      <p class="dashboard__empty">
+        Aucun autre écran n'est disponible pour vos rôles actuels.
+      </p>
+    }
+  </section>
+
   <section class="dashboard__role" aria-label="Tableau de bord par rôle">
     <h2 class="dashboard__subtitle">Mon activité</h2>
     @switch (dashState().kind) {
@@ -498,31 +522,6 @@
           }
         }
       }
-    }
-  </section>
-
-  <section class="dashboard__role" aria-label="Accès rapides">
-    <h2 class="dashboard__subtitle">Accès rapides</h2>
-    @if (quickLinks().length) {
-      <!--
-        Raccourcis de tableau de bord (Lot D) : une grille compacte de
-        tuiles, pas une pile verticale, et volontairement distincte du
-        rail de navigation (surface propre, icône + libellé sur une
-        ligne, pas d'arête active). S'adapte à la largeur de la colonne
-        de contenu via la grille auto-fit.
-      -->
-      <nav class="dashboard__shortcuts" aria-label="Raccourcis">
-        @for (link of quickLinks(); track link.path) {
-          <a class="dashboard__shortcut" [routerLink]="link.path">
-            <mat-icon aria-hidden="true">{{ link.icon }}</mat-icon>
-            <span>{{ link.label }}</span>
-          </a>
-        }
-      </nav>
-    } @else {
-      <p class="dashboard__empty">
-        Aucun autre écran n'est disponible pour vos rôles actuels.
-      </p>
     }
   </section>
 } @else {

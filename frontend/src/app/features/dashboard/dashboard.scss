@@ -63,9 +63,15 @@
   max-width: 46ch;
 }
 
-// -- Section « Mon activité » / « Accès rapides » ---------------------------
+// -- Sections « Accès rapides » / « Mon activité » -------------------------
 .dashboard__role {
   margin-top: var(--esic-space-6);
+}
+
+// Les accès rapides sont hissés juste sous l'identité (Lot §3) : la bande
+// d'identité porte déjà sa marge basse, pas de double espace.
+.dashboard__role--shortcuts {
+  margin-top: 0;
 }
 
 .dashboard__subtitle {
@@ -137,18 +143,47 @@
 .dashboard__metric--pending { --_dot: var(--esic-warning);           border-top-color: var(--esic-warning); }
 .dashboard__metric--rate    { border-top-color: var(--esic-primary); }
 
-// -- Grille de détail : `auto-fill` sur la largeur, alignée en haut. Une carte
-// courte reste courte (le `height: 100%` d'origine gonflait les panneaux).
+// -- Grille de détail : une colonne en pile, DEUX colonnes dès que la colonne
+// de contenu est large (Lot §3 — « grille en deux colonnes » sur ordinateur,
+// sans les 3-4 colonnes étroites de l'`auto-fill` qui laissaient des vides).
+// `@container` : la bascule suit la largeur réelle de `.shell__main`, donc
+// l'état du rail (déplié / replié), jamais la fenêtre. Alignée en haut : une
+// carte courte reste courte.
 .dashboard__grid {
   display: grid;
   gap: var(--esic-space-4);
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  grid-template-columns: 1fr;
   align-items: start;
   margin-bottom: var(--esic-space-5);
 }
 
+@container esic-content (min-width: 52rem) {
+  .dashboard__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+// Repli si le conteneur nommé n'est pas disponible (le navigateur ne
+// connaît pas `container-name`, ou la coquille n'établit pas le contexte).
+@supports not (container-type: inline-size) {
+  @media (min-width: 60rem) {
+    .dashboard__grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}
+
+// Un panneau « large » (histogramme + tableau équivalent) occupe la
+// pleine largeur de la grille.
 .dashboard__card--wide {
   grid-column: 1 / -1;
+}
+
+// Listes longues dans une carte : hauteur bornée, défilement contenu —
+// une carte « Séances à venir » de vingt lignes n'écrase plus le reste.
+.dashboard__card .dashboard__list {
+  max-height: 22rem;
+  overflow-y: auto;
 }
 
 .dashboard__facts {
