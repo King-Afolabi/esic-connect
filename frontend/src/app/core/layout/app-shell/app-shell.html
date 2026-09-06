@@ -24,10 +24,8 @@
             <a
               mat-list-item
               [routerLink]="item.path"
-              routerLinkActive="active"
-              #link="routerLinkActive"
-              [routerLinkActiveOptions]="{ exact: false }"
-              [attr.aria-current]="link.isActive ? 'page' : null"
+              [class.active]="activeNavPath() === item.path"
+              [attr.aria-current]="activeNavPath() === item.path ? 'page' : null"
               [matTooltip]="item.label"
               matTooltipPosition="right"
               [matTooltipDisabled]="!railCollapsed() || isHandset()"

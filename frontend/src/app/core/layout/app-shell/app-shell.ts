@@ -13,15 +13,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { map } from 'rxjs';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 
 import { SkipLink } from '../../a11y/skip-link';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
 import { SessionActivityService } from '../../auth/session-activity.service';
 import { roleLabel } from '../../models/role';
-import { NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
+import { activeNavPath, NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
 import { ConnectivityService } from '../../pwa/connectivity.service';
 import { OfflineQueueService } from '../../pwa/offline-queue.service';
 import { PwaService } from '../../pwa/pwa.service';
@@ -42,7 +42,6 @@ import { SessionTimeoutWarning } from '../session-timeout-warning/session-timeou
   imports: [
     RouterOutlet,
     RouterLink,
-    RouterLinkActive,
     MatSidenavModule,
     MatListModule,
     MatIconModule,
@@ -58,6 +57,7 @@ import { SessionTimeoutWarning } from '../session-timeout-warning/session-timeou
 })
 export class AppShell implements OnDestroy {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly pwa = inject(PwaService);
@@ -89,6 +89,24 @@ export class AppShell implements OnDestroy {
   // droits — l'autorisation reste côté Spring Security.
   protected readonly navItems = computed(() =>
     visibleNavItems(NAV_ITEMS, this.roleContext.effectiveRoles()),
+  );
+
+  /**
+   * `path` de l'unique entrée de navigation active (Lot C). Recalculé à
+   * chaque navigation terminée : une seule entrée porte `.active` et
+   * `aria-current="page"`, y compris sur une route imbriquée ou une fiche
+   * de détail hors menu.
+   */
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  protected readonly activeNavPath = computed(() =>
+    activeNavPath(this.currentUrl(), this.navItems()),
   );
 
   protected readonly isHandset = toSignal(

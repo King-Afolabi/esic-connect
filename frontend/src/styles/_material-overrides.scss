@@ -71,7 +71,9 @@
   &.mdc-list-item--activated,
   &.active {
     background: var(--esic-blue-100);
-    box-shadow: inset 3px 0 0 var(--esic-primary);
+    // Arête active en bleu foncé ESIC (Lot C) : plus lisible que le bleu
+    // primaire sur le fond teinté, sans épaissir le trait.
+    box-shadow: inset 3px 0 0 var(--esic-blue-700);
 
     .mdc-list-item__primary-text {
       color: var(--esic-blue-700);

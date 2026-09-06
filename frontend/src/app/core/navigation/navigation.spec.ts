@@ -1,4 +1,4 @@
-import { NAV_ITEMS, visibleNavItems } from './navigation';
+import { activeNavPath, NAV_ITEMS, visibleNavItems } from './navigation';
 
 describe('NAV_ITEMS', () => {
   it('exposes /administration as a real screen gated on UserAccountController READ_ROLES', () => {
@@ -202,5 +202,56 @@ describe('visibleNavItems', () => {
     ];
     expect(visibleNavItems(items, []).map((i) => i.path)).toEqual(['/p']);
     expect(visibleNavItems(items, ['ADMIN']).map((i) => i.path)).toEqual(['/p', '/s']);
+  });
+});
+
+describe('activeNavPath (Lot C — un seul élément actif)', () => {
+  const menu = NAV_ITEMS.filter((i) => !i.placeholder);
+
+  it('résout chaque route du menu vers elle-même, et une seule', () => {
+    for (const item of menu) {
+      const active = activeNavPath(item.path, NAV_ITEMS);
+      expect(active, `route ${item.path}`).toBe(item.path);
+      // Aucune autre entrée ne peut se dire active pour cette URL.
+      const alsoActive = menu.filter(
+        (other) => other.path !== item.path && activeNavPath(item.path, [other]) === other.path,
+      );
+      const nested = alsoActive.filter((o) => o.path !== active);
+      // Les seules correspondances tolérées sont des parents stricts, que
+      // `activeNavPath` écarte au profit du plus profond.
+      for (const parent of nested) {
+        expect(item.path.startsWith(parent.path + '/')).toBe(true);
+      }
+    }
+  });
+
+  it('sur une route imbriquée, seul l’enfant est actif (le bug signalé)', () => {
+    expect(activeNavPath('/notifications/preferences', NAV_ITEMS)).toBe('/notifications/preferences');
+    expect(activeNavPath('/notifications', NAV_ITEMS)).toBe('/notifications');
+    expect(activeNavPath('/students/import', NAV_ITEMS)).toBe('/students/import');
+    expect(activeNavPath('/my-attendance/transparency', NAV_ITEMS)).toBe(
+      '/my-attendance/transparency',
+    );
+  });
+
+  it('sur une fiche de détail hors menu, le parent reste actif', () => {
+    expect(activeNavPath('/students/42', NAV_ITEMS)).toBe('/students');
+    expect(activeNavPath('/students/42?tab=history', NAV_ITEMS)).toBe('/students');
+    expect(activeNavPath('/sessions/abc-123', NAV_ITEMS)).toBe('/sessions');
+  });
+
+  it('ne confond pas deux routes qui partagent un préfixe de chaîne', () => {
+    // `/attendance` n’est PAS un parent de `/attendance-management`.
+    expect(activeNavPath('/attendance-management', NAV_ITEMS)).toBe('/attendance-management');
+    expect(activeNavPath('/attendance', NAV_ITEMS)).toBe('/attendance');
+  });
+
+  it('renvoie null pour une URL qui ne relève d’aucune entrée', () => {
+    expect(activeNavPath('/connexion/verification', NAV_ITEMS)).toBeNull();
+    expect(activeNavPath('/', NAV_ITEMS)).toBeNull();
+  });
+
+  it('ignore la chaîne de requête et le fragment', () => {
+    expect(activeNavPath('/planning?jobId=7#top', NAV_ITEMS)).toBe('/planning');
   });
 });

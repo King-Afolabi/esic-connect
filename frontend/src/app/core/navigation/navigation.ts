@@ -279,3 +279,43 @@ export function visibleNavItems(
       !item.placeholder && (!item.roles || item.roles.some((r) => heldRoles.includes(r))),
   );
 }
+
+/** Segmente un chemin ou une URL, sans la chaîne de requête ni le fragment. */
+function toSegments(pathOrUrl: string): string[] {
+  const clean = pathOrUrl.split(/[?#]/)[0];
+  return clean.split('/').filter((segment) => segment.length > 0);
+}
+
+/**
+ * Résout l'**unique** entrée de navigation active pour une URL donnée : le
+ * `path` du menu le plus profond dont tous les segments préfixent ceux de
+ * l'URL courante.
+ *
+ * Corrige le double marquage des routes imbriquées (Lot C) : sur
+ * `/notifications/preferences`, seule « Préférences de notification » est
+ * active, pas « Notifications » ; sur `/students/42` (fiche hors menu),
+ * c'est « Apprenants » qui reste le parent actif ; sur `/students/import`,
+ * c'est « Import apprenants ». Une correspondance par simple préfixe de
+ * chaîne (`startsWith`) marquerait plusieurs entrées et confondrait
+ * `/attendance` avec `/attendance-management` — d'où la comparaison
+ * **segment par segment**.
+ *
+ * @returns le `path` actif, ou `null` si l'URL ne relève d'aucune entrée.
+ */
+export function activeNavPath(url: string, items: readonly NavItem[]): string | null {
+  const current = toSegments(url);
+  let best: string | null = null;
+  let bestDepth = 0;
+  for (const item of items) {
+    const segments = toSegments(item.path);
+    if (segments.length === 0 || segments.length > current.length) {
+      continue;
+    }
+    const matches = segments.every((segment, index) => segment === current[index]);
+    if (matches && segments.length > bestDepth) {
+      best = item.path;
+      bestDepth = segments.length;
+    }
+  }
+  return best;
+}
