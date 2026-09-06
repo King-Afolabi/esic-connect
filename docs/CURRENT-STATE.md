@@ -278,6 +278,53 @@ de bord ont été faites ; les autres écrans partagent les mêmes primitives
 déjà vérifiées mais n'ont pas été re-capturés). Recette Playwright non
 rejouée. Audit accessibilité outillé non fait.
 
+### 6 septembre 2026 (soir) — refonte UI : étape 7, formulaires
+
+Même branche. **`PARTIAL` : les formulaires de saisie dédiés sont alignés
+sur une primitive commune ; audit visuel piloté `NOT_PERFORMED` (back-end
+local toujours injoignable).**
+
+Deux lots (`4e673a1`, `3926d4a`), `lint` + `build` prod + **786 tests /
+0 échec** à chaque commit.
+
+**Primitive `.esic-form*`** ajoutée à `_primitives.scss` : colonne bornée
+(`max-width` 42 rem, `--wide` 52 rem), `.esic-form__grid` (grappe de
+champs courts, `auto-fit` sur la largeur disponible), `.esic-form__row`
+(champ pleine largeur), `.esic-form__group` (`<fieldset>` remis à zéro
+puis redécoré, légende serif — regroupement fonctionnel, docs/02 §34.1),
+`.esic-form__hint` (aide autonome, distincte de `mat-hint`),
+`.esic-form__required-note` (« * » explicité une fois par formulaire —
+Material appose déjà l'astérisque sur le libellé d'un champ requis),
+`.esic-form__error` (erreur de **soumission**, niveau formulaire, toujours
+`role="alert"` — distincte de `mat-error`), `.esic-form__actions` (pied à
+filet : action primaire `mat-flat-button` + échappatoire `mat-button`).
+
+**Appliquée** en conservant les classes `.area__*` (mêmes gabarits, à
+l'en-tête / la grille / le pied près) :
+
+| Lot | Formulaires |
+|---|---|
+| 1 | séance exceptionnelle, modèle de rythme (`<fieldset>` → `.esic-form__group`), affectation de rythme, exception d'inscription, site (8 champs courts → grille), ajout de matière, création de compte |
+| 2 | ouverture de réclamation + réponse/transfert/décision/réouverture du fil, attestations (émettre / vérifier), abonnement calendrier, émargement (code court + QR de salle), départs anticipés (transmettre / décider) |
+
+Les blocs `.X__form`, `.X__form-actions`, `.X__inline-error` /
+`.X__form-error` des SCSS communs et isolés (`_sessions-common`,
+`_alt-common`, `organization.shared`, `pattern-form`, `site-form`,
+`user-list`, `subject-list`, `claim-list`, `attestations`,
+`calendar-subscriptions`, `attendance-check-in`, `early-departure-panel`)
+sont réduits à une **délégation** vers la primitive.
+
+**Aucun `.ts`, aucune logique métier, aucune assertion de test touchés.**
+
+**Non repris, signalés tels quels** : `student-import-home` et
+`planning-import` (formulaires-**panneau** à gabarit propre — bordure,
+fond, `padding` —, déjà sur jetons) ; `account-security` (motif « champ +
+bouton en ligne » délibéré) ; les **barres de filtres** `.X__filters`
+(relèvent de l'étape 8, tableaux / listes).
+
+`NOT_PERFORMED` : audit visuel piloté (back-end local injoignable) ;
+recette Playwright non rejouée ; audit accessibilité outillé non fait.
+
 ### 6 septembre 2026 (soir) — refonte UI : étape 5, tableau de bord
 
 Même branche `feat/ui-redesign-bootstrap-material`. Refonte **visuelle et
