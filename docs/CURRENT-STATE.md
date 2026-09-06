@@ -10,6 +10,103 @@
 
 ## Dernière mise à jour
 
+### 7 septembre 2026 — campagne finale : fusion effectuée, déploiement bloqué
+
+Suite et fin de la campagne finale. **Aucune ligne de back-end, zéro
+migration** (schéma inchangé V34). Branche `feat/ui-redesign-bootstrap-material`
+**fusionnée** dans `feat/demo-readiness-e2e-ui` (merge `99971c5`, sans
+conflit), + `scripts/runtime/show-public-url.sh` (`257d539`).
+**Poussé** sur `origin` : `feat/demo-readiness-e2e-ui` (d4eea44 → 257d539)
+et `feat/ui-redesign-bootstrap-material` (a65ef1a → 9a07e2b).
+
+**Lot §4 — données pédagogiques : livré.** `scripts/seed-demo-full.py`
+(nouveau), amorçage complet par les API REST réelles, idempotent. Base
+`esic_connect_demo` réinitialisée (`db-reset.sh`, garde
+`ESIC_ALLOW_DEMO_RESET`) puis amorcée. État vérifié
+(`seed-demo-full.py check`) :
+
+- 5 formations (BTS SIO, BTS CIEL, Bachelor CDA, Mastère ESIS, Mastère
+  CPDIA) + PRG-DEMO ; 9 classes du lot ; année `AY-2026` ;
+- 4 rythmes d'alternance (BTS1 3j/2j lun–mer ; BTS2 2 sem/4 lun–jeu ;
+  Mastères 1 sem/4 ; Bachelor CDA 1 sem/4 — **hypothèse provisoire
+  documentée**) affectés aux 9 classes ;
+- sites Malakoff (étages 1/2/5) + Paris (RDC), **16 salles** ;
+- **18 formateurs actifs** (invitation + activation Mailpit — parcours
+  réel EF-AUTH-004), 2 par classe ;
+- **193 apprenants** (import CSV réel simulé + confirmé), 193 inscriptions
+  ACTIVE reculées au 24 août pour un historique d'assiduité réel ;
+- **489 séances** publiées par l'import CSV de planning réel (24 août →
+  30 nov. 2026), **0 conflit, 0 ligne bloquante** sur les 9
+  publications ; salle et binôme de formateurs dédiés par classe ;
+- **72 séances closes**, ~3000 émargements manuels (présent ≈ 80 %,
+  retard ≈ 12 %, absent ≈ 8 %), points de contrôle nommés ;
+- jeux d'import **valide / avertissement / bloquant / multi-anomalies /
+  doublons** pour l'import apprenants **et** l'import planning, écrits
+  sous `docs/demo-data/` et **réellement simulés** — verdicts consignés
+  dans `IMPORT-FIXTURES-REPORT.md` et `PLANNING-FIXTURES-REPORT.md`.
+- `docs/demo-data/README.md` : section « Amorçage complet ».
+
+**Limite connue (non régression, pré-existante) :** la tuile « Taux
+d'assiduité par classe » du tableau de bord responsable affiche 0 % alors
+que le **rapport journalier** (`GET /attendance/reports/daily`,
+`EF-ATT-004`, vue canonique) calcule correctement (`result: MORNING`,
+`morningValidated: true`). Le *rollup* du tableau de bord compte des
+demi-journées « attendues » sur les jours d'alternance SCHOOL même sans
+séance publiée (dénominateur gonflé) : ce n'est pas corrigé par le jeu de
+données et relève de `DashboardCardsService`, hors périmètre de cette
+campagne. Les retards et absences, eux, remontent.
+
+**§2 tableau de bord — corrigé.** La bascule 2 colonnes de
+« Mon activité | Mon périmètre » ne s'appliquait pas (règle de base
+placée après le `@container`, même spécificité). Ordre corrigé, vérifié
+en navigateur (`.dashboard__split` → `705px / 415px` à 1440 px).
+
+**§3 panneau Profil — corrigé.** Rendu joignable sur mobile
+(`.shell__identity` n'est plus masqué sous 640 px, le déclencheur se
+réduit à sa pastille). Vérifié à 390 px.
+
+**Tests :** front-end `ng lint` + `ng test` **103 fichiers / 842 tests /
+0 échec** + `ng build --configuration production` (581,71 kB, aucune
+alerte de budget) verts, y compris sur le commit de fusion `99971c5`.
+Typecheck Playwright 0 erreur. Images Docker `backend` (879 Mo) /
+`frontend` (105 Mo) construites plus tôt dans la campagne ;
+`compose.prod.yaml config` valide.
+
+**Back-end : `NOT_PERFORMED` sur le commit de fusion.** Aucun fichier
+Java touché de toute la campagne. Dernière suite complète verte cette
+session : **1231 tests / 0 échec** (§6.5). Deux ré-exécutions sur le
+commit fusionné ont été **tuées par saturation mémoire de la machine**
+(~20 Mo de RAM libre) à ~78/143 classes, **sans aucun échec observé**.
+Un `BUILD SUCCESS` propre sur `99971c5` reste à produire (le résultat
+n'est pas en doute : code inchangé).
+
+**§10 déploiement — `NOT_PERFORMED`, deux blocages indépendants :**
+
+1. **Raspberry Pi** : hôte SSH joignable (`192.168.1.83:22`, OpenSSH
+   Debian 13, clé `mac-esic-connect-pi` proposée par l'agent) mais
+   **nom d'utilisateur inconnu** — 12 tentatives (`pi`, `esic`,
+   `afolabi`, `kingafolabi`, `abubacar`, `debian`, `ubuntu`…), toutes
+   `Permission denied (publickey)`. Il faut le login exact du compte de
+   la Pi.
+2. **Repli Quick Tunnel local** : `.env.prod` (non versionné) préparé,
+   `compose.prod.yaml config` validé, mais `docker compose -f
+   compose.prod.yaml up -d --build` **bloqué** — le démon Docker ne
+   répond plus sous la pression mémoire de la machine (host à ~20 Mo de
+   RAM libre après arrêt du superflu ; un simple `docker pull
+   cloudflare/cloudflared` reste sans sortie pendant plus de 3 min). À
+   rejouer sur une machine disposant de RAM, ou directement sur la Pi
+   (`git pull && docker compose --env-file .env -f compose.prod.yaml up
+   -d --build`, puis `scripts/runtime/show-public-url.sh`).
+
+**§11 recette post-déploiement — `NOT_PERFORMED`** (dépend de §10). La
+recette technique a été faite **hors tunnel** contre la pile de
+démonstration locale (`ng serve` → back-end profil `demo`) : page de
+connexion, connexion `responsable@example.test`, tableau de bord (2
+colonnes §2), panneau Profil ouvert (§3), Référentiels (AY-2026 + 5
+formations), hub Organisation & planning, liste des 489 séances, planning
+— tous rendus avec le jeu de données. Captures dans le scratchpad de
+session (non versionnées).
+
 ### 6 septembre 2026 — campagne finale (checkpoint avant fusion/déploiement), branche `feat/ui-redesign-bootstrap-material`
 
 Suite de la campagne finale. Livré et vérifié dans cette passe, **aucune
