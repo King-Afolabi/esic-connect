@@ -1,3 +1,5 @@
+// Aligné sur le système de design ESIC (jetons `--esic-*`).
+
 :host {
   display: block;
 }
@@ -9,36 +11,37 @@
 }
 
 .ed__item {
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  border: 1px solid var(--mat-sys-outline-variant, #dadce0);
-  border-radius: 8px;
+  padding: var(--esic-space-3) var(--esic-space-4);
+  margin-bottom: var(--esic-space-2);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
 }
 
 .ed__meta {
-  color: var(--mat-sys-on-surface-variant, #5f6368);
-  font-size: 0.85rem;
+  color: var(--esic-ink-faint);
+  font-size: 0.8125rem;
 }
 
 .ed__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--esic-space-2);
+  margin-top: var(--esic-space-2);
 }
 
 .ed__form {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--esic-space-2);
+  margin-top: var(--esic-space-2);
 }
 
 .ed__error {
-  color: var(--mat-sys-error, #b3261e);
-  margin: 0.5rem 0 0;
+  color: var(--esic-danger);
+  margin: var(--esic-space-2) 0 0;
 }
 
 .ed__empty {
-  color: var(--mat-sys-on-surface-variant, #5f6368);
+  color: var(--esic-ink-soft);
 }

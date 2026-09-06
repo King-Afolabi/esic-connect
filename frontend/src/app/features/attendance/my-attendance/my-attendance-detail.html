@@ -30,11 +30,15 @@
   }
   @case ('ready') {
     @if (detail(); as d) {
-      <h1 class="att__title">{{ d.row.sessionTitle || 'Séance' }} — {{ d.row.checkpointLabel }}</h1>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">{{ d.row.sessionTitle || 'Séance' }} — {{ d.row.checkpointLabel }}</h1>
+        </div>
+      </header>
       <mat-card appearance="outlined">
         <mat-card-content>
           <dl class="att__facts">
-            <div><dt>Statut</dt><dd>{{ attendanceStatusLabel(d.row.status) }}</dd></div>
+            <div><dt>Statut</dt><dd><span class="att__chip" [attr.data-status]="d.row.status">{{ attendanceStatusLabel(d.row.status) }}</span></dd></div>
             <div><dt>Classe</dt><dd>{{ d.row.classCode || '—' }}</dd></div>
             <div><dt>Début de séance</dt><dd>{{ formatInstantUtc(d.row.sessionStartsAt) }}</dd></div>
             <div><dt>Retard</dt><dd>{{ d.row.lateMinutes ? d.row.lateMinutes + ' min' : '—' }}</dd></div>

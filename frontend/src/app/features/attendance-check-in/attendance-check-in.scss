@@ -1,24 +1,32 @@
+// Écran d'émargement — tâche unique et focalisée. Aligné sur les jetons ESIC.
+
 .checkin {
   max-width: 32rem;
   margin: 0 auto;
 }
 
 .checkin__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--esic-space-2);
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .checkin__intro {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0 0 1.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
+  margin: 0 0 var(--esic-space-5);
 }
 
 .checkin__form {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--esic-space-3);
 }
 
 .checkin__field {
@@ -26,55 +34,50 @@
 }
 
 .checkin__inline-error {
-  color: var(--mat-sys-error);
-  font: var(--mat-sys-body-small);
+  color: var(--esic-danger);
+  font-size: 0.8125rem;
   margin: 0;
 }
 
 .checkin__note {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 1rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+  margin: var(--esic-space-4) 0 0;
 }
 
 .checkin__panel {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
 }
 
 .checkin__panel-title {
-  font: var(--mat-sys-title-medium);
-  margin: 0 0 0.25rem;
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 var(--esic-space-1);
+  color: var(--esic-ink);
 }
 
 .checkin__panel p {
   margin: 0.15rem 0;
 }
 
-.checkin__back {
-  margin-top: 1.5rem;
-}
-
-.checkin__back a {
-  color: var(--mat-sys-primary);
-}
-
-// État « en attente de confirmation » (AC-031) : visuellement distinct du
-// succès, sans reposer sur la seule couleur — icône et libellé portent
-// l'information.
+// État « en attente de confirmation » (AC-031) : distinct du succès, sans
+// reposer sur la seule couleur — icône et libellé portent l'information.
 .checkin__panel--pending {
-  border-left: 4px solid rgb(0 0 0 / 45%);
+  border-color: transparent;
+  background: var(--esic-warning-tint);
+  border-left: 3px solid var(--esic-warning);
 }
 
 .checkin__offline {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
   margin: 0;
 }
