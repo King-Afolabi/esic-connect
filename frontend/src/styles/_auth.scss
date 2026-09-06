@@ -15,6 +15,15 @@
   background: var(--esic-paper);
 }
 
+// Fenêtre courte (téléphone couché, petit portrait) : la carte peut être
+// plus haute que la fenêtre — on l'ancre en haut et on laisse défiler,
+// plutôt que de rogner son sommet avec un centrage vertical.
+@media (max-height: 34rem) {
+  .esic-auth {
+    align-items: flex-start;
+  }
+}
+
 .esic-auth__card {
   width: 100%;
   max-width: 26rem;
@@ -23,6 +32,7 @@
   border: 1px solid var(--esic-line);
   border-radius: var(--esic-radius-md);
   box-shadow: var(--esic-shadow-raise);
+  container-type: inline-size;
 }
 
 .esic-auth__brand {

@@ -159,6 +159,15 @@
   }
 }
 
+// Écran étroit (pliable replié, ~280–350 px) : la barre supérieure garde
+// la pastille de marque mais lâche le mot-symbole, faute de place pour la
+// navigation et les outils.
+@media (max-width: 22rem) {
+  .shell__wordmark {
+    display: none;
+  }
+}
+
 .shell__tools {
   display: flex;
   align-items: center;
@@ -199,6 +208,11 @@
 }
 
 // -- Zone de contenu -------------------------------------------------
+// `container-type: inline-size` : les requêtes `@container` des primitives
+// (`.esic-kv`, etc.) se calent sur la largeur réelle de la colonne de
+// contenu — qui change quand le rail se replie —, jamais sur celle de la
+// fenêtre. C'est la stratégie « largeur disponible », pas « modèle
+// d'appareil ».
 .shell__main {
   display: block;
   width: 100%;
@@ -206,6 +220,7 @@
   margin: 0 auto;
   padding: var(--esic-space-5) var(--esic-space-5) var(--esic-space-7);
   outline: none;
+  container: esic-content / inline-size;
 }
 
 // -- Adaptatif -----------------------------------------------------
@@ -223,7 +238,21 @@
   .shell__identity {
     display: none;
   }
+}
 
+// Paysage court (téléphone couché, hauteur < ~30 rem) : la barre
+// supérieure se resserre pour ne pas manger la zone de lecture.
+@media (orientation: landscape) and (max-height: 30rem) {
+  .shell__topbar {
+    min-height: 3rem;
+  }
+
+  .shell__main {
+    padding-top: var(--esic-space-3);
+  }
+}
+
+@media (max-width: 640px) {
   .shell__logout-label {
     // Icône seule sur très petit écran ; le bouton garde son aria-label.
     position: absolute;
