@@ -261,6 +261,18 @@ describe('Dashboard', () => {
     expect(text()).toContain("Aucun autre écran n'est disponible");
   });
 
+  it('renders the quick links as a labelled grid of shortcut tiles, not a nav list (Lot D)', () => {
+    roles.set(['ADMIN']);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const grid = host.querySelector('nav.dashboard__shortcuts');
+    expect(grid).not.toBeNull();
+    expect(grid?.getAttribute('aria-label')).toBe('Raccourcis');
+    expect(host.querySelectorAll('.dashboard__shortcut').length).toBeGreaterThan(1);
+    // Plus de liste de navigation Material (qui dupliquait le rail).
+    expect(host.querySelector('mat-nav-list')).toBeNull();
+  });
+
   // --- Tableau de bord par rôle (bloc G1-F) ---------------------
 
   const reload = (payload: Record<string, unknown>) => {

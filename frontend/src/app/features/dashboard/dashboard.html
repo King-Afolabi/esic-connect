@@ -503,24 +503,27 @@
 
   <section class="dashboard__role" aria-label="Accès rapides">
     <h2 class="dashboard__subtitle">Accès rapides</h2>
-    <mat-card appearance="outlined" class="dashboard__card">
-      <mat-card-content>
-        @if (quickLinks().length) {
-          <mat-nav-list>
-            @for (link of quickLinks(); track link.path) {
-              <a mat-list-item [routerLink]="link.path">
-                <mat-icon matListItemIcon aria-hidden="true">{{ link.icon }}</mat-icon>
-                <span matListItemTitle>{{ link.label }}</span>
-              </a>
-            }
-          </mat-nav-list>
-        } @else {
-          <p class="dashboard__empty">
-            Aucun autre écran n'est disponible pour vos rôles actuels.
-          </p>
+    @if (quickLinks().length) {
+      <!--
+        Raccourcis de tableau de bord (Lot D) : une grille compacte de
+        tuiles, pas une pile verticale, et volontairement distincte du
+        rail de navigation (surface propre, icône + libellé sur une
+        ligne, pas d'arête active). S'adapte à la largeur de la colonne
+        de contenu via la grille auto-fit.
+      -->
+      <nav class="dashboard__shortcuts" aria-label="Raccourcis">
+        @for (link of quickLinks(); track link.path) {
+          <a class="dashboard__shortcut" [routerLink]="link.path">
+            <mat-icon aria-hidden="true">{{ link.icon }}</mat-icon>
+            <span>{{ link.label }}</span>
+          </a>
         }
-      </mat-card-content>
-    </mat-card>
+      </nav>
+    } @else {
+      <p class="dashboard__empty">
+        Aucun autre écran n'est disponible pour vos rôles actuels.
+      </p>
+    }
   </section>
 } @else {
   <p class="dashboard__empty" role="status">Session introuvable. Redirection vers la connexion…</p>
