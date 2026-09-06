@@ -4,7 +4,10 @@
   <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
 </nav>
 
-<a class="alt__back" routerLink="/alternation/classes">← Retour à la sélection de classe</a>
+<a class="esic-back" routerLink="/alternation/classes">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour à la sélection de classe</span>
+</a>
 
 <h1 class="alt__title">Rythme d'alternance {{ classCode() ? '— ' + classCode() : '' }}</h1>
 

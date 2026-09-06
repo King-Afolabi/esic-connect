@@ -269,6 +269,22 @@ inchangés.
   `dashboard.spec.ts` correspondant a été ajusté au nouveau libellé
   (« Comptes actifs », « En attente d'activation »).
 
+**Liens de retour unifiés.** Les écrans de détail portaient jusqu'ici
+**cinq** implémentations distinctes du lien « Retour » (`<nav>` étiqueté
+à tort « Fil d'Ariane » + glyphe `←`, `<a mat-stroked-button>` avec `←`,
+`<p class="X__back">` avec `<mat-icon>`, `<a mat-button>`…). Nouveau
+primitif unique `.esic-back` (`_primitives.scss`) : lien simple, icône
+`arrow_back` en tête (plus de glyphe texte), placé avant l'en-tête de
+page, anneau de focus clavier. Appliqué à **13 écrans** (séances,
+réclamations, apprenants, imports, comptes, doublons, alternance, mes
+présences) ; classes par écran (`sessions__crumbs`, `alt__back`,
+`profile__back`, `account__back`, `duplicates__back`, `att__crumbs`
+orphelin) et leur SCSS supprimés. Restent hors de ce lot : le lien
+« Retour au tableau de bord » en pied de l'écran d'émargement
+(`attendance-check-in`, à traiter à l'étape 6) et les navigations à
+onglets `att__crumbs` / `plan__tabs` / `alt__tabs` (ce ne sont pas des
+liens de retour).
+
 **Budget de style par composant** : `anyComponentStyle.maximumWarning`
 relevé de `4 kB` à `8 kB` et `maximumError` de `8 kB` à `12 kB` dans
 `angular.json`. Le SCSS *scopé* du tableau de bord (4 variantes de rôle,

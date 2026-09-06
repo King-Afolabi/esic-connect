@@ -1,6 +1,7 @@
-<nav class="sessions__crumbs" aria-label="Fil d'Ariane">
-  <a routerLink="/sessions">← Retour à la liste des séances</a>
-</nav>
+<a class="esic-back" routerLink="/sessions">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux séances</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {

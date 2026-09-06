@@ -1,9 +1,7 @@
-<p class="account__back">
-  <a routerLink="/administration">
-    <mat-icon aria-hidden="true">arrow_back</mat-icon>
-    Retour à la liste des comptes
-  </a>
-</p>
+<a class="esic-back" routerLink="/administration">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux comptes</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {

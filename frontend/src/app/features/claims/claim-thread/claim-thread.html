@@ -1,6 +1,7 @@
-<nav class="claims__actions" aria-label="Fil d'Ariane">
-  <a routerLink="/claims">← Retour aux réclamations</a>
-</nav>
+<a class="esic-back" routerLink="/claims">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux réclamations</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {

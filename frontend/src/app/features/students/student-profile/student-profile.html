@@ -1,9 +1,7 @@
-<p class="profile__back">
-  <a routerLink="/students">
-    <mat-icon aria-hidden="true">arrow_back</mat-icon>
-    Retour à la liste des apprenants
-  </a>
-</p>
+<a class="esic-back" routerLink="/students">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux apprenants</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
