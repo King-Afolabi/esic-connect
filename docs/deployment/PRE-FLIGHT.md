@@ -46,9 +46,10 @@ up -d`. Chaque case non cochée est un motif de report.
       budget.
 - [ ] `docker build ./backend` et `docker build ./frontend` : réussis
       **sur la Pi elle-même** (build natif arm64, jamais d'émulation).
-- [ ] Recette Playwright : voir `docs/audit/FINAL-ONE-SHOT-REPORT.md`
-      pour l'état d'exécution ; à rejouer contre la pile de démonstration
-      avant de présenter la recette comme passée.
+- [ ] Recette Playwright : état d'exécution consigné dans
+      `docs/CURRENT-STATE.md` (§6.1) et le rapport d'audit local
+      (`~/esic-connect-local-docs/`, non versionné) ; à rejouer contre la
+      pile de démonstration avant de présenter la recette comme passée.
 
 ## Réseau et exposition
 

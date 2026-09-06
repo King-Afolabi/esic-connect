@@ -300,6 +300,23 @@ compose.yaml      MySQL, Redis, Mailpit, Mosquitto
 | [`docs/10-guide-utilisateur.md`](docs/10-guide-utilisateur.md) | guide fonctionnel par rôle |
 | [`docs/11-guide-deploiement.md`](docs/11-guide-deploiement.md) | installation, exploitation, déploiement |
 | [`docs/12-prerequis-externes.md`](docs/12-prerequis-externes.md) | comptes, clés et matériel à préparer |
+| [`docs/deployment/`](docs/deployment/) | procédures Raspberry Pi : pré-vol, déploiement, rollback, secrets |
+
+### Documents de travail locaux (non versionnés)
+
+Pour garder le dépôt au strict nécessaire (Lot §6, 6 septembre 2026),
+ces documents sont conservés **hors dépôt**, sur le poste du porteur,
+sous `~/esic-connect-local-docs/<date>/` :
+
+| Chemin local | Contenu | Régénération |
+|---|---|---|
+| `docs/audit/` | rapports d'audit détaillés, comptes rendus de lots (`FINAL-*`, `LOT-*`) | à la main |
+| `artifacts/report-screenshots/` | captures de rapport | `npx playwright test tests/14-report-screenshots.spec.ts` (pile démo démarrée) |
+| `docs/JOURNAL-BATCH-S02A-S11.md` | journal de lot historique | — |
+
+Ils restent présents sur disque et ignorés par Git (`.gitignore`). La
+**seule source de vérité sur l'avancement** reste `docs/CURRENT-STATE.md`,
+versionnée.
 
 ---
 
