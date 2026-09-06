@@ -191,13 +191,18 @@ touchés. **`PARTIAL` : socle livré, refonte écran par écran NON faite.**
   technologies d'assistance + infobulle au survol / focus.
   `mat-sidenav-container [autosize]` pour que le contenu se recale.
 - **Vrai logo ESIC** : trouvé non suivi à la racine du dépôt
-  (`logo esic 1.png`), déplacé dans `frontend/public/brand/logo-esic.png`
-  et affiché sur l'écran de connexion (remplace le titre texte).
+  (`logo esic 1.png`), déplacé dans `frontend/public/brand/logo-esic.png`.
+- **Écrans publics d'authentification** (connexion, second facteur, mot de
+  passe oublié, réinitialisation, activation) : mise en page **partagée**
+  dans `src/styles/_auth.scss` (namespace `.esic-auth`) — carte unique,
+  logo ESIC, titre serif, encarts d'information / d'avertissement à filet
+  de couleur, ligne d'erreur à hauteur réservée. ~150 lignes de SCSS
+  dupliquées par écran supprimées ; aucune règle métier touchée.
 
 **PAS encore fait** (prochaines étapes de la branche) : refonte écran par
-écran (connexion — encore sobre, tableau de bord — cartes trop hautes,
-formulaires, listes/tableaux — défilement horizontal sur mobile à
-revoir, modales) ; libellés longs du rail déplié encore tronqués ;
+écran (tableau de bord — cartes trop hautes, formulaires,
+listes/tableaux — défilement horizontal sur mobile à revoir, modales) ;
+libellés longs du rail déplié encore tronqués ;
 favicon / icônes PWA (toujours le placeholder « E » bleu) — le
 monogramme de la barre reste une forme géométrique neutre
 (`.shell__mark`), remplaçable ; jeu de données de démonstration élargi ;
