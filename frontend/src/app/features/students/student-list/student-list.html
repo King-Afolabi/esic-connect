@@ -7,6 +7,14 @@
       l'historique de ses inscriptions.
     </p>
   </div>
+  @if (canCreateStudent()) {
+    <div class="esic-page-header__actions">
+      <a mat-flat-button routerLink="/students/nouveau">
+        <mat-icon aria-hidden="true">person_add</mat-icon>
+        <span>Ajouter un apprenant</span>
+      </a>
+    </div>
+  }
 </header>
 
 <form class="students__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">

@@ -12,6 +12,7 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { RouterLink } from '@angular/router';
 
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { StudentsApiService } from '../students-api.service';
 import {
@@ -72,6 +73,16 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 export class StudentList {
   private readonly api = inject(StudentsApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * « Ajouter un apprenant » (Lot H) : visible uniquement pour les rôles
+   * qui peuvent réellement créer le compte côté serveur (`POST /users`
+   * exige `ADMIN` / `SUPER_ADMIN`). Le garde de route reste l'autorité.
+   */
+  protected readonly canCreateStudent = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN'),
+  );
 
   protected readonly statuses = STUDENT_PROFILE_STATUSES;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;

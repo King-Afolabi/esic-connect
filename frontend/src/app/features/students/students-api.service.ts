@@ -4,6 +4,10 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
+  CreateStudentAccountRequest,
+  CreateStudentProfileRequest,
+  CreatedUserResponse,
+  EnrollStudentRequest,
   EnrollmentListQuery,
   EnrollmentResponse,
   PageResponse,
@@ -15,15 +19,18 @@ import {
 } from './students.models';
 
 /**
- * Accès en **lecture seule** aux endpoints du module `enrollment` et, de
- * façon facultative, à la fiche d'identité `GET /api/v1/users/{publicId}`.
+ * Accès aux endpoints des modules `enrollment` et `identity` de l'espace
+ * « Apprenants » : consultation (profils, inscriptions, identité civile),
+ * suivi à distance individuel, et **création manuelle d'un apprenant**
+ * (Lot H — trois routes existantes enchaînées).
  *
  * Ce service ne consomme que des routes déjà exposées par le back-end ;
  * aucune n'est inventée. Les appels sont authentifiés par le jeton
  * porteur ajouté par `authTokenInterceptor` (le jeton reste en mémoire).
  * L'autorisation effective est décidée par Spring Security
- * (`EnrollmentWeb.MANAGE_ROLES`) : les gardes de route côté client ne
- * font que masquer une navigation.
+ * (`EnrollmentWeb.MANAGE_ROLES` ; `POST /users` exige `ADMIN` /
+ * `SUPER_ADMIN`) : les gardes de route côté client ne font que masquer
+ * une navigation.
  */
 @Injectable({ providedIn: 'root' })
 export class StudentsApiService {
@@ -78,6 +85,30 @@ export class StudentsApiService {
     return this.http.get<UserIdentitySummary>(
       `${this.base}/users/${encodeURIComponent(publicId)}`,
     );
+  }
+
+  // -------------------------------------------------------------------
+  // Création manuelle d'un apprenant (Lot H)
+  // -------------------------------------------------------------------
+
+  /**
+   * `POST /api/v1/users` — crée le compte `PENDING_ACTIVATION` avec le
+   * rôle `STUDENT` et lui émet son invitation (aucun mot de passe n'est
+   * transmis : la personne le choisit via le lien). `409` si l'adresse
+   * est déjà utilisée. Réservé à `ADMIN` / `SUPER_ADMIN` côté serveur.
+   */
+  createStudentAccount(body: CreateStudentAccountRequest): Observable<CreatedUserResponse> {
+    return this.http.post<CreatedUserResponse>(`${this.base}/users`, body);
+  }
+
+  /** `POST /api/v1/student-profiles` — profil pour un compte existant. */
+  createStudentProfile(body: CreateStudentProfileRequest): Observable<StudentProfileResponse> {
+    return this.http.post<StudentProfileResponse>(`${this.base}/student-profiles`, body);
+  }
+
+  /** `POST /api/v1/enrollments` — inscription initiale dans une classe. */
+  enrollStudent(body: EnrollStudentRequest): Observable<EnrollmentResponse> {
+    return this.http.post<EnrollmentResponse>(`${this.base}/enrollments`, body);
   }
 
   // -------------------------------------------------------------------

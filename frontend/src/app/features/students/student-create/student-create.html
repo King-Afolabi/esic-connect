@@ -1,0 +1,119 @@
+<section class="page">
+  <a class="esic-back" routerLink="/students">
+    <mat-icon aria-hidden="true">arrow_back</mat-icon>
+    <span>Retour aux apprenants</span>
+  </a>
+
+  <header class="esic-page-header">
+    <div class="esic-page-header__text">
+      <h1 class="esic-page-header__title">Ajouter un apprenant</h1>
+      <p class="esic-page-header__description">
+        Crée le compte, envoie l'invitation d'activation, puis inscrit l'apprenant dans une classe.
+        Aucun mot de passe n'est saisi : la personne le choisit via son lien.
+      </p>
+    </div>
+  </header>
+
+  @if (partialNotice(); as notice) {
+    <p class="esic-note esic-note--warning" role="status">{{ notice }}</p>
+  }
+
+  <p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
+
+  <form class="esic-form esic-form--wide" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="esic-form__grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Prénom</mat-label>
+        <input matInput formControlName="firstName" maxlength="120" required autocomplete="off" />
+        @if (form.controls.firstName.touched && form.controls.firstName.hasError('required')) {
+          <mat-error>Le prénom est obligatoire.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Nom</mat-label>
+        <input matInput formControlName="lastName" maxlength="120" required autocomplete="off" />
+        @if (form.controls.lastName.touched && form.controls.lastName.hasError('required')) {
+          <mat-error>Le nom est obligatoire.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Adresse électronique</mat-label>
+        <input matInput type="email" formControlName="email" maxlength="320" required autocomplete="off" />
+        @if (form.controls.email.touched && form.controls.email.hasError('required')) {
+          <mat-error>L'adresse électronique est obligatoire.</mat-error>
+        }
+        @if (form.controls.email.touched && form.controls.email.hasError('email')) {
+          <mat-error>Format d'adresse invalide.</mat-error>
+        }
+        @if (form.controls.email.hasError('server')) {
+          <mat-error>{{ form.controls.email.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Numéro étudiant</mat-label>
+        <input matInput formControlName="studentNumber" maxlength="50" required autocomplete="off" />
+        @if (form.controls.studentNumber.touched && form.controls.studentNumber.hasError('required')) {
+          <mat-error>Le numéro étudiant est obligatoire.</mat-error>
+        }
+        @if (form.controls.studentNumber.hasError('server')) {
+          <mat-error>{{ form.controls.studentNumber.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Classe</mat-label>
+        <mat-select formControlName="classGroupPublicId" required>
+          @for (option of classOptions(); track option.publicId) {
+            <mat-option [value]="option.publicId">{{ option.code }}</mat-option>
+          }
+        </mat-select>
+        @if (classesState() === 'loading') { <mat-hint>Chargement des classes…</mat-hint> }
+        @if (classesState() === 'error') {
+          <mat-hint class="student-create__hint-error">
+            Chargement des classes impossible.
+          </mat-hint>
+        }
+        @if (form.controls.classGroupPublicId.touched && form.controls.classGroupPublicId.hasError('required')) {
+          <mat-error>La classe est obligatoire.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Date de naissance</mat-label>
+        <input matInput type="date" formControlName="birthDate" autocomplete="off" />
+        <mat-hint>Facultatif.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Entreprise (alternance)</mat-label>
+        <input matInput formControlName="companyName" maxlength="191" autocomplete="off" />
+        <mat-hint>Facultatif.</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <div class="esic-form__row">
+      <mat-checkbox formControlName="workStudy">Apprenant en alternance</mat-checkbox>
+    </div>
+
+    @if (classesState() === 'error') {
+      <p class="esic-form__error" role="alert">
+        Les classes n'ont pas pu être chargées.
+        <button mat-button type="button" (click)="loadClasses()">Réessayer</button>
+      </p>
+    }
+
+    @if (submitError(); as error) {
+      <p class="esic-form__error" role="alert">{{ error }}</p>
+    }
+
+    <div class="esic-form__actions">
+      <button mat-flat-button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Création…' : "Créer l'apprenant" }}
+      </button>
+      <a mat-button routerLink="/students">Annuler</a>
+    </div>
+  </form>
+</section>

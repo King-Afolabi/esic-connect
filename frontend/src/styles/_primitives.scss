@@ -429,6 +429,17 @@
       color: var(--esic-warning);
     }
   }
+
+  &--warning {
+    border-color: transparent;
+    background: var(--esic-warning-tint);
+    color: var(--esic-amber-700);
+
+    > .mat-icon,
+    > mat-icon {
+      color: var(--esic-warning);
+    }
+  }
 }
 
 // -- Sous-section d'une page ---------------------------------------------

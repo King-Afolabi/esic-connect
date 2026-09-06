@@ -428,6 +428,19 @@ export const routes: Routes = [
               import('./features/students/student-list/student-list').then((m) => m.StudentList),
           },
           {
+            // Déclaré AVANT `:publicId` (sinon `nouveau` serait pris pour
+            // un identifiant). Création manuelle d'un apprenant (Lot H) :
+            // `POST /api/v1/users` exige `ADMIN` / `SUPER_ADMIN` côté
+            // serveur, d'où ce garde plus restrictif que le parent.
+            path: 'nouveau',
+            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+            title: `Ajouter un apprenant — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/students/student-create/student-create').then(
+                (m) => m.StudentCreate,
+              ),
+          },
+          {
             path: ':publicId',
             title: `Fiche apprenant — ${APP_NAME}`,
             loadComponent: () =>
