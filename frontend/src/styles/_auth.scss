@@ -43,6 +43,83 @@
   margin: 0 auto var(--esic-space-4);
 }
 
+// -- Portrait étroit (téléphone debout, ~≤ 26rem) : composition
+//    verticale plus compacte — logo plus petit, marges resserrées, le
+//    formulaire prioritaire dans la zone visible (Lot E).
+@media (orientation: portrait) and (max-width: 26rem) {
+  .esic-auth {
+    padding: var(--esic-space-4) var(--esic-space-3);
+  }
+
+  .esic-auth__card {
+    padding: var(--esic-space-5) var(--esic-space-4) var(--esic-space-4);
+  }
+
+  .esic-auth__brand {
+    max-width: 8rem;
+    margin-bottom: var(--esic-space-3);
+  }
+
+  .esic-auth__header {
+    margin-bottom: var(--esic-space-4);
+  }
+
+  .esic-auth__title {
+    font-size: 1.25rem;
+  }
+}
+
+// -- Paysage court (téléphone couché, tablette couchée basse, fenêtre
+//    desktop de faible hauteur) : deux colonnes — identité ESIC à gauche,
+//    contenu (titre + formulaire) à droite —, dès que hauteur ET largeur
+//    le permettent. Le formulaire reste entièrement visible ; si la
+//    hauteur est vraiment faible, `.esic-auth` ancre en haut et défile
+//    (règle `max-height: 34rem` plus haut).
+@media (orientation: landscape) and (min-width: 40rem) and (max-height: 30rem) {
+  .esic-auth {
+    padding: var(--esic-space-4);
+  }
+
+  .esic-auth__card {
+    max-width: 44rem;
+    display: grid;
+    grid-template-columns: minmax(8rem, 14rem) 1fr;
+    column-gap: var(--esic-space-6);
+    align-items: center;
+    padding: var(--esic-space-5) var(--esic-space-6);
+  }
+
+  // Colonne de gauche : la marque, centrée verticalement sur toute la
+  // hauteur de la carte.
+  .esic-auth__brand {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: center;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  // Tout le reste (titre, encarts, formulaire, statut) : colonne de droite.
+  .esic-auth__card > :not(.esic-auth__brand) {
+    grid-column: 2;
+  }
+
+  .esic-auth__header {
+    margin-bottom: var(--esic-space-3);
+    text-align: left;
+  }
+
+  .esic-auth__aux,
+  .esic-auth__status {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .esic-auth__link {
+    align-self: flex-start;
+  }
+}
+
 .esic-auth__header {
   margin-bottom: var(--esic-space-5);
   text-align: center;
