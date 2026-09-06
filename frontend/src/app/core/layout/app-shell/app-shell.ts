@@ -27,12 +27,12 @@ import { SkipLink } from '../../a11y/skip-link';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../auth/role-context.service';
 import { SessionActivityService } from '../../auth/session-activity.service';
-import { roleLabel } from '../../models/role';
 import { activeNavPath, NAV_ITEMS, visibleNavItems } from '../../navigation/navigation';
 import { ConnectivityService } from '../../pwa/connectivity.service';
 import { OfflineQueueService } from '../../pwa/offline-queue.service';
 import { PwaService } from '../../pwa/pwa.service';
 import { NotificationBell } from '../../../features/notifications/notification-bell/notification-bell';
+import { ProfileMenu } from '../profile-menu/profile-menu';
 import { RoleContextMenu } from '../role-context-menu/role-context-menu';
 import { SessionTimeoutWarning } from '../session-timeout-warning/session-timeout-warning';
 
@@ -54,6 +54,7 @@ import { SessionTimeoutWarning } from '../session-timeout-warning/session-timeou
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
+    ProfileMenu,
     RoleContextMenu,
     NotificationBell,
     SkipLink,
@@ -87,10 +88,8 @@ export class AppShell implements OnDestroy {
   protected readonly pendingActions = this.queue.pendingCount;
   protected readonly installable = this.pwa.installable;
 
-  protected readonly roleLabel = roleLabel;
-
-  protected readonly email = this.auth.currentUserEmail;
-  protected readonly roles = this.auth.roles;
+  // L'adresse et les rôles ne sont plus affichés à plat dans l'en-tête :
+  // ils sont regroupés dans le panneau compact `app-profile-menu` (Lot §3).
   // Navigation filtrée selon le contexte d'utilisation actif (docs/02 §6.1) :
   // le rôle choisi restreint les entrées visibles, sans jamais élargir les
   // droits — l'autorisation reste côté Spring Security.

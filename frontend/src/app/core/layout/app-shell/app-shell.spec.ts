@@ -53,9 +53,15 @@ describe('AppShell', () => {
   const navLinks = () =>
     Array.from(fixture.nativeElement.querySelectorAll('nav a')) as HTMLAnchorElement[];
 
-  it('shows the brand, the current user email and a logout control', () => {
+  it('shows the brand, a compact profile control and a logout control', () => {
     expect(text()).toContain('ESIC Connect');
-    expect(text()).toContain('admin@esic.test');
+    // L'adresse complète est passée dans le panneau « Profil » (Lot §3) ;
+    // l'en-tête ne garde qu'un identifiant court + l'adresse en aria-label.
+    expect(text()).toContain('admin');
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector(
+      'app-profile-menu button[aria-haspopup="menu"]',
+    );
+    expect(trigger?.getAttribute('aria-label')).toContain('admin@esic.test');
     expect(text()).toContain('Se déconnecter');
   });
 

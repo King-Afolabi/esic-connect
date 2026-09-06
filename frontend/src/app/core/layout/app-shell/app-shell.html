@@ -72,16 +72,7 @@
         <span class="shell__spacer"></span>
 
         <div class="shell__identity">
-          @if (email(); as currentEmail) {
-            <span class="shell__email" aria-label="Utilisateur connecté">{{ currentEmail }}</span>
-          }
-          @if (roles().length) {
-            <span class="shell__roles" aria-label="Rôles du compte">
-              @for (role of roles(); track role) {
-                <span class="esic-badge shell__role">{{ roleLabel(role) }}</span>
-              }
-            </span>
-          }
+          <app-profile-menu />
         </div>
 
         <div class="shell__tools">
