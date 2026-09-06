@@ -13,7 +13,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationSkipped,
+  Router,
+  RouterLink,
+  RouterOutlet,
+} from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 
 import { SkipLink } from '../../a11y/skip-link';
@@ -93,14 +100,26 @@ export class AppShell implements OnDestroy {
 
   /**
    * `path` de l'unique entrée de navigation active (Lot C). Recalculé à
-   * chaque navigation terminée : une seule entrée porte `.active` et
+   * chaque navigation qui se pose : une seule entrée porte `.active` et
    * `aria-current="page"`, y compris sur une route imbriquée ou une fiche
    * de détail hors menu.
+   *
+   * On lit `router.url` (toujours à jour) sur `NavigationEnd` **mais
+   * aussi** `NavigationSkipped` / `NavigationCancel` : une vue de liste
+   * qui réécrit ses filtres dans l'URL au chargement (Lot G) déclenche
+   * une navigation « même URL » qui supplante et annule celle du rail,
+   * sans émettre `NavigationEnd` — ce qui figeait l'entrée active sur la
+   * page précédente en mode zoneless.
    */
   private readonly currentUrl = toSignal(
     this.router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map((event) => event.urlAfterRedirects),
+      filter(
+        (event) =>
+          event instanceof NavigationEnd ||
+          event instanceof NavigationSkipped ||
+          event instanceof NavigationCancel,
+      ),
+      map(() => this.router.url),
       startWith(this.router.url),
     ),
     { initialValue: this.router.url },
