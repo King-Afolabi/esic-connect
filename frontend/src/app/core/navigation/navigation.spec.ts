@@ -15,52 +15,24 @@ describe('NAV_ITEMS', () => {
     expect(students?.roles).toEqual(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION']);
   });
 
-  it('exposes /academic as a real screen gated on AcademicWeb.READ_ROLES', () => {
-    const academic = NAV_ITEMS.find((i) => i.path === '/academic');
-    expect(academic).toBeDefined();
-    expect(academic?.placeholder).toBeUndefined();
-    expect(academic?.roles).toEqual([
+  it('regroupe référentiels / organisation / planning / alternance sous une seule entrée', () => {
+    const group = NAV_ITEMS.find((i) => i.path === '/organisation-planning');
+    expect(group).toBeDefined();
+    expect(group?.label).toBe('Organisation & planning');
+    expect(group?.placeholder).toBeUndefined();
+    expect(group?.roles).toEqual([
       'ADMIN',
       'SUPER_ADMIN',
       'SCHOOL_ADMINISTRATION',
       'PEDAGOGICAL_MANAGER',
     ]);
-  });
-
-  it('exposes /organization as a real screen gated on SiteController.READ_ROLES', () => {
-    const organization = NAV_ITEMS.find((i) => i.path === '/organization');
-    expect(organization).toBeDefined();
-    expect(organization?.placeholder).toBeUndefined();
-    expect(organization?.roles).toEqual([
-      'ADMIN',
-      'SUPER_ADMIN',
-      'SCHOOL_ADMINISTRATION',
-      'PEDAGOGICAL_MANAGER',
-    ]);
-  });
-
-  it('exposes /planning as a real screen gated on PlanningWeb.MANAGE_ROLES', () => {
-    const planning = NAV_ITEMS.find((i) => i.path === '/planning');
-    expect(planning).toBeDefined();
-    expect(planning?.placeholder).toBeUndefined();
-    expect(planning?.roles).toEqual([
-      'ADMIN',
-      'SUPER_ADMIN',
-      'SCHOOL_ADMINISTRATION',
-      'PEDAGOGICAL_MANAGER',
-    ]);
-  });
-
-  it('exposes /alternation as a real screen gated on AlternationWeb read roles', () => {
-    const alternation = NAV_ITEMS.find((i) => i.path === '/alternation');
-    expect(alternation).toBeDefined();
-    expect(alternation?.placeholder).toBeUndefined();
-    expect(alternation?.roles).toEqual([
-      'ADMIN',
-      'SUPER_ADMIN',
-      'SCHOOL_ADMINISTRATION',
-      'PEDAGOGICAL_MANAGER',
-    ]);
+    // Les chemins possédés : les anciennes entrées ne sont plus dans le
+    // menu, mais leurs routes restent adressables et l'entrée groupée
+    // reste active dessus.
+    expect(group?.matchPaths).toEqual(['/academic', '/organization', '/planning', '/alternation']);
+    for (const path of ['/academic', '/organization', '/planning', '/alternation']) {
+      expect(NAV_ITEMS.find((i) => i.path === path)).toBeUndefined();
+    }
   });
 
   it('exposes /sessions gated on CourseSessionWeb.READ_ROLES (TEACHER included)', () => {
@@ -133,39 +105,20 @@ describe('visibleNavItems', () => {
     }
   });
 
-  it('shows /academic for the roles that back AcademicWeb.READ_ROLES, and hides it otherwise', () => {
+  it('shows /organisation-planning for the read roles of its four sub-sections, and hides it otherwise', () => {
     for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/academic');
+      const paths = visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path);
+      expect(paths).toContain('/organisation-planning');
+      // Les quatre anciennes entrées ne sont plus rendues séparément.
+      expect(paths).not.toContain('/academic');
+      expect(paths).not.toContain('/organization');
+      expect(paths).not.toContain('/planning');
+      expect(paths).not.toContain('/alternation');
     }
     for (const role of ['TEACHER', 'STUDENT'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/academic');
-    }
-  });
-
-  it('shows /alternation for the alternation read roles, and hides it otherwise', () => {
-    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/alternation');
-    }
-    for (const role of ['TEACHER', 'STUDENT'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/alternation');
-    }
-  });
-
-  it('shows /organization for the SiteController read roles, and hides it otherwise', () => {
-    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/organization');
-    }
-    for (const role of ['TEACHER', 'STUDENT'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/organization');
-    }
-  });
-
-  it('shows /planning for PlanningWeb.MANAGE_ROLES, and hides it otherwise', () => {
-    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/planning');
-    }
-    for (const role of ['TEACHER', 'STUDENT'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/planning');
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain(
+        '/organisation-planning',
+      );
     }
   });
 
@@ -243,6 +196,21 @@ describe('activeNavPath (Lot C — un seul élément actif)', () => {
     expect(activeNavPath('/sessions/abc-123', NAV_ITEMS)).toBe('/sessions');
   });
 
+  it('garde « Organisation & planning » active sur ses quatre sous-sections regroupées', () => {
+    for (const url of [
+      '/organisation-planning',
+      '/academic',
+      '/academic/class-groups',
+      '/organization',
+      '/organization/sites/abc',
+      '/planning',
+      '/planning/import/7',
+      '/alternation',
+    ]) {
+      expect(activeNavPath(url, NAV_ITEMS), `url ${url}`).toBe('/organisation-planning');
+    }
+  });
+
   it('ne confond pas deux routes qui partagent un préfixe de chaîne', () => {
     // `/attendance` n’est PAS un parent de `/attendance-management`.
     expect(activeNavPath('/attendance-management', NAV_ITEMS)).toBe('/attendance-management');
@@ -255,6 +223,6 @@ describe('activeNavPath (Lot C — un seul élément actif)', () => {
   });
 
   it('ignore la chaîne de requête et le fragment', () => {
-    expect(activeNavPath('/planning?jobId=7#top', NAV_ITEMS)).toBe('/planning');
+    expect(activeNavPath('/planning?jobId=7#top', NAV_ITEMS)).toBe('/organisation-planning');
   });
 });

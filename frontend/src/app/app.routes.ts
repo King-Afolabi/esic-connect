@@ -460,6 +460,22 @@ export const routes: Routes = [
         ],
       },
       {
+        // Point d'entrée « Organisation & planning » : une seule entrée
+        // latérale rassemblant les quatre sous-sections ci-dessous
+        // (référentiels, organisation, planning, alternance). Aucune route
+        // n'est déplacée — ce hub ne fait que lancer. Périmètre : union
+        // des rôles de lecture des quatre, le serveur restant l'autorité.
+        path: 'organisation-planning',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Organisation & planning — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/organisation-planning/organisation-planning-hub').then(
+            (m) => m.OrganisationPlanningHub,
+          ),
+      },
+      {
         // Consultation en LECTURE SEULE du référentiel académique
         // (`com.esic.connect.academic`) : années scolaires → formations →
         // niveaux → promotions → classes. Périmètre aligné sur

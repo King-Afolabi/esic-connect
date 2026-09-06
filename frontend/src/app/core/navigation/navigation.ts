@@ -18,6 +18,16 @@ export interface NavItem {
    * ({@link visibleNavItems} l'exclut).
    */
   placeholder?: boolean;
+  /**
+   * Chemins supplémentaires « possédés » par cette entrée : sur une URL
+   * qui en préfixe un, l'entrée est considérée active bien que son `path`
+   * diffère. Sert au regroupement « Organisation & planning », dont le
+   * hub porte `/organisation-planning` mais qui doit rester actif sur
+   * `/academic`, `/organization`, `/planning`, `/alternation` et leurs
+   * sous-routes. N'élargit **jamais** un droit : `visibleNavItems`
+   * n'utilise que `roles`.
+   */
+  matchPaths?: readonly string[];
 }
 
 /**
@@ -62,47 +72,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
-    // Écran livré : consultation en lecture seule du référentiel
-    // académique (années scolaires → formations → niveaux → promotions →
-    // classes). Périmètre aligné sur `AcademicWeb.READ_ROLES`.
-    label: 'Référentiels',
-    path: '/academic',
-    icon: 'school',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : référentiel organisationnel (sites → fiche →
-    // création / modification, puis bâtiments, salles et plages réseau
-    // depuis la fiche d'un site). Périmètre aligné sur
-    // `SiteController.READ_ROLES` ; l'écriture des sites est restreinte
-    // plus finement par la route, et les plages réseau restent
-    // `SUPER_ADMIN` côté serveur.
-    label: 'Organisation',
-    path: '/organization',
+    // Regroupement (Lot §4) : une seule entrée latérale pour les quatre
+    // sous-sections auparavant séparées — référentiels académiques,
+    // organisation physique, planning, alternance. Le hub
+    // `/organisation-planning` ne fait que lancer : les routes `/academic`,
+    // `/organization`, `/planning`, `/alternation` sont inchangées (favoris,
+    // liens directs). `matchPaths` garde cette entrée active sur toutes ces
+    // sous-routes. Périmètre : union des rôles de lecture des quatre (ils
+    // partagent le même), le serveur restant l'autorité.
+    label: 'Organisation & planning',
+    path: '/organisation-planning',
     icon: 'apartment',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : import CSV, simulation, revue et publication d'un
-    // planning de classe, puis consultation des versions publiées
-    // (`com.esic.connect.planning`). Périmètre aligné sur
-    // `PlanningWeb.MANAGE_ROLES` ; un `PEDAGOGICAL_MANAGER` reste limité à
-    // son périmètre côté serveur.
-    label: 'Planning',
-    path: '/planning',
-    icon: 'calendar_month',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : gestion et consultation de l'alternance (modèles de
-    // rythme, affectations aux classes, exceptions individuelles,
-    // résolution de contexte). Périmètre aligné sur
-    // `AlternationWeb.PATTERN_READ_ROLES` / `SCOPED_ROLES` ; l'écriture
-    // des modèles est restreinte plus finement par la route.
-    label: 'Alternance',
-    path: '/alternation',
-    icon: 'sync_alt',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+    matchPaths: ['/academic', '/organization', '/planning', '/alternation'],
   },
   {
     // Écran livré : séances exceptionnelles et émargement (liste,
@@ -303,14 +285,21 @@ export function activeNavPath(url: string, items: readonly NavItem[]): string | 
   let best: string | null = null;
   let bestDepth = 0;
   for (const item of items) {
-    const segments = toSegments(item.path);
-    if (segments.length === 0 || segments.length > current.length) {
-      continue;
-    }
-    const matches = segments.every((segment, index) => segment === current[index]);
-    if (matches && segments.length > bestDepth) {
-      best = item.path;
-      bestDepth = segments.length;
+    // Le `path` de l'entrée, plus les chemins qu'elle « possède »
+    // (`matchPaths`) : le regroupement « Organisation & planning » reste
+    // actif sur `/academic`, `/planning`, etc. La correspondance la plus
+    // profonde l'emporte toujours — une sous-route qui a sa propre entrée
+    // (rare ici) resterait prioritaire.
+    for (const candidate of [item.path, ...(item.matchPaths ?? [])]) {
+      const segments = toSegments(candidate);
+      if (segments.length === 0 || segments.length > current.length) {
+        continue;
+      }
+      const matches = segments.every((segment, index) => segment === current[index]);
+      if (matches && segments.length > bestDepth) {
+        best = item.path;
+        bestDepth = segments.length;
+      }
     }
   }
   return best;

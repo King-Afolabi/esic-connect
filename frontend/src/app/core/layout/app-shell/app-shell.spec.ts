@@ -65,10 +65,9 @@ describe('AppShell', () => {
       '/administration',
       '/students',
       '/students/import',
-      '/academic',
-      '/organization',
-      '/planning',
-      '/alternation',
+      // Regroupement (Lot §4) : une seule entrée pour référentiels,
+      // organisation, planning et alternance.
+      '/organisation-planning',
       '/sessions',
       // Réclamations livrées au sprint 9 (EF-CLAIM-001..004) : visibles
       // de tous les rôles, chacun n'y voyant que son propre périmètre.
@@ -95,10 +94,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
     expect(text()).toContain('Import apprenants');
-    expect(text()).toContain('Référentiels');
-    expect(text()).toContain('Organisation');
-    expect(text()).toContain('Planning');
-    expect(text()).toContain('Alternance');
+    expect(text()).toContain('Organisation & planning');
     expect(text()).toContain('Séances');
   });
 
@@ -150,26 +146,23 @@ describe('AppShell', () => {
     ]);
   });
 
-  it('hides Apprenants but shows Import apprenants, Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {
+  it('hides Apprenants but shows Import apprenants and Organisation & planning for a PEDAGOGICAL_MANAGER', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
     expect(hrefs).not.toContain('/students');
     expect(hrefs).toContain('/students/import');
-    expect(hrefs).toContain('/academic');
-    expect(hrefs).toContain('/alternation');
+    expect(hrefs).toContain('/organisation-planning');
   });
 
-  it('hides Alternance for a role outside the alternation read roles', () => {
+  it('hides Organisation & planning for a role outside its sub-section read roles', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/alternation');
-  });
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/organisation-planning');
 
-  it('hides Référentiels for a role outside AcademicWeb.READ_ROLES', () => {
     roles.set(['STUDENT']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/academic');
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/organisation-planning');
   });
 
   it('offers no usage-context switch for a single-role account', () => {

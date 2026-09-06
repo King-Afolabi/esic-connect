@@ -177,7 +177,7 @@ describe('Dashboard', () => {
     }
   });
 
-  it('offers Référentiels as a quick link only for the roles behind AcademicWeb.READ_ROLES', () => {
+  it('offers Organisation & planning as a quick link only for its sub-section read roles', () => {
     for (const held of [
       ['ADMIN'],
       ['SUPER_ADMIN'],
@@ -186,37 +186,17 @@ describe('Dashboard', () => {
     ] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
-      ).not.toBeNull();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('a[href="/organisation-planning"]')).not.toBeNull();
+      // Les anciennes entrées séparées ne sont plus des raccourcis.
+      expect(el.querySelector('a[href="/academic"]')).toBeNull();
+      expect(el.querySelector('a[href="/alternation"]')).toBeNull();
     }
     for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
       expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
-      ).toBeNull();
-    }
-  });
-
-  it('offers Alternance as a quick link only for the alternation read roles', () => {
-    for (const held of [
-      ['ADMIN'],
-      ['SUPER_ADMIN'],
-      ['SCHOOL_ADMINISTRATION'],
-      ['PEDAGOGICAL_MANAGER'],
-    ] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
-      ).not.toBeNull();
-    }
-    for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/organisation-planning"]'),
       ).toBeNull();
     }
   });
