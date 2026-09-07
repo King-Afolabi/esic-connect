@@ -108,6 +108,63 @@ mémoire du Mac, cf. entrées antérieures) ; **recette navigateur**
 imprimer / renouveler avec confirmation ; SUPER_ADMIN : consulter /
 imprimer, jamais renouveler), exige la pile de démonstration démarrée.
 
+**Commits** : `944500b` (entrée doc « (3) » laissée non commitée dans
+l'arbre) puis `2450048` (cette livraison). **Poussés** sur
+`origin/feat/demo-readiness-e2e-ui`.
+
+**§10 déploiement — `NOT_PERFORMED`, blocage réseau externe.** La cible
+de production est la Raspberry Pi `king_a@192.168.1.83` (`compose.prod.yaml`
++ Quick Tunnel Cloudflare). La machine de cette session est sur le réseau
+`192.168.10.0/24` (passerelle `192.168.10.1`) : `192.168.1.83` est
+**injoignable** (« Network is unreachable », `nc` et `ssh` échouent). Le
+site public **reste en ligne et sain** sur l'ancienne version
+(`https://buried-fed-implementation-completion.trycloudflare.com` →
+`/`, `/login`, `/dashboard` = 200 ; `/api/v1/programs` = 401). Le code
+Java ayant changé, le déploiement exige un rebuild **natif ARM64** des
+deux images sur la Pi. Procédure **documentée** à appliquer, telle
+quelle, depuis un poste du même LAN que la Pi
+(`docs/deployment/RASPBERRY-PI.md` § « Mise à jour » + `ROLLBACK.md`) :
+
+```bash
+ssh king_a@192.168.1.83
+cd ~/esic-connect
+
+# 1. Sauvegarde AVANT toute mise à jour (ROLLBACK.md § Sauvegarde) :
+#    dump MySQL + tar des justificatifs + note du commit courant.
+
+# 2. Récupérer le code : soit `git pull` si le dépôt de la Pi est un
+#    clone git (RASPBERRY-PI.md § 1), soit — d'après les entrées des
+#    7 sept. (2)/(3), le dépôt de la Pi n'en est pas un — un rsync
+#    depuis un clone à jour sur `origin/feat/demo-readiness-e2e-ui` :
+#      rsync -az --delete --exclude .git --exclude node_modules \
+#        --exclude backend/target --exclude 'frontend/dist' \
+#        --exclude 'frontend/.angular' <clone-local>/ king_a@192.168.1.83:~/esic-connect/
+
+# 3. Reconstruire et recréer (Java touché → backend inclus) :
+docker compose -f compose.prod.yaml up -d --build
+docker compose -f compose.prod.yaml ps          # mysql/redis/backend/frontend "healthy"
+docker compose -f compose.prod.yaml logs -f backend   # Flyway : "Schema up to date" (aucune migration)
+
+# 4. Contrôles § 6 de RASPBERRY-PI.md :
+docker compose -f compose.prod.yaml exec backend wget -qO- http://localhost:8080/actuator/health
+docker compose -f compose.prod.yaml logs cloudflared | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
+#    (si l'URL a changé : la reporter dans .env — APP_ALLOWED_ORIGINS,
+#     APP_ACTIVATION_BASE_URL — puis `up -d backend`.)
+
+# 5. Smoke test via l'URL publique <U> :
+#    curl -s -o /dev/null -w '%{http_code}\n' <U>/           # 200
+#    curl -s -o /dev/null -w '%{http_code}\n' <U>/login       # 200
+#    curl -s -o /dev/null -w '%{http_code}\n' <U>/api/v1/programs  # 401 (route principale existante OK)
+#    Navigateur, connexion ADMIN → fiche d'un site → colonne « QR fixe »
+#    → Afficher → Imprimer l'affiche → (ADMIN) Renouveler avec
+#    confirmation ; vérifier qu'un SUPER_ADMIN ne voit PAS « Renouveler ».
+# En cas d'échec : rollback selon docs/deployment/ROLLBACK.md.
+```
+
+**Aucune migration à appliquer** (schéma V34 inchangé) : le redémarrage
+du back-end ne déclenche aucun Flyway nouveau. **Aucune donnée de
+production n'est touchée.**
+
 ### 7 septembre 2026 (3) — redémarrage de la Pi : nouvelle URL de tunnel
 
 La Pi a été redémarrée par le porteur. Le **Quick Tunnel Cloudflare tire
