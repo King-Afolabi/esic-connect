@@ -580,6 +580,21 @@ export const routes: Routes = [
               import('./features/organization/site-detail/site-detail').then((m) => m.SiteDetail),
           },
           {
+            // Affiche imprimable du QR fixe permanent d'une salle
+            // (EF-ORG-003). Consultation / impression ouvertes à
+            // `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+            // (`RoomController.STATIC_QR_VIEW_ROLES`) ; le
+            // `PEDAGOGICAL_MANAGER`, qui a une lecture seule du reste du
+            // référentiel, en est exclu. Spring Security reste l'autorité.
+            path: 'sites/:publicId/rooms/:roomId/qr-poster',
+            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+            title: `Affiche QR de salle — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/organization/room-qr-poster/room-qr-poster').then(
+                (m) => m.RoomQrPoster,
+              ),
+          },
+          {
             path: 'sites/:publicId/edit',
             canActivate: [roleGuard([...ORGANIZATION_WRITE_ROLES])],
             data: { mode: 'edit' },

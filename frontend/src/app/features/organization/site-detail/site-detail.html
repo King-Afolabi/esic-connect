@@ -268,6 +268,27 @@
                 <th mat-header-cell *matHeaderCellDef>Capacité</th>
                 <td mat-cell *matCellDef="let row">{{ row.capacity === null ? '—' : row.capacity }}</td>
               </ng-container>
+              <ng-container matColumnDef="staticQr">
+                <th mat-header-cell *matHeaderCellDef>QR fixe</th>
+                <td mat-cell *matCellDef="let row">
+                  @if (row.staticQrIssuedAt) {
+                    <span class="esic-badge" data-status="ACTIVE">Disponible</span>
+                    <span class="org__hint">émis le {{ formatDate(row.staticQrIssuedAt) }}</span>
+                  } @else {
+                    <span class="org__hint">Non émis</span>
+                  }
+                  @if (canViewQr() && row.status === 'ACTIVE') {
+                    <button
+                      mat-button
+                      type="button"
+                      (click)="openQr(row)"
+                      [attr.aria-label]="'Afficher le QR fixe de la salle ' + row.code"
+                    >
+                      Afficher
+                    </button>
+                  }
+                </td>
+              </ng-container>
               <ng-container matColumnDef="status">
                 <th mat-header-cell *matHeaderCellDef>Statut</th>
                 <td mat-cell *matCellDef="let row"><span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span></td>
@@ -292,6 +313,112 @@
           </div>
         }
       }
+    }
+
+    <!-- QR fixe de salle (EF-ORG-003) ----------------------------- -->
+    @if (qrLoading()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement du QR fixe"></mat-progress-bar>
+    }
+    @if (qrPanel(); as qr) {
+      <section
+        class="esic-reveal org__qr-panel"
+        role="group"
+        [attr.aria-label]="'QR fixe de la salle ' + qr.room.code"
+      >
+        <p class="esic-reveal__title">QR fixe — {{ qr.room.code }} · {{ qr.room.name }}</p>
+
+        <dl class="org__facts">
+          <div><dt>Site</dt><dd>{{ qr.view.siteName }}</dd></div>
+          @if (qr.view.buildingName) {
+            <div><dt>Bâtiment</dt><dd>{{ qr.view.buildingName }}</dd></div>
+          }
+          @if (qr.view.floorLabel) {
+            <div><dt>Étage</dt><dd>{{ qr.view.floorLabel }}</dd></div>
+          }
+          <div><dt>Salle</dt><dd>{{ qr.view.roomName }}</dd></div>
+        </dl>
+
+        @if (qr.view.issued) {
+          <app-qr-display [value]="qr.view.staticQrReference" />
+          <p class="esic-reveal__text">
+            Émis le {{ formatDate(qr.view.staticQrIssuedAt) }} · réf. support
+            {{ qr.view.maskedReference }}
+          </p>
+          <p class="esic-reveal__text">
+            Ce QR reste affiché durablement en salle et n'est accepté que jusqu'au début de la
+            séance, depuis le réseau autorisé de l'établissement. Ensuite, le QR dynamique et le
+            code court du formateur prennent le relais.
+          </p>
+          <div class="esic-reveal__actions">
+            <a
+              mat-flat-button
+              [routerLink]="['/organization/sites', publicId, 'rooms', qr.room.publicId, 'qr-poster']"
+            >
+              Imprimer l'affiche
+            </a>
+            <button mat-button type="button" (click)="closeQr()">Fermer</button>
+          </div>
+
+          @if (canRotateQr()) {
+            @if (!pendingQrRotate()) {
+              <button
+                mat-button
+                type="button"
+                class="org__qr-danger"
+                (click)="startRotateQr()"
+              >
+                Renouveler le QR…
+              </button>
+            } @else {
+              <div
+                class="esic-reveal esic-reveal--danger"
+                role="group"
+                aria-label="Confirmer le renouvellement du QR fixe"
+              >
+                <p class="esic-reveal__text">
+                  <strong>Renouveler le QR fixe de cette salle ?</strong> Toutes les affiches déjà
+                  posées deviendront <strong>immédiatement invalides</strong> et devront être
+                  réimprimées et remplacées.
+                </p>
+                @if (qrError()) {
+                  <p class="esic-reveal__error" role="alert">{{ qrError() }}</p>
+                }
+                <div class="esic-reveal__actions">
+                  <button
+                    mat-flat-button
+                    type="button"
+                    (click)="confirmRotateQr()"
+                    [disabled]="qrRotating()"
+                  >
+                    Renouveler et invalider les affiches
+                  </button>
+                  <button mat-button type="button" (click)="cancelRotateQr()">Annuler</button>
+                </div>
+              </div>
+            }
+          }
+        } @else {
+          <p class="esic-reveal__text" role="status">
+            Aucun QR fixe n'a encore été émis pour cette salle.
+          </p>
+          @if (qrError()) {
+            <p class="esic-reveal__error" role="alert">{{ qrError() }}</p>
+          }
+          <div class="esic-reveal__actions">
+            @if (canRotateQr()) {
+              <button
+                mat-flat-button
+                type="button"
+                (click)="confirmRotateQr()"
+                [disabled]="qrRotating()"
+              >
+                Émettre le QR fixe
+              </button>
+            }
+            <button mat-button type="button" (click)="closeQr()">Fermer</button>
+          </div>
+        }
+      </section>
     }
 
     <!-- Network ranges (SUPER_ADMIN) ------------------------------- -->

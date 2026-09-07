@@ -2633,6 +2633,43 @@ entrée provisoire est *déclarée* par le formateur, pas vérifiée : la
 confondre avec une présence enregistrée reviendrait à traiter une
 affirmation comme un fait.
 
+### DEC-S13-001 — Le jeton du QR fixe sort par une route dédiée, pas par le contrat de salle
+
+**Contexte.** `EF-ORG-003` : consulter, réimprimer et renouveler le QR
+fixe d'une salle, avec des droits distincts par rôle. Jusqu'ici
+`RoomResponse` portait `staticQrReference` dans **toutes** les réponses
+de salle, lisibles par `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+/ `PEDAGOGICAL_MANAGER`.
+
+**Décision.** Le jeton complet quitte `RoomResponse` (seul
+`staticQrIssuedAt` y reste, comme indicateur « affiche disponible ») et
+n'est servi que par trois routes dédiées : `GET /rooms/{id}/static-qr`
+(réimpression — lecture seule), `POST /rooms/{id}/static-qr/rotate`
+(renouvellement) et `DELETE /rooms/{id}/static-qr` (révocation), via la
+vue `RoomStaticQrView`. Consultation / impression :
+`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`. Renouvellement /
+révocation : `ADMIN` **seul** (`403` pour les deux autres). Contrôle par
+`@PreAuthorize` au niveau route, jamais l'affichage Angular.
+
+**Raison.** Un secret d'affiche n'a pas à circuler dans le contrat de
+consultation courant d'une salle : le `PEDAGOGICAL_MANAGER`, qui a une
+lecture seule du référentiel, n'en a aucun usage, et le diffuser
+multiplie les copies à gouverner. La réimpression (même jeton, même
+date, affiches valides) et le renouvellement (jeton neuf, affiches
+invalidées) sont deux gestes de nature différente : le premier est
+courant et ouvert à l'administration scolaire, le second est
+exceptionnel et réservé à l'`ADMIN` fonctionnel — un `SUPER_ADMIN` garde
+la main en cas d'incident, hors parcours normal. Renouvellements
+concurrents : verrou optimiste de `BaseEntity` (`@Version`). Trace :
+outbox transactionnelle (`ROOM_UPDATED`), sans jeton ni adresse IP.
+
+**Impression.** Le module `document` est strictement tabulaire (CSV,
+`.xlsx`, PDF de tableau) ; il n'y a pas de générateur de page côté
+serveur, et `angularx-qrcode` est déjà une dépendance front. L'affiche
+est donc une **vue d'impression Angular** (`room-qr-poster`, `@media
+print`), pas un PDF serveur — le cahier l'autorise explicitement à
+défaut de générateur.
+
 ### DEC-S9-001 — L'effet d'un départ anticipé est dérivé, jamais stocké
 
 **Contexte.** `EF-ATT-013` et docs/02 §16.13 : « L'effet est `PARTIAL`,

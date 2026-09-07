@@ -15,6 +15,9 @@
  * - `GET  /api/v1/sites/{sitePublicId}/rooms`             → `PageResponse<RoomResponse>`
  * - `POST /api/v1/sites/{sitePublicId}/rooms`             → `RoomResponse` (201)
  * - `GET  /api/v1/rooms/{publicId}` (+ `PATCH`, `/archive`, `/restore`)
+ * - `GET    /api/v1/rooms/{publicId}/static-qr`         → `RoomStaticQrView` (réimpression — ne modifie rien)
+ * - `POST   /api/v1/rooms/{publicId}/static-qr/rotate`  → `RoomStaticQrView` (renouvellement — `ADMIN` seul)
+ * - `DELETE /api/v1/rooms/{publicId}/static-qr`         → `RoomStaticQrView` (révocation — `ADMIN` seul)
  * - `GET  /api/v1/sites/{sitePublicId}/network-ranges`    → `PageResponse<SiteNetworkRangeResponse>`
  * - `POST /api/v1/sites/{sitePublicId}/network-ranges`    → `SiteNetworkRangeResponse` (201)
  * - `POST /api/v1/network-ranges/{publicId}/activate` | `/deactivate` → 204
@@ -90,12 +93,45 @@ export interface RoomResponse {
   name: string;
   capacity: number | null;
   floorLabel: string | null;
-  staticQrReference: string | null;
+  /**
+   * Date d'émission du QR fixe (EF-ORG-003), ou `null` si aucun n'a été
+   * émis. Sert d'indicateur « affiche disponible » dans la liste. Le
+   * **jeton** lui-même n'est jamais dans ce contrat : il n'est renvoyé
+   * que par `GET /api/v1/rooms/{id}/static-qr` (`RoomStaticQrView`).
+   */
+  staticQrIssuedAt: string | null;
   status: OrganizationStatus;
   archivedAt: string | null;
   archiveReason: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Vue **administrative dédiée** du QR fixe d'une salle — `RoomStaticQrView`
+ * (EF-ORG-003 ; docs/02 §7.1, §16.6).
+ *
+ * Renvoyée uniquement par les routes `/rooms/{id}/static-qr` et
+ * uniquement aux rôles autorisés côté serveur (`ADMIN` / `SUPER_ADMIN` /
+ * `SCHOOL_ADMINISTRATION` en lecture ; `ADMIN` seul pour `rotate` /
+ * `DELETE`). `issued === false` tant qu'aucun QR n'a été émis : les
+ * champs secrets sont alors `null`.
+ */
+export interface RoomStaticQrView {
+  roomPublicId: string;
+  roomCode: string;
+  roomName: string;
+  buildingName: string | null;
+  siteName: string;
+  floorLabel: string | null;
+  issued: boolean;
+  /** Jeton complet — à n'afficher que dans l'affiche / la modale, jamais en liste. */
+  staticQrReference: string | null;
+  /** Forme masquée (`abcd…wxyz`), sûre à afficher en pied d'affiche. */
+  maskedReference: string | null;
+  /** Chemin d'émargement à encoder dans le QR (`/attendance?ref=<jeton>`). */
+  checkInPath: string | null;
+  staticQrIssuedAt: string | null;
 }
 
 /** Vue API d'une plage réseau — `SiteNetworkRangeResponse` (jamais d'IP utilisateur). */
@@ -173,14 +209,13 @@ export interface UpdateBuildingRequest {
   name: string;
 }
 
-/** Corps de `POST /api/v1/sites/{id}/rooms`. */
+/** Corps de `POST /api/v1/sites/{id}/rooms` (le QR fixe s'émet ensuite, jamais à la création). */
 export interface CreateRoomRequest {
   code: string;
   name: string;
   buildingPublicId?: string | null;
   capacity?: number | null;
   floorLabel?: string | null;
-  staticQrReference?: string | null;
 }
 
 /** Corps de `PATCH /api/v1/rooms/{id}` (remplace les champs modifiables ; code immuable). */
@@ -189,7 +224,6 @@ export interface UpdateRoomRequest {
   buildingPublicId?: string | null;
   capacity?: number | null;
   floorLabel?: string | null;
-  staticQrReference?: string | null;
 }
 
 /** Corps de `POST /api/v1/sites/{id}/network-ranges` (CIDR immuable ensuite). */

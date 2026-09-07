@@ -107,35 +107,56 @@ class RoomService {
     }
 
     /**
-     * Émet ou renouvelle le QR fixe de la salle (EF-ORG-003).
+     * Vue administrative dédiée du QR fixe (EF-ORG-003) — lecture seule.
+     *
+     * <p>Ne modifie <strong>rien</strong> : c'est le chemin de la
+     * <em>réimpression</em>. Le jeton et sa date d'émission restent
+     * identiques, les affiches déjà posées restent valides. Renvoie une
+     * vue {@code issued == false} tant qu'aucun QR n'a été émis pour la
+     * salle plutôt qu'une erreur : l'interface propose alors l'émission.
+     */
+    @Transactional(readOnly = true)
+    RoomStaticQrView getStaticQr(UUID publicId) {
+        return RoomStaticQrView.from(requireRoom(publicId));
+    }
+
+    /**
+     * Émet ou <strong>renouvelle</strong> le QR fixe de la salle
+     * (EF-ORG-003) — action exceptionnelle réservée à {@code ADMIN}
+     * (contrôlée par la route).
      *
      * <p>Le jeton est tiré d'un {@link java.security.SecureRandom} : une
      * référence saisie à la main serait devinable, et un QR devinable
-     * n'est pas un contrôle. Le renouvellement invalide l'affiche
-     * précédente — c'est le but.
+     * n'est pas un contrôle. Le renouvellement <strong>invalide
+     * immédiatement</strong> l'affiche précédente et met à jour
+     * {@code static_qr_issued_at} — c'est le but. L'écriture est audité
+     * via {@link OrganizationChangePublisher} (outbox transactionnelle) ;
+     * deux renouvellements concurrents sont départagés par le
+     * verrouillage optimiste de {@code BaseEntity} ({@code @Version}).
      */
-    RoomResponse issueStaticQr(UUID publicId, String callerSubject) {
+    RoomStaticQrView rotateStaticQr(UUID publicId, String callerSubject) {
         Room room = requireRoom(publicId);
         if (room.isArchived()) {
             throw new OrganizationException(OrganizationException.Kind.ENTITY_ARCHIVED);
         }
+        boolean firstIssue = room.getStaticQrReference() == null;
         Long actorId = changePublisher.actorId(callerSubject);
         room.issueStaticQr(newStaticQrToken(), clock.instant(), actorId);
         changePublisher.publish(OrganizationResourceType.ROOM, room.getPublicId(),
                 OrganizationChangeAction.UPDATED, actorId,
-                "staticQr=issued;code=" + room.getCode());
-        return RoomResponse.from(room);
+                "staticQr=" + (firstIssue ? "issued" : "rotated") + ";code=" + room.getCode());
+        return RoomStaticQrView.from(room);
     }
 
     /** Retire le QR : la salle n'accepte plus d'émargement par affiche. */
-    RoomResponse revokeStaticQr(UUID publicId, String callerSubject) {
+    RoomStaticQrView revokeStaticQr(UUID publicId, String callerSubject) {
         Room room = requireRoom(publicId);
         Long actorId = changePublisher.actorId(callerSubject);
         room.revokeStaticQr(actorId);
         changePublisher.publish(OrganizationResourceType.ROOM, room.getPublicId(),
                 OrganizationChangeAction.UPDATED, actorId,
                 "staticQr=revoked;code=" + room.getCode());
-        return RoomResponse.from(room);
+        return RoomStaticQrView.from(room);
     }
 
     private static String newStaticQrToken() {

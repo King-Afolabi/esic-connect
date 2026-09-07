@@ -16,3 +16,24 @@
   color: var(--esic-danger);
   font-size: 0.875rem;
 }
+
+// --- QR fixe de salle (EF-ORG-003) ---------------------------------
+
+// Indication discrète dans la colonne « QR fixe » (date d'émission / état).
+.org__hint {
+  display: inline-block;
+  margin-inline: 0.5rem 0.25rem;
+  color: var(--esic-text-muted, #5f6368);
+  font-size: 0.8125rem;
+}
+
+.org__qr-panel {
+  max-width: 48rem;
+}
+
+// Action secondaire dangereuse (renouvellement) — jamais présentée
+// comme l'action principale du panneau.
+.org__qr-danger {
+  margin-top: 0.5rem;
+  color: var(--esic-danger);
+}

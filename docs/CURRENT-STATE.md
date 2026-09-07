@@ -10,6 +10,104 @@
 
 ## Dernière mise à jour
 
+### 7 septembre 2026 (4) — EF-ORG-003 : gestion et impression du QR fixe permanent de salle
+
+Branche `feat/demo-readiness-e2e-ui`. Complète EF-ORG-003 : l'API du QR
+fixe existait depuis le sprint 8, mais elle exposait le jeton dans toutes
+les réponses de salle et n'avait **aucun écran**. Cette passe livre une
+**API administrative dédiée**, la **matrice de rôles** exigée, et
+l'**interface** (consultation, impression, renouvellement contrôlé).
+**Aucune migration** — schéma inchangé en V34, colonnes
+`static_qr_reference` / `static_qr_issued_at` de V26 réutilisées.
+
+**Back-end** (`organization`, `attendance` ; aucun nouveau module) :
+
+- `RoomStaticQrView` — vue dédiée : `roomCode`, `roomName`,
+  `buildingName`, `siteName`, `floorLabel`, `issued`, jeton complet
+  (`staticQrReference`), **forme masquée** (`AbCd…7890`), `checkInPath`
+  (`/attendance?ref=<jeton>`), `staticQrIssuedAt`. `issued == false` tant
+  qu'aucun QR n'a été émis (les champs secrets sont alors `null`).
+- `RoomResponse` : le **jeton complet a été retiré** du contrat général —
+  il ne reste que `staticQrIssuedAt`, indicateur « affiche disponible »
+  pour la colonne de liste. La référence n'est plus servie qu'aux routes
+  `/rooms/{id}/static-qr`.
+- Routes : `GET /rooms/{id}/static-qr` (**réimpression** — lecture seule,
+  ne modifie ni le jeton ni sa date), `POST /rooms/{id}/static-qr/rotate`
+  (**renouvellement**, avec l'alias `POST /rooms/{id}/static-qr` conservé
+  pour l'existant), `DELETE /rooms/{id}/static-qr` (**révocation**).
+- Matrice (`@PreAuthorize` au niveau route, jamais l'affichage seul) :
+
+  | Rôle | Consulter / imprimer | Renouveler / révoquer |
+  |---|---|---|
+  | `ADMIN` | oui | **oui** |
+  | `SUPER_ADMIN` | oui | non (`403`) |
+  | `SCHOOL_ADMINISTRATION` | oui | non (`403`) |
+  | `PEDAGOGICAL_MANAGER`, `TEACHER`, `STUDENT` | non (`403`) | non (`403`) |
+  | anonyme | `401` | `401` |
+
+- Renouvellement : nouveau jeton `SecureRandom` (32 octets), remplace
+  l'ancien atomiquement, met à jour `static_qr_issued_at`, **invalide
+  immédiatement** les affiches posées. Audité via l'**outbox
+  transactionnelle** (`ROOM_UPDATED`, détail `staticQr=rotated;code=…` —
+  **jamais le jeton, jamais d'IP**). Renouvellements concurrents
+  départagés par le verrou optimiste de `BaseEntity` (`@Version`).
+- `RoomQrAttendanceService` : le QR fixe est désormais refusé **à
+  l'heure de début exacte** (filtre `now.isBefore(startsAt)` au lieu de
+  `!now.isAfter(startsAt)`) — alignement du code sur la règle déjà
+  documentée « utilisable **jusqu'au** début » (RG-051, D-01).
+- **Limite connue, liée à D-01** : le QR fixe n'est aujourd'hui
+  utilisable que si un point de contrôle est `OPEN`, ce qui suppose la
+  séance `OPEN` (le formateur l'a ouverte) ; il n'existe pas d'ouverture
+  automatique d'un point de contrôle avant le début (statu quo D-01). Le
+  refus « dès l'ouverture par le formateur » du mandat présuppose ce
+  mécanisme non existant ; **aucune règle métier n'a été inventée** pour
+  le fournir. Le refus « à / après l'heure de début » est, lui, effectif.
+
+**Front-end** (`organization` ; aucune dépendance ajoutée —
+`angularx-qrcode` était déjà là) :
+
+- Fiche de site : colonne **« QR fixe »** (« Disponible » + date
+  d'émission, ou « Non émis ») + action **« Afficher »**
+  (`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`).
+- Panneau **en flux** (`.esic-reveal`, `role="group"` — l'application
+  n'ouvre aucune fenêtre modale, décision documentée) : QR visuel
+  (`app-qr-display`, jeton opaque encodé, jamais rendu en texte),
+  site / bâtiment / étage / salle, **réf. support masquée**, date
+  d'émission, lien **« Imprimer l'affiche »**. **« Renouveler le QR »**
+  en action secondaire dangereuse, `ADMIN` seul, avec confirmation
+  explicite (« toutes les affiches déjà posées deviendront immédiatement
+  invalides »). Recharge la liste des salles au succès.
+- Nouvelle vue d'impression **`room-qr-poster`** — route
+  `organization/sites/:publicId/rooms/:roomId/qr-poster`, gardée
+  `roleGuard(['ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION'])` : logo
+  ESIC, titre « ESIC Connect — Émargement », code + nom de salle,
+  site / bâtiment / étage, QR 320 px, les quatre instructions du mandat,
+  date d'émission, réf. masquée, `@media print` (masque barre d'outils
+  et cadre). Pas de générateur PDF page côté serveur — le module
+  `document` est strictement tabulaire ; le mandat autorise explicitement
+  la vue d'impression Angular dans ce cas.
+
+**Tests exécutés** (environnement §6 ; Docker mysql/redis sains) :
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw -o test -Dtest=RoomStaticQrAdminIntegrationTests` | **10 / 10** (matrice de rôles, réimpression idempotente, renouvellement change jeton + date, révocation, `RoomResponse` sans jeton, audit sans fuite) |
+| `./mvnw -o test -Dtest=RoomQrAttendanceIntegrationTests` | **12 / 12** (+1 : « refusé exactement à H ») |
+| `… -Dtest=OrganizationIntegrationTests,OrganizationSecurityTests,OrganizationServiceTests,OrganizationConstraintsTests,ModularityTests,AttendanceIntegrationTests,DailyAttendanceIntegrationTests,DashboardCardsIntegrationTests` | **toutes vertes** ; `ModularityTests` 19 modules |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **104 fichiers / 852 tests / 0 échec** (+ `room-qr-poster.spec` 5, + `site-detail.spec` QR fixe 7) |
+| `cd frontend && npx ng build --configuration production` | **581,94 kB** initial, aucune alerte de budget |
+| `frontend/node_modules/.bin/tsc -p tsconfig.json --noEmit` | typecheck Playwright — 0 erreur |
+| `./mvnw -o clean test-compile` | `BUILD SUCCESS` (compilation complète, pas seulement incrémentale) |
+
+**`NOT_PERFORMED`** : suite back-end **complète** sur le commit de
+livraison (les tranches ciblées ci-dessus sont vertes ; la suite
+intégrale n'a pas été relancée — historiquement sujette à saturation
+mémoire du Mac, cf. entrées antérieures) ; **recette navigateur**
+`tests/15-room-static-qr.spec.ts` — écrite (ADMIN : consulter / émettre /
+imprimer / renouveler avec confirmation ; SUPER_ADMIN : consulter /
+imprimer, jamais renouveler), exige la pile de démonstration démarrée.
+
 ### 7 septembre 2026 (3) — redémarrage de la Pi : nouvelle URL de tunnel
 
 La Pi a été redémarrée par le porteur. Le **Quick Tunnel Cloudflare tire
@@ -1390,10 +1488,24 @@ raison, le document avait tort.
   serveur, unique, daté, renouvelable et révocable. Une référence saisie
   à la main serait devinable, donc sans valeur (`DEC-S8-001`). `V26`
   efface les valeurs libres héritées de V4.
+  **API administrative dédiée** (7 septembre 2026, entrée en tête ;
+  `DEC-S13-001`) : `GET /rooms/{id}/static-qr` (réimpression — ne modifie
+  rien), `POST /rooms/{id}/static-qr/rotate` (+ alias `POST …/static-qr`),
+  `DELETE /rooms/{id}/static-qr`. Vue `RoomStaticQrView` (jeton complet +
+  forme masquée + `checkInPath`) ; le jeton complet a **disparu de
+  `RoomResponse`** (seul `staticQrIssuedAt` y reste, comme indicateur).
+  Matrice : consultation / impression pour
+  `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` ; renouvellement /
+  révocation pour `ADMIN` **seul** (`403` pour les deux autres).
+  Renouvellement audité via l'outbox (`ROOM_UPDATED`, sans jeton ni IP),
+  concurrence protégée par le verrou optimiste de `BaseEntity`. Écran :
+  colonne « QR fixe » et panneau en flux dans la fiche de site, vue
+  d'impression `room-qr-poster`.
 - `EF-ATT-010` **émargement par QR de salle** : le corps ne porte que le
   jeton ; le serveur détermine salle, séance imminente, inscription et
-  fenêtre. Refusé après le début de la séance (RG-051), sans séance
-  correspondante, et sur jeton inconnu (`404`).
+  fenêtre. Refusé **à l'heure de début exacte et au-delà** (strictement
+  avant H ; RG-051, alignement du code sur « jusqu'au début »), sans
+  séance correspondante, et sur jeton inconnu (`404`).
 - `EF-ATT-008` **contrôle de plage réseau** : comparaison CIDR IPv4/IPv6
   sur les octets, sans résolution DNS, **avant** toute autre décision.
   Refus par défaut — un site sans plage déclarée n'autorise rien. L'adresse

@@ -11,6 +11,7 @@ import {
   BuildingResponse,
   PageResponse,
   RoomResponse,
+  RoomStaticQrView,
   SiteNetworkRangeResponse,
   SiteResponse,
 } from '../organization.models';
@@ -46,6 +47,36 @@ function npage(content: SiteNetworkRangeResponse[]): PageResponse<SiteNetworkRan
   return { content, page: 0, size: 100, totalElements: content.length, totalPages: 1 };
 }
 
+const ROOM: RoomResponse = {
+  publicId: 'r-1',
+  sitePublicId: ID,
+  buildingPublicId: null,
+  code: 'A101',
+  name: 'Salle 101',
+  capacity: 30,
+  floorLabel: '1er étage',
+  staticQrIssuedAt: '2026-09-01T08:00:00Z',
+  status: 'ACTIVE',
+  archivedAt: null,
+  archiveReason: null,
+  createdAt: '2026-08-01T10:00:00Z',
+  updatedAt: '2026-08-01T10:00:00Z',
+};
+
+const QR_VIEW: RoomStaticQrView = {
+  roomPublicId: 'r-1',
+  roomCode: 'A101',
+  roomName: 'Salle 101',
+  buildingName: null,
+  siteName: 'Campus Paris',
+  floorLabel: '1er étage',
+  issued: true,
+  staticQrReference: 'AbCd1234EfGh5678IjKl9012MnOp3456QrSt7890',
+  maskedReference: 'AbCd…7890',
+  checkInPath: '/attendance?ref=AbCd1234EfGh5678IjKl9012MnOp3456QrSt7890',
+  staticQrIssuedAt: '2026-09-01T08:00:00Z',
+};
+
 const BUILDING: BuildingResponse = {
   publicId: 'b-1',
   sitePublicId: ID,
@@ -64,6 +95,9 @@ interface Internals {
   startSiteAction: (k: 'archive' | 'restore') => void;
   confirmSiteAction: () => void;
   submitBuilding: () => void;
+  openQr: (room: RoomResponse) => void;
+  startRotateQr: () => void;
+  confirmRotateQr: () => void;
 }
 
 function setup(roles: Role[] = ['ADMIN']) {
@@ -198,6 +232,109 @@ describe('SiteDetail', () => {
     expect(s.text()).not.toContain('Archiver le site');
     expect(s.text()).not.toContain('Plages réseau autorisées');
     s.http.expectNone((r) => r.url === `/api/v1/sites/${ID}/network-ranges`);
+  });
+
+  // --- QR fixe de salle (EF-ORG-003) -------------------------------
+
+  it('shows the static-QR column state and an "Afficher" action for an ADMIN', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM, { ...ROOM, publicId: 'r-2', code: 'A102', staticQrIssuedAt: null }]);
+    expect(s.text()).toContain('Disponible');
+    expect(s.text()).toContain('Non émis');
+    const el = s.fixture.nativeElement as HTMLElement;
+    expect(
+      el.querySelector('button[aria-label="Afficher le QR fixe de la salle A101"]'),
+    ).not.toBeNull();
+  });
+
+  it('opens the QR panel (reimpression: a plain GET, nothing mutated) and offers print + renew for an ADMIN', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    s.internals.openQr(ROOM);
+    const req = s.http.expectOne(`/api/v1/rooms/r-1/static-qr`);
+    expect(req.request.method).toBe('GET');
+    req.flush(QR_VIEW);
+    s.fixture.detectChanges();
+    expect(s.text()).toContain('AbCd…7890');
+    expect(s.text()).toContain("Imprimer l'affiche");
+    expect(s.text()).toContain('Renouveler le QR');
+    // The full token is never rendered as text.
+    expect(s.text()).not.toContain(QR_VIEW.staticQrReference);
+  });
+
+  it('never shows "Renouveler" to SCHOOL_ADMINISTRATION or SUPER_ADMIN, but still lets them view/print', () => {
+    for (const role of ['SCHOOL_ADMINISTRATION', 'SUPER_ADMIN'] as Role[]) {
+      const s = setup([role]);
+      s.flushSite();
+      const buildings = s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/buildings`);
+      buildings.flush(bpage([]));
+      s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+      if (role === 'SUPER_ADMIN') {
+        s.expectRanges().flush(npage([]));
+      }
+      s.fixture.detectChanges();
+      s.internals.openQr(ROOM);
+      s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+      s.fixture.detectChanges();
+      expect(s.text()).toContain("Imprimer l'affiche");
+      expect(s.text()).not.toContain('Renouveler le QR');
+      s.http.verify();
+    }
+  });
+
+  it('hides the static-QR "Afficher" action from a PEDAGOGICAL_MANAGER', () => {
+    const s = setup(['PEDAGOGICAL_MANAGER']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    expect(s.text()).not.toContain('Afficher le QR fixe de la salle A101');
+  });
+
+  it('renews the QR only after an explicit confirmation, then reloads the rooms list', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    s.internals.openQr(ROOM);
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+    s.fixture.detectChanges();
+
+    // First click only reveals the danger confirmation — no request yet.
+    s.internals.startRotateQr();
+    s.fixture.detectChanges();
+    s.http.expectNone((r) => r.url === `/api/v1/rooms/r-1/static-qr/rotate`);
+    expect(s.text()).toContain('immédiatement invalides');
+
+    s.internals.confirmRotateQr();
+    const rotate = s.http.expectOne(`/api/v1/rooms/r-1/static-qr/rotate`);
+    expect(rotate.request.method).toBe('POST');
+    rotate.flush({ ...QR_VIEW, staticQrReference: 'ZZZZnew', maskedReference: 'ZZZZ…wnew' });
+
+    // Rooms list reloads to refresh the issue-date column.
+    s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+    s.fixture.detectChanges();
+    expect(notifications.info).toHaveBeenCalled();
+  });
+
+  it('surfaces an API error from a renew without crashing', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    s.internals.openQr(ROOM);
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+    s.fixture.detectChanges();
+    s.internals.startRotateQr();
+    s.fixture.detectChanges();
+    s.internals.confirmRotateQr();
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr/rotate`).flush(
+      { status: 403, code: 'X', message: 'Accès refusé', path: '', correlationId: null, details: [] },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    s.fixture.detectChanges();
+    const el = s.fixture.nativeElement as HTMLElement;
+    // The error is surfaced in the panel (role="alert") and the panel is still there.
+    expect(el.querySelector('.esic-reveal__error')?.textContent ?? '').not.toBe('');
+    expect(s.text()).toContain('Renouveler et invalider les affiches');
   });
 
   it('loads and shows the network-range panel for a SUPER_ADMIN', () => {

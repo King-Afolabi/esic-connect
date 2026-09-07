@@ -14,11 +14,13 @@ import { Observable } from 'rxjs';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { Role } from '../../../core/models/role';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { QrDisplay } from '../../sessions/shared/qr-display/qr-display';
 import { OrganizationApiService } from '../organization-api.service';
 import { toOrganizationError } from '../organization-errors';
 import {
   BuildingResponse,
   RoomResponse,
+  RoomStaticQrView,
   SiteNetworkRangeResponse,
   SiteResponse,
   formatIsoDate,
@@ -40,11 +42,21 @@ type ChildState<T> =
 /** Action de mutation du site en cours de confirmation. */
 type PendingSiteAction = { kind: 'archive' } | { kind: 'restore' };
 
+/** Panneau « QR fixe » d'une salle ouvert dans le flux de la page. */
+interface QrPanel {
+  room: RoomResponse;
+  view: RoomStaticQrView;
+}
+
 const ARCHIVE_REASON_MAX = 500;
 /** `SiteController.WRITE_ROLES` — visibilité des actions d'écriture (site / bâtiment / salle). */
 const WRITE_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN'];
 /** `SiteNetworkRangeController` — tout est réservé à `SUPER_ADMIN`, lecture comprise. */
 const NETWORK_ROLES: readonly Role[] = ['SUPER_ADMIN'];
+/** `RoomController.STATIC_QR_VIEW_ROLES` — consulter / imprimer le QR fixe (EF-ORG-003). */
+const QR_VIEW_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'];
+/** `RoomController.STATIC_QR_ROTATE_ROLES` — renouveler / révoquer : `ADMIN` seul. */
+const QR_ROTATE_ROLES: readonly Role[] = ['ADMIN'];
 const CHILD_PAGE_SIZE = 100;
 
 /**
@@ -78,6 +90,7 @@ const CHILD_PAGE_SIZE = 100;
     MatInputModule,
     MatSelectModule,
     MatProgressBarModule,
+    QrDisplay,
   ],
   templateUrl: './site-detail.html',
   styleUrl: './site-detail.scss',
@@ -89,7 +102,7 @@ export class SiteDetail {
   private readonly notifications = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  private readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
+  protected readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
 
   protected readonly statusLabel = organizationStatusLabel;
   protected readonly formatDate = formatIsoDate;
@@ -105,7 +118,15 @@ export class SiteDetail {
   protected readonly actionError = signal<string | null>(null);
 
   protected readonly buildingColumns = ['code', 'name', 'status', 'actions'];
-  protected readonly roomColumns = ['code', 'name', 'building', 'capacity', 'status', 'actions'];
+  protected readonly roomColumns = [
+    'code',
+    'name',
+    'building',
+    'capacity',
+    'staticQr',
+    'status',
+    'actions',
+  ];
   protected readonly rangeColumns = ['cidr', 'label', 'active', 'actions'];
 
   private readonly effectiveRoles = this.roleContext.effectiveRoles;
@@ -115,6 +136,21 @@ export class SiteDetail {
   protected readonly canManageNetwork = computed(() =>
     this.effectiveRoles().some((r) => NETWORK_ROLES.includes(r)),
   );
+  /** Consulter / imprimer le QR fixe d'une salle (EF-ORG-003). */
+  protected readonly canViewQr = computed(() =>
+    this.effectiveRoles().some((r) => QR_VIEW_ROLES.includes(r)),
+  );
+  /** Renouveler / révoquer le QR fixe — `ADMIN` seul. */
+  protected readonly canRotateQr = computed(() =>
+    this.effectiveRoles().some((r) => QR_ROTATE_ROLES.includes(r)),
+  );
+
+  // --- QR fixe de salle (EF-ORG-003) ---------------------------------
+  protected readonly qrPanel = signal<QrPanel | null>(null);
+  protected readonly qrLoading = signal(false);
+  protected readonly qrError = signal<string | null>(null);
+  protected readonly pendingQrRotate = signal(false);
+  protected readonly qrRotating = signal(false);
 
   protected readonly site = computed(() => {
     const current = this.state();
@@ -387,6 +423,78 @@ export class SiteDetail {
     const match =
       current.kind === 'ready' ? current.items.find((b) => b.publicId === publicId) : undefined;
     return match ? match.code : '—';
+  }
+
+  // --- QR fixe de salle (EF-ORG-003) -------------------------------
+
+  /**
+   * Ouvre le panneau du QR fixe d'une salle — **réimpression** : lecture
+   * seule, ne modifie rien côté serveur (même jeton, même date). Un `403`
+   * réel (rôle insuffisant) est rendu « accès refusé ».
+   */
+  protected openQr(room: RoomResponse): void {
+    this.qrPanel.set(null);
+    this.pendingQrRotate.set(false);
+    this.qrError.set(null);
+    this.qrLoading.set(true);
+    this.api.getRoomStaticQr(room.publicId).subscribe({
+      next: (view) => {
+        this.qrLoading.set(false);
+        this.qrPanel.set({ room, view });
+      },
+      error: (error: unknown) => {
+        this.qrLoading.set(false);
+        this.notifications.error(toOrganizationError(error).message);
+      },
+    });
+  }
+
+  protected closeQr(): void {
+    this.qrPanel.set(null);
+    this.pendingQrRotate.set(false);
+    this.qrError.set(null);
+  }
+
+  protected startRotateQr(): void {
+    this.qrError.set(null);
+    this.pendingQrRotate.set(true);
+  }
+
+  protected cancelRotateQr(): void {
+    this.pendingQrRotate.set(false);
+  }
+
+  /**
+   * Émet ou **renouvelle** le QR fixe. Le renouvellement invalide
+   * immédiatement toutes les affiches posées : la confirmation le dit
+   * explicitement (RG-034 pour l'esprit — action irréversible confirmée).
+   * Recharge la liste des salles au succès pour rafraîchir la date
+   * d'émission affichée en colonne.
+   */
+  protected confirmRotateQr(): void {
+    const panel = this.qrPanel();
+    if (!panel || !this.canRotateQr() || this.qrRotating()) {
+      return;
+    }
+    this.qrRotating.set(true);
+    this.qrError.set(null);
+    this.api.rotateRoomStaticQr(panel.room.publicId).subscribe({
+      next: (view) => {
+        this.qrRotating.set(false);
+        this.pendingQrRotate.set(false);
+        this.qrPanel.set({ room: panel.room, view });
+        this.notifications.info(
+          view.issued
+            ? 'QR fixe renouvelé. Réimprimez et remplacez les affiches en salle.'
+            : 'QR fixe émis.',
+        );
+        this.loadRooms();
+      },
+      error: (error: unknown) => {
+        this.qrRotating.set(false);
+        this.qrError.set(toOrganizationError(error).message);
+      },
+    });
   }
 
   // --- Network ranges ------------------------------------------------
