@@ -1,5 +1,27 @@
 <section class="invitations" aria-labelledby="invitations-title">
-  <h1 id="invitations-title">Invitations et délivrabilité</h1>
+  <h1 id="invitations-title">Invitations</h1>
+
+  <nav class="esic-subnav" aria-label="Vues des invitations">
+    <div class="esic-subnav__list">
+      <a
+        class="esic-subnav__link"
+        routerLink="/invitations"
+        routerLinkActive="esic-subnav__link--active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        ariaCurrentWhenActive="page"
+      >
+        Suivi &amp; délivrabilité
+      </a>
+      <a
+        class="esic-subnav__link"
+        routerLink="/invitations/non-activees"
+        routerLinkActive="esic-subnav__link--active"
+        ariaCurrentWhenActive="page"
+      >
+        Non activées
+      </a>
+    </div>
+  </nav>
 
   @if (loading()) {
     <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>

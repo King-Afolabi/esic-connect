@@ -57,19 +57,31 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     // Écran livré : liste des profils apprenants + fiche + historique
     // d'inscriptions. Périmètre aligné sur `EnrollmentWeb.MANAGE_ROLES`.
+    //
+    // Regroupement (ANO-NAV-001) : l'import CSV (`/students/import`) et la
+    // création manuelle (`/students/nouveau`) ne sont plus des entrées
+    // racines distinctes — ce sont des sous-écrans de « Apprenants », avec
+    // un `.esic-back` vers `/students` et un accès depuis l'en-tête de la
+    // liste. `matchPaths` garde donc « Apprenants » actif sur ces routes.
+    // Les routes elles-mêmes sont inchangées (liens profonds préservés).
     label: 'Apprenants',
     path: '/students',
     icon: 'groups',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
+    matchPaths: ['/students/import', '/students/nouveau'],
   },
   {
-    // Écran livré : import CSV contrôlé des apprenants (simulation puis
-    // confirmation). Périmètre aligné sur `StudentImportWeb.MANAGE_ROLES` ;
-    // un `PEDAGOGICAL_MANAGER` reste limité à son périmètre côté serveur.
-    label: 'Import apprenants',
+    // Import CSV contrôlé des apprenants (simulation puis confirmation).
+    // Périmètre serveur : `StudentImportWeb.MANAGE_ROLES`. Cette entrée
+    // racine ne subsiste QUE pour `PEDAGOGICAL_MANAGER` — le seul rôle
+    // autorisé à importer qui n'a PAS l'entrée « Apprenants » ci-dessus et
+    // aurait donc, sans elle, aucun point d'entrée visible. Les rôles
+    // d'administration atteignent l'import depuis l'en-tête de la liste
+    // des apprenants (ANO-NAV-001).
+    label: 'Importer des apprenants',
     path: '/students/import',
     icon: 'upload_file',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+    roles: ['PEDAGOGICAL_MANAGER'],
   },
   {
     // Regroupement (Lot §4) : une seule entrée latérale pour les quatre
@@ -185,14 +197,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
-    // Écran livré (sprint 11) : rapport des invitations non activées
-    // (EF-REP-010).
-    label: 'Invitations non activées',
-    path: '/invitations/non-activees',
-    icon: 'hourglass_top',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
     // Écran livré (sprint 11) : abonnement iCalendar au planning
     // (EF-INT-001). Visible par tout rôle : chacun s'abonne au sien, et
     // le serveur dérive le périmètre du sujet du jeton.
@@ -228,10 +232,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     // Écran livré (sprint 3) : suivi des invitations et de la
     // délivrabilité des courriels (EF-USER-007, EF-USER-008).
+    //
+    // Regroupement (ANO-NAV-001) : le rapport des invitations non activées
+    // (`/invitations/non-activees`, EF-REP-010) n'est plus une entrée
+    // racine distincte — c'est une vue de la page « Invitations », reliée
+    // par une sous-navigation `.esic-subnav` présente sur les deux écrans.
+    // `matchPaths` garde « Invitations » actif sur cette route ; la route
+    // est inchangée (lien profond préservé).
     label: 'Invitations',
     path: '/invitations',
     icon: 'mark_email_read',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+    matchPaths: ['/invitations/non-activees'],
   },
   {
     // Écran livré (sprint 2) : sécurité du compte de l'appelant — second

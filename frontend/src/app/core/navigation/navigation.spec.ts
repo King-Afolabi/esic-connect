@@ -13,6 +13,34 @@ describe('NAV_ITEMS', () => {
     expect(students).toBeDefined();
     expect(students?.placeholder).toBeUndefined();
     expect(students?.roles).toEqual(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION']);
+    // Regroupement ANO-NAV-001 : l'import et la création manuelle sont des
+    // sous-écrans de « Apprenants », pas des entrées racines.
+    expect(students?.matchPaths).toEqual(['/students/import', '/students/nouveau']);
+  });
+
+  it("ANO-NAV-001 — l'import n'a plus qu'une entrée racine, réservée au PEDAGOGICAL_MANAGER", () => {
+    const imp = NAV_ITEMS.find((i) => i.path === '/students/import');
+    expect(imp).toBeDefined();
+    // Seul rôle autorisé à importer qui n'a PAS l'entrée « Apprenants ».
+    expect(imp?.roles).toEqual(['PEDAGOGICAL_MANAGER']);
+    // Les rôles d'administration ne voient plus d'entrée racine « Import ».
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const) {
+      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/students/import');
+    }
+    expect(visibleNavItems(NAV_ITEMS, ['PEDAGOGICAL_MANAGER']).map((i) => i.path)).toContain(
+      '/students/import',
+    );
+  });
+
+  it('ANO-NAV-001 — « Invitations non activées » est une vue de « Invitations », plus une entrée racine', () => {
+    expect(NAV_ITEMS.find((i) => i.path === '/invitations/non-activees')).toBeUndefined();
+    const inv = NAV_ITEMS.find((i) => i.path === '/invitations');
+    expect(inv?.matchPaths).toEqual(['/invitations/non-activees']);
+    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'] as const) {
+      const paths = visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path);
+      expect(paths).toContain('/invitations');
+      expect(paths).not.toContain('/invitations/non-activees');
+    }
   });
 
   it('regroupe référentiels / organisation / planning / alternance sous une seule entrée', () => {
@@ -160,7 +188,12 @@ describe('visibleNavItems', () => {
 });
 
 describe('activeNavPath (Lot C — un seul élément actif)', () => {
-  const menu = NAV_ITEMS.filter((i) => !i.placeholder);
+  // Les chemins « possédés » par une autre entrée via `matchPaths`
+  // (regroupements Organisation & planning, Apprenants, Invitations) sont
+  // intentionnellement résolus vers leur entrée parente : on les exclut de
+  // la boucle « chaque route résout vers elle-même ».
+  const ownedPaths = new Set(NAV_ITEMS.flatMap((i) => i.matchPaths ?? []));
+  const menu = NAV_ITEMS.filter((i) => !i.placeholder && !ownedPaths.has(i.path));
 
   it('résout chaque route du menu vers elle-même, et une seule', () => {
     for (const item of menu) {
@@ -184,10 +217,24 @@ describe('activeNavPath (Lot C — un seul élément actif)', () => {
     // « Notifications » reste active sur les deux vues de l'espace.
     expect(activeNavPath('/notifications/preferences', NAV_ITEMS)).toBe('/notifications');
     expect(activeNavPath('/notifications', NAV_ITEMS)).toBe('/notifications');
-    expect(activeNavPath('/students/import', NAV_ITEMS)).toBe('/students/import');
     expect(activeNavPath('/my-attendance/transparency', NAV_ITEMS)).toBe(
       '/my-attendance/transparency',
     );
+  });
+
+  it('ANO-NAV-001 — les sous-écrans regroupés gardent leur entrée parente active', () => {
+    // Vu par un rôle d'administration : « Apprenants » (avec matchPaths)
+    // est visible, « Import » ne l'est pas → le parent reste actif.
+    const adminItems = visibleNavItems(NAV_ITEMS, ['ADMIN']);
+    expect(activeNavPath('/students/import', adminItems)).toBe('/students');
+    expect(activeNavPath('/students/import/7', adminItems)).toBe('/students');
+    expect(activeNavPath('/students/nouveau', adminItems)).toBe('/students');
+    expect(activeNavPath('/invitations/non-activees', adminItems)).toBe('/invitations');
+
+    // Vu par un PEDAGOGICAL_MANAGER : pas d'entrée « Apprenants », mais une
+    // entrée « Importer des apprenants » → c'est elle qui reste active.
+    const managerItems = visibleNavItems(NAV_ITEMS, ['PEDAGOGICAL_MANAGER']);
+    expect(activeNavPath('/students/import', managerItems)).toBe('/students/import');
   });
 
   it('sur une fiche de détail hors menu, le parent reste actif', () => {

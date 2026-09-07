@@ -70,7 +70,10 @@ describe('AppShell', () => {
       '/dashboard',
       '/administration',
       '/students',
-      '/students/import',
+      // ANO-NAV-001 : « Import apprenants » n'est plus une entrée racine
+      // pour les rôles d'administration — l'import est atteint depuis
+      // l'en-tête de la liste des apprenants ; l'entrée racine ne subsiste
+      // que pour le PEDAGOGICAL_MANAGER (voir son test dédié).
       // Regroupement (Lot §4) : une seule entrée pour référentiels,
       // organisation, planning et alternance.
       '/organisation-planning',
@@ -80,13 +83,13 @@ describe('AppShell', () => {
       '/claims',
       '/attendance-management',
       '/notifications',
-      // Recherche globale, attestations, invitations non activées,
-      // abonnement calendrier et piste d'audit : livrés au sprint 11
-      // (EF-USER-009, EF-REP-006, EF-REP-010, EF-INT-001, EF-AUD-002).
-      // Chaque entrée reprend le `@PreAuthorize` de son contrôleur.
+      // Recherche globale, attestations, abonnement calendrier et piste
+      // d'audit : livrés au sprint 11 (EF-USER-009, EF-REP-006,
+      // EF-INT-001, EF-AUD-002). « Invitations non activées » (EF-REP-010)
+      // n'est plus une entrée racine : c'est une vue de « Invitations »
+      // (ANO-NAV-001).
       '/recherche',
       '/attestations',
-      '/invitations/non-activees',
       '/mon-compte/calendrier',
       '/exploitation/audit',
       // File d'échec des effets de bord (sprint 10, EF-OPS-005) :
@@ -99,7 +102,6 @@ describe('AppShell', () => {
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
-    expect(text()).toContain('Import apprenants');
     expect(text()).toContain('Organisation & planning');
     expect(text()).toContain('Séances');
   });
@@ -152,12 +154,17 @@ describe('AppShell', () => {
     ]);
   });
 
-  it('hides Apprenants but shows Import apprenants and Organisation & planning for a PEDAGOGICAL_MANAGER', () => {
+  it('hides Apprenants but keeps the import root entry and Organisation & planning for a PEDAGOGICAL_MANAGER', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
     expect(hrefs).not.toContain('/students');
+    // ANO-NAV-001 : le PEDAGOGICAL_MANAGER est le seul rôle autorisé à
+    // importer sans l'entrée « Apprenants » — il garde donc une entrée
+    // racine « Importer des apprenants » (les rôles d'administration, eux,
+    // y accèdent depuis la page Apprenants).
     expect(hrefs).toContain('/students/import');
+    expect(text()).toContain('Importer des apprenants');
     expect(hrefs).toContain('/organisation-planning');
   });
 

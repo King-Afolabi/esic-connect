@@ -7,12 +7,20 @@
       l'historique de ses inscriptions.
     </p>
   </div>
-  @if (canCreateStudent()) {
+  @if (canCreateStudent() || canImportStudents()) {
     <div class="esic-page-header__actions">
-      <a mat-flat-button routerLink="/students/nouveau">
-        <mat-icon aria-hidden="true">person_add</mat-icon>
-        <span>Ajouter un apprenant</span>
-      </a>
+      @if (canImportStudents()) {
+        <a mat-stroked-button routerLink="/students/import">
+          <mat-icon aria-hidden="true">upload_file</mat-icon>
+          <span>Importer des apprenants</span>
+        </a>
+      }
+      @if (canCreateStudent()) {
+        <a mat-flat-button routerLink="/students/nouveau">
+          <mat-icon aria-hidden="true">person_add</mat-icon>
+          <span>Ajouter un apprenant</span>
+        </a>
+      }
     </div>
   }
 </header>

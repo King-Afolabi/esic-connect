@@ -87,6 +87,18 @@ export class StudentList {
     this.roleContext.effectiveRoles().some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN'),
   );
 
+  /**
+   * « Importer des apprenants » : l'import CSV n'a plus d'entrée racine
+   * dans la navigation pour les rôles d'administration (ANO-NAV-001) — il
+   * est atteint d'ici. Périmètre aligné sur `StudentImportWeb.MANAGE_ROLES` ;
+   * le garde de route `/students/import` reste l'autorité.
+   */
+  protected readonly canImportStudents = computed(() =>
+    this.roleContext
+      .effectiveRoles()
+      .some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN' || r === 'SCHOOL_ADMINISTRATION'),
+  );
+
   protected readonly statuses = STUDENT_PROFILE_STATUSES;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   protected readonly statusLabel = studentProfileStatusLabel;
