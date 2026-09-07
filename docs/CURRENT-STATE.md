@@ -10,6 +10,62 @@
 
 ## Dernière mise à jour
 
+### 7 septembre 2026 (2) — campagne finale : DÉPLOYÉE sur la Raspberry Pi
+
+Le nom d'utilisateur SSH de la Pi (`king_a@192.168.1.83`) a débloqué le
+déploiement. La Pi (aarch64, 3,8 Go RAM, 44 Go libres, Docker sans sudo)
+faisait déjà tourner `compose.prod.yaml` depuis ~25 h — **mise à jour**
+plutôt que création :
+
+- `frontend/` (+ `scripts/seed-demo-full.py`, `docs/demo-data/`,
+  `.dockerignore`) synchronisés par `rsync` (le dépôt sur la Pi n'est
+  **pas** un dépôt Git) ; **image `frontend` reconstruite** en natif
+  ARM64 (`docker compose -f compose.prod.yaml build frontend`) puis
+  conteneur recréé. **Back-end non reconstruit** — 0 fichier Java touché.
+- `esic_connect_demo` sur la Pi **réinitialisée** (`DROP`/`CREATE` +
+  redémarrage back-end → Flyway V34 + `DemoDataInitializer`), puis
+  amorcée : `seed-demo.sh` + `seed-demo-full.py`. Un **Mailpit jetable**
+  (`compose.seed.yaml`, surcouche temporaire) a servi l'activation des
+  18 formateurs, puis a été **retiré** et la configuration Brevo
+  rétablie.
+- État final vérifié sur la Pi : 6 formations, 9 classes du lot,
+  4 rythmes, 16 salles, **18 formateurs actifs**, 193 apprenants,
+  193 inscriptions ACTIVE, **489 séances** (0 conflit), 72 closes,
+  **3024 émargements**.
+- **Sonde `frontend` corrigée** (`compose.prod.yaml`) :
+  `wget http://127.0.0.1:80/` au lieu de `localhost` (résolu en `::1`,
+  refusé par nginx IPv4) — le conteneur était marqué `unhealthy` alors
+  qu'il servait. Corrigé, poussé, appliqué sur la Pi → **5/5 conteneurs
+  `healthy`**.
+
+**URL publique (Quick Tunnel Cloudflare, éphémère) :
+`https://decor-inform-leone-cir.trycloudflare.com`** — tunnel `cloudflared`
+inchangé depuis 25 h, donc URL stable pour l'instant. Enregistrée dans
+`.local/runtime/public-url.txt` (non versionné). La retrouver :
+`bash scripts/runtime/show-public-url.sh` (ou, sur la Pi,
+`docker compose -f compose.prod.yaml logs cloudflared | grep trycloudflare.com`).
+
+**Recette technique post-déploiement (via l'URL publique) — verte :**
+`/`, `/login`, `/dashboard` → 200 ; connexion `responsable@example.test`
+→ jeton ; `/api/v1/me/dashboard` → 200 ; `/api/v1/programs` → 6 ;
+`/api/v1/class-groups` → 10 ; `/api/v1/sessions` → 489 ;
+`/api/v1/alternation/patterns` → 4. Revue navigateur (agent-browser,
+1440 px) : tableau de bord responsable avec le vis-à-vis §2
+(`.dashboard__split` = 705 px / 415 px), panneau **Profil** §3 ouvert
+(adresse, rôles, contexte, lien « Sécurité du compte »), « Séances à
+venir » alimentées par le jeu de données. Captures dans le scratchpad de
+session (non versionnées).
+
+**Reste `NOT_PERFORMED` :** `./mvnw clean test` sur le commit de fusion
+(`5884c12`) — 0 fichier Java touché de toute la campagne, dernière suite
+complète verte cette session **1231 / 0** (§6.5) ; deux ré-exécutions
+tuées par saturation mémoire du Mac (~20 Mo libres) à ~78/143 classes
+**sans échec observé**. Le résultat n'est pas en doute.
+
+**Commits poussés** (`feat/demo-readiness-e2e-ui` `d4eea44 → 5884c12`,
+merge `99971c5` ; `feat/ui-redesign-bootstrap-material` `a65ef1a →
+9a07e2b`).
+
 ### 7 septembre 2026 — campagne finale : fusion effectuée, déploiement bloqué
 
 Suite et fin de la campagne finale. **Aucune ligne de back-end, zéro
