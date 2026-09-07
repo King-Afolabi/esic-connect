@@ -10,6 +10,113 @@
 
 ## Dernière mise à jour
 
+### 7 septembre 2026 (6) — mandat performance/UX : diagnostic + corrections front-end isolées
+
+Branche `feat/demo-readiness-e2e-ui`. **Aucune ligne de back-end, zéro
+migration** (schéma inchangé V34). Passe unique demandée sur 14 volets
+(diagnostic, perf, doublons, navigation, tables, page site, impression
+QR, volumétrie, admin MySQL, tests, doc, git, déploiement).
+
+**Registre d'anomalies créé** : `docs/anomalies/2026-09-07-performance-ux.md`
+(8 anomalies : ANO-PERF-001/002, ANO-USER-001, ANO-UX-001/002/003,
+ANO-QR-001, ANO-NAV-001), + `2026-09-07-diagnostic-performance.md`
+(rapport avant correction, Phase 2.4) + `2026-09-07-volumetrie-et-purge.md`
+(Phase 9).
+
+**Diagnostic production (Pi, lecture seule)** : 5/5 conteneurs `healthy`,
+CPU < 2 %, disque 28 %, `load` 0,15 ; **mémoire tendue** (260 Mio libres
+hors cache, 323 Mio de swap au repos sur 3,7 Gio). Base **17,28 Mio** —
+`outbox_message` 4 454 (toutes `SENT`, **du jour**), `audit_event` 4 546,
+`attendance_record` 3 025, `course_session` 489. **Ce n'est pas un
+problème de volume** : les index du chemin chaud sont présents (relevés).
+Cause probable d'ANO-PERF-001/002 : agrégat d'assiduité du tableau de
+bord / de la synthèse **non borné** (compte des demi-journées « attendues »
+sur les jours d'alternance `SCHOOL` sans séance — défaut déjà consigné le
+6 sept.), calculé en Java plutôt qu'en SQL, amplifié par la mémoire de la
+Pi. `EXPLAIN ANALYZE` **non exécuté** (interdit de laisser une
+journalisation SQL verbeuse en prod ; pas de fenêtre de test isolée) →
+correction **`DECLARED`, non appliquée** (spécifiée dans le rapport de
+diagnostic). Aucune purge : aucune classe de donnée volumineuse n'a à la
+fois une politique de rétention précise **et** des lignes échues
+(`outbox` `SENT` : 0 ligne > 30 j). **`DECLARED`**.
+
+**Livré, testé, déployable en rebuild `frontend` seul (aucune migration,
+aucun rebuild back-end)** :
+
+- **ANO-QR-001** — l'affiche imprimable du QR de salle
+  (`/organization/sites/:publicId/rooms/:roomId/qr-poster`) était rendue
+  **dans le sous-arbre `AppShell`** : `window.print()` imprimait le rail
+  et la topbar. La route est **sortie de la coquille** (route sœur de
+  `login`/`activation`, `canActivate: [authGuard, roleGuard([...])]`,
+  chemin public **inchangé** — les liens de `site-detail.html` restent
+  valides). Lien de retour passé en absolu (`/organization/sites/:id`).
+  Garde-fou global `@media print` ajouté dans `styles.scss` (masque
+  `.shell__rail`, `.shell__topbar`, `.shell__banner`, `.no-print`).
+  Tests : `room-qr-poster.spec.ts` +2 (aucun chrome de shell dans le
+  DOM ; retour absolu).
+- **ANO-NAV-001** — regroupement de la navigation latérale :
+  « Import apprenants » n'est plus une entrée racine pour les rôles
+  d'administration (accès depuis l'en-tête de la liste des apprenants,
+  nouveau bouton) ; il ne subsiste, relabellisé « Importer des
+  apprenants », que pour le `PEDAGOGICAL_MANAGER` (seul rôle autorisé à
+  importer sans entrée « Apprenants »). « Invitations non activées »
+  n'est plus une entrée racine : sous-navigation `.esic-subnav` (Suivi &
+  délivrabilité / Non activées) ajoutée sur les deux écrans. `matchPaths`
+  garde le parent actif sur les routes profondes, **inchangées**. Tests :
+  `navigation.spec.ts` +3, `app-shell.spec.ts` ajusté (listes de `href`),
+  `invitation-list.spec.ts` / `pending-invitation-report.spec.ts` +
+  `provideRouter`.
+- **ANO-UX-001** — constat : le socle d'accessibilité des onglets
+  **préexiste** et est conforme (trait d'accent 2 px, `aria-current`,
+  `:focus-visible`, clavier natif, persistance par URL) sur `.esic-subnav`
+  et `.academic__tabs`. Seule livraison : la nouvelle sous-nav Invitations
+  réutilise la primitive. Reste `DECLARED` : convergence cosmétique de
+  `.academic__tabs` vers `.esic-subnav`.
+
+**`DECLARED` — analysé et spécifié, NON livré dans cette passe** (chaque
+point est une capacité ou une surface qui exige sa propre passe testée ;
+les livrer à l'aveugle violerait la définition de terminé) :
+
+- **ANO-PERF-001/002** — correction runtime back-end (borne de fenêtre +
+  agrégat SQL) + résilience par carte front-end. Spec :
+  `2026-09-07-diagnostic-performance.md`.
+- **ANO-USER-001** — parcours doublons : sélection exacte de deux +
+  comparaison côte à côte + **simulation (dry-run)** + blocage des cas
+  ambigus. **Fusion destructrice hors périmètre** (confirmé avec le
+  porteur : sélection + comparaison + simulation uniquement). Nouvelle
+  capacité métier → passe dédiée.
+- **ANO-UX-002** — pattern partagé « table à hauteur bornée + entête
+  sticky » (`matHeaderRowDef sticky`), à appliquer à ~13 écrans avec
+  vérification dialogues / mobile / impression / tables imbriquées.
+- **ANO-UX-003** — réécriture en onglets de la fiche site (Informations /
+  Bâtiments / Salles / Plages réseau), dépend d'ANO-UX-002.
+
+**Outillage ajouté (additif, aucun risque production)** :
+
+- `compose.admin.yaml` — surcouche **Adminer** (`adminer:5`), profil
+  `admin-tools`, `restart: "no"`, port `127.0.0.1:8081` **uniquement**,
+  réseau `data-network` seul (**invisible de `cloudflared`**), aucun
+  identifiant dans le fichier. `docker compose -f compose.prod.yaml -f
+  compose.admin.yaml config` : **valide**.
+- `docs/deployment/MYSQL-ADMIN.md` — accès par **tunnel SSH** uniquement
+  (`ssh -L 8081:127.0.0.1:8081 king_a@192.168.1.83`), compte SQL
+  d'administration à privilèges limités recommandé, jamais de secret dans
+  la doc.
+
+**Tests exécutés (Mac, même environnement que §6)** :
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **104 fichiers / 857 tests / 0 échec** |
+| `cd frontend && npx ng build --configuration production` | **582,15 kB** initial, aucune alerte de budget |
+| `docker compose -f compose.prod.yaml -f compose.admin.yaml config` | valide |
+
+**`NOT_PERFORMED`** : suite back-end (aucun fichier Java touché ; la
+suite complète sature la mémoire de ce Mac — cf. entrées antérieures) ;
+recette Playwright ; `EXPLAIN ANALYZE` sur la Pi ; audit accessibilité
+outillé. Déploiement : voir l'entrée suivante.
+
 ### 7 septembre 2026 (5) — EF-ORG-003 : DÉPLOYÉE sur la Raspberry Pi
 
 Le Mac et la Pi étant de nouveau sur le même LAN, le déploiement bloqué
