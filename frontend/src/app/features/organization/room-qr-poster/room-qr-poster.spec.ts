@@ -7,6 +7,7 @@ import { RoomStaticQrView } from '../organization.models';
 import { RoomQrPoster } from './room-qr-poster';
 
 const ROOM_ID = 'r-1';
+const SITE_ID = 's-1';
 
 const ISSUED: RoomStaticQrView = {
   roomPublicId: ROOM_ID,
@@ -31,7 +32,9 @@ function setup() {
       provideHttpClientTesting(),
       {
         provide: ActivatedRoute,
-        useValue: { snapshot: { paramMap: convertToParamMap({ roomId: ROOM_ID }) } },
+        useValue: {
+          snapshot: { paramMap: convertToParamMap({ roomId: ROOM_ID, publicId: SITE_ID }) },
+        },
       },
     ],
   });
@@ -86,6 +89,25 @@ describe('RoomQrPoster', () => {
     s.fixture.detectChanges();
     expect(s.text()).toContain("Aucun QR fixe n'a encore été émis");
     expect(s.el().querySelector('qrcode')).toBeNull();
+  });
+
+  it('renders no application shell chrome — the poster prints alone (ANO-QR-001)', () => {
+    const s = setup();
+    s.http.expectOne(`/api/v1/rooms/${ROOM_ID}/static-qr`).flush(ISSUED);
+    s.fixture.detectChanges();
+    const el = s.el();
+    expect(el.querySelector('.shell__rail')).toBeNull();
+    expect(el.querySelector('.shell__topbar')).toBeNull();
+    expect(el.querySelector('mat-sidenav')).toBeNull();
+    expect(el.querySelector('mat-nav-list')).toBeNull();
+  });
+
+  it('links back to the parent site with an absolute route', () => {
+    const s = setup();
+    s.http.expectOne(`/api/v1/rooms/${ROOM_ID}/static-qr`).flush(ISSUED);
+    s.fixture.detectChanges();
+    const back = s.el().querySelector('a.poster-page__back') as HTMLAnchorElement | null;
+    expect(back?.getAttribute('href')).toBe(`/organization/sites/${SITE_ID}`);
   });
 
   it('shows an access-denied message on a 403', () => {

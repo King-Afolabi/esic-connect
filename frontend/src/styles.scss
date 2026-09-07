@@ -174,3 +174,31 @@ table {
     scroll-behavior: auto !important;
   }
 }
+
+// -- Impression -----------------------------------------------------------
+// Garde-fou global (ANO-QR-001) : l'affiche imprimable du QR de salle est
+// désormais rendue HORS du sous-arbre `AppShell` (voir `app.routes.ts`),
+// donc le rail et la topbar ne sont plus dans le DOM lors de son
+// impression. Ce bloc reste en défense en profondeur : si un autre écran
+// déclenche `window.print()` depuis l'intérieur de la coquille, la
+// navigation et les bandeaux applicatifs ne doivent jamais partir à
+// l'imprimante. `.no-print` est l'utilitaire commun pour masquer une
+// barre d'actions à l'impression.
+@media print {
+  .shell__rail,
+  .shell__topbar,
+  .shell__banner,
+  app-skip-link,
+  app-session-timeout-warning,
+  .no-print {
+    display: none !important;
+  }
+
+  .shell__main {
+    padding: 0 !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+}

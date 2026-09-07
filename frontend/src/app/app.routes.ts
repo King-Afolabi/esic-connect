@@ -190,6 +190,22 @@ export const routes: Routes = [
       import('./features/account-activation/account-activation').then((m) => m.AccountActivation),
   },
   {
+    // Affiche imprimable du QR fixe permanent d'une salle (EF-ORG-003 ;
+    // ANO-QR-001). Déclarée EN DEHORS du sous-arbre `AppShell` : une
+    // affiche destinée à l'impression ne doit pas être rendue à
+    // l'intérieur du rail de navigation et de la barre supérieure, sinon
+    // `window.print()` imprime toute la coquille (menu, topbar, fond).
+    // L'authentification et le périmètre de rôles sont donc portés
+    // explicitement ici — mêmes rôles que `RoomController.STATIC_QR_VIEW_ROLES`
+    // (`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`). Le chemin est
+    // inchangé : les liens existants (`site-detail.html`) restent valides.
+    path: 'organization/sites/:publicId/rooms/:roomId/qr-poster',
+    canActivate: [authGuard, roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+    title: `Affiche QR de salle — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/organization/room-qr-poster/room-qr-poster').then((m) => m.RoomQrPoster),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authGuard],
@@ -580,21 +596,12 @@ export const routes: Routes = [
               import('./features/organization/site-detail/site-detail').then((m) => m.SiteDetail),
           },
           {
-            // Affiche imprimable du QR fixe permanent d'une salle
-            // (EF-ORG-003). Consultation / impression ouvertes à
-            // `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
-            // (`RoomController.STATIC_QR_VIEW_ROLES`) ; le
-            // `PEDAGOGICAL_MANAGER`, qui a une lecture seule du reste du
-            // référentiel, en est exclu. Spring Security reste l'autorité.
-            path: 'sites/:publicId/rooms/:roomId/qr-poster',
-            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
-            title: `Affiche QR de salle — ${APP_NAME}`,
-            loadComponent: () =>
-              import('./features/organization/room-qr-poster/room-qr-poster').then(
-                (m) => m.RoomQrPoster,
-              ),
-          },
-          {
+            // NB : l'affiche imprimable du QR fixe de salle
+            // (`sites/:publicId/rooms/:roomId/qr-poster`) est déclarée en
+            // tête de fichier, HORS du sous-arbre `AppShell` (ANO-QR-001) :
+            // elle ne doit pas être rendue dans le rail + la topbar, sinon
+            // l'impression emporte toute la coquille. Le chemin public est
+            // identique, les liens existants restent valides.
             path: 'sites/:publicId/edit',
             canActivate: [roleGuard([...ORGANIZATION_WRITE_ROLES])],
             data: { mode: 'edit' },

@@ -46,6 +46,8 @@ export class RoomQrPoster {
   private readonly route = inject(ActivatedRoute);
 
   private readonly roomId = this.route.snapshot.paramMap.get('roomId') ?? '';
+  /** Site parent — lien de retour absolu (la route est hors du sous-arbre `AppShell`). */
+  protected readonly sitePublicId = this.route.snapshot.paramMap.get('publicId') ?? '';
 
   protected readonly formatDate = formatIsoDate;
   protected readonly state = signal<PosterState>({ kind: 'loading' });

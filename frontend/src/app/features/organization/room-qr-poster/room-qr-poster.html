@@ -21,7 +21,11 @@
     }
     @case ('ready') {
       <div class="poster-page__toolbar no-print">
-        <a mat-button routerLink="../../.." class="poster-page__back">
+        <a
+          mat-button
+          [routerLink]="['/organization/sites', sitePublicId]"
+          class="poster-page__back"
+        >
           <mat-icon aria-hidden="true">arrow_back</mat-icon>
           Retour au site
         </a>
