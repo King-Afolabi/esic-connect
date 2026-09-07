@@ -10,6 +10,29 @@
 
 ## Dernière mise à jour
 
+### 7 septembre 2026 (3) — redémarrage de la Pi : nouvelle URL de tunnel
+
+La Pi a été redémarrée par le porteur. Le **Quick Tunnel Cloudflare tire
+une URL aléatoire à chaque démarrage** — l'ancienne
+(`decor-inform-leone-cir`) est morte. Nouvelle URL relevée dans les
+journaux `cloudflared` et vérifiée :
+
+**`https://buried-fed-implementation-completion.trycloudflare.com`**
+
+- `.env` sur la Pi mis à jour (`APP_ALLOWED_ORIGINS`,
+  `APP_ACTIVATION_BASE_URL` — sauvegarde `.env.bak.<epoch>`), **back-end
+  recréé** puis **frontend redémarré** (cache d'upstream nginx). Sans
+  cela, la connexion via la nouvelle URL était refusée en `403` (CORS).
+- Recette : `/`, `/login` → 200 ; connexion `responsable@example.test`
+  via la nouvelle origine → jeton (200). 5/5 conteneurs sains.
+- `.local/runtime/public-url.txt` (non versionné) mis à jour.
+- La retrouver après un futur redémarrage :
+  `ssh king_a@192.168.1.83 'cd ~/esic-connect && docker compose -f compose.prod.yaml logs cloudflared | grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" | tail -1'`
+  puis répercuter dans `.env` (2 lignes) et `docker compose -f
+  compose.prod.yaml up -d backend && docker compose -f compose.prod.yaml
+  restart frontend`. Pour une URL stable : tunnel nommé + domaine
+  (cf. en-tête de `compose.prod.yaml`).
+
 ### 7 septembre 2026 (2) — campagne finale : DÉPLOYÉE sur la Raspberry Pi
 
 Le nom d'utilisateur SSH de la Pi (`king_a@192.168.1.83`) a débloqué le
