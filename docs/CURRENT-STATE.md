@@ -10,6 +10,95 @@
 
 ## Dernière mise à jour
 
+### 7 septembre 2026 (5) — EF-ORG-003 : DÉPLOYÉE sur la Raspberry Pi
+
+Le Mac et la Pi étant de nouveau sur le même LAN, le déploiement bloqué
+à l'entrée « (4) » a été **réalisé**. Aucune ligne de code modifiée,
+**aucune migration** (schéma V34 inchangé, confirmé au démarrage :
+« Successfully validated 34 migrations », « Schema up to date. No
+migration necessary »).
+
+**Cible** : `king_a@192.168.1.83` (`King-A`, aarch64, Debian 13, Docker
+29.8.0 / Compose v5.5.1), `~/esic-connect` — **pas un dépôt Git** :
+transfert par **archive** (`git archive bf6c3a9` → `scp` → extraction en
+staging → `rsync` sans `--delete`, `.env` et `.env.bak.*` exclus).
+Commit déployé : **`bf6c3a9`** (contient `2450048`). `compose.prod.yaml`
+identique à celui du dépôt — seuls `backend` et `frontend` sont
+reconstruits.
+
+**Sauvegarde préalable** (`ROLLBACK.md`), dans
+`~/esic-backups/20260907T183031Z/` sur la Pi :
+`mysql.sql.gz` (1,67 Mo, gzip vérifié, 65 `CREATE TABLE`, trailer
+« Dump completed » présent) ; `justifications.tar.gz` (volume vide en
+démo — 2 entrées) ; `deployed-state.txt` (`docker compose ps`, IDs
+d'images, `config --no-interpolate` — **aucun secret en clair**, seuls
+des `${VAR}`) ; `.env.prod.example` (modèle) ; `code-before.tar.gz`
+(3,9 Mo, intègre vérifiée). Images d'avant taguées pour rollback
+image-level : **`esic-connect-backend:pre-ef-org-003`** (`aa12e98fd073`),
+**`esic-connect-frontend:pre-ef-org-003`** (`546a396c6324`).
+
+**Build natif ARM64 sur la Pi** :
+`docker compose -f compose.prod.yaml build` — frontend ~2 min 30
+(`cd3873953f8f`), backend ~6 min 20 (`dependency:go-offline` 204 s +
+`clean package -DskipTests` 113 s ; image `879adab04b49`, 879 Mo). Puis
+`up -d --wait --wait-timeout 600` : `backend` et `frontend` recréés,
+**`cloudflared` recréé aussi** (dépendance) → **nouvelle URL de Quick
+Tunnel**. `mysql` / `redis` inchangés.
+
+**URL publique** (Quick Tunnel, éphémère) :
+**`https://drivers-revenues-alloy-guarantee.trycloudflare.com`**
+(l'ancienne `buried-fed-implementation-completion` est morte au
+redémarrage de `cloudflared`). `.env` sur la Pi : `APP_ALLOWED_ORIGINS`
+et `APP_ACTIVATION_BASE_URL` recalés sur la nouvelle URL (sauvegarde
+`.env.bak.1788806603`, 2 lignes changées, 34 lignes conservées, aucun
+secret touché), puis `up -d backend` pour la prise en compte CORS.
+
+**Santé** : 5/5 conteneurs `healthy` (cloudflared sans sonde, `running`),
+`restarts=0`, aucune boucle de redémarrage.
+`GET /actuator/health` → `{"status":"UP"}`. Aucune exception au
+démarrage (seul un `INFO` bénin Spring Data Redis, pré-existant). Flyway :
+34 migrations appliquées, `rank_max=34`, dernière `V34`.
+
+**Recette technique via l'URL publique** : `/` → 200, `/login` → 200,
+`/dashboard` → 200, `/api/v1/programs` (sans auth) → 401.
+
+**Smoke test EF-ORG-003** — API réelle sur la Pi (`localhost:8080`),
+second facteur franchi pour de vrai (TOTP déterministe `demo`), **26/26
+PASS** :
+
+- non authentifié : `GET /rooms/{id}/static-qr` → 401,
+  `POST …/static-qr/rotate` → 401 ;
+- `GET /rooms/{id}` (`RoomResponse`) : **`staticQrReference` retiré**
+  (`has("staticQrReference") == false`), `staticQrIssuedAt` conservé ;
+- **ADMIN** : `GET …/static-qr` → 200 (jeton complet 43 c. +
+  `maskedReference` `QdaT…QaO4` + `checkInPath` `/attendance?ref=…` +
+  `staticQrIssuedAt`) ; réimpression **stable** (jeton et date
+  inchangés) ; `POST …/rotate` → 200, **jeton et date changés** ;
+- **SUPER_ADMIN** : `GET …/static-qr` → 200 ; `POST …/rotate` → **403** ;
+  `DELETE …/static-qr` → **403** ;
+- **TEACHER** (`formateur@example.test`) : `GET …/static-qr` → **403**,
+  `POST …/rotate` → **403** ;
+- **PEDAGOGICAL_MANAGER** (`responsable@example.test`) :
+  `GET …/static-qr` → **403**.
+
+**`NOT_PERFORMED`** : rôle **`SCHOOL_ADMINISTRATION`** en direct — aucun
+compte de démonstration pour ce rôle ; sa matrice (lecture/impression
+autorisées, renouvellement `403`) reste couverte par
+`RoomStaticQrAdminIntegrationTests` (10/10). Recette navigateur
+`tests/15-room-static-qr.spec.ts` non rejouée (la config Playwright vise
+`localhost:4200` + `ng serve`, pas le tunnel) — les écrans sont couverts
+par `room-qr-poster.spec.ts` (5) et `site-detail.spec.ts` (7). Suite
+back-end complète non relancée sur ce commit (0 fichier Java modifié
+depuis le build de `2450048`, images reconstruites à l'identique du
+source). Le QR de la salle de démonstration `MLK-101`
+(`esic_connect_demo`, données fictives, aucune affiche physique) a été
+renouvelé pendant le smoke test.
+
+**Retrouver l'URL après un futur redémarrage de la Pi** :
+`ssh king_a@192.168.1.83 'cd ~/esic-connect && docker compose -f compose.prod.yaml logs cloudflared | grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" | tail -1'`,
+puis recaler les 2 lignes de `.env` et
+`docker compose -f compose.prod.yaml up -d backend`.
+
 ### 7 septembre 2026 (4) — EF-ORG-003 : gestion et impression du QR fixe permanent de salle
 
 Branche `feat/demo-readiness-e2e-ui`. Complète EF-ORG-003 : l'API du QR
@@ -2424,7 +2513,8 @@ exécution live). `NOT_PERFORMED`.
 | Parcours du sprint 11 rejoués dans un vrai navigateur contre la pile démarrée (recherche, attestation, abonnement iCalendar de bout en bout, refus de la piste d'audit, invitations, tableau équivalent) — **13 / 13**, §6.1 | `IMPLEMENTED_AND_TESTED` |
 | ~~Écrans réservés à `ADMIN` / `SUPER_ADMIN` en navigateur~~ — T-20 levée hors sprint (5 septembre 2026) : le second facteur est réellement franchi (`tests/support/auth.ts`) | `IMPLEMENTED_AND_TESTED` — suite complète 167/167, §6.4 |
 | Démonstration **manuelle** de bout en bout par un humain | **`NOT_PERFORMED`** — un navigateur piloté par script n'en est pas une |
-| Déploiement | **`NOT_PERFORMED`** — aucune instance, aucune URL |
+| Déploiement | **`PERFORMED` (7 septembre 2026)** — commit `bf6c3a9` sur la Raspberry Pi `king_a@192.168.1.83` (`compose.prod.yaml`, build natif ARM64, Quick Tunnel). URL éphémère : `https://drivers-revenues-alloy-guarantee.trycloudflare.com` (`/`, `/login`, `/dashboard` → 200 ; `/api/v1/programs` → 401). 5/5 conteneurs `healthy`, schéma V34, aucune migration. Smoke test EF-ORG-003 : 26/26. Voir « Dernière mise à jour » (5). |
+| Démonstration **manuelle** de bout en bout par un humain sur l'instance déployée | **`NOT_PERFORMED`** — un navigateur piloté par script n'en est pas une |
 
 ---
 
