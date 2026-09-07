@@ -1,0 +1,70 @@
+name: esic-connect
+
+# -----------------------------------------------------------------------------
+# SURCOUCHE D'ADMINISTRATION — Adminer (client MySQL visuel), OPTIONNELLE.
+# -----------------------------------------------------------------------------
+# À utiliser EN PLUS de compose.prod.yaml, jamais seule :
+#
+#   docker compose -f compose.prod.yaml -f compose.admin.yaml \
+#     --profile admin-tools up -d adminer
+#
+# Garanties de sécurité (Phase 10 du mandat performance/UX) :
+#   - profil `admin-tools` : le service NE DÉMARRE PAS avec
+#     `docker compose -f compose.prod.yaml up -d` ni au redémarrage de la
+#     Pi (aucun `restart` permanent) — il faut le lancer explicitement ;
+#   - port lié à `127.0.0.1` UNIQUEMENT sur la Pi : jamais `0.0.0.0`,
+#     jamais joignable depuis le réseau local ni Internet ;
+#   - hors du réseau `backend-network` : cloudflared ne le voit pas, il
+#     n'entre JAMAIS dans le tunnel Cloudflare / l'URL publique ;
+#   - aucun identifiant dans ce fichier : Adminer ne pré-remplit rien, on
+#     saisit serveur + utilisateur + base sur son écran de connexion.
+#
+# Accès depuis le Mac (tunnel SSH — le SEUL chemin) :
+#   ssh -L 8081:127.0.0.1:8081 king_a@192.168.1.83
+#   puis, dans un navigateur du Mac : http://127.0.0.1:8081
+#
+# Arrêt quand l'administration est finie (recommandé — ne pas laisser
+# tourner) :
+#   docker compose -f compose.prod.yaml -f compose.admin.yaml \
+#     --profile admin-tools down adminer
+#   (ou : ... stop adminer  — pour le relancer plus vite ensuite)
+#
+# Vérifier ce qui tourne :
+#   docker compose -f compose.prod.yaml -f compose.admin.yaml ps
+#
+# Détail complet et compte SQL d'administration à privilèges limités :
+#   docs/deployment/MYSQL-ADMIN.md
+# -----------------------------------------------------------------------------
+
+services:
+  adminer:
+    image: adminer:5
+    container_name: esic-connect-adminer
+    # `profiles` : exclut le service de tout `up` qui ne passe pas
+    # explicitement `--profile admin-tools`.
+    profiles:
+      - admin-tools
+    # PAS `unless-stopped` : l'outil ne doit pas revenir tout seul après
+    # un redémarrage de la Pi. `no` = démarrage manuel uniquement.
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    environment:
+      # Pré-sélectionne le SGBD et le serveur dans le formulaire de
+      # connexion ; ne contient AUCUN identifiant.
+      ADMINER_DEFAULT_SERVER: mysql
+      ADMINER_DESIGN: dracula
+    # Boucle locale de la Pi exclusivement. Le tunnel SSH depuis le Mac
+    # réexpose ce port côté Mac, et lui seul.
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # `data-network` uniquement : accès à MySQL, PAS à `backend-network`
+    # (donc invisible de cloudflared).
+    networks:
+      - data-network
