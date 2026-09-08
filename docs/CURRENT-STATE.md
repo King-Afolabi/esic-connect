@@ -10,6 +10,42 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — courriel Brevo : nouvelle adresse d'expédition
+
+Branche `feat/demo-readiness-e2e-ui`. **Documentation seule, zéro code,
+zéro migration.** Le porteur a changé l'adresse d'envoi (nouvelle :
+`abubacar@etudiant-esci.fr`) et signale que les courriels ne partent
+plus.
+
+**Constat (revue de code)** : la chaîne d'envoi est entièrement pilotée
+par l'environnement — `MAIL_HOST/PORT/USERNAME/PASSWORD/SMTP_AUTH/STARTTLS`
+→ `spring.mail.*`, `APP_MAIL_FROM` → `app.mail.from` →
+`SimpleMailMessage.setFrom(...)` dans les trois émetteurs
+(`JavaMailSender*Mailer`). **Aucune adresse codée en dur.** Un changement
+d'adresse est donc un changement de `.env` + `up -d backend` (pas de
+rebuild, pas de migration).
+
+**Cause probable de l'échec** : Brevo refuse (`550`) toute adresse `From`
+qui n'est pas un **expéditeur validé** ou un domaine authentifié
+SPF/DKIM. `etudiant-esci.fr` étant un domaine de l'école (DNS hors de
+portée), il faut déclarer `abubacar@etudiant-esci.fr` en **expéditeur
+unique validé** dans Brevo (action côté compte, hors dépôt). L'échec SMTP
+lève une `MailException` → l'effet de bord part en file d'échec de
+l'outbox (`FAILED`/`DEAD`), visible dans `/exploitation/effets-de-bord`.
+
+**Livré** : `docs/deployment/BREVO-EMAIL.md` (chaîne d'envoi, action
+compte Brevo, procédure `.env` sur la Pi, 4 contrôles de vérification,
+retour au mode Mailpit) ; `.env.prod.example` et `docs/12-prerequis-externes.md`
+§5 complétés (validation d'expéditeur) ; ligne « Courriel (Brevo) »
+ajoutée au runbook `docs/deployment/RASPBERRY-PI.md`.
+
+**`NOT_PERFORMED`** : application sur la Pi (`.env` + `up -d backend`) et
+vérification d'un envoi réel — **la Pi n'est pas joignable** (porteur
+hors du LAN ; le tunnel Cloudflare n'expose que l'application, pas SSH).
+À exécuter au prochain accès au réseau local de la Pi, selon
+`BREVO-EMAIL.md` §3–4. L'ajout du sender validé dans Brevo est un
+prérequis côté compte, indépendant du dépôt.
+
 ### 8 septembre 2026 — mandat performance/UX (suite) : tables à entête figée (ANO-UX-002)
 
 Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, aucune migration.**

@@ -101,6 +101,7 @@ curl -sI https://<url-tunnel>/            # 200, servi par Nginx
 | **Sauvegarde** | `ROLLBACK.md` § Sauvegarde |
 | **Restauration** | `ROLLBACK.md` § Rollback complet |
 | **Redémarrer un service** | `docker compose -f compose.prod.yaml restart backend` |
+| **Courriel (Brevo) / changer l'adresse d'expédition** | éditer `MAIL_*` / `APP_MAIL_FROM` dans `.env`, puis `docker compose -f compose.prod.yaml up -d backend` — détail : `BREVO-EMAIL.md` |
 | **Shell d'admin** | `docker compose -f compose.prod.yaml exec backend sh` |
 | **Migrations à jour ?** | `docker compose -f compose.prod.yaml exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -e "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 5"'` |
 
