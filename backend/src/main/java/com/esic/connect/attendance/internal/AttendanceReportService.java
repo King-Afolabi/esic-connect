@@ -137,10 +137,13 @@ class AttendanceReportService {
         Set<UUID> classes = scopedClasses(sessions, classFilter);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
-        // Une seule mémoire d'alternance pour tout le rapport : les mêmes
-        // couples (inscription, jour) reviennent d'une classe à l'autre.
-        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo = new HashMap<>();
         Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
+        // Contexte d'alternance de tout l'effectif sur toute la fenêtre,
+        // résolu en lot (quelques requêtes ensemblistes) plutôt qu'une
+        // poignée de requêtes par couple (inscription, jour) : c'était le
+        // coût dominant des rapports et du tableau de bord (ANO-PERF-001/002).
+        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo =
+                resolveAlternation(rosterByClass, sessions);
         List<AttendanceReports.ClassRow> rows = new ArrayList<>();
         for (UUID classPublicId : classes) {
             List<RosterEntry> roster = rosterByClass.getOrDefault(classPublicId, List.of());
@@ -168,8 +171,9 @@ class AttendanceReportService {
         Set<UUID> classes = scopedClasses(sessions, classFilter);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
-        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo = new HashMap<>();
         Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
+        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo =
+                resolveAlternation(rosterByClass, sessions);
         List<AttendanceReports.StudentRow> rows = new ArrayList<>();
         for (UUID classPublicId : classes) {
             for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
@@ -198,8 +202,9 @@ class AttendanceReportService {
         Set<UUID> classes = scopedClasses(sessions, classFilter);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
-        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo = new HashMap<>();
         Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
+        Map<AlternationKey, AlternationDirectory.Axis> alternationMemo =
+                resolveAlternation(rosterByClass, sessions);
         Accrual acc = new Accrual();
         for (UUID classPublicId : classes) {
             for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
@@ -256,6 +261,51 @@ class AttendanceReportService {
             }
         }
         return byClass;
+    }
+
+    /**
+     * Contexte d'alternance de tout l'effectif du rapport, sur toute la
+     * fenêtre de jours couverte par les séances, résolu <strong>en
+     * lot</strong> (ANO-PERF-001/002, dette T-03).
+     *
+     * <p>Avant : {@code accrueHalfDays} résolvait le contexte à la demande,
+     * couple (inscription, jour) par couple — chacun coûtant plusieurs
+     * requêtes SQL (classe, affectation de rythme, exceptions). Sur une
+     * fenêtre d'un mois pour un responsable de plusieurs classes, cela
+     * faisait des milliers d'allers-retours et la requête du tableau de
+     * bord / de la synthèse durait une minute. Ici, {@code alternation}
+     * charge tout en quelques requêtes ensemblistes et résout chaque jour
+     * en mémoire. La mémoire reste alimentée à la demande en dernier
+     * recours ({@code computeIfAbsent} dans {@code accrueHalfDays}), pour
+     * un couple qui sortirait de l'intervalle pré-calculé.
+     */
+    private Map<AlternationKey, AlternationDirectory.Axis> resolveAlternation(
+            Map<UUID, List<RosterEntry>> rosterByClass, List<SessionRef> sessions) {
+        Map<AlternationKey, AlternationDirectory.Axis> memo = new HashMap<>();
+        if (rosterByClass.isEmpty() || sessions.isEmpty()) {
+            return memo;
+        }
+        LocalDate min = null;
+        LocalDate max = null;
+        for (SessionRef s : sessions) {
+            LocalDate day = LocalDate.ofInstant(s.startsAt(), persistedZone(s.timeZoneId()));
+            if (min == null || day.isBefore(min)) {
+                min = day;
+            }
+            if (max == null || day.isAfter(max)) {
+                max = day;
+            }
+        }
+        List<AlternationDirectory.EnrollmentDescriptor> descriptors = new ArrayList<>();
+        for (List<RosterEntry> roster : rosterByClass.values()) {
+            for (RosterEntry entry : roster) {
+                descriptors.add(new AlternationDirectory.EnrollmentDescriptor(
+                        entry.enrollmentPublicId(), entry.enrollmentInternalId(), entry.classGroupPublicId()));
+            }
+        }
+        alternationDirectory.resolveEnrollmentContexts(descriptors, min, max).forEach((key, axis) ->
+                memo.put(new AlternationKey(key.enrollmentPublicId(), key.day()), axis));
+        return memo;
     }
 
     /** Identifiant interne de l'appelant, pour nommer l'auteur d'un document. */

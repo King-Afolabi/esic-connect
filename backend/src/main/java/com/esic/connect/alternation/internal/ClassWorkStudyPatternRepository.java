@@ -45,6 +45,25 @@ interface ClassWorkStudyPatternRepository
                                                    @Param("on") LocalDate on);
 
     /**
+     * Toutes les affectations {@code ACTIVE} des classes indiquées, avec
+     * leur rythme chargé (anti-N+1). Sert la résolution <em>en lot</em> du
+     * contexte d'alternance pour les agrégats (rapports, tableau de bord) :
+     * la sélection de l'affectation qui recouvre un jour donné se fait
+     * ensuite en mémoire, avec la même règle que {@link #findActiveCovering}
+     * ({@code validFrom <= jour <= validUntil}, {@code validUntil} nul =
+     * ouvert). L'invariant de non-chevauchement garantit au plus une
+     * affectation par classe et par jour.
+     */
+    @Query("""
+            select c from ClassWorkStudyPattern c
+            join fetch c.pattern
+            where c.classGroupId in :classGroupIds
+              and c.status = com.esic.connect.alternation.internal.ClassPatternStatus.ACTIVE
+            """)
+    List<ClassWorkStudyPattern> findActiveByClassGroupIdIn(
+            @Param("classGroupIds") java.util.Collection<Long> classGroupIds);
+
+    /**
      * Affectations {@code ACTIVE} de la classe dont la période
      * (inclusive, {@code valid_until} nul = +infini) recoupe l'intervalle
      * demandé — sert le pré-contrôle de non-chevauchement. Deux périodes

@@ -1,6 +1,8 @@
 package com.esic.connect.alternation;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -47,6 +49,47 @@ public interface AlternationDirectory {
      *         avertissement
      */
     Axis resolveClassAxis(UUID classGroupPublicId, LocalDate date);
+
+    /**
+     * Contexte d'alternance <em>effectif</em> de plusieurs inscriptions
+     * sur une plage de jours, résolu <strong>en lot</strong> — pour les
+     * agrégats du module {@code attendance} (rapports d'assiduité, tableau
+     * de bord d'un responsable pédagogique).
+     *
+     * <p>Mêmes règles de résolution que
+     * {@link #resolveEnrollmentContext(UUID, LocalDate)} (priorité d'une
+     * exception individuelle, contexte contradictoire → {@code UNKNOWN}),
+     * et <strong>sans</strong> contrôle de périmètre : le module appelant
+     * a déjà vérifié le périmètre des classes concernées. Le coût est
+     * borné — quelques requêtes ensemblistes, quel que soit le nombre de
+     * couples (inscription, jour) — au lieu d'une poignée de requêtes
+     * <em>par</em> couple.
+     *
+     * @param enrollments inscriptions à résoudre — l'appelant fournit
+     *                    l'identifiant public, l'identifiant interne et la
+     *                    classe (il les tient déjà de l'effectif du rapport)
+     * @param fromDay     premier jour civil inclus
+     * @param toDay       dernier jour civil inclus
+     * @return l'axe effectif par couple (inscription, jour) ; un couple
+     *         absent de la carte doit être traité comme {@link Axis#UNKNOWN}
+     */
+    Map<EnrollmentDay, Axis> resolveEnrollmentContexts(Collection<EnrollmentDescriptor> enrollments,
+                                                       LocalDate fromDay, LocalDate toDay);
+
+    /**
+     * Descriptif d'inscription pour la résolution en lot — types standard
+     * uniquement, aucune entité.
+     *
+     * @param enrollmentPublicId   identifiant public de l'inscription
+     * @param enrollmentInternalId clé primaire SQL de l'inscription
+     * @param classGroupPublicId   classe de l'inscription (peut être {@code null})
+     */
+    record EnrollmentDescriptor(UUID enrollmentPublicId, long enrollmentInternalId, UUID classGroupPublicId) {
+    }
+
+    /** Clé d'un contexte résolu en lot : inscription + jour civil. */
+    record EnrollmentDay(UUID enrollmentPublicId, LocalDate day) {
+    }
 
     /** Axe école / entreprise d'une inscription à une date. */
     enum Axis {

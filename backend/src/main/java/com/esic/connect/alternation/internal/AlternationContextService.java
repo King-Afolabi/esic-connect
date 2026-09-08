@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -95,22 +96,56 @@ class AlternationContextService {
 
     private EnrollmentContextResponse computeEnrollmentContext(EnrollmentDirectory.EnrollmentRef enrollment,
                                                               LocalDate date) {
+        Long classInternalId = enrollment.classGroupPublicId() == null ? null
+                : classGroupDirectory.findByPublicId(enrollment.classGroupPublicId())
+                        .map(ClassGroupDirectory.ClassGroupRef::internalId).orElse(null);
+        List<ClassWorkStudyPattern> classAssignments = classInternalId == null ? List.of()
+                : assignmentRepository.findActiveCovering(classInternalId, date);
+        List<StudentScheduleException> exceptionCandidates =
+                coveringExceptions(enrollment.internalId(), date);
+        return computeEnrollmentContext(enrollment.publicId(), enrollment.classGroupPublicId(), classInternalId,
+                date, classAssignments, exceptionCandidates, /* candidatesArePreFiltered */ true);
+    }
+
+    /**
+     * Cœur <em>pur</em> de la résolution du contexte effectif — aucune
+     * I/O. Les affectations de rythme et les exceptions individuelles sont
+     * fournies par l'appelant, qui les a chargées soit une par une
+     * ({@link #computeEnrollmentContext(EnrollmentDirectory.EnrollmentRef, LocalDate)}),
+     * soit <strong>en lot</strong> pour tout un rapport
+     * ({@link #resolveEnrollmentContextsUnchecked}). Une seule
+     * implémentation des règles de priorité : les deux chemins ne peuvent
+     * pas diverger.
+     *
+     * @param classAssignments affectations {@code ACTIVE} de la classe —
+     *        soit déjà restreintes au jour, soit toutes (le drapeau
+     *        {@code candidatesArePreFiltered} le dit)
+     * @param exceptionCandidates exceptions {@code ACTIVE} de l'inscription —
+     *        déjà restreintes au jour si {@code candidatesArePreFiltered},
+     *        sinon simplement pré-sélectionnées sur une fenêtre large
+     */
+    private EnrollmentContextResponse computeEnrollmentContext(
+            UUID enrollmentPublicId, UUID classGroupPublicId, Long classInternalId, LocalDate date,
+            List<ClassWorkStudyPattern> classAssignments,
+            List<StudentScheduleException> exceptionCandidates,
+            boolean candidatesArePreFiltered) {
         AlternationContext patternContext = AlternationContext.UNKNOWN;
         ContextSource source = ContextSource.NONE;
-        if (enrollment.classGroupPublicId() != null) {
-            Long classInternalId = classGroupDirectory.findByPublicId(enrollment.classGroupPublicId())
-                    .map(ClassGroupDirectory.ClassGroupRef::internalId).orElse(null);
-            if (classInternalId != null) {
-                AlternationContextResponse classResult = resolvePattern(enrollment.classGroupPublicId(),
-                        classInternalId, date);
-                patternContext = classResult.context();
-                if (classResult.source() == ContextSource.PATTERN) {
-                    source = ContextSource.PATTERN;
-                }
+        if (classGroupPublicId != null && classInternalId != null) {
+            AlternationContextResponse classResult = resolvePatternFrom(
+                    classAssignments.stream()
+                            .filter(candidatesArePreFiltered ? a -> true : a -> covers(a, date))
+                            .toList(),
+                    classGroupPublicId, date);
+            patternContext = classResult.context();
+            if (classResult.source() == ContextSource.PATTERN) {
+                source = ContextSource.PATTERN;
             }
         }
 
-        List<StudentScheduleException> covering = coveringExceptions(enrollment.internalId(), date);
+        List<StudentScheduleException> covering = candidatesArePreFiltered
+                ? exceptionCandidates
+                : filterCoveringExceptions(exceptionCandidates, date);
         List<ScheduleExceptionType> coveringTypes = new ArrayList<>();
         Set<AlternationContext> individualContexts = EnumSet.noneOf(AlternationContext.class);
         for (StudentScheduleException exception : covering) {
@@ -133,8 +168,103 @@ class AlternationContextService {
             source = ContextSource.INDIVIDUAL_EXCEPTION;
         }
 
-        return new EnrollmentContextResponse(enrollment.publicId(), enrollment.classGroupPublicId(), date,
+        return new EnrollmentContextResponse(enrollmentPublicId, classGroupPublicId, date,
                 patternContext, effectiveContext, source, List.copyOf(coveringTypes));
+    }
+
+    /**
+     * Contexte effectif de plusieurs inscriptions sur une plage de jours,
+     * résolu <strong>en lot</strong> — sans contrôle de périmètre (réservé
+     * au port public {@code alternation.AlternationDirectory} ; le module
+     * appelant a déjà vérifié le périmètre).
+     *
+     * <p>Coût : trois requêtes bornées (classes, affectations
+     * {@code ACTIVE} des classes, exceptions {@code ACTIVE} des
+     * inscriptions sur la fenêtre) au lieu d'une poignée par couple
+     * (inscription, jour). La résolution jour par jour est ensuite
+     * purement en mémoire et suit exactement les mêmes règles que
+     * {@link #resolveEnrollmentContextUnchecked}.
+     *
+     * @param enrollments couples (inscription publique, id interne
+     *                    d'inscription, classe publique) — l'appelant les
+     *                    tient déjà (effectif du rapport)
+     * @param fromDay     premier jour civil inclus
+     * @param toDay       dernier jour civil inclus
+     * @return une entrée par couple (inscription, jour) de l'intervalle
+     */
+    Map<EnrollmentDayKey, EnrollmentContextResponse> resolveEnrollmentContextsUnchecked(
+            java.util.Collection<BatchEnrollmentRef> enrollments, LocalDate fromDay, LocalDate toDay) {
+        if (enrollments == null || enrollments.isEmpty() || fromDay == null || toDay == null
+                || toDay.isBefore(fromDay)) {
+            return Map.of();
+        }
+        // 1. classe publique -> id interne, en une requête
+        Set<UUID> classPublicIds = new java.util.LinkedHashSet<>();
+        Set<Long> enrollmentInternalIds = new java.util.LinkedHashSet<>();
+        for (BatchEnrollmentRef e : enrollments) {
+            if (e.classGroupPublicId() != null) {
+                classPublicIds.add(e.classGroupPublicId());
+            }
+            enrollmentInternalIds.add(e.enrollmentInternalId());
+        }
+        Map<UUID, Long> classInternalIds = new java.util.HashMap<>();
+        for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByPublicIds(classPublicIds)) {
+            classInternalIds.put(ref.publicId(), ref.internalId());
+        }
+
+        // 2. affectations ACTIVE de toutes ces classes, rythme chargé
+        Map<Long, List<ClassWorkStudyPattern>> assignmentsByClass = new java.util.HashMap<>();
+        if (!classInternalIds.isEmpty()) {
+            for (ClassWorkStudyPattern a : assignmentRepository
+                    .findActiveByClassGroupIdIn(new java.util.LinkedHashSet<>(classInternalIds.values()))) {
+                assignmentsByClass.computeIfAbsent(a.getClassGroupId(), k -> new ArrayList<>()).add(a);
+            }
+        }
+
+        // 3. exceptions ACTIVE de toutes ces inscriptions, sur une fenêtre
+        //    large (± 2 jours UTC autour de l'intervalle) — le recoupement
+        //    exact est calculé jour par jour ensuite.
+        Instant windowStart = fromDay.minusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant windowEnd = toDay.plusDays(3).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Map<Long, List<StudentScheduleException>> exceptionsByEnrollment = new java.util.HashMap<>();
+        if (!enrollmentInternalIds.isEmpty()) {
+            for (StudentScheduleException x : exceptionRepository
+                    .findActiveOverlappingForEnrollments(enrollmentInternalIds, windowStart, windowEnd)) {
+                exceptionsByEnrollment.computeIfAbsent(x.getEnrollmentId(), k -> new ArrayList<>()).add(x);
+            }
+        }
+
+        // 4. résolution en mémoire, couple par couple
+        Map<EnrollmentDayKey, EnrollmentContextResponse> out = new java.util.HashMap<>();
+        for (BatchEnrollmentRef e : enrollments) {
+            Long classInternalId = e.classGroupPublicId() == null ? null
+                    : classInternalIds.get(e.classGroupPublicId());
+            List<ClassWorkStudyPattern> classAssignments = classInternalId == null ? List.of()
+                    : assignmentsByClass.getOrDefault(classInternalId, List.of());
+            List<StudentScheduleException> candidates =
+                    exceptionsByEnrollment.getOrDefault(e.enrollmentInternalId(), List.of());
+            for (LocalDate day = fromDay; !day.isAfter(toDay); day = day.plusDays(1)) {
+                out.put(new EnrollmentDayKey(e.enrollmentPublicId(), day),
+                        computeEnrollmentContext(e.enrollmentPublicId(), e.classGroupPublicId(),
+                                classInternalId, day, classAssignments, candidates,
+                                /* candidatesArePreFiltered */ false));
+            }
+        }
+        return out;
+    }
+
+    /** Descriptif minimal d'une inscription pour la résolution en lot. */
+    record BatchEnrollmentRef(UUID enrollmentPublicId, long enrollmentInternalId, UUID classGroupPublicId) {
+    }
+
+    /** Clé d'un contexte résolu en lot : inscription + jour civil. */
+    record EnrollmentDayKey(UUID enrollmentPublicId, LocalDate day) {
+    }
+
+    /** Une affectation {@code ACTIVE} recouvre-t-elle la date ({@code validUntil} nul = ouvert) ? */
+    private static boolean covers(ClassWorkStudyPattern assignment, LocalDate date) {
+        return !assignment.getValidFrom().isAfter(date)
+                && (assignment.getValidUntil() == null || !assignment.getValidUntil().isBefore(date));
     }
 
     // ------------------------------------------------------------------
@@ -150,7 +280,17 @@ class AlternationContextService {
     }
 
     private AlternationContextResponse resolvePattern(UUID classGroupPublicId, long classInternalId, LocalDate date) {
-        List<ClassWorkStudyPattern> covering = assignmentRepository.findActiveCovering(classInternalId, date);
+        return resolvePatternFrom(assignmentRepository.findActiveCovering(classInternalId, date),
+                classGroupPublicId, date);
+    }
+
+    /**
+     * Cœur <em>pur</em> de {@link #resolvePattern} : les affectations
+     * {@code ACTIVE} qui recouvrent le jour sont fournies par l'appelant
+     * (une requête unitaire, ou un lot filtré en mémoire).
+     */
+    private AlternationContextResponse resolvePatternFrom(List<ClassWorkStudyPattern> covering,
+                                                          UUID classGroupPublicId, LocalDate date) {
         String dayOfWeek = date.getDayOfWeek().name();
         if (covering.isEmpty()) {
             return new AlternationContextResponse(classGroupPublicId, date, AlternationContext.UNKNOWN,
@@ -193,8 +333,19 @@ class AlternationContextService {
         // par intersection d'intervalles dans le fuseau de l'exception.
         Instant from = date.minusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant to = date.plusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
-        List<StudentScheduleException> candidates = exceptionRepository
-                .findActiveOverlapping(enrollmentInternalId, from, to);
+        return filterCoveringExceptions(
+                exceptionRepository.findActiveOverlapping(enrollmentInternalId, from, to), date);
+    }
+
+    /**
+     * Cœur <em>pur</em> de {@link #coveringExceptions} : parmi des
+     * exceptions pré-sélectionnées sur une fenêtre large, retient celles
+     * dont l'intervalle {@code [startAt, endAt)} recoupe réellement le
+     * jour civil {@code date} projeté dans le fuseau propre à chaque
+     * exception.
+     */
+    private List<StudentScheduleException> filterCoveringExceptions(
+            List<StudentScheduleException> candidates, LocalDate date) {
         List<StudentScheduleException> covering = new ArrayList<>();
         for (StudentScheduleException exception : candidates) {
             ZoneId zone = persistedZone(exception.getTimeZoneId());
