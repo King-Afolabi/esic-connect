@@ -25,30 +25,38 @@ test.describe('Connexion — comptes réels par rôle', () => {
   for (const account of Object.values(ACCOUNTS)) {
     test(`connexion réussie : ${account.role} (${account.email})`, async ({ page }) => {
       await loginAsUi(page, account);
-      // Le tableau de bord affiche aussi l'e-mail (carte "Session") : on
-      // cible explicitement la puce d'identité de la barre d'outils
-      // (`app-shell.html`, `aria-label="Utilisateur connecté"`) pour éviter
-      // une correspondance ambiguë entre les deux occurrences.
-      await expect(page.locator('[aria-label="Utilisateur connecté"]')).toHaveText(account.email);
-      // Les rôles réellement détenus doivent apparaître comme puces dans
-      // l'en-tête (app-shell.html) — vérifie que le JWT porte bien les
-      // rôles attendus, pas seulement que la connexion a réussi.
-      for (const role of account.roles) {
-        // Les libellés sont traduits (roleLabel()) ; on vérifie la
-        // présence d'au moins une puce de rôle plutôt que le code brut.
-        await expect(page.locator('.shell__role-chip')).not.toHaveCount(0);
-      }
+      // L'identité connectée est portée par le déclencheur du panneau
+      // Profil de la barre d'outils (`profile-menu.html`,
+      // `aria-label="Profil — <email>"`) depuis la refonte « profil en
+      // icône seule » (CURRENT-STATE, 9 sept. 2026 : le nom court n'est
+      // plus affiché, l'adresse reste sur l'aria-label).
+      await expect(page.locator('button.profile-menu__trigger')).toHaveAttribute(
+        'aria-label',
+        `Profil — ${account.email}`,
+      );
+      // Les rôles réellement détenus apparaissent comme puces dans le
+      // panneau Profil (déplacées de la barre d'outils vers le panneau) :
+      // ouvrir le menu et vérifier au moins une puce — confirme que le JWT
+      // porte bien des rôles, pas seulement que la connexion a réussi.
+      await page.locator('button.profile-menu__trigger').click();
+      await expect(page.locator('.profile-menu__roles .esic-badge')).not.toHaveCount(0);
+      await page.keyboard.press('Escape');
     });
   }
 
   test('compte multi-rôles : les deux puces de rôle sont visibles', async ({ page }) => {
     await loginAsUi(page, ACCOUNTS.PEDAGOGICAL_MANAGER_TEACHER);
-    const chips = page.locator('.shell__role-chip');
+    // Les puces de rôle vivent désormais dans le panneau Profil
+    // (`profile-menu.html`, `.profile-menu__roles .esic-badge`) et non
+    // plus dans la barre d'outils (CURRENT-STATE, 9 sept. 2026).
+    await page.locator('button.profile-menu__trigger').click();
+    const chips = page.locator('.profile-menu__roles .esic-badge');
     await expect(chips).toHaveCount(2);
     await page.screenshot({
       path: path.join(CAPTURES, 'success', '00-connexion-multi-roles.png'),
       fullPage: true,
     });
+    await page.keyboard.press('Escape');
   });
 });
 

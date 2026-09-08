@@ -19,10 +19,14 @@ test.describe('Tableau de bord', () => {
     }) => {
       await loginAsUi(page, account);
       await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible();
-      // Le tableau de bord affiche l'e-mail à deux endroits (barre d'outils
-      // + carte "Session") : on cible la puce d'identité de la barre
-      // d'outils pour éviter une correspondance ambiguë.
-      await expect(page.locator('[aria-label="Utilisateur connecté"]')).toHaveText(account.email);
+      // L'identité connectée est portée par le déclencheur du panneau
+      // Profil (`profile-menu.html`, `aria-label="Profil — <email>"`)
+      // depuis la refonte « profil en icône seule » (CURRENT-STATE,
+      // 9 sept. 2026).
+      await expect(page.locator('button.profile-menu__trigger')).toHaveAttribute(
+        'aria-label',
+        `Profil — ${account.email}`,
+      );
     });
   }
 });
