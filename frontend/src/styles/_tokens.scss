@@ -43,11 +43,16 @@
   --esic-ink: #17212b; // texte principal — teinte réelle, pas un noir décoratif
   --esic-ink-soft: #55606c; // texte secondaire
   --esic-ink-faint: #7a8592; // texte tertiaire, méta
-  --esic-paper: #f4f6f8; // fond d'application
-  --esic-surface: #ffffff; // cartes, panneaux, barres
-  --esic-surface-sunken: #eef1f4; // zones en creux (en-tête de tableau, champs)
-  --esic-line: #d9dee4; // filets, séparateurs
-  --esic-line-strong: #b9c1cb; // filets appuyés
+  // Fonds légèrement réchauffés (grain neutre chaud, jamais crème appuyé) :
+  // le blanc pur des cartes est cassé d'un point pour poser un peu de
+  // profondeur sans virer beige. Contrastes vérifiés (texte ink sur ces
+  // fonds > 12:1).
+  --esic-paper: #f7f7f4; // fond d'application — blanc légèrement chaud
+  --esic-surface: #fffdfa; // cartes, panneaux, barres — surface chaude subtile
+  --esic-surface-raised: #ffffff; // surface franchement détachée (aperçu, tuile flottante)
+  --esic-surface-sunken: #eef0ec; // zones en creux (en-tête de tableau, champs)
+  --esic-line: #e6e2da; // filets, séparateurs — chaud
+  --esic-line-strong: #c8c2b6; // filets appuyés
 
   // ---------------------------------------------------------------------------
   // Rôles sémantiques (indirection : les composants n'utilisent que ceux-ci)
@@ -114,8 +119,16 @@
   // Élévation — réservée à ce qui flotte réellement (menus, dialogues,
   // en-têtes collants). Pas d'ombre sous chaque carte.
   // ---------------------------------------------------------------------------
-  --esic-shadow-raise: 0 1px 2px rgb(23 33 43 / 8%), 0 1px 1px rgb(23 33 43 / 4%);
-  --esic-shadow-float: 0 6px 16px rgb(23 33 43 / 12%), 0 2px 6px rgb(23 33 43 / 8%);
+  // Trois ombres sobres, teintées froid (31 35 40) pour ne pas jaunir la
+  // profondeur. Statiques : jamais animées, jamais posées sur chaque
+  // ligne de tableau, jamais de `blur()` ni de `backdrop-filter`.
+  --esic-shadow-sm: 0 1px 2px rgb(31 35 40 / 6%), 0 2px 6px rgb(31 35 40 / 4%);
+  --esic-shadow-md: 0 4px 12px rgb(31 35 40 / 8%), 0 1px 3px rgb(31 35 40 / 5%);
+  --esic-shadow-lg: 0 12px 30px rgb(31 35 40 / 12%);
+
+  // Alias historiques — conservés pour ne pas réécrire tous les appels.
+  --esic-shadow-raise: var(--esic-shadow-sm);
+  --esic-shadow-float: var(--esic-shadow-md);
 
   // ---------------------------------------------------------------------------
   // Plans (z-index) — échelle nommée pour éviter les surenchères

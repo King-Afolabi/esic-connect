@@ -644,7 +644,11 @@
   border: 1px solid var(--esic-line);
   border-left: 3px solid var(--esic-primary);
   border-radius: var(--esic-radius-xs);
-  background: var(--esic-surface-sunken);
+  background: var(--esic-surface);
+  // Amélioration visuelle légère : ombre moyenne statique — ces panneaux
+  // (confirmations, saisie contextuelle, affiche QR de salle) s'ouvrent
+  // « au-dessus » du flux sans être des fenêtres modales.
+  box-shadow: var(--esic-shadow-md);
 
   > p {
     margin: 0;

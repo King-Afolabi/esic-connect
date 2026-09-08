@@ -24,6 +24,19 @@
   min-height: var(--esic-tap-min);
 }
 
+// Amélioration visuelle légère : l'action primaire (bouton plein / relevé)
+// porte une petite ombre STATIQUE — jamais animée. Les boutons secondaires
+// (contour) et les boutons texte n'en portent aucune.
+.mat-mdc-unelevated-button:not(:disabled),
+.mat-mdc-raised-button:not(:disabled) {
+  box-shadow: var(--esic-shadow-sm);
+}
+
+.mat-mdc-button,
+.mat-mdc-outlined-button {
+  box-shadow: none;
+}
+
 // -- Champs de formulaire ---------------------------------------------
 .mat-mdc-form-field {
   width: 100%;

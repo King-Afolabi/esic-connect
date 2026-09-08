@@ -178,6 +178,14 @@
   align-self: start;
 }
 
+// Amélioration visuelle légère : les cartes du tableau de bord portent une
+// ombre discrète et statique (jamais animée), en plus du filet — elles se
+// détachent un peu du fond chaud sans « flotter ». Les tableaux internes
+// gardent bordure + surface, aucune ombre par ligne.
+.dashboard__card.mat-mdc-card {
+  box-shadow: var(--esic-shadow-sm);
+}
+
 @container esic-content (min-width: 52rem) {
   .dashboard__grid {
     grid-template-columns: 1fr 1fr;

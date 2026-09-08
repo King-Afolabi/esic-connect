@@ -201,4 +201,10 @@ table {
   body {
     background: #fff !important;
   }
+
+  // Amélioration visuelle légère : aucune ombre à l'impression (affiche
+  // QR de salle, rapports) — l'élévation est un repère d'écran.
+  * {
+    box-shadow: none !important;
+  }
 }
