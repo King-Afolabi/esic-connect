@@ -342,6 +342,35 @@ describe('Dashboard', () => {
     expect(text()).toContain("Le tableau de bord n'a pas pu être chargé");
   });
 
+  it('surfaces the correlation id of a failed load so it can be quoted to support', () => {
+    (fixture.componentInstance as unknown as { loadDashboard: () => void }).loadDashboard();
+    http.expectOne(DASH_URL).flush(
+      { timestamp: 't', status: 500, code: 'INTERNAL_ERROR', message: 'x', path: '/', correlationId: 'corr-abc-123', details: [] },
+      { status: 500, statusText: 'Server Error' },
+    );
+    fixture.detectChanges();
+    expect(text()).toContain('Référence à citer au support : corr-abc-123');
+  });
+
+  it('ignores a stale response that resolves after a newer reload (switchMap-like)', () => {
+    const internals = fixture.componentInstance as unknown as {
+      loadDashboard: () => void;
+      dash: () => { generatedAt: string } | null;
+    };
+    internals.loadDashboard(); // requête « lente » (A)
+    internals.loadDashboard(); // rechargement plus récent (B)
+    const pending = http.match(DASH_URL);
+    expect(pending.length).toBe(2);
+
+    // B répond en premier avec des données fraîches…
+    pending[1].flush({ ...EMPTY_ADMIN_DASH, generatedAt: '2026-09-10T10:00:00Z' });
+    // …puis A répond en retard avec des données périmées : elles sont ignorées.
+    pending[0].flush({ ...EMPTY_ADMIN_DASH, generatedAt: '2026-09-10T08:00:00Z' });
+    fixture.detectChanges();
+
+    expect(internals.dash()?.generatedAt).toBe('2026-09-10T10:00:00Z');
+  });
+
   /**
    * EF-REP-008 — « tout graphique dispose […] d'un tableau équivalent »
    * (docs/02 §22.6). L'histogramme et la table lisent la MÊME liste :

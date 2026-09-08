@@ -81,6 +81,9 @@
       @case ('error') {
         <div role="alert" class="dashboard__empty">
           <p>Le tableau de bord n'a pas pu être chargé.</p>
+          @if (dashErrorRef(); as ref) {
+            <p class="dashboard__error-ref">Référence à citer au support : {{ ref }}</p>
+          }
           <button mat-stroked-button type="button" (click)="loadDashboard()">Réessayer</button>
         </div>
       }

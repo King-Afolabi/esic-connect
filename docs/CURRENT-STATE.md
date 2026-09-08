@@ -10,6 +10,42 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — tableau de bord : garde anti-course + réf. de corrélation (ANO-PERF-001/002, part front)
+
+Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, zéro migration.**
+Volet **front** de la résilience
+d'ANO-PERF ; la correction **backend** (borne de fenêtre d'agrégat +
+`GROUP BY` SQL + dénominateur gonflé) reste `DECLARED` — elle exige
+`EXPLAIN ANALYZE` sur la Pi et un cycle build+backup+deploy impossible
+cette session (porteur hors LAN).
+
+**Constat** : `attendance-summary` et `attendance-report` (coquille Suivi
+d'assiduité) portaient **déjà** une garde de réponse obsolète
+(`loadToken`), des états `loading` / `forbidden` / `error` par écran et un
+bouton « Réessayer ». Seul `Dashboard` (`/dashboard`) manquait la garde
+anti-course : une réponse lente pour un contexte de rôle pouvait écraser
+l'état d'un contexte plus récent.
+
+**Livré sur `Dashboard`** :
+- **garde de séquence** (`dashSeq`) : `loadDashboard()` incrémente un
+  compteur ; toute réponse (succès **ou** erreur) dont le numéro n'est
+  plus le courant est **ignorée** (équivalent `switchMap` — changement de
+  contexte de rôle, clic « Réessayer », pas de spinner figé) ;
+- l'échec passe désormais par le helper partagé `normalizeHttpError` ;
+  l'état d'erreur porte l'`correlationId` et la bannière l'affiche
+  (« Référence à citer au support : … », `.dashboard__error-ref`) ;
+- états `loading` / `forbidden` / `error` + « Réessayer » **préexistants**
+  conservés à l'identique. **Note** : `/me/dashboard` est un appel
+  unique — une résilience « par carte » supposerait de scinder
+  l'endpoint (aucune route inventée).
+
+**Tests** : `dashboard.spec.ts` +2 (réf. de corrélation affichée sur
+échec ; réponse périmée ignorée après un rechargement plus récent) ;
+`npm run lint` vert ; `npx ng test --watch=false`
+**104 fichiers / 864 tests / 0 échec** ; `ng build --configuration production`
+**582,62 kB**, aucune alerte de budget. `NOT_PERFORMED` : correction
+backend + mesure sur la Pi ; déploiement.
+
 ### 8 septembre 2026 — onglets référentiels académiques → primitive `.esic-subnav` (ANO-UX-001, reliquat)
 
 Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, zéro migration.**

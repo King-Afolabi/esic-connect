@@ -9,6 +9,7 @@ import { interval, startWith } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { RoleContextService } from '../../core/auth/role-context.service';
+import { normalizeHttpError } from '../../core/models/api-error';
 import { roleLabel } from '../../core/models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../core/navigation/navigation';
 import { DashboardApiService } from './dashboard-api.service';
@@ -16,7 +17,7 @@ import { barWidth, DashboardResponse, percent, shortDate, shortInstant } from '.
 
 type DashboardState =
   | { kind: 'loading' }
-  | { kind: 'error' }
+  | { kind: 'error'; correlationId: string | null }
   | { kind: 'forbidden' }
   | { kind: 'ready'; data: DashboardResponse };
 
@@ -53,6 +54,19 @@ export class Dashboard {
     const s = this.dashState();
     return s.kind === 'ready' ? s.data : null;
   });
+  /** Identifiant de corrélation d'un échec, à citer au support. */
+  protected readonly dashErrorRef = computed(() => {
+    const s = this.dashState();
+    return s.kind === 'error' ? s.correlationId : null;
+  });
+
+  /**
+   * Compteur de requêtes : une réponse arrivée après un rechargement plus
+   * récent (changement de contexte de rôle, clic sur « Réessayer ») est
+   * **ignorée** — elle ne doit jamais écraser un état plus frais ni
+   * laisser un spinner tourner indéfiniment (équivalent `switchMap`).
+   */
+  private dashSeq = 0;
   /** Le contexte de rôle du front est ergonomique ; le serveur seul décide. */
   protected readonly canLinkSessions = computed(() =>
     this.roleContext
@@ -106,15 +120,25 @@ export class Dashboard {
   }
 
   protected loadDashboard(context = this.requestedContext()): void {
+    const seq = ++this.dashSeq;
     this.dashState.set({ kind: 'loading' });
     this.dashboardApi.getDashboard(context).subscribe({
-      next: (data) => this.dashState.set({ kind: 'ready', data }),
+      next: (data) => {
+        if (seq !== this.dashSeq) {
+          return;
+        }
+        this.dashState.set({ kind: 'ready', data });
+      },
       error: (error: unknown) => {
-        const status =
-          typeof error === 'object' && error !== null && 'status' in error
-            ? (error as { status: number }).status
-            : 0;
-        this.dashState.set({ kind: status === 403 ? 'forbidden' : 'error' });
+        if (seq !== this.dashSeq) {
+          return;
+        }
+        const normalized = normalizeHttpError(error);
+        this.dashState.set(
+          normalized.status === 403
+            ? { kind: 'forbidden' }
+            : { kind: 'error', correlationId: normalized.correlationId },
+        );
       },
     });
   }

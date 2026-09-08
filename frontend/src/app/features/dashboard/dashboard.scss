@@ -291,6 +291,14 @@
   margin: 0;
 }
 
+.dashboard__error-ref {
+  margin: var(--esic-space-2) 0 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-soft);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
 // -- Histogramme + tableau équivalent (EF-REP-008) : la barre ne porte jamais
 // seule l'information — la valeur en chiffres suit, et le tableau reprend les
 // mêmes nombres. Couleurs issues des jetons.
