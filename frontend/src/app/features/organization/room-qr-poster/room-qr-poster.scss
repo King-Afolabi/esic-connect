@@ -149,13 +149,23 @@
 /* --- Print --------------------------------------------------------- */
 
 @media print {
+  // Marges de page à zéro : sur les navigateurs Chromium, cela supprime
+  // les en-têtes / pieds de page générés par le navigateur (titre de
+  // l'onglet, URL, date, numéro de page) qui apparaissaient en bordure de
+  // l'affiche. Le contenu reprend sa propre respiration ci-dessous.
+  @page {
+    margin: 0;
+  }
+
   .no-print {
     display: none !important;
   }
 
+  // `@page` ne laisse plus de marge : on en rétablit une raisonnable sur
+  // le contenu lui-même pour que l'affiche ne soit pas collée au bord.
   .poster-page {
     max-width: none;
-    padding: 0;
+    padding: 12mm;
   }
 
   .poster {

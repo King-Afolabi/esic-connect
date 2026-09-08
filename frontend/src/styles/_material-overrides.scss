@@ -116,6 +116,23 @@
   max-width: min(420px, 92vw);
 }
 
+// Déclencheur « Profil » de l'en-tête : `mat-button` enferme son contenu
+// dans `.mdc-button__label`, si bien que le `gap` posé sur le bouton dans
+// `profile-menu.scss` n'agissait pas — l'avatar, le nom et le chevron se
+// touchaient. On rend le label lui-même flex, centré, avec l'espacement,
+// et on annule le décalage vertical résiduel du texte Material.
+.profile-menu__trigger.mat-mdc-button {
+  .mdc-button__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mat-mdc-button-touch-target {
+    height: 100%;
+  }
+}
+
 // -- Bandeau transitoire (snack-bar) — seule surcouche « dialogue » du
 //    produit : aucune fenêtre modale n'est ouverte ailleurs. Encre claire
 //    sur fond encré, arête d'accent, action « Fermer » lisible.

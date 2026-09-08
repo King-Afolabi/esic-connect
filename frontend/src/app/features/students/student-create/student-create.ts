@@ -68,6 +68,14 @@ export class StudentCreate {
   private readonly notifications = inject(NotificationService);
   private readonly fb = inject(NonNullableFormBuilder);
 
+  /**
+   * Préfixe suggéré du numéro étudiant : `ESIC-{année civile courante}-`.
+   * Ce n'est qu'un pré-remplissage éditable — l'unicité reste contrôlée
+   * côté serveur (`ENR_STUDENT_NUMBER_TAKEN`). La génération entièrement
+   * automatique de la séquence n'existe que dans l'import de masse.
+   */
+  protected readonly numberPrefix = signal(`ESIC-${new Date().getFullYear()}-`);
+
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<string | null>(null);
   /** Rappel de l'état après un échec partiel (compte ou profil déjà créé). */
@@ -84,7 +92,10 @@ export class StudentCreate {
     firstName: this.fb.control('', [Validators.required, Validators.maxLength(120)]),
     lastName: this.fb.control('', [Validators.required, Validators.maxLength(120)]),
     email: this.fb.control('', [Validators.required, Validators.email, Validators.maxLength(320)]),
-    studentNumber: this.fb.control('', [Validators.required, Validators.maxLength(50)]),
+    studentNumber: this.fb.control(`ESIC-${new Date().getFullYear()}-`, [
+      Validators.required,
+      Validators.maxLength(50),
+    ]),
     classGroupPublicId: this.fb.control('', [Validators.required]),
     birthDate: this.fb.control(''),
     workStudy: this.fb.control(false),

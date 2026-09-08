@@ -1,7 +1,11 @@
 .profile-menu__trigger {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  // L'espacement réel entre avatar / nom / chevron est posé sur
+  // `.mdc-button__label` dans `_material-overrides.scss` (le contenu d'un
+  // `mat-button` y est enfermé). On garde `gap` ici pour le cas où la
+  // structure Material changerait.
+  gap: 0.5rem;
   min-width: 0;
   // Hauteur maîtrisée : la cible tactile (44 px) est portée par le
   // padding, pas par une pilule démesurée. Centrage vertical strict de

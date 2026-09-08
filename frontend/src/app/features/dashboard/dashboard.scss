@@ -82,66 +82,12 @@
   color: var(--esic-ink);
 }
 
-// -- Bandeau d'indicateurs : un bloc bordé divisé par des filets, pas N cartes.
-// Chaque cellule d'assiduité porte le point de couleur de son statut ; la
-// couleur ne porte jamais seule l'information (docs/02 §32.5).
-.dashboard__metrics {
-  list-style: none;
-  margin: 0 0 var(--esic-space-5);
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  border: 1px solid var(--esic-line);
-  border-radius: var(--esic-radius-sm);
-  background: var(--esic-surface);
-  overflow: hidden;
-}
-
-.dashboard__metric {
-  flex: 1 1 8.5rem;
-  min-width: 0;
-  padding: var(--esic-space-4) var(--esic-space-5);
-  border-top: 3px solid transparent;
-  border-left: 1px solid var(--esic-line);
-
-  &:first-child {
-    border-left: 0;
-  }
-}
-
-.dashboard__metric-value {
-  display: block;
-  font-size: clamp(1.5rem, 1.3rem + 1vw, 1.875rem);
-  font-weight: 600;
-  line-height: 1.1;
-  color: var(--esic-ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.dashboard__metric-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: var(--esic-space-2);
-  font-size: 0.8125rem;
-  color: var(--esic-ink-soft);
-
-  &::before {
-    content: "";
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--_dot, transparent);
-  }
-}
-
-.dashboard__metric--present { --_dot: var(--esic-status-present-fg); border-top-color: var(--esic-status-present-fg); }
-.dashboard__metric--late    { --_dot: var(--esic-status-late-fg);    border-top-color: var(--esic-status-late-fg); }
-.dashboard__metric--absent  { --_dot: var(--esic-status-absent-fg);  border-top-color: var(--esic-status-absent-fg); }
-.dashboard__metric--excused { --_dot: var(--esic-status-excused-fg); border-top-color: var(--esic-status-excused-fg); }
-.dashboard__metric--pending { --_dot: var(--esic-warning);           border-top-color: var(--esic-warning); }
-.dashboard__metric--rate    { border-top-color: var(--esic-primary); }
+// Bandeau d'indicateurs : tous les rôles utilisent désormais la primitive
+// partagée `.esic-metric-grid` (grille compacte à 2 colonnes, filets
+// internes, tonalité de statut par `data-tone`) — voir `_primitives.scss`.
+// Un seul écart : dans le vis-à-vis « Mon activité | Mon périmètre » du
+// responsable, la grille ne porte pas sa marge basse (gérée par
+// `.dashboard__split`).
 
 // -- Grille de détail : une colonne en pile, DEUX colonnes dès que la colonne
 // de contenu est large (Lot §3 — « grille en deux colonnes » sur ordinateur,
@@ -154,6 +100,14 @@
   gap: var(--esic-space-4);
   grid-template-columns: 1fr;
   align-items: start;
+  margin-bottom: var(--esic-space-5);
+}
+
+// La primitive `.esic-metric-grid` n'a pas de marge propre : dans les
+// tableaux de bord apprenant / formateur / administration, le bandeau
+// d'indicateurs doit se détacher des cartes qui suivent. (Le vis-à-vis
+// du responsable la remet à 0 juste en dessous.)
+.dashboard__role > .esic-metric-grid {
   margin-bottom: var(--esic-space-5);
 }
 
@@ -170,7 +124,6 @@
   margin-bottom: var(--esic-space-5);
 }
 
-.dashboard__split .dashboard__metrics,
 .dashboard__split .esic-metric-grid {
   margin-bottom: 0;
   align-self: start;
@@ -323,56 +276,12 @@
   word-break: break-all;
 }
 
-// -- Histogramme + tableau équivalent (EF-REP-008) : la barre ne porte jamais
-// seule l'information — la valeur en chiffres suit, et le tableau reprend les
-// mêmes nombres. Couleurs issues des jetons.
-.dashboard__chart {
-  list-style: none;
-  margin: 0 0 var(--esic-space-5);
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--esic-space-3);
-}
-
-.dashboard__bar-row {
-  display: grid;
-  grid-template-columns: minmax(6rem, 12rem) 1fr minmax(4.5rem, auto);
-  align-items: center;
-  gap: var(--esic-space-3);
-}
-
-.dashboard__bar-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--esic-ink);
-  overflow-wrap: anywhere;
-}
-
-.dashboard__bar-track {
-  display: block;
-  height: 0.5rem;
-  border-radius: var(--esic-radius-pill);
-  background: var(--esic-surface-sunken);
-  overflow: hidden;
-}
-
-.dashboard__bar-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--esic-primary);
-}
-
-.dashboard__bar-value {
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--esic-ink);
-}
-
-// Table équivalente : classe `.esic-table` (styles de `_primitives`), dans une
-// enveloppe à défilement horizontal contenu pour tenir sur un téléphone.
+// -- Tableau « Taux d'assiduité par classe / par formation » (EF-REP-008)
+// Un seul visuel : une table à DEUX colonnes (libellé | taux). Le détail
+// en demi-journées tient sur la ligne de la colonne « Taux », en texte
+// discret. `table-layout: fixed` + aucune enveloppe à défilement : plus
+// aucune barre de défilement horizontale sur le tableau de bord, quel que
+// soit l'état du rail. Le détail complet reste dans Suivi d'assiduité.
 .dashboard__table {
   font-size: 0.875rem;
 
@@ -386,6 +295,53 @@
   }
 }
 
+.dashboard__rate-table {
+  width: 100%;
+  table-layout: fixed;
+
+  th[scope="col"]:first-child,
+  th[scope="row"] {
+    inline-size: 34%;
+    overflow-wrap: anywhere;
+  }
+
+  td {
+    // La cellule « Taux » empile la barre + le pourcentage, puis la
+    // ligne de détail.
+    white-space: normal;
+  }
+
+  .esic-rate-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esic-space-2);
+    min-width: 0;
+  }
+
+  .esic-rate-cell__track {
+    flex: 1 1 4rem;
+    min-width: 3rem;
+  }
+}
+
+.dashboard__bar-value {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--esic-ink);
+  flex-shrink: 0;
+}
+
+// Détail en demi-journées sous la barre de taux : information secondaire,
+// jamais un tableau large qui déborde.
+.dashboard__rate-meta {
+  display: block;
+  margin-top: var(--esic-space-1);
+  font-size: 0.75rem;
+  color: var(--esic-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 // -- Adaptatif : sous 640 px, l'identité et les indicateurs passent en pleine
 // largeur. Le filet gauche remplace le filet supérieur pour séparer les cellules
 // empilées (l'accent de statut, porté par `border-top`, reste visible).
@@ -397,16 +353,6 @@
 
   .dashboard__roles {
     justify-content: flex-start;
-  }
-
-  .dashboard__metric {
-    flex-basis: 100%;
-    border-left: 0;
-    border-bottom: 1px solid var(--esic-line);
-
-    &:last-child {
-      border-bottom: 0;
-    }
   }
 }
 

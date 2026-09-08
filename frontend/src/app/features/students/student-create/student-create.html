@@ -55,6 +55,11 @@
       <mat-form-field appearance="outline">
         <mat-label>Numéro étudiant</mat-label>
         <input matInput formControlName="studentNumber" maxlength="50" required autocomplete="off" />
+        <mat-hint>
+          Pré-rempli avec le préfixe de l'année ({{ numberPrefix() }}) : complétez avec le
+          numéro de séquence, ou saisissez un numéro complet. La génération entièrement
+          automatique n'existe que pour l'import de masse.
+        </mat-hint>
         @if (form.controls.studentNumber.touched && form.controls.studentNumber.hasError('required')) {
           <mat-error>Le numéro étudiant est obligatoire.</mat-error>
         }
