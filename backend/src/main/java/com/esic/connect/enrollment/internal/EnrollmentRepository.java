@@ -21,6 +21,11 @@ interface EnrollmentRepository
 
     List<Enrollment> findByStudentProfile_UserId(Long userId);
 
+    /** Décompte borné des inscriptions d'un compte (comparaison de doublons, ANO-USER-001). */
+    long countByStudentProfile_UserId(Long userId);
+
+    long countByStudentProfile_UserIdAndStatus(Long userId, EnrollmentStatus status);
+
     long countByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);
 
     List<Enrollment> findByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);

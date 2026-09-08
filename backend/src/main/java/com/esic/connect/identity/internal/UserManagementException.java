@@ -32,7 +32,9 @@ class UserManagementException extends RuntimeException {
         /** Valeur de filtre invalide (statut ou rôle). */
         INVALID_FILTER,
         /** Adresse électronique déjà utilisée par un compte (RG-001). */
-        EMAIL_ALREADY_USED
+        EMAIL_ALREADY_USED,
+        /** Comparaison de doublons demandée avec deux fois le même compte (ANO-USER-001). */
+        SAME_USER
     }
 
     private final Kind kind;

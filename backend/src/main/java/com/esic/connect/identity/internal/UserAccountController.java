@@ -37,15 +37,18 @@ class UserAccountController {
     private final UserManagementService userManagementService;
     private final AccountInvitationService invitationService;
     private final BulkUserService bulkUserService;
+    private final DuplicateComparisonService duplicateComparisonService;
     private final StepUpGuard stepUpGuard;
 
     UserAccountController(UserManagementService userManagementService,
                           AccountInvitationService invitationService,
                           BulkUserService bulkUserService,
+                          DuplicateComparisonService duplicateComparisonService,
                           StepUpGuard stepUpGuard) {
         this.userManagementService = userManagementService;
         this.invitationService = invitationService;
         this.bulkUserService = bulkUserService;
+        this.duplicateComparisonService = duplicateComparisonService;
         this.stepUpGuard = stepUpGuard;
     }
 
@@ -118,6 +121,30 @@ class UserAccountController {
     @PreAuthorize(ADMIN_ROLES)
     java.util.List<BulkUserWeb.DuplicateGroup> duplicates() {
         return bulkUserService.findDuplicates();
+    }
+
+    /**
+     * Comparaison contrôlée de deux comptes signalés comme doublons
+     * (ANO-USER-001 ; docs/02 §9.5).
+     *
+     * <p><strong>Lecture seule.</strong> Aucune fusion, aucune écriture,
+     * aucune trace d'audit, aucune notification : la réponse est une
+     * <em>simulation</em> — concordances, divergences, conflits bloquants,
+     * volume de données rattaché, et un verdict informatif
+     * ({@code POTENTIALLY_SAFE} / {@code MANUAL_REVIEW_REQUIRED} /
+     * {@code NOT_MERGEABLE}). Même périmètre de rôles que
+     * {@link #duplicates()} : {@code ADMIN} / {@code SUPER_ADMIN}.
+     *
+     * <p>{@code POST} plutôt que {@code GET} : deux identifiants dans le
+     * corps ne se retrouvent pas dans les journaux d'accès ni l'historique
+     * du navigateur. Deux identifiants identiques → {@code 400}
+     * {@code USER_COMPARE_SAME} ; identifiant inconnu → {@code 404}.
+     */
+    @PostMapping("/duplicates/compare")
+    @PreAuthorize(ADMIN_ROLES)
+    DuplicateComparisonWeb.ComparisonResponse compareDuplicates(
+            @Valid @RequestBody DuplicateComparisonWeb.CompareRequest request) {
+        return duplicateComparisonService.compare(request.firstUserId(), request.secondUserId());
     }
 
     @PostMapping("/{publicId}/suspend")

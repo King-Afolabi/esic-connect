@@ -80,6 +80,11 @@ class UserManagementExceptionHandler {
                 code = "USER_INVALID_SORT";
                 message = "Champ de tri non autorisé.";
             }
+            case SAME_USER -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "USER_COMPARE_SAME";
+                message = "La comparaison exige deux comptes différents.";
+            }
             default -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "USER_INVALID_FILTER";

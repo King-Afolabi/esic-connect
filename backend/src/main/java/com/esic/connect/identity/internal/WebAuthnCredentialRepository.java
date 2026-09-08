@@ -17,4 +17,6 @@ interface WebAuthnCredentialRepository extends JpaRepository<WebAuthnCredentialE
     Optional<WebAuthnCredentialEntity> findByPublicIdAndUserId(UUID publicId, Long userId);
 
     boolean existsByUserIdAndStatus(Long userId, WebAuthnCredentialStatus status);
+
+    long countByUserIdAndStatus(Long userId, WebAuthnCredentialStatus status);
 }

@@ -26,6 +26,9 @@ interface AttendanceJustificationRepository
 
     long countBySubmittedByIdAndStatus(Long submittedById, JustificationStatus status);
 
+    /** Justificatifs déposés par un compte (comparaison de doublons, ANO-USER-001). */
+    long countBySubmittedById(Long submittedById);
+
     /**
      * Justificatifs examinés sur une fenêtre (EF-REP-007 — volume et
      * délai de traitement). Seule la paire de dates est chargée : le

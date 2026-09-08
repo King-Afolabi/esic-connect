@@ -24,6 +24,9 @@ interface AccountInvitationRepository extends JpaRepository<AccountInvitation, L
 
     List<AccountInvitation> findByUserIdAndStatus(Long userId, AccountInvitationStatus status);
 
+    /** Nombre total d'invitations d'un compte (comparaison de doublons, ANO-USER-001). */
+    long countByUserId(Long userId);
+
     /**
      * Compte chargé dans la même requête : le suivi affiche l'adresse et
      * le nom du destinataire, une page de vingt invitations ne doit pas

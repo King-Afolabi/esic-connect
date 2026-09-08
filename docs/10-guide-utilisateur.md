@@ -61,6 +61,18 @@ portant le rôle `SUPER_ADMIN` ou attribuer / retirer ce rôle.
   compte, attribuer / retirer un rôle (avec motif obligatoire).
   L'archivage clôture tous les rôles actifs et est **irréversible** dans
   ce lot.
+- **Doublons détectés** (`/administration/duplicates`, `ADMIN` /
+  `SUPER_ADMIN`) : les comptes rapprochés par nom normalisé ou téléphone
+  sont listés. Cocher **exactement deux** comptes, puis « Comparer » :
+  une **comparaison côte à côte en lecture seule** s'ouvre — concordances,
+  différences, conflits bloquants, avertissements, volume de données
+  rattaché (inscriptions, présences, justificatifs, réclamations,
+  notifications, invitations, passkeys, appareils) et un **verdict
+  informatif** : « Fusion potentiellement sûre », « Revue manuelle
+  requise » ou « Fusion impossible ». **Aucune fusion n'est réalisée** :
+  ce parcours s'arrête à la simulation ; la résolution d'un doublon reste
+  une action humaine, exceptionnelle et doublement confirmée
+  (docs/02 §9.5). Le bouton « Fusionner » est présent mais **désactivé**.
 - Restrictions : auto-suspension / auto-archivage / retrait de son
   propre dernier rôle **interdits** (`USER_SELF_ACTION_FORBIDDEN`,
   `USER_LAST_ACTIVE_ROLE`).

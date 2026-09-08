@@ -9,6 +9,8 @@ import {
   BulkRequest,
   BulkResult,
   CreateUserRequest,
+  DuplicateCompareRequest,
+  DuplicateComparisonResponse,
   DuplicateGroup,
   PageResponse,
   UserDetailResponse,
@@ -134,6 +136,24 @@ export class AdministrationApiService {
    */
   listDuplicates(): Observable<DuplicateGroup[]> {
     return this.http.get<DuplicateGroup[]>(`${this.base}/users/duplicates`);
+  }
+
+  /**
+   * `POST /api/v1/users/duplicates/compare` — comparaison contrôlée
+   * **en lecture seule** de deux comptes signalés comme doublons
+   * (ANO-USER-001). Ne fusionne rien, ne modifie rien : renvoie
+   * concordances, divergences, conflits, volume de données rattaché et un
+   * verdict informatif. `POST` (et non `GET`) pour tenir les deux
+   * identifiants hors des journaux d'accès. Réservé à
+   * `ADMIN` / `SUPER_ADMIN` côté serveur.
+   */
+  compareDuplicates(
+    request: DuplicateCompareRequest,
+  ): Observable<DuplicateComparisonResponse> {
+    return this.http.post<DuplicateComparisonResponse>(
+      `${this.base}/users/duplicates/compare`,
+      request,
+    );
   }
 }
 

@@ -10,6 +10,126 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — ANO-USER-001 : comparaison de doublons en lecture seule + amélioration visuelle légère
+
+Branche `feat/demo-readiness-e2e-ui`. **Aucune migration** (schéma
+inchangé V34). Deux commits distincts.
+
+**Statut ANO-USER-001 : « Comparaison et simulation en lecture seule
+livrées localement ; fusion réelle non implémentée ; déploiement
+différé. »** Pas d'accès à la Raspberry Pi cette session — aucun
+déploiement, aucune recette de production.
+
+#### Partie A — parcours contrôlé de comparaison des doublons
+
+**Back-end (`identity`, aucun nouveau module ; port entrant vers 4
+modules) :**
+
+- Nouveau port **`identity.DuplicateDependencyContributor`** (SPI
+  *entrant* : `identity` le déclare, d'autres modules l'implémentent —
+  renverse la dépendance, `enrollment` / `attendance` / `claim` /
+  `notification` dépendent déjà d'`identity`, l'inverse créerait un
+  cycle). Contrat : **lecture seule stricte**, `countsFor(long)` +
+  `attributesFor(long)` (défaut vide), invoqué **deux fois par
+  comparaison** (une par compte) — coût borné (NFR-PERF-08).
+- Implémentations : `EnrollmentDuplicateContributor` (`studentProfile`,
+  `enrollments`, `activeEnrollments`, attribut `studentNumber`),
+  `AttendanceDuplicateContributor` (`attendanceRecords`,
+  `justifications`, `earlyDepartures`), `ClaimDuplicateContributor`
+  (`claims`), `NotificationDuplicateContributor` (`notifications`,
+  `pushSubscriptions`). `identity` ajoute ses propres décomptes
+  (`invitations`, `passkeys`, `trustedDevices`, `activeRoles`) et
+  l'indicateur `mfaConfigured`. Repositories : uniquement des méthodes
+  de **décompte dérivées** (`countBy…`).
+- Route **`POST /api/v1/users/duplicates/compare`** sur
+  `UserAccountController` (méthode ajoutée — le
+  `UserManagementExceptionHandler` existant la couvre), `@PreAuthorize`
+  **`hasAnyRole('ADMIN','SUPER_ADMIN')`** — même périmètre que
+  `GET .../duplicates` (`SCHOOL_ADMINISTRATION` : `403`). `POST` et non
+  `GET` : deux identifiants hors des journaux d'accès.
+- `DuplicateComparisonService` — `@Transactional(readOnly = true)` :
+  charge deux comptes par `public_id`, agrège les contributeurs, calcule
+  `matchingFields` / `differentFields` / `conflicts` / `warnings` /
+  `consequences` / `dependencySummary` et un **verdict informatif**
+  `POTENTIALLY_SAFE` | `MANUAL_REVIEW_REQUIRED` | `NOT_MERGEABLE`.
+  **Aucune fusion, aucune écriture, aucun événement, aucune outbox,
+  aucune notification, aucune trace d'audit, `updated_at` intact.**
+  Deux identifiants identiques → `400 USER_COMPARE_SAME` (nouveau
+  `Kind.SAME_USER`) ; identifiant inconnu → `404`.
+- **Règles d'évaluation.** `NOT_MERGEABLE` si : deux numéros étudiants
+  distincts et valides ; deux inscriptions actives (RG-022) ; ni nom
+  normalisé, ni téléphone, ni adresse concordants ; profil apprenant
+  vs intervenant pédagogique. Sinon `POTENTIALLY_SAFE` si identité
+  concordante (nom normalisé ou téléphone), aucun conflit, historique
+  porté par **un seul** compte et aucun avertissement *matériel* (une
+  adresse différente est attendue pour tout doublon — RG-001 — et ne
+  bloque pas seule). Sinon `MANUAL_REVIEW_REQUIRED`.
+- **Ne renvoie jamais** : hachage de mot de passe, secret MFA, code de
+  récupération, jeton d'invitation, structure de passkey. Adresse et
+  numéro étudiant présents car la route est réservée à
+  `ADMIN` / `SUPER_ADMIN`, qui les voient déjà sur la fiche du compte.
+
+**Front-end (`administration`) :**
+
+- `duplicate-list` : case à cocher par ligne, **sélection plafonnée à
+  deux** (une 3ᵉ case est désactivée à 2/2 et refusée si forcée),
+  compteur `0/2` / `1/2` / `2/2`, « Comparer » désactivé hors de deux,
+  entête de table figée **conservée** (`.esic-table-wrap--tall`).
+- Panneau de comparaison **en flux** (`.esic-reveal`, `role="group"` —
+  décision « aucune fenêtre modale » du dépôt) : verdict coloré + non
+  coloré seul (icône + libellé), raisons, deux colonnes `.esic-kv`
+  côte à côte, blocs Correspondances / Différences / Conflits /
+  Avertissements, tableau des données rattachées, conséquences.
+  États `loading` / `error` (+ réf. de corrélation) / `ready`, bouton
+  « Réessayer », « Fermer » qui **restaure le focus** sur « Comparer ».
+- Bouton **« Fusionner — disponible après validation du parcours »**
+  présent mais **`disabled`**, avec explication pour lecteur d'écran.
+- `administration.models.ts` / `administration-api.service.ts` :
+  `compareDuplicates()` + types alignés sur le contrat back-end, aucune
+  route inventée.
+
+**Hors périmètre de cette passe (documenté) :** affectations
+pédagogiques (`academic`) non encore remontées dans le résumé ;
+comparaison de plusieurs groupes ; **fusion réelle** (aucune route côté
+serveur, décision porteur — sélection + comparaison + simulation
+uniquement).
+
+#### Partie B — amélioration visuelle légère
+
+`src/styles/_tokens.scss` : neutres légèrement **réchauffés** (`--esic-paper`
+`#f4f6f8`→`#f7f7f4`, `--esic-surface` `#ffffff`→`#fffdfa`, `--esic-line`
+`#d9dee4`→`#e6e2da`, `--esic-surface-sunken` refroidi vers le chaud),
+nouveau `--esic-surface-raised: #ffffff`. Trois ombres sobres et
+**statiques** `--esic-shadow-sm` / `-md` / `-lg` (teintées froid `31 35 40`) ;
+`--esic-shadow-raise` / `-float` deviennent des alias (`sm` / `md`) — aucun
+appel existant réécrit. Applications : cartes du tableau de bord
+(`.dashboard__card.mat-mdc-card` → `sm`) ; action primaire Material
+(`.mat-mdc-unelevated-button` / `-raised-button:not(:disabled)` → `sm`),
+boutons texte / contour explicitement `none` ; `.esic-reveal`
+(confirmations, saisie contextuelle, **affiche QR de salle**) → `md` +
+fond `--esic-surface`. `styles.scss` `@media print` : `* { box-shadow:
+none !important }` — aucune ombre à l'impression. Aucune animation
+continue, aucun `blur()`, aucun `backdrop-filter`, aucun JS ; couleur
+métier des statuts inchangée.
+
+#### Tests exécutés (Mac, `set -a && source .env`)
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw -o test -Dtest=ModularityTests` | **1 / 0 échec** — 19 modules, aucun cycle |
+| `./mvnw -o test -Dtest=DuplicateComparisonIntegrationTests` | **15 / 0 échec** (autorisations, 400 même compte, 404 inconnu, correspondances / différences / conflits, résumé additionné, `POTENTIALLY_SAFE`, aucune entité modifiée, 0 `outbox_message` / `audit_event` / `notification`, aucun secret, coût SQL borné et stable) |
+| `./mvnw -o test -Dtest=BulkUserIntegrationTests,EnrollmentIntegrationTests,AttendanceIntegrationTests,ClaimIntegrationTests,NotificationIntegrationTests` | **93 / 0 échec** |
+| `./mvnw -o clean test-compile` | `BUILD SUCCESS` |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **104 fichiers / 870 tests / 0 échec** (+6 : `duplicate-list.spec.ts` réécrit — sélection 0/2–2/2, plafond, POST des deux UUID, rendu côté à côte, chargement / erreur + réessai, fermeture + focus, aucun bouton de fusion actif, `aria`) |
+| `cd frontend && npx ng build --configuration production` | **587,64 kB** initial, aucune alerte de budget (seuil 600 kB) |
+
+**`NOT_PERFORMED`** : suite back-end **complète** sur le commit de
+livraison (tranches ciblées vertes ; la suite intégrale sature la
+mémoire de ce Mac — cf. entrées antérieures) ; recette navigateur du
+parcours de comparaison ; audit accessibilité outillé ; **déploiement
+Pi + recette de production** (aucun accès Pi cette session).
+
 ### 8 septembre 2026 — tableau de bord : garde anti-course + réf. de corrélation (ANO-PERF-001/002, part front)
 
 Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, zéro migration.**

@@ -16,6 +16,9 @@ interface ClaimRepository extends JpaRepository<Claim, Long> {
     /** Réclamations déposées par un utilisateur (vue apprenant). */
     Page<Claim> findByAuthorUserId(Long authorUserId, Pageable pageable);
 
+    /** Décompte des réclamations déposées par un compte (comparaison de doublons, ANO-USER-001). */
+    long countByAuthorUserId(Long authorUserId);
+
     /** File d'un guichet (vue formateur / responsable / administration). */
     Page<Claim> findByAudience(ClaimAudience audience, Pageable pageable);
 
