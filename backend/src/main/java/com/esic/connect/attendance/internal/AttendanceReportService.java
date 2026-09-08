@@ -133,8 +133,9 @@ class AttendanceReportService {
     @Transactional(readOnly = true)
     List<AttendanceReports.ClassRow> classReport(Instant from, Instant to, String classGroupFilter, String sort) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
-        List<SessionRef> sessions = scopedSessions(from, to, classFilter);
-        Set<UUID> classes = scopedClasses(sessions, classFilter);
+        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        List<SessionRef> sessions = scopedSessions(from, to, classFilter, scope);
+        Set<UUID> classes = scopedClasses(sessions, classFilter, scope);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
         Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
@@ -167,8 +168,9 @@ class AttendanceReportService {
                                                      String studentProfileFilter, String sort) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
         UUID studentFilter = parseOptionalUuid(studentProfileFilter);
-        List<SessionRef> sessions = scopedSessions(from, to, classFilter);
-        Set<UUID> classes = scopedClasses(sessions, classFilter);
+        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        List<SessionRef> sessions = scopedSessions(from, to, classFilter, scope);
+        Set<UUID> classes = scopedClasses(sessions, classFilter, scope);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
         Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
@@ -198,8 +200,9 @@ class AttendanceReportService {
     @Transactional(readOnly = true)
     AttendanceReports.Summary summary(Instant from, Instant to, String classGroupFilter) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
-        List<SessionRef> sessions = scopedSessions(from, to, classFilter);
-        Set<UUID> classes = scopedClasses(sessions, classFilter);
+        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        List<SessionRef> sessions = scopedSessions(from, to, classFilter, scope);
+        Set<UUID> classes = scopedClasses(sessions, classFilter, scope);
         Map<String, AttendanceRecord> recordIndex = indexRecords(sessions);
 
         Map<UUID, List<RosterEntry>> rosterByClass = rosterByClass(classes);
@@ -441,10 +444,13 @@ class AttendanceReportService {
         Set<Long> recordIds = recordRepository.findByAttendanceCheckpointIdIn(checkpointIds).stream()
                 .map(AttendanceRecord::getId)
                 .collect(Collectors.toUnmodifiableSet());
-        return justificationRepository
-                .findByStatusInOrderBySubmittedAtAsc(List.of(JustificationStatus.PENDING)).stream()
-                .filter(j -> recordIds.contains(j.getAttendanceRecordId()))
-                .count();
+        if (recordIds.isEmpty()) {
+            return 0;
+        }
+        // Compte direct plutôt que « charger toute la file PENDING de la
+        // base puis filtrer en mémoire » (NFR-PERF-08).
+        return justificationRepository.countByStatusAndAttendanceRecordIdIn(
+                JustificationStatus.PENDING, recordIds);
     }
 
     /**
@@ -478,7 +484,17 @@ class AttendanceReportService {
     }
 
     private List<SessionRef> scopedSessions(Instant from, Instant to, UUID classFilter) {
-        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        return scopedSessions(from, to, classFilter, visibleClassPublicIds());
+    }
+
+    /**
+     * Variante qui reçoit le périmètre <strong>déjà résolu</strong> :
+     * un rapport résout {@link #visibleClassPublicIds()} une seule fois et
+     * le passe à {@code scopedSessions} puis {@code scopedClasses}, au lieu
+     * de le recalculer à chaque appel (NFR-PERF-08).
+     */
+    private List<SessionRef> scopedSessions(Instant from, Instant to, UUID classFilter,
+                                            Optional<Set<UUID>> scope) {
         boolean global = scope.isEmpty();
         Set<UUID> visible = scope.orElse(Set.of());
         if (classFilter != null && !global && !visible.contains(classFilter)) {
@@ -500,7 +516,10 @@ class AttendanceReportService {
     }
 
     private Set<UUID> scopedClasses(List<SessionRef> sessions, UUID classFilter) {
-        Optional<Set<UUID>> scope = visibleClassPublicIds();
+        return scopedClasses(sessions, classFilter, visibleClassPublicIds());
+    }
+
+    private Set<UUID> scopedClasses(List<SessionRef> sessions, UUID classFilter, Optional<Set<UUID>> scope) {
         boolean global = scope.isEmpty();
         Set<UUID> visible = scope.orElse(Set.of());
         LinkedHashSet<UUID> classes = new LinkedHashSet<>();

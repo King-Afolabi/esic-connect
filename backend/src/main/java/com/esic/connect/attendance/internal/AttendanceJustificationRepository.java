@@ -24,6 +24,15 @@ interface AttendanceJustificationRepository
     /** Décompte borné (bloc G1-F). */
     long countByStatus(JustificationStatus status);
 
+    /**
+     * Nombre de justificatifs d'un statut donné rattachés à l'un des
+     * enregistrements de présence indiqués — pour le compteur « en
+     * attente dans mon périmètre » du tableau de bord et de la synthèse,
+     * sans matérialiser toute la file des justificatifs {@code PENDING}
+     * de la base (NFR-PERF-08).
+     */
+    long countByStatusAndAttendanceRecordIdIn(JustificationStatus status, Collection<Long> attendanceRecordIds);
+
     long countBySubmittedByIdAndStatus(Long submittedById, JustificationStatus status);
 
     /** Justificatifs déposés par un compte (comparaison de doublons, ANO-USER-001). */
