@@ -10,6 +10,104 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 (nuit, 2) — tableaux de bord unifiés, top bar, affiche QR, courriel Brevo, purge du jeu de démo
+
+Branche `feat/demo-readiness-e2e-ui`. **Front-end + `.env` de la Pi +
+purge de la base de démo. Aucune migration** (schéma V34 inchangé).
+Déployé (front reconstruit, back-end recréé pour recharger `.env`,
+`mysql` / `redis` / `cloudflared` intacts, URL Quick Tunnel conservée).
+
+#### Front (commit `95d8425`)
+
+- **Tableaux de bord — tous les rôles alignés.** `apprenant`,
+  `formateur` et `administration` utilisent désormais la primitive
+  `.esic-metric-grid` (bandeau d'indicateurs compact à 2 colonnes)
+  comme le `responsable pédagogique`. La carte « Comparaison des
+  formations » de l'`administration` **perd son histogramme séparé** et,
+  comme « Taux d'assiduité par classe » du responsable, se **replie en
+  une seule table à 2 colonnes** (Libellé | Taux) : barre + pourcentage
+  + une ligne de détail discrète (½-j. suivies/attendues · abs · exc ·
+  ret) sur la ligne du taux. `table-layout: fixed`, **aucune enveloppe à
+  défilement** → plus de barre de défilement horizontale sur le tableau
+  de bord (constat utilisateur). Le détail complet reste dans Suivi
+  d'assiduité › Par classe. Tables toujours accessibles (`<caption>`,
+  `th[scope]`) — EF-REP-008. `dashboard.spec.ts` inchangé (les
+  assertions folded — `.esic-rate-cell__fill`, `.dashboard__bar-value`,
+  caption « Tableau équivalent », grille 6 cellules — passent toujours).
+- **Top bar — panneau Profil.** `mat-button` enferme son contenu dans
+  `.mdc-button__label` : le `gap` posé sur le bouton n'agissait pas,
+  l'icône et le nom se touchaient. Le label devient lui-même une rangée
+  `inline-flex` centrée avec `gap` (`_material-overrides.scss`). Vérifié
+  au navigateur : espace correct icône ↔ nom, alignement vertical net.
+- **Affiche QR de salle imprimable.** `@media print { @page { margin: 0 } }`
+  dans `room-qr-poster.scss` : sur Chromium, cela supprime les
+  en-têtes / pieds générés par le navigateur (titre d'onglet, URL, date,
+  numéro de page) qui apparaissaient en bordure de page ; le contenu
+  garde une marge de 12 mm.
+- **Création manuelle d'un apprenant.** Le champ « Numéro étudiant » est
+  **pré-rempli** avec le préfixe d'année `ESIC-{AAAA}-` et un `mat-hint`
+  précise qu'il est éditable et que la génération entièrement automatique
+  n'existe que pour l'import de masse. *Constat* : il n'y a pas
+  d'allocation automatique côté serveur pour la création unitaire — le
+  `StudentNumberAllocator` vit dans `studentimport.internal`, et
+  `studentimport` dépend déjà d'`enrollment` (l'inverse créerait un
+  cycle Spring Modulith). Une vraie auto-allocation exigerait de
+  déplacer l'allocateur + sa séquence dans `enrollment` et d'exposer un
+  port — signalé, non fait ici.
+- Tests : `npm run lint` vert · `npx ng test --watch=false`
+  **107 fichiers / 929 tests / 0 échec** · `ng build --configuration
+  production` **590 kio** initial, aucune alerte de budget.
+
+#### Courriel Brevo — cause trouvée et corrigée
+
+`APP_MAIL_FROM` sur la Pi valait **`abubacar.afo@gmail.com`**, pas
+l'adresse d'expédition validée dans Brevo (`abubacar@etudiant-esic.fr`).
+Brevo rejette ou fait disparaître silencieusement un `From` en
+`gmail.com` non authentifié SPF/DKIM → « les mails ne passent pas ».
+`.env` corrigé (`APP_MAIL_FROM=abubacar@etudiant-esic.fr`, sauvegarde
+`.env.bak.<epoch>`, une seule ligne changée), `up -d backend`. Vérifié :
+`printenv APP_MAIL_FROM` dans le conteneur = la bonne adresse ; un
+`POST /api/v1/users` de test réel produit `email_delivery` en
+`SENT_TO_PROVIDER` **sans erreur** (SMTP accepté par
+`smtp-relay.brevo.com`), aucun `550` dans les journaux. Le compte de
+test a été **archivé**. **Reste côté compte Brevo (hors dépôt)** :
+`abubacar@etudiant-esic.fr` doit être un **expéditeur validé** (ou le
+domaine authentifié) pour une remise réelle en boîte ; `SENT_TO_PROVIDER`
+/ `UNKNOWN` est le comportement attendu (docs/02 §11.3 — la remise au
+relais n'est pas une délivrance).
+
+#### Base de démo `esic_connect_demo` — purge du volume, socle conservé
+
+Choix porteur : vider le gros jeu, garder un socle présentable.
+**Sauvegarde préalable** `backups/<ts>/esic_connect_demo.sql.gz`
+(1,68 Mo, `gzip -t` OK, marqueur « Dump completed »). Puis
+`DROP DATABASE` / `CREATE DATABASE`, `up -d backend` →
+Flyway **applique V1→V34** sur la base vierge, `DemoDataInitializer`
+recrée les **6 comptes** de démo. Enfin `scripts/seed-demo.sh` (le
+**petit**, pas `seed-demo-full.py`) exécuté sur la Pi contre
+`localhost:8080` (second facteur franchi via `ESIC_DEMO_TOTP_SECRET`) :
+SITE-DEMO, PRG-DEMO, un niveau, une année, une promotion, C-DEMO,
+2 apprenants inscrits, 1 séance `PLANNED`.
+
+| | Avant | Après |
+|---|---:|---:|
+| comptes | 219 | 6 actifs |
+| profils apprenants | 195 | 2 |
+| séances | 489 | 1 |
+| émargements | 3025 | 0 |
+| classes | 10 | 1 |
+| formations | 6 | 1 |
+
+**`NOT_PERFORMED`** : la salle `MLK-101` (issue de `seed-demo-full.py`)
+n'est **pas** recréée — SITE-DEMO n'a ni bâtiment ni salle dans le petit
+seed ; pour démontrer l'affiche QR, ajouter un bâtiment + une salle à
+SITE-DEMO depuis l'écran Organisation puis émettre son QR. Recette
+visuelle authentifiée du tableau de bord **administration** (MFA au
+navigateur non franchie) et de l'affiche QR imprimée réelle. Le tableau
+de bord **responsable** a, lui, été vérifié au navigateur (métriques
+compactes, « Mon périmètre », aucun défilement horizontal, panneau
+Profil).
+
 ### 8 septembre 2026 (nuit) — ANO-PERF-001/002 corrigée : tableau de bord et synthèse d'assiduité, mesures avant/après sur la Pi
 
 Branche `feat/demo-readiness-e2e-ui`. **Back-end + tests + déploiement
