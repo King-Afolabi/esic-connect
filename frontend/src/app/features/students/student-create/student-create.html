@@ -52,20 +52,16 @@
         }
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Numéro étudiant (facultatif)</mat-label>
         <input
           matInput
           formControlName="studentNumber"
           maxlength="50"
           autocomplete="off"
-          placeholder="Laissez vide pour une génération automatique"
+          placeholder="Vide = généré (ESIC-AAAA-NNNNN)"
         />
-        <mat-hint>
-          Laissé vide, le numéro est généré au format normalisé
-          <strong>ESIC-AAAA-NNNNN</strong>. Ne le renseignez que pour reprendre un numéro
-          existant.
-        </mat-hint>
+        <mat-hint>Vide : généré automatiquement au format ESIC-AAAA-NNNNN.</mat-hint>
         @if (form.controls.studentNumber.hasError('server')) {
           <mat-error>{{ form.controls.studentNumber.getError('server') }}</mat-error>
         }
