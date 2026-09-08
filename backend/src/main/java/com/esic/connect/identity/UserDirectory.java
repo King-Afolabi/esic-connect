@@ -110,6 +110,16 @@ public interface UserDirectory {
      */
     java.util.List<NamedUserRef> searchByName(String query, String roleCode, int limit);
 
+    /**
+     * Comme {@link #searchByName}, mais inclut les comptes <strong>non
+     * activés</strong> (tout statut sauf {@code ARCHIVED}). Réservé à la
+     * liste d'administration des apprenants, qui doit retrouver par son
+     * nom un apprenant fraîchement importé ou créé, encore en attente
+     * d'activation. La recherche globale continue d'utiliser
+     * {@link #searchByName} (comptes actifs uniquement).
+     */
+    java.util.List<NamedUserRef> searchByNameIncludingInactive(String query, String roleCode, int limit);
+
     /** Compte trouvé par recherche : identité civile, jamais d'adresse. */
     record NamedUserRef(long internalId, UUID publicId, String firstName, String lastName) {
     }

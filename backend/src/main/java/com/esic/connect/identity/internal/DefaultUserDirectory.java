@@ -57,6 +57,23 @@ class DefaultUserDirectory implements UserDirectory {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<NamedUserRef> searchByNameIncludingInactive(String query, String roleCode, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        RoleCode role = parseRole(roleCode);
+        if (pattern == null || role == null) {
+            return java.util.List.of();
+        }
+        return userAccountRepository.searchByNameExcludingStatus(pattern, role, AccountStatus.ARCHIVED,
+                        org.springframework.data.domain.PageRequest.of(0,
+                                com.esic.connect.shared.SearchPattern.bound(limit)))
+                .stream()
+                .map(account -> new NamedUserRef(account.getId(), account.getPublicId(),
+                        account.getFirstName(), account.getLastName()))
+                .toList();
+    }
+
     /** Code de rôle inconnu : aucun résultat, jamais une exception. */
     private static RoleCode parseRole(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {

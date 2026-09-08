@@ -114,13 +114,21 @@ class StudentProfileService {
 
         changePublisher.publish(EnrollmentResourceType.STUDENT_PROFILE, saved.getPublicId(),
                 EnrollmentChangeAction.CREATED, actorId, null);
-        return StudentProfileResponse.from(saved, target.publicId());
+        UserDirectory.PersonName name = userDirectory.findName(target.internalId()).orElse(null);
+        return StudentProfileResponse.from(saved, target.publicId(),
+                name == null ? null : name.firstName(),
+                name == null ? null : name.lastName());
     }
 
     @Transactional(readOnly = true)
     StudentProfileResponse get(UUID publicId) {
         StudentProfile profile = require(publicId);
-        return StudentProfileResponse.from(profile, resolveUserPublicId(profile.getUserId()));
+        UserDirectory.NamedUserRef ref = userDirectory.findNamedRefs(List.of(profile.getUserId()))
+                .get(profile.getUserId());
+        if (ref == null) {
+            return StudentProfileResponse.from(profile, resolveUserPublicId(profile.getUserId()));
+        }
+        return StudentProfileResponse.from(profile, ref.publicId(), ref.firstName(), ref.lastName());
     }
 
     @Transactional(readOnly = true)
@@ -134,7 +142,10 @@ class StudentProfileService {
         // filtre porte sur `student_number LIKE … OR user_id IN (…)`.
         // L'adresse électronique reste exclue (énumération, RG-001).
         EnrollmentQuerySupport.normalizeText(q).ifPresent(text -> {
-            List<Long> nameHits = userDirectory.searchByName(text, STUDENT_ROLE, 200).stream()
+            // Inclut les apprenants encore en attente d'activation :
+            // l'administration doit retrouver par le nom un apprenant
+            // fraîchement importé ou créé.
+            List<Long> nameHits = userDirectory.searchByNameIncludingInactive(text, STUDENT_ROLE, 200).stream()
                     .map(UserDirectory.NamedUserRef::internalId)
                     .toList();
             specs.add(EnrollmentSpecifications.profileMatchesNumberOrUsers(text, nameHits));

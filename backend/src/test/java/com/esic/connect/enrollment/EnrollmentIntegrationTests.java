@@ -298,6 +298,20 @@ class EnrollmentIntegrationTests {
                 + number.substring(number.length() - 6), admin);
         assertThat((List<Map<String, Object>>) byNumber.get("content"))
                 .anySatisfy(r -> assertThat(r.get("lastName")).isEqualTo(unique));
+
+        // Un apprenant encore EN ATTENTE D'ACTIVATION est aussi trouvé par
+        // son nom (la recherche globale, elle, ne verrait que les actifs).
+        String pendingLast = "Pendingsearch" + shortCode().substring(0, 6);
+        String pendingUser = accountWithName("Noé", pendingLast,
+                AccountStatus.PENDING_ACTIVATION, RoleCode.STUDENT).publicId();
+        created("/api/v1/student-profiles", Map.of("userPublicId", pendingUser), admin);
+        Map<String, Object> pendingHit = getMap("/api/v1/student-profiles?q=" + pendingLast, admin);
+        assertThat((List<Map<String, Object>>) pendingHit.get("content"))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.get("lastName")).isEqualTo(pendingLast);
+                    assertThat((String) r.get("studentNumber")).matches("ESIC-\\d{4}-\\d{5}");
+                });
     }
 
     // ------------------------------------------------------------------
@@ -395,8 +409,13 @@ class EnrollmentIntegrationTests {
     }
 
     private Account accountWithName(String firstName, String lastName, RoleCode... roles) {
+        return accountWithName(firstName, lastName, AccountStatus.ACTIVE, roles);
+    }
+
+    private Account accountWithName(String firstName, String lastName, AccountStatus status,
+                                   RoleCode... roles) {
         UserAccount account = new UserAccount("enr-" + UUID.randomUUID() + "@esic-connect.test",
-                firstName, lastName, AccountStatus.ACTIVE);
+                firstName, lastName, status);
         account.setPasswordHash(passwordEncoder.encode(PASSWORD));
         account = userAccountRepository.saveAndFlush(account);
         for (RoleCode roleCode : roles) {

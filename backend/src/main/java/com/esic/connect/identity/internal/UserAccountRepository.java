@@ -62,4 +62,24 @@ public interface UserAccountRepository
                                    @Param("roleCode") RoleCode roleCode,
                                    @Param("status") AccountStatus status,
                                    org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Comme {@link #searchByName}, mais retient tout compte <strong>non
+     * archivé</strong> (activé ou non). La liste des apprenants (réservée
+     * à l'administration) doit retrouver par le nom un apprenant tout
+     * juste créé, encore en attente d'activation — la recherche globale,
+     * elle, reste limitée aux comptes actifs.
+     */
+    @Query("""
+            SELECT DISTINCT u FROM UserRole ur JOIN ur.user u JOIN ur.role r
+            WHERE r.code = :roleCode
+              AND ur.active = true
+              AND u.status <> :excludedStatus
+              AND (LOWER(u.lastName) LIKE :pattern OR LOWER(u.firstName) LIKE :pattern)
+            ORDER BY u.lastName ASC, u.firstName ASC
+            """)
+    List<UserAccount> searchByNameExcludingStatus(@Param("pattern") String pattern,
+                                                  @Param("roleCode") RoleCode roleCode,
+                                                  @Param("excludedStatus") AccountStatus excludedStatus,
+                                                  org.springframework.data.domain.Pageable pageable);
 }
