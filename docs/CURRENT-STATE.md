@@ -10,6 +10,112 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — passe UX : départ anticipé, fiche apprenant, profil, tableau de bord responsable, synthèse, tables compactes
+
+Branche `feat/demo-readiness-e2e-ui`. **Frontend + documentation
+uniquement — zéro ligne de back-end, zéro migration** (schéma inchangé
+V34, aucun `.java` touché). Registre d'anomalies :
+`docs/anomalies/2026-09-08-ux-passe-2.md` (ANO-UX-006/007/008).
+
+#### Livré (`FIXED_LOCAL`)
+
+- **A — Départ anticipé (apprenant), chevauchement hint / label.**
+  `/my-attendance/early-departures`, carte « Signaler un départ ». Cause
+  réelle : `<form>` nu sans rythme vertical **+** `.att__field
+  { display: block }` qui écrasait la mise en page interne du
+  `mat-form-field` (`inline-flex`) et supprimait la hauteur réservée du
+  `.mat-mdc-form-field-subscript-wrapper` — le `mat-hint` du 1ᵉʳ champ
+  chevauchait le `mat-label` de « Heure de départ ». Défaut **local**,
+  `subscriptSizing` par défaut correct. Correctif : formulaire sur la
+  primitive `.esic-form`, action dans `.esic-form__actions`, `.att__field`
+  supprimée (usage unique). Aucun `overflow: hidden`, aucun positionnement
+  absolu, aucune retouche globale, aucune modification métier.
+- **B — Fiche apprenant : « Scolarité actuelle ».**
+  `/students/:publicId`. Nouveau bloc (carte `.esic-kv`) **dérivé de
+  l'historique déjà chargé** (`GET /api/v1/enrollments?student=…&sort=
+  startDate,desc`) — l'inscription `ACTIVE`, à défaut la plus récente.
+  Affiche Formation / Classe active / Année scolaire / Statut
+  d'inscription / Depuis le, en **libellés / codes humains** (jamais
+  d'UUID). **Aucun appel supplémentaire, aucun N+1, aucun changement
+  back-end** : le contrat `EnrollmentResponse` porte déjà `classGroupCode`
+  / `programCode` / `academicYearCode`. Niveau, promotion et rythme
+  d'alternance **ne sont pas exposés** par ce contrat → non affichés
+  plutôt qu'inventés (mention explicite à l'écran). Historique inchangé
+  (RG-006, EF-ENR-003). Gardes de rôle inchangées (contrôle Spring
+  Security côté serveur).
+- **C — Profil dans la barre haute.** Déclencheur `app-profile-menu`
+  resserré : hauteur maîtrisée (`2.25rem` + padding, cible tactile
+  conservée), avatar / nom court / chevron centrés (`line-height: 1`,
+  chevron dimensionné). Le panneau `mat-menu` passe de ~280 px à
+  **≈ 420 px** (`.mat-mdc-menu-panel.profile-menu__panel` dans
+  `_material-overrides.scss`, borné `min(420px, 92vw)`) et est
+  **hiérarchisé** : en-tête identité (avatar + rôle principal + adresse
+  sur une ligne + contexte), filet, section « Rôles » en badges, puis le
+  lien « Sécurité du compte » (entrée de menu focusable, inchangé).
+  Aucune donnée sensible, aucun appel réseau, déconnexion non dupliquée.
+  `mat-menu` fournit clavier / Échap / clic extérieur / piège de focus.
+- **D — Tableau de bord responsable, compaction.** « Mon activité » :
+  la longue ligne de 6 tuiles `.dashboard__metrics` + carte « Comptes non
+  activés » séparée deviennent **une carte compacte à grille de 2
+  colonnes** (nouvelle primitive `.esic-metric-grid` / `.esic-metric`,
+  `[data-tone]` = filet supérieur coloré, jamais seul). Elle reste
+  **à côté** de « Mon périmètre » sur desktop (`.dashboard__split`
+  inchangé), en pile sur tablette/mobile. « Mon périmètre » : la liste
+  complète des codes de classes est remplacée par un **aperçu borné**
+  (3 codes + « +N autres ») et un bouton **« Voir les classes »** vers
+  `/academic/class-groups` (liste existante, filtrée au périmètre côté
+  serveur). Aucune donnée back-end nouvelle.
+- **E — Suivi d'assiduité › Synthèse.** `.att__cards` (8 `mat-card`)
+  → **`.esic-metric-grid`** (mêmes 8 valeurs, 2 colonnes, libellés
+  courts, valeurs non coupées). `MatCardModule` retiré de
+  `attendance-summary.ts` (inutilisé).
+- **F — Fusion graphique / tableau « Taux d'assiduité par classe »
+  (responsable).** L'histogramme `.dashboard__chart` séparé est supprimé
+  du bloc responsable ; la barre (`.esic-rate-cell`, piste `aria-hidden`)
+  + le pourcentage `.dashboard__bar-value` passent dans la colonne
+  « Taux » du **tableau enrichi** unique (`table.dashboard__table`, qui
+  reste la source accessible, `<caption>` conservée). Le graphe
+  **administration** (`programRates`) est inchangé (hors mandat).
+  Calcul métier inchangé.
+- **G — Tables compactes (ANO-UX-008).** Nouvelle variante de primitive
+  **`.esic-table-wrap--compact`** (`_primitives.scss`) : mécanique de
+  `--tall` (entête `sticky`, défilement interne, `overscroll-behavior:
+  contain`) + plafond ~6-7 lignes (`--esic-table-max-h: clamp(15rem,
+  42vh, 24rem)`, surchargeable inline). Paginator **hors** de l'enveloppe,
+  toujours visible. Aucun `wheel` JS, clavier intact, scroll horizontal
+  mobile conservé, petites tables à hauteur naturelle. Appliquée à :
+  fiche apprenant (historique + suivi à distance), « Mes signalements »
+  de départ anticipé, tableau fusionné du dashboard. `attendance-report`
+  garde `--tall` (rapports longs).
+
+#### Chiffres d'assiduité (D.3)
+
+`ANO-UX-007` — **non maquillé, non corrigé ici**. Le taux `0 %` /
+dénominateur gonflé est un défaut **backend / calcul métier** déjà
+consigné (`ANO-PERF-001/002`, `CURRENT-STATE` des 6-7 sept.,
+`DashboardCardsService` — demi-journées « attendues » comptées sur les
+jours d'alternance `SCHOOL` sans séance). La refonte visuelle affiche les
+valeurs telles que l'API les renvoie. Correction backend = `DECLARED`
+(exige `EXPLAIN ANALYZE` sur la Pi + cycle build/deploy).
+
+#### Tests exécutés (Mac)
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **107 fichiers / 929 tests / 0 échec** (+7 : `dashboard.spec` +1, `attendance-management.spec` +0 assertions étendues, `my-early-departures.spec` +2, `profile-menu.spec` +2, `student-profile.spec` +2) |
+| `cd frontend && npx ng build --configuration production` | **589,90 kio** initial (137,63 kio transféré), `styles.css` 93,80 kio ; **aucune alerte de budget** (seuil 600) |
+| `frontend/node_modules/.bin/tsc -p tsconfig.json --noEmit` | typecheck Playwright — **0 erreur** |
+
+**`NOT_PERFORMED`** : suite back-end (0 `.java` touché) ; recette
+navigateur Playwright (pile de démonstration non démarrée cette session) ;
+audit accessibilité outillé (axe) des écrans refondus ; **revue visuelle
+pilotée** desktop / tablette / mobile / zoom 200 % (jsdom ne met pas en
+page — rendu `sticky`, chevauchement réel, largeur du panneau profil non
+vérifiés au navigateur) ; **déploiement Pi** (porteur hors LAN — à faire
+au retour à la maison, avec `npm run build` frontend seul, aucune
+migration).
+
 ### 8 septembre 2026 — scan QR dans l'application + fondations NFC de salle
 
 Branche `feat/demo-readiness-e2e-ui`. **Frontend + documentation
