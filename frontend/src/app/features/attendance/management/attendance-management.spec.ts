@@ -180,6 +180,40 @@ describe('AttendanceReport', () => {
     http.verify();
   });
 
+  it('bounds the long table height and pins its header (ANO-UX-002)', () => {
+    const { fixture, http } = setupReport('sessions');
+    http.expectOne((r) => r.url === SESSIONS_URL).flush({
+      content: [
+        {
+          sessionPublicId: 's-1',
+          sessionTitle: 'Atelier',
+          startsAt: '2026-09-10T08:00:00Z',
+          endsAt: '2026-09-10T12:00:00Z',
+          classCodes: 'C1',
+          teacherName: 'A. Martin',
+          checkpointCount: 1,
+          expectedCount: 2,
+          presentCount: 1,
+          lateCount: 0,
+          absentCount: 1,
+          excusedCount: 0,
+          attendanceRate: 0.5,
+        },
+      ],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.att__table-wrapper.esic-table-wrap--tall')).not.toBeNull();
+    expect(el.querySelector('.mat-mdc-table-sticky, tr.mat-mdc-header-row')).not.toBeNull();
+    // La pagination reste HORS de l'enveloppe défilante (toujours visible).
+    expect(el.querySelector('.att__table-wrapper .att__pager')).toBeNull();
+    http.verify();
+  });
+
   it('exportAs requests a blob and triggers a programmatic download (no navigation URL)', () => {
     const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);

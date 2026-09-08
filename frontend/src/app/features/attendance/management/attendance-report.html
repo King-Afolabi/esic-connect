@@ -60,7 +60,7 @@
     @if (rows().length === 0) {
       <p class="att__status" role="status">Aucune donnée pour ces filtres.</p>
     } @else {
-      <div class="att__table-wrapper">
+      <div class="att__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="rows()">
           <ng-container matColumnDef="label">
             <th mat-header-cell *matHeaderCellDef>{{ kind === 'sessions' ? 'Séance' : kind === 'classes' ? 'Classe' : 'Apprenant' }}</th>
@@ -110,7 +110,7 @@
             <th mat-header-cell *matHeaderCellDef>Taux présence</th>
             <td mat-cell *matCellDef="let r">{{ percent(kind === 'sessions' ? r.attendanceRate : r.totals.attendanceRate) }}</td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns()"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns(); sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns()"></tr>
         </table>
       </div>

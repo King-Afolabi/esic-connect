@@ -65,23 +65,25 @@ restent librement défilables ; la pagination reste **hors** de
 l'enveloppe. Opt-in explicite : une petite table (hauteur naturelle sous
 le plafond) n'est jamais enfermée.
 
-**Écrans traités (9)** : Séances (`session-list`), Apprenants
+**Écrans traités (10)** : Séances (`session-list`), Apprenants
 (`student-list`), Comptes (`user-list`), Réclamations (`claim-list`),
 Invitations (2 tables), Justificatifs (`justification-queue`), Mes
 présences (`my-attendance-list`), **Audit** (`audit-trail`, natif),
-**Doublons** (`duplicate-list`, natif).
-
-**Reste `DECLARED`** : `attendance-report` (rapports de la coquille Suivi
-d'assiduité) — même patch d'une ligne, non appliqué faute de vérification
-visuelle par point de rupture dans cette passe.
+**Doublons** (`duplicate-list`, natif), **Rapports d'assiduité**
+(`attendance-report` — coquille Suivi d'assiduité ; ajouté le 8 sept.,
+`att__table-wrapper esic-table-wrap--tall` + `matHeaderRowDef sticky`,
+pager hors enveloppe). ANO-UX-002 n'a plus de reliquat.
 
 **Tests** : `session-list.spec.ts` +1 (famille `mat-table` : enveloppe
 `--tall`, entête `sticky`, paginator hors enveloppe), `audit-trail.spec.ts`
-+1 (famille native) ; `npm run lint` vert ; `npx ng test --watch=false`
-**104 fichiers / 859 tests / 0 échec** ; `ng build --configuration production`
++1 (famille native), `attendance-management.spec.ts` +1
+(`AttendanceReport` : enveloppe `--tall`, entête `sticky`, pager hors
+enveloppe) ; `npm run lint` vert ; `npx ng test --watch=false`
+**104 fichiers / 860 tests / 0 échec** ; `ng build --configuration production`
 **582,62 kB** initial, aucune alerte de budget. `NOT_PERFORMED` : rendu
 `sticky` réel au défilement (jsdom ne met pas en page) — vérification
-navigateur manuelle à faire ; recette Playwright.
+navigateur manuelle à faire ; recette Playwright ; **déploiement Pi**
+(porteur hors LAN cette session).
 
 ### 7 septembre 2026 (6) — mandat performance/UX : diagnostic + corrections front-end isolées
 
