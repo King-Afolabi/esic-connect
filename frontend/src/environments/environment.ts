@@ -13,6 +13,18 @@ export const environment = {
   production: true,
   apiBaseUrl: '/api',
   /**
+   * Origine publique de l'application, pour construire l'URL absolue d'un
+   * QR fixe / tag NFC de salle (`<origine>/attendance?ref=<opaque>`).
+   *
+   * Vide par défaut : l'application utilise alors sa **propre origine**
+   * (`window.location.origin`), de confiance puisque c'est celle d'où
+   * elle est servie. Renseigner une URL absolue (`https://…`, sans `/`
+   * final) uniquement si l'origine publique canonique diffère de celle du
+   * navigateur (ex. tunnel). Jamais une origine reçue d'un en-tête ou
+   * d'un paramètre client.
+   */
+  publicBaseUrl: '',
+  /**
    * Expiration glissante de session côté client (Lot A).
    *
    * Le jeton d'accès vit `JWT_ACCESS_TOKEN_TTL_SECONDS` secondes (900 par

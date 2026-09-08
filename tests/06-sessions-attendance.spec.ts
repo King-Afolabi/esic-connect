@@ -9,12 +9,11 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
  * DOMAINE 3 — Séances exceptionnelles et émargement intelligent.
  *
  * C'est le cœur du « parcours prioritaire » de CLAUDE.md
- * (Ouverture par le formateur → Émargement → Rapport), dans les limites
- * réellement livrées : pas de scan caméra (le champ "Code court" est le
- * seul canal, cf. le texte d'aide affiché sur `/attendance` lui-même :
- * « Le scan caméra sera ajouté dans une tranche ultérieure »), pas de QR
- * fixe de salle, pas de 4 points de contrôle nommés (un seul point START
- * auto-ouvert avec la séance).
+ * (Ouverture par le formateur → Émargement → Rapport). Ce fichier exerce
+ * le canal **code court** ; le **scan caméra** (livré depuis le
+ * 8 septembre 2026) a son propre fichier `tests/16-qr-scanner.spec.ts`
+ * (caméra simulée). Pas de 4 points de contrôle nommés ici (un seul
+ * point START auto-ouvert avec la séance).
  *
  * Les tests sont **sérialisés** : ils font progresser une séance créée
  * pour l'occasion (PLANNED → OPEN → CLOSED), un état non réversible.

@@ -5,11 +5,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormGroup } from '@angular/forms';
 import { provideRouter } from '@angular/router';
 
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+
 import { Role } from '../../core/models/role';
 import { RoleContextService } from '../../core/auth/role-context.service';
 import { AttendanceCheckIn } from './attendance-check-in';
 
 const URL = '/api/v1/attendance/validate';
+const ROOM_URL = '/api/v1/attendance/room-qr';
 
 interface CheckInInternals {
   form: FormGroup;
@@ -17,9 +20,13 @@ interface CheckInInternals {
   submit: () => void;
   submitRoomQr: () => void;
   reset: () => void;
+  onScanned: (raw: string) => void;
+  openScanner: () => void;
+  scannerOpen: () => boolean;
+  prefilledFromLink: () => boolean;
 }
 
-function setup(roles: Role[] = ['STUDENT']) {
+function setup(roles: Role[] = ['STUDENT'], queryParams: Record<string, string> = {}) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
@@ -30,6 +37,10 @@ function setup(roles: Role[] = ['STUDENT']) {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: RoleContextService, useValue: { effectiveRoles } },
+      {
+        provide: ActivatedRoute,
+        useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
+      },
     ],
   });
   const fixture = TestBed.createComponent(AttendanceCheckIn);
@@ -277,6 +288,77 @@ describe('AttendanceCheckIn', () => {
     fixture.detectChanges();
 
     expect(text()).toContain('réseau de l');
+  });
+
+  // -------------------------------------------------------------------
+  // Scan caméra (EF-ATT-001/002/009/010) — dispatch local, autorité serveur
+  // -------------------------------------------------------------------
+
+  it('ne monte jamais le scanner avant un clic explicite', () => {
+    ({ fixture, http, internals } = setup());
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-qr-scanner')).toBeNull();
+    expect(internals.scannerOpen()).toBe(false);
+  });
+
+  it('monte le scanner sur clic « Scanner un QR code »', () => {
+    // La création du scanner déclenche getUserMedia : on le neutralise.
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: () => new Promise(() => undefined) },
+    });
+    ({ fixture, http, internals } = setup());
+    const btn = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find((b) =>
+      (b.textContent ?? '').includes('Scanner un QR code'),
+    ) as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-qr-scanner')).not.toBeNull();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+  });
+
+  it('un QR à jeton opaque nu est envoyé à /attendance/validate dans le champ token', () => {
+    ({ fixture, http, internals } = setup());
+    internals.onScanned('q1w2e3r4t5y6u7i8o9p0AsDfGhJkLzXcVbNm-_QwErTy');
+    const req = http.expectOne(URL);
+    expect(req.request.body).toEqual({ token: 'q1w2e3r4t5y6u7i8o9p0AsDfGhJkLzXcVbNm-_QwErTy' });
+    req.flush(RECORD);
+    fixture.detectChanges();
+    expect(text()).toContain('Présence enregistrée');
+  });
+
+  it('une URL interne /attendance?ref= est envoyée à /attendance/room-qr', () => {
+    ({ fixture, http, internals } = setup());
+    const ref = 'q1w2e3r4t5y6u7i8o9p0AsDfGhJkLzXcVbNm-_QwErTy';
+    internals.onScanned(`${window.location.origin}/attendance?ref=${ref}`);
+    const req = http.expectOne(ROOM_URL);
+    expect(req.request.body).toEqual({ roomReference: ref });
+    req.flush({ ...RECORD, source: 'ROOM_STATIC_QR' });
+  });
+
+  it('un QR externe / inconnu est refusé sans aucun appel réseau', () => {
+    ({ fixture, http, internals } = setup());
+    internals.onScanned('https://evil.example/attendance?ref=q1w2e3r4t5y6u7i8o9p0AsDfGhJkLz');
+    http.expectNone(URL);
+    http.expectNone(ROOM_URL);
+    fixture.detectChanges();
+    expect(text()).toContain("n'est pas un code d'émargement ESIC Connect");
+  });
+
+  it('ignore un scan hors du contexte STUDENT', () => {
+    ({ fixture, http, internals } = setup(['TEACHER']));
+    internals.onScanned('q1w2e3r4t5y6u7i8o9p0AsDfGhJkLzXcVbNm-_QwErTy');
+    http.expectNone(URL);
+    http.expectNone(ROOM_URL);
+  });
+
+  it('pré-remplit le champ « QR de salle » depuis un lien profond ?ref= sans rien envoyer', () => {
+    const ref = 'q1w2e3r4t5y6u7i8o9p0AsDfGhJkLzXcVbNm-_QwErTy';
+    ({ fixture, http, internals } = setup(['STUDENT'], { ref }));
+    fixture.detectChanges();
+    expect(internals.prefilledFromLink()).toBe(true);
+    expect(internals.roomForm.getRawValue().roomReference).toBe(ref);
+    http.expectNone(ROOM_URL);
+    expect(text()).toContain("rien n'est envoyé");
   });
 });
 

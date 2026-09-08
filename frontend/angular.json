@@ -28,7 +28,8 @@
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "allowedCommonJsDependencies": [
-              "qrcode"
+              "qrcode",
+              "jsqr"
             ],
             "assets": [
               {

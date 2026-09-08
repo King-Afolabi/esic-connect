@@ -1,0 +1,56 @@
+<section class="qr-scanner" role="region" aria-labelledby="qr-scanner-heading">
+  <div class="qr-scanner__bar">
+    <h2 id="qr-scanner-heading" tabindex="-1" #heading>Scanner un QR code</h2>
+    <button
+      mat-icon-button
+      type="button"
+      class="qr-scanner__close"
+      aria-label="Fermer le scanner"
+      (click)="close()"
+    >
+      <mat-icon aria-hidden="true">close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Zone d'annonce pour les technologies d'assistance. -->
+  <p class="qr-scanner__sr" aria-live="polite">{{ liveMessage() }}</p>
+
+  <div class="qr-scanner__viewport">
+    <!-- Vidéo décorative : l'information utile passe par `aria-live`. -->
+    <video #video class="qr-scanner__video" aria-hidden="true" muted playsinline></video>
+
+    @if (state() === 'scanning') {
+      <div class="qr-scanner__frame" aria-hidden="true">
+        <span class="qr-scanner__corner qr-scanner__corner--tl"></span>
+        <span class="qr-scanner__corner qr-scanner__corner--tr"></span>
+        <span class="qr-scanner__corner qr-scanner__corner--bl"></span>
+        <span class="qr-scanner__corner qr-scanner__corner--br"></span>
+        <span class="qr-scanner__scanline"></span>
+      </div>
+    }
+
+    @if (state() === 'starting') {
+      <p class="qr-scanner__overlay" role="status">Activation de la caméra…</p>
+    } @else if (state() === 'decoded') {
+      <p class="qr-scanner__overlay" role="status">Code détecté, vérification en cours…</p>
+    } @else if (state() === 'error') {
+      <p class="qr-scanner__overlay qr-scanner__overlay--error" role="alert">{{ errorText() }}</p>
+    }
+  </div>
+
+  @if (state() === 'scanning') {
+    <p class="qr-scanner__hint">
+      Placez dans le cadre le QR affiché par votre formateur ou l'écriteau de la salle.
+    </p>
+  }
+
+  <div class="qr-scanner__actions">
+    @if (state() === 'error') {
+      <button mat-flat-button type="button" (click)="retry()">Réessayer</button>
+    }
+    <button mat-stroked-button type="button" (click)="useShortCode()">
+      Saisir un code court à la place
+    </button>
+    <button mat-button type="button" (click)="close()">Fermer</button>
+  </div>
+</section>

@@ -69,6 +69,14 @@ const KNOWN_CODES = new Set<string>([
   'ATT_ALREADY_RECORDED',
   'ATT_TOKEN_BACKEND_UNAVAILABLE',
   'ATT_OPERATION_FORBIDDEN',
+  // QR fixe de salle (EF-ATT-010 / EF-ATT-008) et suivi à distance
+  // (EF-ENR-004) : messages serveur français sûrs, à faire remonter tels
+  // quels à l'apprenant qui vient de scanner.
+  'ATT_ROOM_QR_UNKNOWN',
+  'ATT_ROOM_QR_OUT_OF_NETWORK',
+  'ATT_ROOM_QR_SESSION_STARTED',
+  'ATT_ROOM_QR_NO_SESSION',
+  'ATT_REMOTE_NOT_AUTHORIZED',
   // V10 — points de contrôle, présence manuelle, correction, justificatifs, rapports.
   'ATT_CHECKPOINT_NOT_FOUND',
   'ATT_CHECKPOINT_INVALID_STATE',

@@ -5,7 +5,8 @@
   </a>
   <h1 class="checkin__title">Émargement</h1>
   <p class="checkin__intro">
-    Saisissez le code court affiché par votre formateur pour confirmer votre présence.
+    Scannez le QR code affiché par votre formateur ou sur l'écriteau de la salle, ou saisissez le
+    code court.
   </p>
 
   @if (!canCheckIn()) {
@@ -16,6 +17,12 @@
         sous ce rôle.
       </p>
     </div>
+  } @else if (scannerOpen()) {
+    <app-qr-scanner
+      (scanned)="onScanned($event)"
+      (closed)="closeScanner()"
+      (fallbackRequested)="scannerFallback()"
+    />
   } @else if (queued()) {
     <!--
       État distinct du succès, et délibérément : la présence n'existe pas
@@ -48,11 +55,30 @@
       <button mat-stroked-button type="button" (click)="reset()">Nouvel émargement</button>
     </div>
   } @else {
+    <div class="checkin__scan">
+      <button mat-flat-button type="button" (click)="openScanner()">
+        <mat-icon aria-hidden="true">qr_code_scanner</mat-icon>
+        Scanner un QR code
+      </button>
+      <p class="checkin__note">
+        Autorisez l'accès à la caméra pour scanner le code affiché dans la salle ou par votre
+        formateur. La caméra nécessite une connexion sécurisée (HTTPS).
+      </p>
+    </div>
+
+    @if (submitting()) {
+      <p class="checkin__offline" role="status">
+        <mat-icon aria-hidden="true">hourglass_empty</mat-icon>
+        <span>Vérification en cours…</span>
+      </p>
+    }
+
     <form class="checkin__form esic-form" [formGroup]="form" (ngSubmit)="submit()">
       <mat-form-field appearance="outline" class="checkin__field">
         <mat-label>Code court</mat-label>
         <input
           matInput
+          id="checkin-short-code"
           formControlName="shortCode"
           [maxlength]="shortCodeMaxLength"
           autocomplete="off"
@@ -80,15 +106,14 @@
         <p class="esic-form__error" role="alert">{{ errorMessage() }}</p>
       }
 
-      <button mat-flat-button type="submit" [disabled]="submitting()">
+      <button mat-stroked-button type="submit" [disabled]="submitting()">
         Valider ma présence
       </button>
     </form>
 
     <p id="checkin-help" class="checkin__note">
-      Le scan caméra sera ajouté dans une tranche ultérieure ; utilisez le code affiché par le
-      formateur. Le suivi à distance sur une séance en présentiel demande une autorisation de
-      votre responsable pédagogique.
+      Le suivi à distance sur une séance en présentiel demande une autorisation de votre
+      responsable pédagogique.
     </p>
 
     <!-- EF-ATT-010 / EF-ATT-008 — QR fixe de salle -->
@@ -98,6 +123,16 @@
         Utilisable jusqu'au début de la séance, depuis le réseau de l'établissement uniquement.
         Passé l'heure de début, demandez le code au formateur.
       </p>
+
+      @if (prefilledFromLink()) {
+        <p class="checkin__offline" role="status">
+          <mat-icon aria-hidden="true">link</mat-icon>
+          <span>
+            Code de salle repris du lien. Vérifiez, puis validez pour émarger — rien n'est envoyé
+            automatiquement.
+          </span>
+        </p>
+      }
 
       <form class="checkin__form esic-form" [formGroup]="roomForm" (ngSubmit)="submitRoomQr()" novalidate>
         <mat-form-field appearance="outline" class="checkin__field">
