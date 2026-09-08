@@ -10,6 +10,95 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 (nuit) — ANO-PERF-001/002 corrigée : tableau de bord et synthèse d'assiduité, mesures avant/après sur la Pi
+
+Branche `feat/demo-readiness-e2e-ui`. **Back-end + tests + déploiement
+Pi. Aucune migration** (schéma V34 inchangé). Le volet « `DECLARED`, non
+appliqué » d'ANO-PERF-001/002 (diagnostic du 7 sept.) est **levé** : la
+cause a été mesurée sur la Pi, corrigée, testée et déployée.
+
+#### Diagnostic (mesuré sur la Pi, base `esic_connect_demo`, compte `responsable@example.test`)
+
+| Endpoint | Avant |
+|---|---|
+| `GET /api/v1/me/dashboard` (responsable, « Mon activité ») | **10–13 s** |
+| `GET /api/v1/attendance/reports/summary` (« Synthèse », sans dates) | **44–45 s** |
+| `GET /api/v1/attendance/reports/classes` | **44 s** |
+
+Aucune amélioration au second appel → ce n'était pas un défaut de cache,
+mais un volume de requêtes payé à chaque fois. **Cause** :
+`AttendanceReportService` résolvait le contexte d'alternance **un couple
+(inscription, jour) à la fois** dans la boucle d'accumulation des
+demi-journées ; chaque résolution tirait ~4 allers-retours SQL
+(inscription, classe, affectation de rythme, exceptions individuelles).
+Sur une fenêtre de 30 jours pour un responsable de plusieurs classes :
+des milliers d'allers-retours vers MySQL sur la Pi. `summary()` sans
+bornes de dates parcourt en plus tout l'historique de séances, d'où les
+45 s.
+
+#### Correctifs (aucun changement de règle de gestion — même calcul de demi-journées, même traitement `COMPANY` / `UNKNOWN`, même priorité des exceptions individuelles)
+
+- **`AlternationDirectory.resolveEnrollmentContexts(descripteurs, jourDébut,
+  jourFin)`** — nouveau point d'entrée du port : trois requêtes
+  ensemblistes (classes ; affectations `ACTIVE` avec le rythme chargé ;
+  exceptions `ACTIVE` sur la fenêtre), puis la résolution jour par jour
+  **en mémoire**. `AlternationContextService.computeEnrollmentContext` est
+  désormais un **cœur unique** partagé par le chemin unitaire et le
+  chemin en lot — ils ne peuvent plus diverger. Deux méthodes de
+  repository ajoutées (`findActiveByClassGroupIdIn` avec `join fetch`,
+  `findActiveOverlappingForEnrollments`).
+- **`AttendanceReportService`** — `classReport` / `studentReport` /
+  `summary` pré-remplissent la mémoire d'alternance par **un** appel en
+  lot ; le repli paresseux par couple reste pour un (inscription, jour)
+  hors de l'intervalle pré-calculé. Le compteur « justificatifs en
+  attente dans mon périmètre » **compte directement** en base au lieu de
+  charger toute la file `PENDING` puis de filtrer en mémoire. Le
+  périmètre pédagogique est résolu **une fois** par rapport et passé à
+  `scopedSessions` / `scopedClasses`.
+
+#### Après (mêmes mesures, Pi, commit `f7710f5` déployé)
+
+| Endpoint | Après (froid) | Après (chaud) | Gain |
+|---|---|---|---|
+| `GET /api/v1/attendance/reports/summary` | **3,2 s** | **1,9 s** | ~14–24× |
+| `GET /api/v1/attendance/reports/classes` | **1,6 s** | — | ~27× |
+| `GET /api/v1/me/dashboard` (responsable) | **5,9 s** | **2,2–2,7 s** | ~2–5× |
+
+Le froid résiduel du tableau de bord responsable est surtout la montée en
+température de la JVM après redémarrage du conteneur ; les appels chauds
+(cas réel, avec cache navigateur) sont à ~2 s. Reste possible plus tard :
+fusionner les deux pipelines indépendants de `manager()`
+(`classDigests` + comptage des justificatifs) en une seule passe.
+
+#### Tests (Mac, `set -a && source .env`)
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw -o test -Dtest=AlternationIntegrationTests,AlternationSecurityTests,ModularityTests` | **25 / 0 échec** — dont `batchEnrollmentContextMatchesTheSingleCallResolutionForEveryDay` (valeurs métier + parité stricte lot vs résolution unitaire), `ModularityTests` 19 modules, 0 cycle |
+| `./mvnw -o test -Dtest=AttendanceIntegrationTests,AttendanceSecurityTests,DailyAttendanceIntegrationTests,DashboardIntegrationTests,DashboardCardsIntegrationTests` | **79 / 0 échec** — dont `DashboardCardsIntegrationTests.theManagerDashboardCostDoesNotGrowWithTheNumberOfSessions` toujours vert |
+| `./mvnw -o clean test-compile` | `BUILD SUCCESS` |
+
+#### Déploiement Pi
+
+Deux passes, mêmes règles que l'entrée précédente : `git archive` → `scp`
+→ staging → `rsync` **sans `--delete`** ; **back-end reconstruit seul**
+(`build backend` puis `up -d --no-deps backend`) ; `mysql` / `redis` /
+`frontend` / `cloudflared` **non touchés** ; **URL Quick Tunnel
+conservée** (`https://drivers-revenues-alloy-guarantee.trycloudflare.com`).
+Sauvegardes préalables vérifiées (`backups/20260908T201638Z`,
+`backups/20260908T202610Z` — `mysql.sql.gz` gzip OK + marqueur « Dump
+completed »). Images de rollback : `esic-connect-backend:pre-20260908-perf`
+puis `:pre-20260908-perf2`. Flyway au démarrage : « Successfully validated
+34 migrations », « Schema up to date. No migration necessary ». 5/5
+conteneurs sains ; `/actuator/health` → `{"status":"UP"}` ; `/`, `/login`,
+`/dashboard` → 200, `/api/v1/programs` → 401.
+
+**`NOT_PERFORMED`** : suite back-end **complète** sur le commit déployé
+(tranches ciblées vertes — 104 tests des modules touchés) ; recette
+navigateur ; **revue visuelle authentifiée** des deux écrans
+(« Mon activité », « Synthèse ») dans un vrai navigateur — la mesure est
+faite au niveau API, pas à l'écran.
+
 ### 8 septembre 2026 (soir) — DÉPLOIEMENT Raspberry Pi : passe UX front + comparaison de doublons
 
 Le Mac et la Pi étant sur le même LAN, les lots UX/front des entrées
