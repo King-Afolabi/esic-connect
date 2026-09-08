@@ -63,6 +63,12 @@ class EnrollmentExceptionHandler {
                 code = "ENR_DUPLICATE_STUDENT_NUMBER";
                 message = "Ce numéro étudiant est déjà attribué.";
             }
+            case STUDENT_NUMBER_EXHAUSTED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ENR_STUDENT_NUMBER_EXHAUSTED";
+                message = "La série de numéros étudiants de l'année est épuisée. "
+                        + "Saisissez un numéro manuellement ou contactez l'administration technique.";
+            }
             case STUDENT_PROFILE_ARCHIVED -> {
                 status = HttpStatus.CONFLICT;
                 code = "ENR_STUDENT_PROFILE_ARCHIVED";

@@ -28,6 +28,27 @@ final class EnrollmentSpecifications {
         return (root, query, cb) -> cb.like(cb.lower(root.get("studentNumber")), pattern, ESCAPE);
     }
 
+    /**
+     * Le profil correspond si son numéro contient {@code normalizedQuery}
+     * <strong>ou</strong> si son compte figure dans {@code userIds} — la
+     * liste des comptes dont le nom / prénom correspond, résolue en amont
+     * par le port {@code identity} (le nom n'est pas une colonne de
+     * {@code student_profile}, aucun jointure inter-module ici). Une
+     * adresse électronique n'est jamais un critère (énumération).
+     */
+    static Specification<StudentProfile> profileMatchesNumberOrUsers(String normalizedQuery,
+                                                                     java.util.Collection<Long> userIds) {
+        String pattern = "%" + escapeLike(normalizedQuery) + "%";
+        return (root, query, cb) -> {
+            jakarta.persistence.criteria.Predicate byNumber =
+                    cb.like(cb.lower(root.get("studentNumber")), pattern, ESCAPE);
+            if (userIds == null || userIds.isEmpty()) {
+                return byNumber;
+            }
+            return cb.or(byNumber, root.get("userId").in(userIds));
+        };
+    }
+
     static Specification<Enrollment> enrollmentHasStudentProfile(long studentProfileId) {
         return (root, query, cb) -> cb.equal(root.get("studentProfile").get("id"), studentProfileId);
     }

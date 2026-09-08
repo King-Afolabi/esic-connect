@@ -46,15 +46,15 @@
   }
 }
 
+// Le nom n'est plus affiché dans la barre haute : le déclencheur est la
+// pastille + le chevron. Le libellé reste dans le DOM (lecteurs d'écran)
+// et l'`aria-label` du bouton porte déjà l'adresse complète.
 .profile-menu__name {
-  min-width: 0;
-  max-width: 10rem;
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  line-height: 1;
+  clip-path: inset(50%);
 }
 
 .profile-menu__caret {
@@ -64,19 +64,6 @@
   block-size: 1.25rem;
   line-height: 1.25rem;
   color: var(--esic-ink-faint);
-}
-
-// Sous 640 px, le déclencheur devient la pastille seule : le nom court
-// reste dans le DOM pour les technologies d'assistance.
-@media (max-width: 640px) {
-  .profile-menu__name,
-  .profile-menu__caret {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
 }
 
 // -- Panneau (surcouche `mat-menu`) ----------------------------------

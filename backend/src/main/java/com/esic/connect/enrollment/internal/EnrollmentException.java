@@ -39,6 +39,11 @@ class EnrollmentException extends RuntimeException {
         PROFILE_ALREADY_EXISTS,
         /** Numéro étudiant déjà attribué ({@code ENR_DUPLICATE_STUDENT_NUMBER}). */
         DUPLICATE_STUDENT_NUMBER,
+        /**
+         * La séquence de numéros étudiants de l'année est épuisée (borne de
+         * largeur atteinte) — {@code ENR_STUDENT_NUMBER_EXHAUSTED}.
+         */
+        STUDENT_NUMBER_EXHAUSTED,
         /** Le profil apprenant visé est archivé. */
         STUDENT_PROFILE_ARCHIVED,
         /**

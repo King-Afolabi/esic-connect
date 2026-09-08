@@ -42,9 +42,10 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
  * Liste des profils apprenants — `GET /api/v1/student-profiles`.
  *
  * Recherche, filtre, tri et pagination reflètent **exactement** ce que
- * l'API accepte : recherche `q` sur le seul numéro étudiant, filtre
- * `status`, tri sur `studentNumber` / `createdAt`, pagination bornée à
- * 100. Aucune capacité inventée.
+ * l'API accepte : recherche `q` sur le nom, le prénom **ou** le numéro
+ * étudiant (l'adresse électronique n'est jamais un critère — énumération),
+ * filtre `status`, tri sur `studentNumber` / `createdAt`, pagination
+ * bornée à 100. Aucune capacité inventée.
  *
  * Le contrôle d'accès reste côté Spring Security : un `403` renvoyé par
  * l'API est rendu comme un état « accès refusé » explicite, même si le
@@ -103,6 +104,7 @@ export class StudentList {
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   protected readonly statusLabel = studentProfileStatusLabel;
   protected readonly displayedColumns = [
+    'name',
     'studentNumber',
     'workStudy',
     'companyName',

@@ -53,16 +53,19 @@
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Numéro étudiant</mat-label>
-        <input matInput formControlName="studentNumber" maxlength="50" required autocomplete="off" />
+        <mat-label>Numéro étudiant (facultatif)</mat-label>
+        <input
+          matInput
+          formControlName="studentNumber"
+          maxlength="50"
+          autocomplete="off"
+          placeholder="Laissez vide pour une génération automatique"
+        />
         <mat-hint>
-          Pré-rempli avec le préfixe de l'année ({{ numberPrefix() }}) : complétez avec le
-          numéro de séquence, ou saisissez un numéro complet. La génération entièrement
-          automatique n'existe que pour l'import de masse.
+          Laissé vide, le numéro est généré au format normalisé
+          <strong>ESIC-AAAA-NNNNN</strong>. Ne le renseignez que pour reprendre un numéro
+          existant.
         </mat-hint>
-        @if (form.controls.studentNumber.touched && form.controls.studentNumber.hasError('required')) {
-          <mat-error>Le numéro étudiant est obligatoire.</mat-error>
-        }
         @if (form.controls.studentNumber.hasError('server')) {
           <mat-error>{{ form.controls.studentNumber.getError('server') }}</mat-error>
         }

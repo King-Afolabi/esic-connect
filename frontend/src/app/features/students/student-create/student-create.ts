@@ -68,14 +68,6 @@ export class StudentCreate {
   private readonly notifications = inject(NotificationService);
   private readonly fb = inject(NonNullableFormBuilder);
 
-  /**
-   * Préfixe suggéré du numéro étudiant : `ESIC-{année civile courante}-`.
-   * Ce n'est qu'un pré-remplissage éditable — l'unicité reste contrôlée
-   * côté serveur (`ENR_STUDENT_NUMBER_TAKEN`). La génération entièrement
-   * automatique de la séquence n'existe que dans l'import de masse.
-   */
-  protected readonly numberPrefix = signal(`ESIC-${new Date().getFullYear()}-`);
-
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<string | null>(null);
   /** Rappel de l'état après un échec partiel (compte ou profil déjà créé). */
@@ -92,10 +84,11 @@ export class StudentCreate {
     firstName: this.fb.control('', [Validators.required, Validators.maxLength(120)]),
     lastName: this.fb.control('', [Validators.required, Validators.maxLength(120)]),
     email: this.fb.control('', [Validators.required, Validators.email, Validators.maxLength(320)]),
-    studentNumber: this.fb.control(`ESIC-${new Date().getFullYear()}-`, [
-      Validators.required,
-      Validators.maxLength(50),
-    ]),
+    // Facultatif : laissé vide, le serveur génère un numéro au format
+    // normalisé ESIC-AAAA-NNNNN. Le renseigner reste possible (reprise
+    // d'un numéro existant), mais ce n'est plus obligatoire — une saisie
+    // libre systématique cassait la norme de nommage.
+    studentNumber: this.fb.control('', [Validators.maxLength(50)]),
     classGroupPublicId: this.fb.control('', [Validators.required]),
     birthDate: this.fb.control(''),
     workStudy: this.fb.control(false),
@@ -180,7 +173,7 @@ export class StudentCreate {
     return this.api
       .createStudentProfile({
         userPublicId,
-        studentNumber: raw.studentNumber.trim(),
+        studentNumber: raw.studentNumber.trim() || null,
         birthDate: raw.birthDate || null,
         workStudy: raw.workStudy,
         companyName: raw.companyName.trim() || null,

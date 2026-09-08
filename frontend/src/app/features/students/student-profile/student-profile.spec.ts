@@ -40,6 +40,8 @@ const REMOTE_AUTHORIZATION: RemoteAttendanceAuthorizationResponse = {
 const PROFILE: StudentProfileResponse = {
   publicId: ID,
   userPublicId: 'u-1',
+  firstName: 'Alice',
+  lastName: 'Durand',
   studentNumber: 'ESIC-2026-0007',
   birthDate: null,
   workStudy: false,

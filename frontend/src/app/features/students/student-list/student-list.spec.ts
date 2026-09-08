@@ -24,6 +24,8 @@ function page(content: StudentProfileResponse[]): PageResponse<StudentProfileRes
 const PROFILE: StudentProfileResponse = {
   publicId: 'p-1',
   userPublicId: 'u-1',
+  firstName: 'Alice',
+  lastName: 'Durand',
   studentNumber: 'ESIC-2026-0001',
   birthDate: '2004-05-10',
   workStudy: true,

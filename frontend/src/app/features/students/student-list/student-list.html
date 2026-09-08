@@ -2,9 +2,9 @@
   <div class="esic-page-header__text">
     <h1 class="esic-page-header__title">Apprenants</h1>
     <p class="esic-page-header__description">
-      Profils apprenants enregistrés. La recherche porte sur le
-      <strong>numéro étudiant</strong> ; sélectionnez un apprenant pour consulter sa fiche et
-      l'historique de ses inscriptions.
+      Profils apprenants enregistrés. La recherche porte sur le <strong>nom</strong>, le
+      <strong>prénom</strong> ou le <strong>numéro étudiant</strong> ; sélectionnez un
+      apprenant pour consulter sa fiche et l'historique de ses inscriptions.
     </p>
   </div>
   @if (canCreateStudent() || canImportStudents()) {
@@ -27,13 +27,13 @@
 
 <form class="students__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="students__filter">
-    <mat-label>Numéro étudiant</mat-label>
+    <mat-label>Nom, prénom ou numéro</mat-label>
     <input
       matInput
       type="search"
       formControlName="q"
       autocomplete="off"
-      placeholder="ex. ESIC-2026-0001"
+      placeholder="ex. Durand, ou ESIC-2026-00001"
     />
   </mat-form-field>
 
@@ -93,6 +93,17 @@
         matSortDisableClear
         (matSortChange)="onSortChange($event)"
       >
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Apprenant</th>
+          <td mat-cell *matCellDef="let row">
+            @if (row.lastName || row.firstName) {
+              {{ row.lastName }}{{ row.lastName && row.firstName ? ' ' : '' }}{{ row.firstName }}
+            } @else {
+              <span class="students__unknown">Identité non résolue</span>
+            }
+          </td>
+        </ng-container>
+
         <ng-container matColumnDef="studentNumber">
           <th mat-header-cell *matHeaderCellDef mat-sort-header>Numéro étudiant</th>
           <td mat-cell *matCellDef="let row">{{ row.studentNumber }}</td>
@@ -129,7 +140,9 @@
               mat-button
               color="primary"
               [routerLink]="['/students', row.publicId]"
-              [attr.aria-label]="'Consulter la fiche de ' + row.studentNumber"
+              [attr.aria-label]="
+                'Consulter la fiche de ' + (row.lastName || row.firstName || row.studentNumber)
+              "
             >
               Consulter
             </a>

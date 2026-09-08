@@ -41,9 +41,12 @@ class StudentProfileServiceTests {
     private UserDirectory userDirectory;
     @Mock
     private EnrollmentChangePublisher changePublisher;
+    @Mock
+    private StudentNumberAllocator studentNumberAllocator;
 
     private StudentProfileService service() {
-        return new StudentProfileService(profileRepository, persister, userDirectory, changePublisher);
+        return new StudentProfileService(profileRepository, persister, userDirectory, changePublisher,
+                studentNumberAllocator);
     }
 
     private static StudentProfileRequests.Create create(UUID userPublicId, String studentNumber) {

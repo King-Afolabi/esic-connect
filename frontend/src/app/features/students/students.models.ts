@@ -36,6 +36,9 @@ export type EnrollmentSource = 'MANUAL' | 'CLASS_TRANSFER';
 export interface StudentProfileResponse {
   publicId: string;
   userPublicId: string;
+  /** Identité civile du compte lié — `null` si non résolue. */
+  firstName: string | null;
+  lastName: string | null;
   studentNumber: string;
   /** `LocalDate` (`yyyy-MM-dd`) ou `null`. */
   birthDate: string | null;
@@ -121,7 +124,8 @@ export interface CreatedUserResponse {
 /** Corps de `POST /api/v1/student-profiles`. */
 export interface CreateStudentProfileRequest {
   userPublicId: string;
-  studentNumber: string;
+  /** Vide / `null` : le serveur génère `ESIC-AAAA-NNNNN`. */
+  studentNumber: string | null;
   birthDate?: string | null;
   workStudy?: boolean;
   companyName?: string | null;

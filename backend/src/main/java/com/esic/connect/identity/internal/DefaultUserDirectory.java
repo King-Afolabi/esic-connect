@@ -85,6 +85,21 @@ class DefaultUserDirectory implements UserDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.Map<Long, NamedUserRef> findNamedRefs(java.util.Collection<Long> userInternalIds) {
+        if (userInternalIds == null || userInternalIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, NamedUserRef> refs = new java.util.HashMap<>();
+        for (UserAccount account : userAccountRepository.findAllById(
+                userInternalIds.stream().filter(java.util.Objects::nonNull).distinct().toList())) {
+            refs.put(account.getId(), new NamedUserRef(account.getId(), account.getPublicId(),
+                    account.getFirstName(), account.getLastName()));
+        }
+        return refs;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<PersonName> findName(long userInternalId) {
         return userAccountRepository.findById(userInternalId)
                 .map(account -> new PersonName(account.getFirstName(), account.getLastName()));
