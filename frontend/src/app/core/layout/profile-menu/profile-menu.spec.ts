@@ -53,6 +53,28 @@ describe('ProfileMenu', () => {
     expect(button.getAttribute('aria-label')).toContain('claire.durand@esic.test');
   });
 
+  it('keeps the header trigger compact: avatar + short name + caret, nothing else', () => {
+    const button = trigger();
+    expect(button.querySelector('.profile-menu__avatar')).not.toBeNull();
+    expect(button.querySelector('.profile-menu__caret')).not.toBeNull();
+    // L'adresse et les rôles détaillés ne sont JAMAIS dans la topbar.
+    expect(button.textContent).not.toContain('@esic.test');
+    expect(button.textContent).not.toContain('Responsable pédagogique');
+  });
+
+  it('gives the panel a wider, hierarchised layout (head + roles section)', () => {
+    openPanel();
+    const panel = document.querySelector('.profile-menu__panel') as HTMLElement;
+    expect(panel.classList.contains('profile-menu__panel')).toBe(true);
+    expect(panel.querySelector('.profile-menu__head')).not.toBeNull();
+    expect(panel.querySelector('.profile-menu__email')?.textContent).toContain(
+      'claire.durand@esic.test',
+    );
+    expect(panel.querySelector('.profile-menu__section')?.textContent).toContain(
+      'Responsable pédagogique',
+    );
+  });
+
   it('falls back to "Profil" when no address is known', () => {
     email.set(null);
     fixture.detectChanges();

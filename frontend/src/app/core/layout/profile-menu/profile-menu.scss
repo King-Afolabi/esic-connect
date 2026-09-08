@@ -1,8 +1,14 @@
 .profile-menu__trigger {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   min-width: 0;
+  // Hauteur maîtrisée : la cible tactile (44 px) est portée par le
+  // padding, pas par une pilule démesurée. Centrage vertical strict de
+  // l'avatar, du nom et du chevron.
+  height: 2.25rem;
+  padding: 0 0.5rem;
+  line-height: 1;
 }
 
 .profile-menu__avatar {
@@ -20,6 +26,19 @@
     font-size: 1.125rem;
     inline-size: 1.125rem;
     block-size: 1.125rem;
+    line-height: 1.125rem;
+  }
+
+  &--lg {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+
+    .mat-icon {
+      font-size: 1.5rem;
+      inline-size: 1.5rem;
+      block-size: 1.5rem;
+      line-height: 1.5rem;
+    }
   }
 }
 
@@ -31,6 +50,16 @@
   white-space: nowrap;
   font-size: 0.8125rem;
   font-weight: 500;
+  line-height: 1;
+}
+
+.profile-menu__caret {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  line-height: 1.25rem;
+  color: var(--esic-ink-faint);
 }
 
 // Sous 640 px, le déclencheur devient la pastille seule : le nom court
@@ -47,34 +76,63 @@
 }
 
 // -- Panneau (surcouche `mat-menu`) ----------------------------------
-// En-tête d'informations statiques, puis le lien de gestion du compte
-// comme entrée de menu focusable. Le panneau reste compact.
+// En-tête d'identité (avatar + rôle principal + adresse + contexte),
+// filet, rôles en badges, puis le lien de gestion du compte comme entrée
+// de menu focusable. Panneau plus LARGE (≈ 420 px, cf.
+// `_material-overrides.scss`) et mieux hiérarchisé — pas simplement plus
+// long. L'adresse tient sur une ligne quand la place le permet.
 .profile-menu__body {
   padding: var(--esic-space-4) var(--esic-space-4) var(--esic-space-3);
-  min-width: 15rem;
-  max-width: 20rem;
 }
 
-.profile-menu__facts {
+.profile-menu__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-3);
+}
+
+.profile-menu__head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.profile-menu__primary {
   margin: 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--esic-space-2) var(--esic-space-4);
-  align-items: baseline;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--esic-ink);
+}
 
-  dt {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--esic-ink-faint);
-  }
+.profile-menu__email {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--esic-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  dd {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--esic-ink);
-    overflow-wrap: anywhere;
-  }
+.profile-menu__context {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+}
+
+.profile-menu__section {
+  margin-top: var(--esic-space-3);
+  padding-top: var(--esic-space-3);
+  border-top: 1px solid var(--esic-line);
+}
+
+.profile-menu__section-title {
+  margin: 0 0 var(--esic-space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--esic-ink-faint);
 }
 
 .profile-menu__roles {

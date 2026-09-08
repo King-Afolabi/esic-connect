@@ -108,6 +108,14 @@
   box-shadow: var(--esic-shadow-float) !important;
 }
 
+// Panneau « Profil » de l'en-tête (Lot §3) : plus large que la limite
+// Material par défaut (280 px), pour hiérarchiser identité / rôles /
+// accès au compte sans empiler verticalement. Reste borné sur petit
+// écran.
+.mat-mdc-menu-panel.profile-menu__panel {
+  max-width: min(420px, 92vw);
+}
+
 // -- Bandeau transitoire (snack-bar) — seule surcouche « dialogue » du
 //    produit : aucune fenêtre modale n'est ouverte ailleurs. Encre claire
 //    sur fond encré, arête d'accent, action « Fermer » lisible.
