@@ -234,8 +234,9 @@ table {
   text-decoration: line-through;
 }
 
-.att__field {
-  display: block;
-  max-width: 40rem;
-  width: 100%;
-}
+// `.att__field` retiré : le formulaire « Signaler un départ » s'appuie
+// désormais sur la primitive `.esic-form` (colonne, gap, zone de
+// sous-script Material réservée par champ). L'override `display: block`
+// cassait la mise en page interne du `mat-form-field` (`inline-flex`),
+// ce qui supprimait la hauteur réservée sous le premier champ : son
+// `mat-hint` chevauchait le `mat-label` du champ suivant.

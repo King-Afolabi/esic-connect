@@ -137,6 +137,35 @@ describe('MyEarlyDepartures', () => {
     http.expectNone(DECLARE);
   });
 
+  it('lays the "signaler un départ" form on the shared .esic-form primitive with reserved field subscripts', () => {
+    ({ fixture, http } = setup());
+    http.expectOne(LIST).flush([]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    const form = el.querySelector('form.esic-form');
+    expect(form).not.toBeNull();
+    // Plus d'override local `display: block` sur les champs (cause du
+    // chevauchement hint / label du champ suivant).
+    expect(el.querySelector('.att__field')).toBeNull();
+    // Chaque `mat-form-field` réserve sa zone de sous-script (hint / error).
+    const fields = form?.querySelectorAll('mat-form-field') ?? [];
+    expect(fields.length).toBe(3);
+    fields.forEach((field) =>
+      expect(field.querySelector('.mat-mdc-form-field-subscript-wrapper')).not.toBeNull(),
+    );
+    // Le libellé qui chevauchait est bien présent, dans son propre champ.
+    expect(el.textContent).toContain('Heure de départ');
+  });
+
+  it('bounds the "mes signalements" table with the compact primitive and a pinned header', () => {
+    ({ fixture, http } = setup());
+    http.expectOne(LIST).flush([OPEN_DOSSIER]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.att__table-wrapper.esic-table-wrap--compact')).not.toBeNull();
+  });
+
   it('stores nothing in the browser', () => {
     ({ fixture, http } = setup());
     http.expectOne(LIST).flush([OPEN_DOSSIER]);
