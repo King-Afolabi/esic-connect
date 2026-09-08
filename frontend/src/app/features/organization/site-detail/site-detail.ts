@@ -12,9 +12,12 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
+import { ClipboardService } from '../../../core/clipboard/clipboard.service';
 import { Role } from '../../../core/models/role';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { QrDisplay } from '../../sessions/shared/qr-display/qr-display';
+import { buildRoomCheckInUrl } from '../../attendance/check-in-reference';
+import { publicOrigin } from '../../attendance/public-origin';
 import { OrganizationApiService } from '../organization-api.service';
 import { toOrganizationError } from '../organization-errors';
 import {
@@ -151,6 +154,26 @@ export class SiteDetail {
   protected readonly qrError = signal<string | null>(null);
   protected readonly pendingQrRotate = signal(false);
   protected readonly qrRotating = signal(false);
+
+  // --- URL pour tag NFC (même URL que le QR fixe) -------------------
+  private readonly clipboard = inject(ClipboardService);
+  /** Section « URL pour tag NFC » dépliée. */
+  protected readonly nfcUrlOpen = signal(false);
+  protected readonly nfcCopyState = signal<'idle' | 'copied' | 'failed'>('idle');
+  /**
+   * URL absolue à écrire dans un tag NFC NDEF : exactement celle du QR
+   * fixe (`<origine publique>/attendance?ref=<opaque>`), bâtie depuis le
+   * `checkInPath` du back-end et l'origine publique de confiance. `null`
+   * tant qu'aucun QR n'est émis. Réservée aux rôles `canViewQr` — elle
+   * n'est jamais dans la liste générale des salles, ni loggée, ni auditée.
+   */
+  protected readonly nfcUrl = computed(() => {
+    const panel = this.qrPanel();
+    if (!panel?.view.issued) {
+      return null;
+    }
+    return buildRoomCheckInUrl(panel.view.checkInPath, publicOrigin());
+  });
 
   protected readonly site = computed(() => {
     const current = this.state();
@@ -518,6 +541,29 @@ export class SiteDetail {
     this.qrPanel.set(null);
     this.pendingQrRotate.set(false);
     this.qrError.set(null);
+    this.nfcUrlOpen.set(false);
+    this.nfcCopyState.set('idle');
+  }
+
+  protected toggleNfcUrl(): void {
+    this.nfcUrlOpen.update((open) => !open);
+    this.nfcCopyState.set('idle');
+  }
+
+  /**
+   * Copie l'URL du tag NFC dans le presse-papiers, sur clic explicite.
+   * Aucun renouvellement n'est déclenché ; le contenu copié n'apparaît
+   * jamais dans un bandeau — seul l'état « copiée » / « à copier
+   * manuellement » est montré. En cas d'échec, le champ `readonly` reste
+   * sélectionnable à la main.
+   */
+  protected async copyNfcUrl(): Promise<void> {
+    const url = this.nfcUrl();
+    if (!url) {
+      return;
+    }
+    const ok = await this.clipboard.copy(url);
+    this.nfcCopyState.set(ok ? 'copied' : 'failed');
   }
 
   protected startRotateQr(): void {
@@ -548,6 +594,8 @@ export class SiteDetail {
         this.qrRotating.set(false);
         this.pendingQrRotate.set(false);
         this.qrPanel.set({ room: panel.room, view });
+        // L'URL du tag NFC a changé : forcer une nouvelle copie.
+        this.nfcCopyState.set('idle');
         this.notifications.info(
           view.issued
             ? 'QR fixe renouvelé. Réimprimez et remplacez les affiches en salle.'

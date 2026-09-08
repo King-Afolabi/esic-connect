@@ -8,6 +8,8 @@ import { QRCodeComponent } from 'angularx-qrcode';
 import { OrganizationApiService } from '../organization-api.service';
 import { toOrganizationError } from '../organization-errors';
 import { RoomStaticQrView, formatIsoDate } from '../organization.models';
+import { buildRoomCheckInUrl } from '../../attendance/check-in-reference';
+import { publicOrigin } from '../../attendance/public-origin';
 
 type PosterState =
   | { kind: 'loading' }
@@ -57,8 +59,23 @@ export class RoomQrPoster {
     return current.kind === 'ready' ? current.view : null;
   });
 
-  /** Jeton opaque encodé dans le QR — jamais rendu en texte dans le DOM. */
-  protected readonly qrPayload = computed(() => this.view()?.staticQrReference ?? null);
+  /**
+   * Contenu encodé dans le QR — jamais rendu en texte dans le DOM.
+   *
+   * Forme privilégiée : l'**URL absolue d'émargement de salle**
+   * (`<origine publique>/attendance?ref=<opaque>`), construite à partir du
+   * `checkInPath` fourni par le back-end. C'est la même URL qu'un tag NFC
+   * NDEF doit contenir. Repli sur la référence opaque brute si l'URL ne
+   * peut pas être construite — compat des lecteurs qui saisissent la
+   * référence à la main.
+   */
+  protected readonly qrPayload = computed(() => {
+    const v = this.view();
+    if (!v?.issued) {
+      return null;
+    }
+    return buildRoomCheckInUrl(v.checkInPath, publicOrigin()) ?? v.staticQrReference;
+  });
 
   protected readonly siteLine = computed(() => {
     const v = this.view();

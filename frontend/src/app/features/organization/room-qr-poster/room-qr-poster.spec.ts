@@ -76,6 +76,31 @@ describe('RoomQrPoster', () => {
     expect(text).not.toContain(ISSUED.staticQrReference);
   });
 
+  it('encodes the absolute check-in URL in the QR, never the bare reference as text', () => {
+    const s = setup();
+    s.http.expectOne(`/api/v1/rooms/${ROOM_ID}/static-qr`).flush(ISSUED);
+    s.fixture.detectChanges();
+    const payload = (
+      s.fixture.componentInstance as unknown as { qrPayload: () => string | null }
+    ).qrPayload();
+    expect(payload).toContain('/attendance?ref=');
+    expect(payload).toContain(ISSUED.staticQrReference!);
+    expect(payload!.startsWith('http')).toBe(true);
+    // ...mais jamais en texte visible.
+    expect(s.text()).not.toContain(ISSUED.staticQrReference!);
+  });
+
+  it('carries a non-printed NFC setup note', () => {
+    const s = setup();
+    s.http.expectOne(`/api/v1/rooms/${ROOM_ID}/static-qr`).flush(ISSUED);
+    s.fixture.detectChanges();
+    const help = s.el().querySelector('.poster-page__help');
+    expect(help).not.toBeNull();
+    expect(help?.classList.contains('no-print')).toBe(true);
+    expect(help?.textContent).toContain('NDEF');
+    expect(help?.textContent).toContain('la même URL que ce QR fixe');
+  });
+
   it('shows a clear "not issued" state instead of a poster when no QR has been emitted', () => {
     const s = setup();
     s.http.expectOne(`/api/v1/rooms/${ROOM_ID}/static-qr`).flush({

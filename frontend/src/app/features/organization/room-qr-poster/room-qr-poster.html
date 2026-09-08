@@ -92,6 +92,22 @@
             <span>Réf. support {{ view()!.maskedReference }}</span>
           </footer>
         </article>
+
+        <aside class="poster-page__help no-print" aria-label="Équiper la salle en NFC">
+          <h2>Équiper cette salle en NFC</h2>
+          <p>
+            Pour poser un tag NFC dans cette salle, programmez un tag <strong>NDEF</strong> avec
+            <strong>la même URL que ce QR fixe</strong> (enregistrement URL HTTPS, référence
+            opaque uniquement — jamais de nom, de numéro étudiant ni de secret). Le tap NFC
+            ouvre alors le même écran d'émargement que le scan du QR, sous les mêmes contrôles
+            serveur (réseau autorisé, fenêtre de séance).
+          </p>
+          <p>
+            L'URL exacte à programmer est disponible dans la fiche du site, panneau « QR fixe »,
+            section « URL pour tag NFC ». Après un <strong>renouvellement</strong> du QR fixe,
+            reprogrammez le tag avec la nouvelle URL.
+          </p>
+        </aside>
       }
     }
   }

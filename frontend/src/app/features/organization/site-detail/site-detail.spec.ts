@@ -6,6 +6,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 
 import { Role } from '../../../core/models/role';
 import { RoleContextService } from '../../../core/auth/role-context.service';
+import { ClipboardService } from '../../../core/clipboard/clipboard.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import {
   BuildingResponse,
@@ -19,6 +20,7 @@ import { SiteDetail } from './site-detail';
 
 const ID = 's-1';
 const notifications = { info: vi.fn(), error: vi.fn() };
+const clipboard = { copy: vi.fn().mockResolvedValue(true) };
 
 const SITE: SiteResponse = {
   publicId: ID,
@@ -98,6 +100,10 @@ interface Internals {
   openQr: (room: RoomResponse) => void;
   startRotateQr: () => void;
   confirmRotateQr: () => void;
+  toggleNfcUrl: () => void;
+  copyNfcUrl: () => Promise<void>;
+  nfcUrl: () => string | null;
+  nfcCopyState: () => 'idle' | 'copied' | 'failed';
   setFilter: (which: 'building' | 'room' | 'range', value: string) => void;
 }
 
@@ -106,6 +112,8 @@ function setup(roles: Role[] = ['ADMIN']) {
   sessionStorage.clear();
   notifications.info.mockReset();
   notifications.error.mockReset();
+  clipboard.copy.mockReset();
+  clipboard.copy.mockResolvedValue(true);
   TestBed.resetTestingModule();
   const effectiveRoles: WritableSignal<Role[]> = signal(roles);
   TestBed.configureTestingModule({
@@ -114,6 +122,7 @@ function setup(roles: Role[] = ['ADMIN']) {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: NotificationService, useValue: notifications },
+      { provide: ClipboardService, useValue: clipboard },
       { provide: RoleContextService, useValue: { effectiveRoles } },
       {
         provide: ActivatedRoute,
@@ -369,6 +378,105 @@ describe('SiteDetail', () => {
     // The error is surfaced in the panel (role="alert") and the panel is still there.
     expect(el.querySelector('.esic-reveal__error')?.textContent ?? '').not.toBe('');
     expect(s.text()).toContain('Renouveler et invalider les affiches');
+  });
+
+  // --- URL pour tag NFC (même URL que le QR fixe) -------------------
+
+  async function openQrPanel(roles: Role[]) {
+    const s = setup(roles);
+    s.flushSite();
+    const buildings = s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/buildings`);
+    buildings.flush(bpage([]));
+    s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+    if (roles.includes('SUPER_ADMIN')) {
+      s.expectRanges().flush(npage([]));
+    }
+    s.fixture.detectChanges();
+    s.internals.openQr(ROOM);
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+    s.fixture.detectChanges();
+    return s;
+  }
+
+  it.each([['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION']] as Role[][])(
+    'exposes the collapsible "URL pour tag NFC" block to %s',
+    async (role) => {
+      const s = await openQrPanel([role]);
+      expect(s.text()).toContain('URL pour tag NFC');
+      // Repliée par défaut : l'URL n'est pas encore dans le DOM.
+      expect((s.fixture.nativeElement as HTMLElement).querySelector('#nfc-url-field')).toBeNull();
+
+      s.internals.toggleNfcUrl();
+      s.fixture.detectChanges();
+      const field = (s.fixture.nativeElement as HTMLElement).querySelector(
+        '#nfc-url-field',
+      ) as HTMLInputElement;
+      expect(field).not.toBeNull();
+      expect(field.readOnly).toBe(true);
+      expect(field.value).toBe(s.internals.nfcUrl());
+      expect(field.value).toContain('/attendance?ref=');
+      s.http.verify();
+    },
+  );
+
+  it('does not show the NFC URL block to a PEDAGOGICAL_MANAGER (no QR panel at all)', () => {
+    const s = setup(['PEDAGOGICAL_MANAGER']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    expect(s.text()).not.toContain('URL pour tag NFC');
+  });
+
+  it('copies the exact URL via the clipboard service and reports success — no renew triggered', async () => {
+    const s = await openQrPanel(['ADMIN']);
+    s.internals.toggleNfcUrl();
+    s.fixture.detectChanges();
+    await s.internals.copyNfcUrl();
+    s.fixture.detectChanges();
+    expect(clipboard.copy).toHaveBeenCalledWith(s.internals.nfcUrl());
+    expect(s.text()).toContain('URL copiée dans le presse-papiers.');
+    s.http.expectNone(`/api/v1/rooms/r-1/static-qr/rotate`);
+    s.http.verify();
+  });
+
+  it('falls back to a manual-copy message when the clipboard write fails', async () => {
+    const s = await openQrPanel(['ADMIN']);
+    clipboard.copy.mockResolvedValue(false);
+    s.internals.toggleNfcUrl();
+    s.fixture.detectChanges();
+    await s.internals.copyNfcUrl();
+    s.fixture.detectChanges();
+    expect(s.text()).toContain("copiez l'URL");
+    s.http.verify();
+  });
+
+  it('resets the copy state after a QR renewal (the URL changed)', async () => {
+    const s = await openQrPanel(['ADMIN']);
+    s.internals.toggleNfcUrl();
+    await s.internals.copyNfcUrl();
+    s.fixture.detectChanges();
+    expect(s.internals.nfcCopyState()).toBe('copied');
+
+    s.internals.startRotateQr();
+    s.fixture.detectChanges();
+    s.internals.confirmRotateQr();
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr/rotate`).flush({
+      ...QR_VIEW,
+      staticQrReference: 'ZZZZnew1234567890123456789012345678901234',
+      maskedReference: 'ZZZZ…1234',
+      checkInPath: '/attendance?ref=ZZZZnew1234567890123456789012345678901234',
+    });
+    s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+    s.fixture.detectChanges();
+    expect(s.internals.nfcCopyState()).toBe('idle');
+    s.http.verify();
+  });
+
+  it('never renders the NFC URL in the general rooms list', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    // Panneau QR fermé : ni URL, ni checkInPath dans le texte de la liste.
+    expect(s.text()).not.toContain('/attendance?ref=');
   });
 
   it('loads and shows the network-range panel for a SUPER_ADMIN', () => {

@@ -365,7 +365,7 @@
         </dl>
 
         @if (qr.view.issued) {
-          <app-qr-display [value]="qr.view.staticQrReference" />
+          <app-qr-display [value]="nfcUrl() ?? qr.view.staticQrReference" />
           <p class="esic-reveal__text">
             Émis le {{ formatDate(qr.view.staticQrIssuedAt) }} · réf. support
             {{ qr.view.maskedReference }}
@@ -384,6 +384,62 @@
             </a>
             <button mat-button type="button" (click)="closeQr()">Fermer</button>
           </div>
+
+          <!-- URL pour tag NFC — même URL que le QR fixe. Jamais dans la
+               liste des salles, jamais loggée ni auditée ; réservée aux
+               rôles qui peuvent déjà imprimer le QR. -->
+          @if (nfcUrl(); as url) {
+            <div class="org__nfc">
+              <button
+                mat-button
+                type="button"
+                class="org__nfc-toggle"
+                [attr.aria-expanded]="nfcUrlOpen()"
+                aria-controls="nfc-url-panel"
+                (click)="toggleNfcUrl()"
+              >
+                <mat-icon aria-hidden="true">{{ nfcUrlOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+                URL pour tag NFC
+              </button>
+
+              @if (nfcUrlOpen()) {
+                <div id="nfc-url-panel" class="org__nfc-panel" role="group" aria-label="URL pour tag NFC">
+                  <label class="org__nfc-label" for="nfc-url-field">
+                    URL à écrire dans un tag NFC NDEF (référence opaque de salle — aucune donnée
+                    personnelle)
+                  </label>
+                  <input
+                    id="nfc-url-field"
+                    class="org__nfc-field"
+                    type="text"
+                    readonly
+                    [value]="url"
+                    (focus)="$any($event.target).select()"
+                    aria-describedby="nfc-url-help"
+                  />
+                  <div class="esic-reveal__actions">
+                    <button mat-stroked-button type="button" (click)="copyNfcUrl()">
+                      Copier l'URL
+                    </button>
+                  </div>
+                  @if (nfcCopyState() === 'copied') {
+                    <p class="org__nfc-status" role="status">URL copiée dans le presse-papiers.</p>
+                  } @else if (nfcCopyState() === 'failed') {
+                    <p class="org__nfc-status" role="status">
+                      Copie automatique impossible. Sélectionnez le champ et copiez l'URL
+                      manuellement.
+                    </p>
+                  }
+                  <p id="nfc-url-help" class="org__nfc-help">
+                    Cette URL peut être écrite dans un tag NFC NDEF pour permettre l'ouverture de
+                    l'émargement de cette salle par rapprochement du téléphone. Après le
+                    renouvellement du QR fixe, programmez de nouveau le tag NFC avec la nouvelle
+                    URL.
+                  </p>
+                </div>
+              }
+            </div>
+          }
 
           @if (canRotateQr()) {
             @if (!pendingQrRotate()) {
