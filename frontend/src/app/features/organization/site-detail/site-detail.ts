@@ -192,6 +192,71 @@ export class SiteDetail {
     return current.kind === 'ready' ? current.items.filter((b) => b.status === 'ACTIVE') : [];
   });
 
+  // --- Filtres de recherche par sous-liste (côté client) -------------
+  // Objectif « gestion efficace de nombreuses salles » : un simple filtre
+  // texte sur code / nom. Les sous-listes tiennent déjà en mémoire
+  // (`size=100`, aucune pagination serveur) — le filtre reste local et
+  // n'ajoute aucun appel.
+  protected readonly buildingFilter = signal('');
+  protected readonly roomFilter = signal('');
+  protected readonly rangeFilter = signal('');
+
+  private static contains(haystack: string | null | undefined, needle: string): boolean {
+    return (haystack ?? '').toLowerCase().includes(needle);
+  }
+
+  protected readonly filteredBuildings = computed<BuildingResponse[]>(() => {
+    const current = this.buildings();
+    if (current.kind !== 'ready') {
+      return [];
+    }
+    const q = this.buildingFilter().trim().toLowerCase();
+    if (!q) {
+      return current.items;
+    }
+    return current.items.filter(
+      (b) => SiteDetail.contains(b.code, q) || SiteDetail.contains(b.name, q),
+    );
+  });
+
+  protected readonly filteredRooms = computed<RoomResponse[]>(() => {
+    const current = this.rooms();
+    if (current.kind !== 'ready') {
+      return [];
+    }
+    const q = this.roomFilter().trim().toLowerCase();
+    if (!q) {
+      return current.items;
+    }
+    return current.items.filter(
+      (r) =>
+        SiteDetail.contains(r.code, q) ||
+        SiteDetail.contains(r.name, q) ||
+        SiteDetail.contains(r.floorLabel, q) ||
+        SiteDetail.contains(this.buildingName(r.buildingPublicId), q),
+    );
+  });
+
+  protected readonly filteredRanges = computed<SiteNetworkRangeResponse[]>(() => {
+    const current = this.ranges();
+    if (current.kind !== 'ready') {
+      return [];
+    }
+    const q = this.rangeFilter().trim().toLowerCase();
+    if (!q) {
+      return current.items;
+    }
+    return current.items.filter(
+      (n) => SiteDetail.contains(n.cidr, q) || SiteDetail.contains(n.label, q),
+    );
+  });
+
+  protected setFilter(which: 'building' | 'room' | 'range', value: string): void {
+    ({ building: this.buildingFilter, room: this.roomFilter, range: this.rangeFilter })[which].set(
+      value,
+    );
+  }
+
   protected readonly siteReasonForm = this.formBuilder.group({
     reason: this.formBuilder.control('', [
       Validators.required,

@@ -4,6 +4,45 @@
   max-width: 48rem;
 }
 
+// En-tête compact de la fiche : titre + statut à gauche, actions à
+// droite ; passe en colonne sous 40 rem.
+.org__detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--esic-space-3);
+}
+
+.org__detail-header .esic-page-header__title {
+  display: flex;
+  align-items: center;
+  gap: var(--esic-space-2);
+  flex-wrap: wrap;
+}
+
+.org__detail-sub {
+  margin: 0.25rem 0 0;
+  color: var(--esic-ink-soft);
+  font-size: 0.9375rem;
+}
+
+.org__detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-2);
+}
+
+// Filtre de recherche au-dessus d'une sous-liste (bâtiments / salles /
+// plages). Colonne bornée : un champ de recherche n'a pas à s'étirer.
+.org__list-filter {
+  margin: var(--esic-space-3) 0 0;
+
+  mat-form-field {
+    width: min(100%, 26rem);
+  }
+}
+
 // Confirmation en ligne — cf. primitive `.esic-reveal`.
 // Dialogue de confirmation en ligne — cf. primitive `.esic-reveal`
 // (`_primitives.scss`).

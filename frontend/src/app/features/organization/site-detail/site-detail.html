@@ -30,10 +30,32 @@
     </div>
   }
   @case ('ready') {
-    <header class="esic-page-header">
+    <header class="esic-page-header org__detail-header">
       <div class="esic-page-header__text">
-        <h1 class="esic-page-header__title">Site {{ site()!.code }}</h1>
+        <h1 class="esic-page-header__title">
+          Site {{ site()!.code }}
+          <span class="esic-badge" [attr.data-status]="site()!.status">{{ statusLabel(site()!.status) }}</span>
+        </h1>
+        <p class="org__detail-sub">{{ site()!.name }}</p>
       </div>
+
+      @if (canWrite()) {
+        <div class="org__detail-actions">
+          @if (!isArchived()) {
+            <a mat-stroked-button [routerLink]="['/organization/sites', site()!.publicId, 'edit']">
+              <mat-icon aria-hidden="true">edit</mat-icon>
+              Modifier
+            </a>
+            <button mat-stroked-button type="button" (click)="startSiteAction('archive')">
+              Archiver le site
+            </button>
+          } @else {
+            <button mat-stroked-button type="button" (click)="startSiteAction('restore')">
+              Restaurer le site
+            </button>
+          }
+        </div>
+      }
     </header>
 
     <mat-card class="org__card" appearance="outlined">
@@ -50,22 +72,6 @@
     </mat-card>
 
     @if (canWrite()) {
-      <div class="org__actions-row">
-        @if (!isArchived()) {
-          <a mat-stroked-button [routerLink]="['/organization/sites', site()!.publicId, 'edit']">
-            <mat-icon aria-hidden="true">edit</mat-icon>
-            Modifier
-          </a>
-          <button mat-stroked-button type="button" (click)="startSiteAction('archive')">
-            Archiver le site
-          </button>
-        } @else {
-          <button mat-stroked-button type="button" (click)="startSiteAction('restore')">
-            Restaurer le site
-          </button>
-        }
-      </div>
-
       @if (pendingSite(); as action) {
         <div class="esic-reveal" [class.esic-reveal--danger]="action.kind === 'archive'" role="group" [attr.aria-label]="action.kind === 'archive' ? 'Archiver le site' : 'Restaurer le site'">
           @if (action.kind === 'archive') {
@@ -146,8 +152,17 @@
         @if ($any(buildings()).items.length === 0) {
           <p class="org__status" role="status">Aucun bâtiment pour ce site.</p>
         } @else {
-          <div class="org__table-wrapper">
-            <table mat-table [dataSource]="$any(buildings()).items" class="org__table">
+          <div class="org__list-filter">
+            <mat-form-field appearance="outline">
+              <mat-label>Filtrer les bâtiments (code, nom)</mat-label>
+              <input matInput [value]="buildingFilter()" (input)="setFilter('building', $any($event.target).value)" autocomplete="off" />
+            </mat-form-field>
+          </div>
+          @if (filteredBuildings().length === 0) {
+            <p class="org__status" role="status">Aucun bâtiment ne correspond à ce filtre.</p>
+          } @else {
+          <div class="org__table-wrapper esic-table-wrap--tall">
+            <table mat-table [dataSource]="filteredBuildings()" class="org__table">
               <ng-container matColumnDef="code">
                 <th mat-header-cell *matHeaderCellDef>Code</th>
                 <td mat-cell *matCellDef="let row">{{ row.code }}</td>
@@ -174,10 +189,11 @@
                   }
                 </td>
               </ng-container>
-              <tr mat-header-row *matHeaderRowDef="buildingColumns"></tr>
+              <tr mat-header-row *matHeaderRowDef="buildingColumns; sticky: true"></tr>
               <tr mat-row *matRowDef="let row; columns: buildingColumns"></tr>
             </table>
           </div>
+          }
         }
       }
     }
@@ -250,8 +266,17 @@
         @if ($any(rooms()).items.length === 0) {
           <p class="org__status" role="status">Aucune salle pour ce site.</p>
         } @else {
-          <div class="org__table-wrapper">
-            <table mat-table [dataSource]="$any(rooms()).items" class="org__table">
+          <div class="org__list-filter">
+            <mat-form-field appearance="outline">
+              <mat-label>Filtrer les salles (code, nom, étage, bâtiment)</mat-label>
+              <input matInput [value]="roomFilter()" (input)="setFilter('room', $any($event.target).value)" autocomplete="off" />
+            </mat-form-field>
+          </div>
+          @if (filteredRooms().length === 0) {
+            <p class="org__status" role="status">Aucune salle ne correspond à ce filtre.</p>
+          } @else {
+          <div class="org__table-wrapper esic-table-wrap--tall">
+            <table mat-table [dataSource]="filteredRooms()" class="org__table">
               <ng-container matColumnDef="code">
                 <th mat-header-cell *matHeaderCellDef>Code</th>
                 <td mat-cell *matCellDef="let row">{{ row.code }}</td>
@@ -307,10 +332,11 @@
                   }
                 </td>
               </ng-container>
-              <tr mat-header-row *matHeaderRowDef="roomColumns"></tr>
+              <tr mat-header-row *matHeaderRowDef="roomColumns; sticky: true"></tr>
               <tr mat-row *matRowDef="let row; columns: roomColumns"></tr>
             </table>
           </div>
+          }
         }
       }
     }
@@ -470,8 +496,17 @@
           @if ($any(ranges()).items.length === 0) {
             <p class="org__status" role="status">Aucune plage réseau pour ce site.</p>
           } @else {
-            <div class="org__table-wrapper">
-              <table mat-table [dataSource]="$any(ranges()).items" class="org__table">
+            <div class="org__list-filter">
+              <mat-form-field appearance="outline">
+                <mat-label>Filtrer les plages (CIDR, libellé)</mat-label>
+                <input matInput [value]="rangeFilter()" (input)="setFilter('range', $any($event.target).value)" autocomplete="off" />
+              </mat-form-field>
+            </div>
+            @if (filteredRanges().length === 0) {
+              <p class="org__status" role="status">Aucune plage ne correspond à ce filtre.</p>
+            } @else {
+            <div class="org__table-wrapper esic-table-wrap--tall">
+              <table mat-table [dataSource]="filteredRanges()" class="org__table">
                 <ng-container matColumnDef="cidr">
                   <th mat-header-cell *matHeaderCellDef>CIDR</th>
                   <td mat-cell *matCellDef="let row">{{ row.cidr }}</td>
@@ -493,10 +528,11 @@
                     </button>
                   </td>
                 </ng-container>
-                <tr mat-header-row *matHeaderRowDef="rangeColumns"></tr>
+                <tr mat-header-row *matHeaderRowDef="rangeColumns; sticky: true"></tr>
                 <tr mat-row *matRowDef="let row; columns: rangeColumns"></tr>
               </table>
             </div>
+            }
           }
         }
       }

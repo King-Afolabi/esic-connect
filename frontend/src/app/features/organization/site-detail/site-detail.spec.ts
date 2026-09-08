@@ -98,6 +98,7 @@ interface Internals {
   openQr: (room: RoomResponse) => void;
   startRotateQr: () => void;
   confirmRotateQr: () => void;
+  setFilter: (which: 'building' | 'room' | 'range', value: string) => void;
 }
 
 function setup(roles: Role[] = ['ADMIN']) {
@@ -154,6 +155,39 @@ describe('SiteDetail', () => {
     expect(s.text()).toContain('Europe/Paris');
     expect(s.text()).toContain('Bâtiment A');
     expect(s.text()).toContain('Aucune salle pour ce site');
+  });
+
+  it('bounds the child tables and pins their headers (ANO-UX-002/003)', () => {
+    const s = setup();
+    s.flushSite();
+    s.flushChildren([BUILDING], [ROOM]);
+    const el = s.fixture.nativeElement as HTMLElement;
+    // Bâtiments + Salles : enveloppe à hauteur bornée, défilement interne.
+    expect(el.querySelectorAll('.org__table-wrapper.esic-table-wrap--tall').length).toBeGreaterThanOrEqual(2);
+    // L'entête figée est marquée par Angular Material (`sticky: true`).
+    expect(el.querySelector('.mat-mdc-table-sticky, tr.mat-mdc-header-row')).not.toBeNull();
+  });
+
+  it('filters the rooms sub-list by a free-text query (client-side, no request)', () => {
+    const s = setup();
+    s.flushSite();
+    s.flushChildren(
+      [],
+      [ROOM, { ...ROOM, publicId: 'r-2', code: 'B200', name: 'Amphi B' }],
+    );
+    expect(s.text()).toContain('Salle 101');
+    expect(s.text()).toContain('Amphi B');
+
+    s.internals.setFilter('room', 'amphi');
+    s.fixture.detectChanges();
+    // Aucun nouvel appel réseau : le filtre est local.
+    s.http.expectNone((r) => r.url === `/api/v1/sites/${ID}/rooms`);
+    expect(s.text()).toContain('Amphi B');
+    expect(s.text()).not.toContain('Salle 101');
+
+    s.internals.setFilter('room', 'zzz-introuvable');
+    s.fixture.detectChanges();
+    expect(s.text()).toContain('Aucune salle ne correspond à ce filtre');
   });
 
   it('shows a not-found panel on a 404 and never loads children', () => {

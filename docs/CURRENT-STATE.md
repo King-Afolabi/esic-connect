@@ -10,6 +10,45 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — fiche site : en-tête compact + sous-listes bornées + filtres (ANO-UX-003, PARTIAL)
+
+Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, zéro migration.**
+Suite du mandat performance/UX. Déploiement Pi impossible (porteur hors
+LAN) → `FIXED_LOCAL`.
+
+**Livré sur `SiteDetail` (`/organization/sites/:publicId`)** :
+
+- **En-tête compact** `.org__detail-header` : lien retour `.esic-back`
+  (préexistant) + `Site {code}` + **pastille de statut** + actions
+  **Modifier / Archiver / Restaurer** remontées à côté du titre (elles
+  étaient dans une rangée séparée sous la carte d'informations).
+- **Sous-listes bornées** : les trois tables — Bâtiments, Salles, Plages
+  réseau — passent en `.esic-table-wrap--tall` + `matHeaderRowDef sticky`
+  (primitive ANO-UX-002). Chaque table devient une boîte à défilement
+  interne : la page cesse d'être « trop longue » **sans** onglets.
+- **Filtre texte par sous-liste** (`.org__list-filter` + `computed`
+  `filtered{Buildings,Rooms,Ranges}`) : code / nom / étage / bâtiment
+  pour les salles, code / nom pour les bâtiments, CIDR / libellé pour les
+  plages. **Côté client, aucun appel réseau** — les sous-listes sont déjà
+  chargées à `size=100` sans pagination serveur. Message « aucun résultat
+  pour ce filtre » distinct de « aucun élément ».
+- Le panneau **QR fixe** reste **en flux** sous la table des salles (la
+  table demeure visible — décision « aucune fenêtre modale » du dépôt).
+
+**Reste `DECLARED`** : le découpage **en onglets** (une section visible à
+la fois, `role="tablist"` bespoke sur `.esic-subnav` — le dépôt n'utilise
+pas `mat-tab-group`) + persistance `?tab=`. Non fait à l'aveugle : exige
+une revue visuelle clavier / point de rupture en navigateur. Pagination
+serveur par onglet : sans objet tant que les endpoints ne paginent pas.
+
+**Tests** : `site-detail.spec.ts` +2 (enveloppes `--tall` sur ≥ 2 tables
++ entête `sticky` ; filtre salles local sans appel, message « aucun
+résultat ») ; `npm run lint` vert ; `npx ng test --watch=false`
+**104 fichiers / 862 tests / 0 échec** ; `ng build --configuration production`
+**582,62 kB** initial, aucune alerte de budget. `NOT_PERFORMED` : rendu
+`sticky` réel + responsive de l'en-tête au navigateur ; recette
+Playwright ; déploiement Pi.
+
 ### 8 septembre 2026 — courriel Brevo : nouvelle adresse d'expédition
 
 Branche `feat/demo-readiness-e2e-ui`. **Documentation seule, zéro code,
