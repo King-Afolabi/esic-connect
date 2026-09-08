@@ -92,7 +92,7 @@
         <p>Aucune réclamation.</p>
       </div>
     } @else {
-      <div class="claims__table-wrapper">
+      <div class="claims__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="$any(state()).rows">
           <ng-container matColumnDef="subject">
             <th mat-header-cell *matHeaderCellDef scope="col">Sujet</th>
@@ -124,7 +124,7 @@
               <a mat-stroked-button [routerLink]="['/claims', c.publicId]">Ouvrir</a>
             </td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
       </div>

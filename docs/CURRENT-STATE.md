@@ -10,6 +10,43 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — mandat performance/UX (suite) : tables à entête figée (ANO-UX-002)
+
+Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, aucune migration.**
+Suite directe de l'entrée (6) ci-dessous, sur demande explicite du
+porteur (« les tables toujours pareilles, entête pas figée »).
+
+**Livré** : primitive partagée **`.esic-table-wrap--tall`**
+(`src/styles/_primitives.scss`) — `max-height: clamp(20rem, 62vh, 46rem)`
+(jamais `height` ; surchargeable via `--esic-table-max-h`),
+`overflow-y/x: auto`, `overscroll-behavior: contain`, bordure + fond.
+Entête figée pour **les deux familles de tableaux** : `mat-table`
+(`.mat-mdc-header-row` / `th.mat-mdc-header-cell` en `position: sticky`
++ fond opaque + `z-index`, à coupler avec `*matHeaderRowDef="…; sticky: true"`)
+**et** tableau HTML natif (`thead th { position: sticky; top: 0 }`). Le
+défilement est **interne à l'enveloppe** — la coquille et le `<body>`
+restent librement défilables ; la pagination reste **hors** de
+l'enveloppe. Opt-in explicite : une petite table (hauteur naturelle sous
+le plafond) n'est jamais enfermée.
+
+**Écrans traités (9)** : Séances (`session-list`), Apprenants
+(`student-list`), Comptes (`user-list`), Réclamations (`claim-list`),
+Invitations (2 tables), Justificatifs (`justification-queue`), Mes
+présences (`my-attendance-list`), **Audit** (`audit-trail`, natif),
+**Doublons** (`duplicate-list`, natif).
+
+**Reste `DECLARED`** : `attendance-report` (rapports de la coquille Suivi
+d'assiduité) — même patch d'une ligne, non appliqué faute de vérification
+visuelle par point de rupture dans cette passe.
+
+**Tests** : `session-list.spec.ts` +1 (famille `mat-table` : enveloppe
+`--tall`, entête `sticky`, paginator hors enveloppe), `audit-trail.spec.ts`
++1 (famille native) ; `npm run lint` vert ; `npx ng test --watch=false`
+**104 fichiers / 859 tests / 0 échec** ; `ng build --configuration production`
+**582,62 kB** initial, aucune alerte de budget. `NOT_PERFORMED` : rendu
+`sticky` réel au défilement (jsdom ne met pas en page) — vérification
+navigateur manuelle à faire ; recette Playwright.
+
 ### 7 septembre 2026 (6) — mandat performance/UX : diagnostic + corrections front-end isolées
 
 Branche `feat/demo-readiness-e2e-ui`. **Aucune ligne de back-end, zéro

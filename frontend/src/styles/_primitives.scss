@@ -295,6 +295,61 @@
   -webkit-overflow-scrolling: touch;
 }
 
+// -- Variante « longue » : entête figée + défilement vertical interne ----
+// (ANO-UX-002) À ajouter EXPLICITEMENT sur l'enveloppe des tableaux
+// vraiment longs (Séances, Salles, Comptes, Audit, Réclamations,
+// Invitations, Présences…). Jamais posée par défaut : une petite table
+// ne doit pas être enfermée dans un cadre à hauteur fixe.
+//
+//   - `max-height` (jamais `height`) : une table courte reste courte, sa
+//     hauteur naturelle étant sous le plafond ;
+//   - le plafond est relatif au viewport (`vh`) donc responsive, borné
+//     entre 20rem et 46rem ; surchargeable par `--esic-table-max-h` ;
+//   - le défilement est INTERNE à l'enveloppe : le `<body>` / la coquille
+//     restent librement défilables pour atteindre les autres sections ;
+//   - l'entête colle en haut de l'enveloppe pendant le défilement.
+//
+// Fonctionne avec les deux familles de tableaux du projet :
+//   * `mat-table` avec `*matHeaderRowDef="cols; sticky: true"` — Material
+//     pose `position: sticky` sur les cellules ; on force ici un fond
+//     opaque et un `z-index` pour que les lignes ne transparaissent pas ;
+//   * `.esic-table` (tableau HTML natif) — son `thead th` est déjà
+//     `position: sticky; top: 0` (voir plus bas) et devient effectif dès
+//     que l'enveloppe est le conteneur de défilement.
+.esic-table-wrap--tall {
+  max-height: var(--esic-table-max-h, clamp(20rem, 62vh, 46rem));
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+
+  // mat-table (Angular Material)
+  .mat-mdc-header-row {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  th.mat-mdc-header-cell {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--esic-surface-sunken);
+  }
+
+  // Tableau HTML natif (`<thead><th>`), quelle que soit sa classe
+  // (`.esic-table`, `.audit__table`, `.duplicates__table`…) : on colle
+  // l'entête en haut de l'enveloppe avec un fond opaque.
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--esic-surface-sunken);
+  }
+}
+
 // -- Indice de défilement horizontal (Lot L) ----------------------------
 // Ombre discrète au bord d'un tableau qui déborde, tant qu'il reste du
 // contenu à faire défiler de ce côté. Technique CSS pure (Lea Verou) :

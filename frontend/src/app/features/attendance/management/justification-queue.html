@@ -27,7 +27,7 @@
     @if (rows().length === 0) {
       <p class="att__status" role="status">Aucun justificatif dans cette vue.</p>
     } @else {
-      <div class="att__table-wrapper">
+      <div class="att__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="rows()">
           <ng-container matColumnDef="student">
             <th mat-header-cell *matHeaderCellDef>Apprenant</th>
@@ -105,7 +105,7 @@
               }
             </td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
       </div>

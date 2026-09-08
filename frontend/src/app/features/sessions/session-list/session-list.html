@@ -61,7 +61,7 @@
   @if (isEmpty()) {
     <p class="sessions__status" role="status">Aucune séance ne correspond à votre recherche.</p>
   } @else {
-    <div class="sessions__table-wrapper">
+    <div class="sessions__table-wrapper esic-table-wrap--tall">
       <table
         mat-table
         [dataSource]="rows()"
@@ -107,7 +107,7 @@
           </td>
         </ng-container>
 
-        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
         <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
       </table>
     </div>

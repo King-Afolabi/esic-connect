@@ -101,6 +101,22 @@ describe('SessionList', () => {
     expect(text()).toContain('Ouverte');
   });
 
+  it('bounds the long table height and pins its header (ANO-UX-002)', () => {
+    ({ fixture, http, internals } = setup(true));
+    expectList().flush(page([SESSION]));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    // L'enveloppe de la table longue porte la variante « --tall » :
+    // hauteur bornée + défilement vertical interne (le <body> reste
+    // librement défilable pour atteindre les autres sections).
+    expect(el.querySelector('.sessions__table-wrapper.esic-table-wrap--tall')).not.toBeNull();
+    // Angular Material marque l'entête figée d'un `sticky: true`.
+    expect(el.querySelector('.mat-mdc-table-sticky, tr.mat-mdc-header-row')).not.toBeNull();
+    // La pagination reste HORS de l'enveloppe défilante (toujours visible).
+    const wrap = el.querySelector('.sessions__table-wrapper')!;
+    expect(wrap.querySelector('mat-paginator')).toBeNull();
+  });
+
   it('shows the empty state when there is no session', () => {
     ({ fixture, http, internals } = setup(true));
     expectList().flush(page([]));

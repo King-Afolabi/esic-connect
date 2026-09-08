@@ -56,7 +56,7 @@
     @if (rows().length === 0) {
       <p class="att__status" role="status">Aucune présence sur la période sélectionnée.</p>
     } @else {
-      <div class="att__table-wrapper">
+      <div class="att__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="rows()">
           <ng-container matColumnDef="session">
             <th mat-header-cell *matHeaderCellDef>Séance</th>
@@ -121,7 +121,7 @@
               }
             </td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
       </div>

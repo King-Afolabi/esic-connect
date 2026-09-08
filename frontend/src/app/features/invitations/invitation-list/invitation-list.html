@@ -44,7 +44,7 @@
       <mat-card-title>Invitations en attente d'activation</mat-card-title>
     </mat-card-header>
     <mat-card-content>
-      <div class="esic-table-wrap">
+      <div class="esic-table-wrap esic-table-wrap--tall">
       <table mat-table [dataSource]="invitations()" class="invitations__table">
         <ng-container matColumnDef="recipient">
           <th mat-header-cell *matHeaderCellDef scope="col">Destinataire</th>
@@ -75,7 +75,7 @@
             </button>
           </td>
         </ng-container>
-        <tr mat-header-row *matHeaderRowDef="invitationColumns"></tr>
+        <tr mat-header-row *matHeaderRowDef="invitationColumns; sticky: true"></tr>
         <tr mat-row *matRowDef="let row; columns: invitationColumns"></tr>
       </table>
       </div>
@@ -95,7 +95,7 @@
         remonte rien — c'est le cas en développement avec Mailpit — le statut de délivrabilité reste
         non renseigné.
       </p>
-      <div class="esic-table-wrap">
+      <div class="esic-table-wrap esic-table-wrap--tall">
       <table mat-table [dataSource]="deliveries()" class="invitations__table">
         <ng-container matColumnDef="recipientMasked">
           <th mat-header-cell *matHeaderCellDef scope="col">Destinataire</th>
@@ -127,7 +127,7 @@
             {{ delivery.lastAttemptAt ? (delivery.lastAttemptAt | date: 'short') : '—' }}
           </td>
         </ng-container>
-        <tr mat-header-row *matHeaderRowDef="deliveryColumns"></tr>
+        <tr mat-header-row *matHeaderRowDef="deliveryColumns; sticky: true"></tr>
         <tr mat-row *matRowDef="let row; columns: deliveryColumns"></tr>
       </table>
       </div>
