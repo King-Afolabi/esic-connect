@@ -498,6 +498,40 @@ Le serveur vérifie :
 - canal ;
 - risque.
 
+## Scan caméra dans l'application (8 septembre 2026)
+
+- la caméra n'est ouverte **qu'après un clic** ; jamais au chargement ;
+- les pistes caméra sont libérées à la fermeture, au changement de route,
+  à la destruction du composant et **dès la première lecture** ;
+- le contenu scanné est une **chaîne opaque** transmise telle quelle aux
+  routes d'émargement existantes — le frontend ne décide d'aucune
+  validité ; il n'est **jamais** persisté (`localStorage` /
+  `sessionStorage` exclus) ;
+- une **URL externe** (origine hors application) est refusée et jamais
+  suivie ni ouverte automatiquement ;
+- décodage `BarcodeDetector` natif si présent, sinon `jsQR` (Apache-2.0,
+  aucune dépendance native, aucun réseau, aucune télémétrie) ;
+- aucune image de caméra n'est envoyée ni stockée.
+
+## Tag NFC de salle
+
+- **même URL** que le QR fixe, référence opaque seule — aucune donnée
+  personnelle, aucun secret ;
+- **aucune sécurité autonome** : le serveur applique exactement les mêmes
+  contrôles que pour le QR fixe (réseau ESIC, fenêtre de séance) ;
+- Web NFC n'est pas utilisé ; pas de canal `ROOM_STATIC_NFC` distinct
+  (rien ne distingue de façon fiable un tap NFC d'une ouverture d'URL).
+
+## URL de salle côté administration
+
+- servie **uniquement** par la route dédiée du QR fixe, aux rôles
+  `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` ;
+- **jamais** dans `RoomResponse`, jamais dans la liste des salles, jamais
+  journalisée, jamais dans un événement d'audit ni un message d'erreur ;
+- copie presse-papiers **en écriture seule**, sur clic ; jamais de
+  lecture du presse-papiers ; repli sur sélection manuelle d'un champ
+  `readonly`.
+
 ---
 
 # 12. MySQL

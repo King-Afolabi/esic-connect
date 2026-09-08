@@ -173,9 +173,9 @@ Elle **complète** la recette d'intégration API
 
 | Élément | Valeur |
 |---|---|
-| Emplacement | `tests/01-*.spec.ts` … `tests/11-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
+| Emplacement | `tests/01-*.spec.ts` … `tests/16-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
 | Commande | `npm run test:e2e` — pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté |
-| Volume | 11 fichiers ; 10 fichiers / **149 tests** exécutés à l'audit du 3 septembre, plus `tests/11-pilotage-restitution.spec.ts` ajouté au sprint 11 — voir `docs/CURRENT-STATE.md` §6.1 pour son état d'exécution réel |
+| Volume | 16 fichiers ; 10 fichiers / **149 tests** exécutés à l'audit du 3 septembre, plus `tests/11-pilotage-restitution.spec.ts` (sprint 11, exécuté), `tests/12`…`tests/15` (hors sprint) et `tests/16-qr-scanner.spec.ts` (8 sept. 2026, caméra simulée, **non exécuté — pile de démonstration requise**) — voir `docs/CURRENT-STATE.md` §6.1 |
 | Résultat fonctionnel | **149 / 149** (le run livré affiche 145/149 ; les 4 écarts sont des blocages d'environnement sous charge) |
 | Durée | 18-20 min en environnement sain |
 | CI | `.github/workflows/e2e.yml`, **manuel** (`workflow_dispatch`) |
@@ -444,6 +444,16 @@ Créer au minimum :
 | TE-010 | Apprenant provisoire | Entrée provisoire |
 | TE-011 | Distanciel collectif | Canal distant |
 | TE-012 | Distanciel individuel autorisé | Accepté |
+| TE-013 | Scan caméra d'un jeton dynamique opaque | Envoyé à `/attendance/validate` `{token}` |
+| TE-014 | Scan d'une URL interne `/attendance?ref=…` | Envoyé à `/attendance/room-qr` `{roomReference}` |
+| TE-015 | Scan d'une URL externe ou d'un QR d'une autre app | Rejeté localement, aucun appel |
+| TE-016 | Fermeture / destruction / changement de route pendant un scan | Pistes caméra libérées |
+| TE-017 | Lien profond `/attendance?ref=…` ouvert non connecté | Retour au champ « QR de salle » pré-rempli après login, rien envoyé |
+
+Couverture : `check-in-reference.spec.ts`, `qr-scanner.spec.ts`,
+`attendance-check-in.spec.ts` (unitaire) ; `tests/16-qr-scanner.spec.ts`
+(navigateur, caméra simulée — **non exécuté cette passe**). Recette
+physique iPhone / Android et tap NFC : `NOT_PERFORMED`.
 | TE-013 | Distanciel individuel non autorisé | Refus |
 | TE-014 | Correction | Motif et audit |
 | TE-015 | SSE déconnecté | Reconnexion |

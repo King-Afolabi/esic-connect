@@ -147,15 +147,28 @@ visible.
 
 ### 3.6 `STUDENT`
 
-- **Émargement** (`/attendance`) : saisir le **code court** affiché par
-  le formateur. Erreurs possibles :
-  - « code expiré / invalide » (`ATT_TOKEN_INVALID`) → demander un
-    nouveau code au formateur ;
-  - « séance fermée » (`ATT_SESSION_CLOSED`) ;
-  - « présence déjà enregistrée » (`ATT_ALREADY_RECORDED`) ;
-  - « vous n'êtes pas inscrit » (`ATT_NOT_ENROLLED`).
-  - **Scan caméra : non disponible** (le code court est le seul
-    parcours). Une note l'indique à l'écran.
+- **Émargement** (`/attendance`) — trois entrées, une seule autorité (le
+  serveur) :
+  - **Scanner un QR code** (bouton principal) : autoriser la caméra
+    (arrière par défaut ; **HTTPS requis**), viser le QR affiché par le
+    formateur **ou** l'écriteau de la salle. Le code détecté est vérifié
+    en ligne et le résultat du serveur s'affiche. Bouton
+    « Saisir un code court à la place » toujours présent.
+  - **Code court** affiché par le formateur (champ de saisie).
+  - **Code du QR de salle** (saisie manuelle, avant le début du cours ;
+    depuis le réseau de l'établissement uniquement).
+  - Ouvrir un lien `/attendance?ref=…` (QR fixe ou **tag NFC** de salle
+    lu par l'appareil photo système) pré-remplit le champ « QR de
+    salle » ; **rien n'est envoyé sans validation**.
+  - Erreurs possibles : « code expiré / invalide » (`ATT_TOKEN_INVALID`)
+    → demander un nouveau code ; « séance fermée » (`ATT_SESSION_CLOSED`) ;
+    « présence déjà enregistrée » (`ATT_ALREADY_RECORDED`) ;
+    « vous n'êtes pas inscrit » (`ATT_NOT_ENROLLED`) ; « QR de salle non
+    reconnu » (`ATT_ROOM_QR_UNKNOWN`) ; « hors réseau de l'établissement »
+    (`ATT_ROOM_QR_OUT_OF_NETWORK`) ; « la séance a commencé »
+    (`ATT_ROOM_QR_SESSION_STARTED`) ; « ce QR n'est pas un code
+    d'émargement ESIC Connect » (QR d'une autre application ou URL
+    externe).
 - **Mes présences** (`/my-attendance`) : historique (présences réelles +
   absences dérivées d'un point de contrôle fermé), dépôt et suivi d'un
   **justificatif métier** (catégorie, période, motif — **sans pièce
@@ -203,8 +216,9 @@ Fichier d'exemple fourni : `docs/demo-data/apprenants-demo.csv` (voir
 4. Le formateur affiche le **QR code** (jeton opaque, sans donnée
    personnelle) et le **code court** (8 caractères). Le jeton **tourne**
    toutes les ~30 s.
-5. L'apprenant saisit le code court dans **Émargement**. Présence
-   classée `PRESENT` ou `LATE` (seuil unique de 10 minutes).
+5. L'apprenant **scanne le QR** (bouton « Scanner un QR code » de
+   **Émargement**) ou saisit le code court. Présence classée `PRESENT`
+   ou `LATE` (seuil unique de 10 minutes).
 6. Le formateur voit la liste des présences se mettre à jour, corrige si
    besoin (motif obligatoire, historique conservé), exporte le CSV.
 7. Le formateur ferme la séance : les jetons deviennent inutilisables.

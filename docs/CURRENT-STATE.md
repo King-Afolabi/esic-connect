@@ -10,6 +10,114 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — scan QR dans l'application + fondations NFC de salle
+
+Branche `feat/demo-readiness-e2e-ui`. **Frontend + documentation
+uniquement — zéro ligne de back-end, zéro migration** (schéma inchangé
+V34). Le déploiement Pi, la recette physique NFC et les tests sur
+téléphones réels sont **`NOT_PERFORMED`** — à faire au retour du porteur
+sur le réseau de la Pi.
+
+**Note de décision** : `docs/decisions/2026-09-08-scan-qr-nfc.md` ;
+architecture : `DEC-S13-002` (`docs/03-architecture.md`).
+
+#### Livré
+
+- **Dépendance** : `jsqr@1.4.0` (Apache-2.0, **zéro dépendance
+  transitive**, ~250 kio non minifié). Décodeur logiciel de repli.
+  `BarcodeDetector` natif est utilisé en **accélération** quand il
+  existe, jamais comme unique voie (absent d'iOS Safari). `jsQR` est
+  chargé dans le **chunk paresseux** `attendance-check-in` — bundle
+  **initial inchangé : 587,67 kio** (seuil 600). `jsqr` ajouté à
+  `allowedCommonJsDependencies` (angular.json).
+- **`app-qr-scanner`** (`features/attendance/qr-scanner/`) — composant
+  caméra réutilisable : permission **après clic uniquement** ; caméra
+  arrière (`facingMode: environment` puis `enumerateDevices`) ; aperçu
+  vidéo + cadre de visée ; **libération des pistes** à la destruction, à
+  la fermeture, au changement de route (`NavigationStart`) et **dès la
+  première lecture** ; verrou anti-lecture-multiple ; actions
+  « Réessayer », « Saisir un code court à la place », « Fermer » ; états
+  d'erreur normalisés (permission refusée, caméra absente, caméra
+  occupée, navigateur incompatible) ; `aria-live` (« Caméra activée »,
+  « Code détecté, vérification en cours… », erreurs) ; `@media
+  (prefers-reduced-motion)` sur la ligne de scan ; unités relatives
+  (zoom 200 %, portrait / paysage).
+- **`parseCheckInReference`** (`features/attendance/check-in-reference.ts`)
+  — parseur **pur**, type **fermé** :
+  `DYNAMIC_ATTENDANCE_TOKEN` | `STATIC_ROOM_REFERENCE` | `UNSUPPORTED`.
+  Chaîne opaque nue → jeton dynamique ; URL **interne**
+  `…/attendance?ref=<opaque>` → référence de salle (contrôle d'origine
+  strict) ; URL externe / QR d'une autre app / texte libre → `UNSUPPORTED`.
+  `buildRoomCheckInUrl(checkInPath, origine)` : URL absolue depuis le
+  `checkInPath` **du serveur** + l'origine publique de confiance
+  (`publicBaseUrl` configuré, sinon `window.location.origin` ;
+  `features/attendance/public-origin.ts`).
+- **`attendance-check-in`** : bouton principal **« Scanner un QR
+  code »** ; sur décodage, analyse locale puis appel des routes
+  **existantes** — `POST /attendance/validate` `{token}` (jeton
+  dynamique) ou `POST /attendance/room-qr` `{roomReference}` (URL de
+  salle). **Aucune seconde logique de validation, aucune route
+  ajoutée.** Le code court reste intact. Lien profond
+  `/attendance?ref=<opaque>` (QR fixe / tag NFC ouvert par l'appareil
+  photo système) : **pré-remplit** le champ « QR de salle », **rien
+  n'est envoyé** sans clic (le retour après authentification est déjà
+  assuré par `authGuard` → `?redirect=`).
+- **`session-errors.ts`** : `ATT_ROOM_QR_UNKNOWN`,
+  `ATT_ROOM_QR_OUT_OF_NETWORK`, `ATT_ROOM_QR_SESSION_STARTED`,
+  `ATT_ROOM_QR_NO_SESSION`, `ATT_REMOTE_NOT_AUTHORIZED` ajoutés à la
+  liste blanche : les messages serveur (déjà des phrases françaises
+  sûres) remontent tels quels après un scan. Correction d'un manque
+  pré-existant.
+- **`room-qr-poster`** : le QR encode désormais l'**URL absolue**
+  d'émargement de salle (repli sur la référence brute si l'URL ne peut
+  être construite). Section d'aide **non imprimée** « Équiper cette
+  salle en NFC ».
+- **AJOUT — URL pour tag NFC (fiche de site, panneau QR fixe)** :
+  section repliable « URL pour tag NFC », champ `readonly` monospace,
+  bouton « Copier l'URL » (`ClipboardService` —
+  `core/clipboard/clipboard.service.ts` : écriture seule sur clic, repli
+  sélection manuelle, jamais de lecture, jamais de `localStorage`).
+  Mêmes rôles que l'affichage / l'impression du QR (`ADMIN`,
+  `SUPER_ADMIN`, `SCHOOL_ADMINISTRATION`) ; `PEDAGOGICAL_MANAGER` /
+  `TEACHER` / `STUDENT` : aucun accès. Copie remise à `idle` après un
+  renouvellement (l'URL a changé). L'URL **n'est jamais** dans
+  `RoomResponse`, dans la liste des salles, dans les journaux ou dans
+  l'audit.
+- **NFC — fondations, pas d'implémentation Web NFC** : le tag NDEF
+  contient la **même URL** que le QR fixe ; le serveur applique
+  **exactement** les mêmes contrôles (plage réseau, fenêtre de séance).
+  **Pas de canal `ROOM_STATIC_NFC`** : aucune information fiable ne
+  distingue un tap NFC d'une ouverture d'URL — canal enregistré inchangé
+  (`ROOM_STATIC_QR`). Limite documentée. Guide :
+  `docs/deployment/NFC-ROOM-TAGS.md`.
+
+#### Backend
+
+**Aucune route modifiée, aucune route ajoutée.** Le scan atteint la
+validation existante : le QR dynamique du formateur (`app-qr-display`)
+encode déjà la chaîne opaque brute du jeton, transmise dans le champ
+`token` de `POST /api/v1/attendance/validate`. `RoomResponse` ne portait
+déjà plus `staticQrReference` (`DEC-S13-001`). Sécurité et autorité
+serveur **inchangées** : jeton, expiration, séance, point de contrôle,
+inscription, plage réseau, anti-rejeu, retard et canal restent
+déterminés par le serveur.
+
+#### Tests exécutés (Mac)
+
+| Commande | Résultat |
+|---|---|
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **107 fichiers / 922 tests / 0 échec** (+52 : `check-in-reference.spec` 14, `qr-scanner.spec` 12, `clipboard.service.spec` 4, `attendance-check-in.spec` +7, `session-errors.spec` +5, `site-detail.spec` +8, `room-qr-poster.spec` +2) |
+| `cd frontend && npx ng build --configuration production` | **587,67 kio** initial, **aucune alerte de budget** ; `jsqr` confiné au chunk paresseux `attendance-check-in` (153,97 kio brut) ; avertissement CommonJS supprimé |
+| `frontend/node_modules/.bin/tsc -p tsconfig.json --noEmit` | typecheck de la suite Playwright (dont `tests/16-qr-scanner.spec.ts`) — **0 erreur** |
+
+**`NOT_PERFORMED`** : suite back-end (0 fichier Java touché) ;
+`tests/16-qr-scanner.spec.ts` (caméra simulée) — écrit et typé, **non
+exécuté** (pile de démonstration non démarrée cette session) ; **recette
+physique iPhone / Android** (caméra réelle, QR imprimé, tap NFC d'un tag
+NDEF) ; audit accessibilité outillé des écrans refondus ; **déploiement
+Pi**.
+
 ### 8 septembre 2026 — ANO-USER-001 : comparaison de doublons en lecture seule + amélioration visuelle légère
 
 Branche `feat/demo-readiness-e2e-ui`. **Aucune migration** (schéma

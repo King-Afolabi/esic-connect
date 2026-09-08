@@ -2670,6 +2670,61 @@ est donc une **vue d'impression Angular** (`room-qr-poster`, `@media
 print`), pas un PDF serveur — le cahier l'autorise explicitement à
 défaut de générateur.
 
+### DEC-S13-002 — Le scan QR vit dans l'app ; l'URL de salle est la forme d'affiche et de tag NFC
+
+**Contexte.** `EF-ATT-001/002/009/010` : l'apprenant émarge par scan
+d'un QR dynamique du formateur ou d'un QR fixe de salle. Jusqu'ici,
+`/attendance` n'offrait que la **saisie manuelle** du code court et du
+code d'affiche. Il fallait aussi préparer un tag NFC de salle.
+
+**Décision.**
+
+1. **Un composant caméra unique, `app-qr-scanner`** (sous
+   `features/attendance/`), ouvert **uniquement après un clic**. Il gère
+   la permission caméra, la sélection de la caméra arrière
+   (`facingMode: environment` puis `enumerateDevices`), la libération des
+   pistes (destruction, fermeture, changement de route, **première
+   lecture**), et un verrou anti-lecture-multiple. Décodage :
+   `BarcodeDetector` natif s'il existe (accélération), sinon `jsQR`
+   (Apache-2.0, zéro dépendance) sur les trames — **jamais**
+   `BarcodeDetector` seul (absent d'iOS Safari). `jsQR` est chargé dans
+   le **chunk paresseux** de `attendance-check-in` : bundle initial
+   inchangé (~588 kio).
+2. **Le frontend ne décide de rien.** Le contenu scanné est analysé par
+   un parseur pur (`parseCheckInReference`) vers un **type fermé**
+   (`DYNAMIC_ATTENDANCE_TOKEN` / `STATIC_ROOM_REFERENCE` / `UNSUPPORTED`),
+   puis transmis **tel quel** aux routes d'émargement **existantes**
+   (`POST /attendance/validate` `{token}`, `POST /attendance/room-qr`
+   `{roomReference}`). Aucune route ni logique de validation nouvelle.
+   Une URL hors des origines internes est `UNSUPPORTED` — jamais suivie.
+3. **Ambiguïté jeton dynamique / référence de salle** : les deux sont des
+   chaînes Base64 URL-safe de longueur voisine. Une chaîne **nue** issue
+   de la caméra est donc traitée comme un **jeton dynamique** ; une
+   **référence de salle** n'est reconnue que dans une **URL interne**
+   `…/attendance?ref=…`. L'affiche `room-qr-poster` encode désormais
+   cette **URL absolue** (construite depuis `checkInPath` fourni par le
+   serveur + l'origine publique configurée), et c'est **la même URL**
+   qu'un tag **NFC NDEF** doit contenir. Les anciennes affiches à
+   référence nue restent utilisables par la **saisie manuelle**.
+4. **NFC : fondations seulement, pas de canal dédié.** Le tag ouvre la
+   même URL ; le serveur applique les mêmes contrôles (plage réseau,
+   fenêtre). Aucun canal `ROOM_STATIC_NFC` : rien ne distingue de façon
+   fiable un tap NFC d'une ouverture d'URL par appareil photo. Web NFC
+   n'est pas utilisé. Détails : `docs/deployment/NFC-ROOM-TAGS.md`.
+5. **URL de salle côté administration** : une section repliable « URL
+   pour tag NFC » dans le panneau QR fixe de la fiche de site (mêmes
+   rôles que l'affichage / l'impression : `ADMIN`, `SUPER_ADMIN`,
+   `SCHOOL_ADMINISTRATION`), avec copie presse-papiers **sur clic**
+   (`ClipboardService`, repli sélection manuelle d'un champ `readonly`).
+   L'URL n'est **jamais** dans `RoomResponse` ni dans la liste des
+   salles, jamais loggée, jamais auditée.
+
+**Raison.** Réutiliser l'unique autorité serveur évite toute divergence
+de règle ; le composant caméra concentre la gestion, difficile, du cycle
+de vie des pistes ; `jsQR` en repli garantit iOS ; l'URL comme forme
+canonique d'affiche unifie QR imprimé et tag NFC derrière un seul chemin
+de code.
+
 ### DEC-S9-001 — L'effet d'un départ anticipé est dérivé, jamais stocké
 
 **Contexte.** `EF-ATT-013` et docs/02 §16.13 : « L'effet est `PARTIAL`,
