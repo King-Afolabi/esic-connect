@@ -10,6 +10,26 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 — onglets référentiels académiques → primitive `.esic-subnav` (ANO-UX-001, reliquat)
+
+Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, zéro migration.**
+Dernier reliquat d'ANO-UX-001. Les barres d'onglets bespoke
+`.academic__tabs` de la **liste** et du **détail** des référentiels
+académiques (`/academic/*`) convergent vers la primitive partagée
+`.esic-subnav` : `<nav class="esic-subnav"><div class="esic-subnav__list">
+<a class="esic-subnav__link" routerLinkActive="esic-subnav__link--active"
+ariaCurrentWhenActive="page">`. ~60 lignes de SCSS dupliqué supprimées
+(`.academic__tabs*`, `.academic__tab--active` dans les deux `.scss`).
+Comportement identique (trait d'accent 2 px, `aria-current`,
+`:focus-visible`, clavier natif, persistance par URL) — c'est une dette
+de duplication, pas un défaut d'accessibilité. `academic-reference-detail.spec.ts`
+mis à jour (sélecteurs `nav.esic-subnav` / `.esic-subnav__link--active`).
+**ANO-UX-001 n'a plus de reliquat.**
+
+**Tests** : `npm run lint` vert ; `npx ng test --watch=false`
+**104 fichiers / 862 tests / 0 échec** ; `ng build --configuration production`
+**582,62 kB**, aucune alerte de budget. `NOT_PERFORMED` : déploiement Pi.
+
 ### 8 septembre 2026 — fiche site : en-tête compact + sous-listes bornées + filtres (ANO-UX-003, PARTIAL)
 
 Branche `feat/demo-readiness-e2e-ui`. **Frontend seul, zéro migration.**

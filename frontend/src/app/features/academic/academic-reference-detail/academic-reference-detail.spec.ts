@@ -252,9 +252,9 @@ describe('AcademicReferenceDetail', () => {
     harness.detectChanges();
 
     const tabLinks = Array.from(
-      harness.routeNativeElement?.querySelectorAll('nav.academic__tabs a') ?? [],
+      harness.routeNativeElement?.querySelectorAll('nav.esic-subnav a') ?? [],
     ) as HTMLAnchorElement[];
-    const active = tabLinks.filter((a) => a.classList.contains('academic__tab--active'));
+    const active = tabLinks.filter((a) => a.classList.contains('esic-subnav__link--active'));
     expect(active).toHaveLength(1);
     expect(active[0].textContent?.trim()).toBe('Classes');
     expect(active[0].getAttribute('aria-current')).toBe('page');

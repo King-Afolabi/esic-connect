@@ -18,39 +18,8 @@
   color: var(--esic-ink);
 }
 
-// Navigation à onglets de section (formations / niveaux / promotions…).
-.academic__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esic-space-2) var(--esic-space-5);
-  border-bottom: 1px solid var(--esic-line);
-  padding-bottom: var(--esic-space-2);
-}
-
-.academic__tabs a {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--esic-ink-soft);
-  text-decoration: none;
-  padding: var(--esic-space-2) 0;
-  border-bottom: 2px solid transparent;
-}
-
-.academic__tabs a:hover {
-  color: var(--esic-ink);
-  border-bottom-color: var(--esic-line-strong);
-}
-
-.academic__tabs a:focus-visible {
-  outline: 2px solid var(--esic-focus-ring);
-  outline-offset: 3px;
-  border-radius: 2px;
-}
-
-.academic__tab--active {
-  color: var(--esic-blue-700);
-  border-bottom-color: var(--esic-blue-700);
-}
+// Navigation à onglets de section : primitive partagée `.esic-subnav`
+// (`_primitives.scss`) — plus de bloc bespoke ici (ANO-UX-001).
 
 // Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`).
 .academic__filter-actions {
