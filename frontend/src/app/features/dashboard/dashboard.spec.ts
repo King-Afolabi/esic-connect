@@ -425,6 +425,62 @@ describe('Dashboard', () => {
     expect(root.querySelector('.dashboard__bar-value')?.textContent).toContain('95.00 %');
   });
 
+  it('folds the class attendance chart into a single enriched table (no duplicate visual)', () => {
+    roles.set(['PEDAGOGICAL_MANAGER']);
+    reload({
+      role: 'PEDAGOGICAL_MANAGER',
+      generatedAt: '2026-09-10T09:00:00Z',
+      student: null,
+      teacher: null,
+      administration: null,
+      notes: [],
+      manager: {
+        classCount: 12,
+        upcomingSessions: [],
+        classCodes: ['BTS1-A', 'BTS1-B', 'BTS2-A', 'M1-A', 'M2-A'],
+        periodFrom: '2026-08-11T09:00:00Z',
+        periodTo: '2026-09-10T09:00:00Z',
+        attendanceRate: 0.9125,
+        lateCount: 7,
+        unjustifiedAbsenceHalfDays: 5,
+        pendingJustifications: 3,
+        openClaims: 1,
+        pendingActivations: 2,
+        classRates: [
+          {
+            label: 'BTS1-A',
+            expectedHalfDays: 40,
+            presentHalfDays: 38,
+            absentHalfDays: 1,
+            excusedHalfDays: 1,
+            lateCount: 4,
+            attendanceRate: 0.95,
+          },
+        ],
+      },
+    });
+    const root = fixture.nativeElement as HTMLElement;
+
+    // Un seul visuel : le graphique séparé a disparu du bloc responsable.
+    expect(root.querySelector('.dashboard__chart')).toBeNull();
+    // Le tableau enrichi reste, avec la barre + la valeur dans la colonne « Taux ».
+    const table = root.querySelector('table.dashboard__table');
+    expect(table?.querySelector('.esic-rate-cell__fill')).not.toBeNull();
+    expect(table?.querySelector('.dashboard__bar-value')?.textContent).toContain('95.00 %');
+    expect(table?.querySelector('caption')?.textContent).toContain('Tableau équivalent');
+
+    // « Mon activité » : grille compacte de 2 colonnes, 6 cellules, dont
+    // « Comptes non activés » — plus de carte séparée.
+    const grid = root.querySelector('.esic-metric-grid');
+    expect(grid).not.toBeNull();
+    expect(grid?.querySelectorAll('.esic-metric').length).toBe(6);
+    expect(grid?.textContent).toContain('Comptes non activés');
+
+    // « Mon périmètre » : aperçu borné + lien vers la liste des classes.
+    expect(root.textContent).toContain('+2 autres');
+    expect(root.querySelector('a[href="/academic/class-groups"]')).not.toBeNull();
+  });
+
   it('renders the full manager indicators the specification asks for', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     reload({

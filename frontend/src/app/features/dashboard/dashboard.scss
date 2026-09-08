@@ -170,8 +170,10 @@
   margin-bottom: var(--esic-space-5);
 }
 
-.dashboard__split .dashboard__metrics {
+.dashboard__split .dashboard__metrics,
+.dashboard__split .esic-metric-grid {
   margin-bottom: 0;
+  align-self: start;
 }
 
 .dashboard__card--facing {
@@ -233,6 +235,20 @@
 .dashboard__card .dashboard__list {
   max-height: 22rem;
   overflow-y: auto;
+}
+
+// D.2 — aperçu BORNÉ des classes du périmètre (3 codes + « +N autres »),
+// jamais la liste complète. Le lien « Voir les classes » mène à la liste
+// existante, filtrée au périmètre côté serveur.
+.dashboard__scope-preview {
+  margin: var(--esic-space-3) 0 0;
+  font-size: 0.875rem;
+  color: var(--esic-ink);
+  overflow-wrap: anywhere;
+}
+
+.dashboard__card--facing .mat-mdc-card-content > a {
+  margin-top: var(--esic-space-3);
 }
 
 .dashboard__facts {

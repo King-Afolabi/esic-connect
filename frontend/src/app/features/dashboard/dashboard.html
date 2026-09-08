@@ -206,30 +206,38 @@
               rail), jamais la fenêtre. En pile sous 52 rem.
             -->
             <div class="dashboard__split">
-              <ul class="dashboard__metrics" aria-label="Indicateurs de mon périmètre">
-                <li class="dashboard__metric dashboard__metric--rate">
-                  <span class="dashboard__metric-value">{{ percent(m.attendanceRate) }}</span>
-                  <span class="dashboard__metric-label">Taux d'assiduité</span>
+              <!--
+                D.1 — « Mon activité » : une seule carte compacte, grille
+                de DEUX colonnes (primitive `.esic-metric-grid`), plus la
+                longue ligne de tuiles ni la deuxième ligne isolée. Les
+                comptes non activés y figurent comme cellule, pas comme
+                carte séparée. La tonalité (`data-tone`) double le
+                libellé, jamais l'inverse.
+              -->
+              <ul class="esic-metric-grid" aria-label="Mon activité">
+                <li class="esic-metric" data-tone="present">
+                  <span class="esic-metric__label">Taux d'assiduité</span>
+                  <span class="esic-metric__value">{{ percent(m.attendanceRate) }}</span>
                 </li>
-                <li class="dashboard__metric dashboard__metric--late">
-                  <span class="dashboard__metric-value">{{ m.lateCount }}</span>
-                  <span class="dashboard__metric-label">Retards</span>
+                <li class="esic-metric" data-tone="late">
+                  <span class="esic-metric__label">Retards</span>
+                  <span class="esic-metric__value">{{ m.lateCount }}</span>
                 </li>
-                <li class="dashboard__metric dashboard__metric--absent">
-                  <span class="dashboard__metric-value">{{ m.unjustifiedAbsenceHalfDays }}</span>
-                  <span class="dashboard__metric-label">Absences non justifiées (½-journées)</span>
+                <li class="esic-metric" data-tone="absent">
+                  <span class="esic-metric__label">Absences non justifiées (½-j.)</span>
+                  <span class="esic-metric__value">{{ m.unjustifiedAbsenceHalfDays }}</span>
                 </li>
-                <li class="dashboard__metric dashboard__metric--pending">
-                  <span class="dashboard__metric-value">{{ m.pendingJustifications }}</span>
-                  <span class="dashboard__metric-label">Justificatifs en attente</span>
+                <li class="esic-metric" data-tone="pending">
+                  <span class="esic-metric__label">Justificatifs en attente</span>
+                  <span class="esic-metric__value">{{ m.pendingJustifications }}</span>
                 </li>
-                <li class="dashboard__metric">
-                  <span class="dashboard__metric-value">{{ m.openClaims }}</span>
-                  <span class="dashboard__metric-label">Réclamations ouvertes</span>
+                <li class="esic-metric">
+                  <span class="esic-metric__label">Réclamations ouvertes</span>
+                  <span class="esic-metric__value">{{ m.openClaims }}</span>
                 </li>
-                <li class="dashboard__metric">
-                  <span class="dashboard__metric-value">{{ m.pendingActivations }}</span>
-                  <span class="dashboard__metric-label">Comptes non activés</span>
+                <li class="esic-metric">
+                  <span class="esic-metric__label">Comptes non activés</span>
+                  <span class="esic-metric__value">{{ m.pendingActivations }}</span>
                 </li>
               </ul>
 
@@ -237,12 +245,20 @@
                 <mat-card-header><mat-card-title>Mon périmètre</mat-card-title></mat-card-header>
                 <mat-card-content>
                   <dl class="dashboard__facts">
-                    <dt>Classes</dt><dd>{{ m.classCount }}</dd>
-                    <dt>Codes</dt><dd>{{ m.classCodes.join(', ') || '—' }}</dd>
+                    <dt>Classes gérées</dt><dd>{{ m.classCount }}</dd>
                   </dl>
+                  @if (m.classCodes.length) {
+                    <p class="dashboard__scope-preview">
+                      {{ m.classCodes.slice(0, 3).join(' · ') }}<!--
+                      -->@if (m.classCodes.length > 3) {
+                        <span class="dashboard__meta"> · +{{ m.classCodes.length - 3 }} autres</span>
+                      }
+                    </p>
+                  }
                   <p class="dashboard__meta">
                     Période mesurée : du {{ shortDate(m.periodFrom) }} au {{ shortDate(m.periodTo) }}.
                   </p>
+                  <a mat-stroked-button routerLink="/academic/class-groups">Voir les classes</a>
                 </mat-card-content>
               </mat-card>
             </div>
@@ -255,13 +271,14 @@
             -->
             <div class="dashboard__grid dashboard__grid--facing">
               <!--
-                EF-REP-008 — « tout graphique dispose d'un titre, d'une
-                légende, de valeurs accessibles, d'un tableau équivalent,
-                d'une palette contrastée, et ne dépend jamais uniquement
-                de la couleur » (docs/02 §22.6). L'histogramme et le
-                tableau lisent la MÊME liste : ils ne peuvent pas diverger.
-                Chaque barre porte sa valeur en texte — la couleur n'est
-                jamais le seul porteur de l'information.
+                EF-REP-008 (docs/02 §22.6) — le cahier exige « un tableau
+                équivalent » à un graphique, pas DEUX visuels côte à côte.
+                L'histogramme séparé et le tableau doublaient la même
+                donnée : ils sont fusionnés en un seul tableau enrichi. La
+                colonne « Taux » porte une barre décorative (`aria-hidden`)
+                suivie du pourcentage en toutes lettres — la couleur n'est
+                jamais le seul porteur de l'information, et le tableau
+                reste la source accessible (lecteur d'écran, clavier).
               -->
               <mat-card appearance="outlined" class="dashboard__card dashboard__card--lead">
                 <mat-card-header>
@@ -272,21 +289,9 @@
                 </mat-card-header>
                 <mat-card-content>
                   @if (m.classRates.length) {
-                    <ul class="dashboard__chart" role="presentation">
-                      @for (rate of m.classRates; track rate.label) {
-                        <li class="dashboard__bar-row">
-                          <span class="dashboard__bar-label">{{ rate.label }}</span>
-                          <span class="dashboard__bar-track">
-                            <span class="dashboard__bar-fill"
-                                  [style.width.%]="barWidth(rate.attendanceRate)"></span>
-                          </span>
-                          <span class="dashboard__bar-value">{{ percent(rate.attendanceRate) }}</span>
-                        </li>
-                      }
-                    </ul>
-                    <div class="esic-table-wrap">
+                    <div class="esic-table-wrap esic-table-wrap--compact">
                       <table class="esic-table dashboard__table">
-                        <caption>Tableau équivalent — assiduité par classe, en demi-journées</caption>
+                        <caption>Assiduité par classe, en demi-journées — Tableau équivalent au graphique de taux</caption>
                         <thead>
                           <tr>
                             <th scope="col">Classe</th>
@@ -295,7 +300,7 @@
                             <th scope="col" class="esic-num">Absentes</th>
                             <th scope="col" class="esic-num">Excusées</th>
                             <th scope="col" class="esic-num">Retards</th>
-                            <th scope="col" class="esic-num">Taux</th>
+                            <th scope="col">Taux</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -307,7 +312,15 @@
                               <td class="esic-num">{{ rate.absentHalfDays }}</td>
                               <td class="esic-num">{{ rate.excusedHalfDays }}</td>
                               <td class="esic-num">{{ rate.lateCount }}</td>
-                              <td class="esic-num">{{ percent(rate.attendanceRate) }}</td>
+                              <td>
+                                <span class="esic-rate-cell">
+                                  <span class="esic-rate-cell__track" aria-hidden="true">
+                                    <span class="esic-rate-cell__fill"
+                                          [style.width.%]="barWidth(rate.attendanceRate)"></span>
+                                  </span>
+                                  <span class="dashboard__bar-value">{{ percent(rate.attendanceRate) }}</span>
+                                </span>
+                              </td>
                             </tr>
                           }
                         </tbody>
