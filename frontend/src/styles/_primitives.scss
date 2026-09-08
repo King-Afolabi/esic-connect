@@ -177,6 +177,114 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
 }
 
+// -- Grille compacte d'indicateurs (2 colonnes) --------------------------
+// (ANO-UX-005) Un bloc d'indicateurs dense : libellé court + valeur
+// lisible, exactement DEUX colonnes dès qu'il y a la place, une seule en
+// pile en dessous. Filets internes plutôt que cartes séparées : pas de
+// grande zone vide, chiffres alignés. Repris par « Mon activité » du
+// tableau de bord responsable et par la synthèse du suivi d'assiduité.
+// La couleur (via `data-tone`) n'est jamais le seul indice : le libellé
+// et la valeur restent lisibles sans elle (docs/02 §32.5).
+.esic-metric-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  overflow: hidden;
+
+  @container esic-content (max-width: 34rem) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.esic-metric {
+  min-width: 0;
+  padding: var(--esic-space-3) var(--esic-space-4);
+  border-top: 1px solid var(--esic-line);
+  border-left: 1px solid var(--esic-line);
+
+  &:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  &:nth-child(odd) {
+    border-left: 0;
+  }
+
+  @container esic-content (max-width: 34rem) {
+    &:nth-child(2) {
+      border-top: 1px solid var(--esic-line);
+    }
+
+    border-left: 0;
+  }
+
+  &__label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--esic-ink-faint);
+  }
+
+  &__value {
+    display: block;
+    margin-top: var(--esic-space-1);
+    font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--esic-ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__hint {
+    display: block;
+    margin-top: var(--esic-space-1);
+    font-size: 0.75rem;
+    color: var(--esic-ink-faint);
+  }
+
+  // Tonalité métier — un filet supérieur coloré, jamais la seule couleur.
+  &[data-tone="present"] { box-shadow: inset 0 3px 0 var(--esic-status-present-fg); }
+  &[data-tone="late"] { box-shadow: inset 0 3px 0 var(--esic-status-late-fg); }
+  &[data-tone="absent"] { box-shadow: inset 0 3px 0 var(--esic-status-absent-fg); }
+  &[data-tone="excused"] { box-shadow: inset 0 3px 0 var(--esic-status-excused-fg); }
+  &[data-tone="pending"] { box-shadow: inset 0 3px 0 var(--esic-status-pending-fg); }
+}
+
+// Barre de taux inline (colonne « Taux » d'un tableau d'assiduité) :
+// piste en creux + remplissage bleu ESIC, suivie de la valeur en toutes
+// lettres. Décorative (`aria-hidden` sur la piste) — la valeur porte
+// l'information.
+.esic-rate-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esic-space-2);
+  min-width: 8rem;
+}
+
+.esic-rate-cell__track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 0.5rem;
+  min-width: 3rem;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-surface-sunken);
+  overflow: hidden;
+}
+
+.esic-rate-cell__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--esic-primary);
+}
+
 // -- Pastille de statut d'assiduité ------------------------------------------
 // Le vocabulaire visuel signature du produit. Toujours : un point coloré + un
 // libellé. La couleur ne porte jamais seule l'information.
@@ -316,7 +424,23 @@
 //   * `.esic-table` (tableau HTML natif) — son `thead th` est déjà
 //     `position: sticky; top: 0` (voir plus bas) et devient effectif dès
 //     que l'enveloppe est le conteneur de défilement.
-.esic-table-wrap--tall {
+// -- Variante « compacte » : ~6-7 lignes visibles + entête figée --------
+// (ANO-UX-004) Même mécanique que `--tall`, mais un plafond calibré pour
+// que ~6-7 lignes normales tiennent « dans l'assiette » : l'utilisateur
+// atteint le paginator (posé JUSTE sous l'enveloppe) sans faire défiler
+// toute la page. Opt-in explicite, jamais posée par défaut.
+//
+//   - plafond par défaut ≈ 6-7 lignes (`clamp(15rem, 42vh, 24rem)`),
+//     surchargeable par `--esic-table-max-h` (p. ex. `18rem` pour ~5
+//     lignes quand la page porte déjà beaucoup au-dessus) ;
+//   - une table plus courte que le plafond garde sa hauteur naturelle
+//     (`max-height`, jamais `height`) ;
+//   - défilement INTERNE à l'enveloppe ; `overscroll-behavior: contain`
+//     évite que la molette, une fois la table en butée, emporte la page
+//     — le `<body>` reste défilable dès que le curseur quitte le tableau.
+//     Aucun gestionnaire `wheel` en JS, clavier / PageUp-Down intacts.
+.esic-table-wrap--tall,
+.esic-table-wrap--compact {
   max-height: var(--esic-table-max-h, clamp(20rem, 62vh, 46rem));
   overflow-x: auto;
   overflow-y: auto;
@@ -348,6 +472,13 @@
     z-index: 2;
     background: var(--esic-surface-sunken);
   }
+}
+
+// Plafond compact : ~6-7 lignes. La pagination (`mat-paginator`,
+// `.esic-pager`…) reste TOUJOURS posée hors de l'enveloppe, juste
+// dessous, donc visible sans second défilement.
+.esic-table-wrap--compact {
+  --esic-table-max-h: clamp(15rem, 42vh, 24rem);
 }
 
 // -- Indice de défilement horizontal (Lot L) ----------------------------

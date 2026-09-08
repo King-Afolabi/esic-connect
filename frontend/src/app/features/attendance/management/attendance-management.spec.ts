@@ -67,6 +67,11 @@ describe('AttendanceSummary', () => {
     expect(text).toContain('Justificatifs en attente');
     expect(text).toContain('contexte COMPANY sont exclues');
     expect(localStorage.length).toBe(0);
+    // Synthèse compacte : grille 2 colonnes (primitive `.esic-metric-grid`),
+    // huit cellules, plus les huit cartes séparées d'avant.
+    const grid = (fixture.nativeElement as HTMLElement).querySelector('.esic-metric-grid');
+    expect(grid).not.toBeNull();
+    expect(grid?.querySelectorAll('.esic-metric').length).toBe(8);
     http.verify();
   });
 
