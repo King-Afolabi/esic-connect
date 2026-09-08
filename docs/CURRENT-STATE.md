@@ -10,6 +10,79 @@
 
 ## Dernière mise à jour
 
+### 8 septembre 2026 (soir) — DÉPLOIEMENT Raspberry Pi : passe UX front + comparaison de doublons
+
+Le Mac et la Pi étant sur le même LAN, les lots UX/front des entrées
+ci-dessous **et** la comparaison de doublons en lecture seule
+(ANO-USER-001, back-end + front) ont été **déployés** sur la Raspberry
+Pi.
+
+| Élément | Valeur |
+|---|---|
+| Hôte SSH | `king_a@king-a.local` (résolu `192.168.1.83`), `King-A`, aarch64, Debian, Docker 29.8.0 / Compose v5.5.1 |
+| SHA déployé | **`80ff31a9cffce917e726bff4e724b1c846f7d8a8`** (`origin/feat/demo-readiness-e2e-ui`) |
+| État Pi avant | non un dépôt Git ; images `backend 879adab04b49` (7 sept, `bf6c3a9`), `frontend d16936e37e45` (8 sept ~06:43, build front intermédiaire non consigné) |
+| Transfert | `git archive 80ff31a` → `scp` → extraction en staging `/tmp/esic-staging` → `rsync -a` **sans `--delete`** vers `~/esic-connect`, exclusions `.env* .git backups node_modules .angular dist target *.log .local` |
+| Sauvegarde | `~/esic-connect/backups/20260908T193332Z/` : `mysql.sql.gz` (1 676 997 o, `gzip -t` OK, marqueur « Dump completed » présent), `justifications.tar.gz` (volume vide, 2 entrées), `compose-{ps,images,config}.txt` (`config --no-interpolate`, aucun secret en clair), `deployed-state.txt`, `.env.prod.example` |
+| Images de rollback | `esic-connect-backend:pre-20260908-uxfront` (`879adab04b49`), `esic-connect-frontend:pre-20260908-uxfront` (`d16936e37e45`) |
+
+**Le lot n'est pas purement front.** L'inspection `git diff bf6c3a9..80ff31a`
+révèle des fichiers Java **nouveaux** (`DuplicateDependencyContributor`,
+`DuplicateComparisonService`, `DuplicateComparisonWeb`,
+`UserAccountController`, contributeurs `attendance` / `claim` /
+`enrollment` / `notification`, repositories) absents de l'image backend
+en service : **backend reconstruit** en plus du frontend. **Aucune
+migration** — `git diff` sur `backend/src/main/resources/db` vide,
+schéma **V34** inchangé (Flyway au démarrage : « Successfully validated
+34 migrations », « Schema `esic_connect_demo` is up to date. No migration
+necessary »). `compose.prod.yaml` **identique** à la source
+(`diff` vide).
+
+**Build (natif ARM64, sur la Pi)** : `docker compose -f compose.prod.yaml
+build frontend` ≈ 2 min 20 (image `ab121402b42a`) ; `… build backend`
+≈ 2 min 59 (deps Maven en cache ; image `9a35a240d65c`). Puis
+`docker compose -f compose.prod.yaml up -d --no-deps backend frontend` :
+**seuls `backend` et `frontend` recréés**. `mysql`, `redis` et
+**`cloudflared` non touchés** — l'URL du Quick Tunnel est **conservée**.
+
+**Santé** : 5/5 conteneurs — `backend` `healthy`, `frontend` `healthy`,
+`mysql` / `redis` `healthy` (41 h, inchangés), `cloudflared` `running`
+(25 h, inchangé). `GET /actuator/health` (interne) → `{"status":"UP"}`.
+Aucune exception au démarrage (seul un `INFO` bénin Spring Data Redis,
+pré-existant).
+
+**URL publique (Quick Tunnel, éphémère, inchangée) :
+`https://drivers-revenues-alloy-guarantee.trycloudflare.com`**
+
+**Smoke tests HTTP (via l'URL publique)** :
+
+| Chemin | Code |
+|---|---|
+| `/` | 200 |
+| `/login` | 200 |
+| `/dashboard` | 200 |
+| `/api/v1/programs` | 401 |
+| `/my-attendance/early-departures` | 200 |
+| `/students` | 200 |
+| `/administration/duplicates` | 200 |
+| `/organization/sites` | 200 |
+| `/attendance` | 200 |
+
+Bundles neufs servis (`main-VBNEFB7X.js`, `styles-YLFUO5QS.css`) ; la
+feuille de styles publiée contient les primitives attendues —
+`.esic-metric-grid` (2), `.esic-table-wrap--compact` (5),
+`.profile-menu__panel` (1), `.esic-form__actions` (1) — et les jetons
+« surfaces chaudes » (`--esic-surface:#fffdfa`, ombres
+`--esic-shadow-sm/md/lg`).
+
+**`NOT_PERFORMED`** : **recette visuelle authentifiée** dans un vrai
+navigateur (départ anticipé, bloc « Scolarité actuelle », panneau
+profil, tableau de bord responsable compact, scanner QR caméra,
+comparaison de doublons côte à côte) — non exécutée, non simulée ;
+recette Playwright ; audit accessibilité outillé des écrans refondus ;
+suite back-end sur le commit déployé (tranches vertes au Mac dans les
+entrées ci-dessous ; non relancée ici). Statut : **DEPLOYED**.
+
 ### 8 septembre 2026 — passe UX : départ anticipé, fiche apprenant, profil, tableau de bord responsable, synthèse, tables compactes
 
 Branche `feat/demo-readiness-e2e-ui`. **Frontend + documentation
