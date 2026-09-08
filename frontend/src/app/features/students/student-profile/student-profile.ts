@@ -128,6 +128,27 @@ export class StudentProfile {
     const current = this.history();
     return current.kind === 'ready' ? current.enrollments : [];
   });
+
+  /**
+   * Scolarité actuelle — <strong>dérivée</strong> de l'historique déjà
+   * chargé (`GET /api/v1/enrollments?student=…&sort=startDate,desc`),
+   * aucun appel supplémentaire, aucun N+1. On retient l'inscription
+   * `ACTIVE` ; à défaut, la plus récente (la liste est triée par date de
+   * début décroissante). `null` tant que l'historique n'est pas prêt ou
+   * qu'aucune inscription n'existe.
+   *
+   * <p>Le contrat `EnrollmentResponse` porte des <em>codes</em> lisibles
+   * (`classGroupCode`, `programCode`, `academicYearCode`) — jamais des
+   * UUID. Le niveau, la promotion et le rythme d'alternance n'y figurent
+   * pas : ils ne sont pas affichés plutôt qu'inventés.</p>
+   */
+  protected readonly currentEnrollment = computed<EnrollmentResponse | null>(() => {
+    const rows = this.historyRows();
+    if (rows.length === 0) {
+      return null;
+    }
+    return rows.find((row) => row.status === 'ACTIVE') ?? rows[0];
+  });
   protected readonly historyError = computed(() => {
     const current = this.history();
     return current.kind === 'error' ? current.message : null;

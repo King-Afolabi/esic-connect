@@ -93,6 +93,51 @@
         </mat-card-content>
       </mat-card>
 
+      <mat-card appearance="outlined" class="profile__card">
+        <mat-card-header>
+          <mat-card-title>Scolarité actuelle</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @switch (history().kind) {
+            @case ('loading') {
+              <p class="profile__status" role="status">Chargement de la scolarité…</p>
+            }
+            @case ('error') {
+              <p class="profile__status" role="status">
+                Scolarité indisponible : voir l'historique ci-dessous.
+              </p>
+            }
+            @case ('ready') {
+              @if (currentEnrollment(); as e) {
+                <dl class="esic-kv profile__current">
+                  <dt>Formation</dt>
+                  <dd>{{ e.programCode }}</dd>
+                  <dt>Classe active</dt>
+                  <dd>{{ e.classGroupCode }}</dd>
+                  <dt>Année scolaire</dt>
+                  <dd>{{ e.academicYearCode }}</dd>
+                  <dt>Statut de l'inscription</dt>
+                  <dd>
+                    <span class="esic-badge" [attr.data-status]="e.status">
+                      {{ enrollmentStatusLabel(e.status) }}
+                    </span>
+                  </dd>
+                  <dt>Depuis le</dt>
+                  <dd>{{ e.startDate | date: 'dd/MM/yyyy' }}</dd>
+                </dl>
+                <p class="profile__hint">
+                  Niveau, promotion et rythme d'alternance ne sont pas exposés par cette fiche.
+                </p>
+              } @else {
+                <p class="profile__status" role="status">
+                  Aucune inscription active. Voir l'historique ci-dessous.
+                </p>
+              }
+            }
+          }
+        </mat-card-content>
+      </mat-card>
+
       <section class="profile__history" aria-labelledby="history-heading">
         <h2 id="history-heading" class="profile__section-title">Historique des inscriptions</h2>
 
@@ -119,7 +164,7 @@
                 Aucune inscription n'est enregistrée pour cet apprenant.
               </p>
             } @else {
-              <div class="profile__table-wrapper">
+              <div class="profile__table-wrapper esic-table-wrap--compact">
                 <table mat-table [dataSource]="historyRows()">
                   <ng-container matColumnDef="academicYear">
                     <th mat-header-cell *matHeaderCellDef>Année scolaire</th>
@@ -161,7 +206,7 @@
                     </td>
                   </ng-container>
 
-                  <tr mat-header-row *matHeaderRowDef="historyColumns"></tr>
+                  <tr mat-header-row *matHeaderRowDef="historyColumns; sticky: true"></tr>
                   <tr mat-row *matRowDef="let row; columns: historyColumns"></tr>
                 </table>
               </div>
@@ -193,7 +238,7 @@
               @if (remoteRows().length === 0) {
                 <p class="profile__empty">Aucune autorisation enregistrée.</p>
               } @else {
-                <div class="profile__table-wrapper">
+                <div class="profile__table-wrapper esic-table-wrap--compact">
                   <table mat-table [dataSource]="remoteRows()">
                     <ng-container matColumnDef="period">
                       <th mat-header-cell *matHeaderCellDef scope="col">Période</th>
@@ -230,7 +275,7 @@
                         }
                       </td>
                     </ng-container>
-                    <tr mat-header-row *matHeaderRowDef="remoteColumns"></tr>
+                    <tr mat-header-row *matHeaderRowDef="remoteColumns; sticky: true"></tr>
                     <tr mat-row *matRowDef="let row; columns: remoteColumns"></tr>
                   </table>
                 </div>
