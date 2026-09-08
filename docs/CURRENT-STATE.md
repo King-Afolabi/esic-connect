@@ -10,6 +10,105 @@
 
 ## Dernière mise à jour
 
+### 9 septembre 2026 — liste des apprenants (nom + recherche), numéro étudiant auto, profil en icône seule
+
+Branche `feat/demo-readiness-e2e-ui`. **Back-end + front-end. Aucune
+migration** (schéma V34). Déployé (back-end et front-end reconstruits ;
+`mysql` / `redis` / `cloudflared` intacts ; URL Quick Tunnel conservée ;
+5/5 conteneurs sains, `/actuator/health` `UP`). Commits `6bdec29`,
+`efbdb3a`.
+
+#### Liste des apprenants (`/students`) — nom affiché **et** recherché
+
+Constat utilisateur : la table ne montrait **ni nom ni prénom** et la
+recherche portait **sur le seul numéro étudiant**. Corrigé :
+
+- **Colonne « Apprenant » (nom + prénom)** ajoutée. Les noms viennent du
+  module `identity` — nouveau `UserDirectory.findNamedRefs(ids)` qui
+  résout nom **et** identifiant public **en une requête pour toute la
+  page** (remplace la résolution unitaire par ligne — anti-N+1,
+  NFR-PERF-08). `firstName` / `lastName` ajoutés à
+  `StudentProfileResponse` (liste, fiche et création).
+- **Recherche `q` = numéro OU nom / prénom.** `StudentProfileService.list`
+  résout d'abord via `UserDirectory.searchByNameIncludingInactive` les
+  comptes `STUDENT` (tout statut sauf `ARCHIVED` — un apprenant tout
+  juste créé, encore `PENDING_ACTIVATION`, est donc trouvable ; la
+  **recherche globale** `EF-USER-009` reste, elle, limitée aux comptes
+  actifs), puis le filtre est `student_number LIKE … OR user_id IN (…)`.
+  **L'adresse électronique n'est jamais un critère** (énumération,
+  RG-001) — inchangé et assumé.
+- Front : colonne « Apprenant », libellé de filtre « Nom, prénom ou
+  numéro », description de page mise à jour.
+
+#### Numéro étudiant — facultatif, généré selon la norme
+
+Constat utilisateur : une saisie libre systématique casse la norme de
+nommage. Désormais le champ **n'est plus obligatoire** (API et écran).
+Laissé vide, le serveur alloue **`ESIC-{année}-{NNNNN}`** via un nouvel
+`enrollment.internal.StudentNumberAllocator` — **même table
+`student_number_sequence` et même mécanisme atomique** (`INSERT … ON
+DUPLICATE KEY UPDATE`, verrou de ligne sur `start_year`, annulé au
+rollback) que l'allocation à la confirmation d'un import de masse ; accès
+natif par `EntityManager`, **pas de second mapping d'entité**, nom de
+bean explicite pour éviter la collision avec la classe homonyme de
+`studentimport`. Renseigné, le numéro est contrôlé unique comme avant.
+Nouveau `EnrollmentException.Kind.STUDENT_NUMBER_EXHAUSTED` → `409
+ENR_STUDENT_NUMBER_EXHAUSTED` si la série de l'année est épuisée.
+
+**Choix d'architecture** : l'allocateur de `studentimport` **n'a pas pu
+être réutilisé** — `studentimport` dépend d'`enrollment`, l'inverse
+créerait un cycle Spring Modulith. `ModularityTests` reste vert
+(19 modules, 0 cycle).
+
+#### Top bar — panneau Profil en icône seule
+
+Le libellé (nom court) n'est plus affiché : le déclencheur est la
+pastille + le chevron. Le nom reste dans le DOM (`position: absolute;
+width: 1px`) pour les lecteurs d'écran, l'`aria-label` du bouton porte
+déjà l'adresse. Vérifié au navigateur.
+
+#### « Pourquoi deux zones de création d'apprenant ? » — réponse
+
+Les deux ne font **pas** la même chose et `/students/nouveau` est
+**conservé** :
+
+- **Administration › créer un utilisateur** (`POST /users`) crée un
+  **compte nu** + invitation, pour **n'importe quel rôle** (formateur
+  externe, admin, apprenant…), sans profil, sans numéro, sans classe.
+- **Apprenants › Ajouter un apprenant** (`/students/nouveau`) enchaîne
+  les **trois** étapes de l'intégration d'un apprenant : compte +
+  invitation, **profil apprenant** (numéro, alternance…), **inscription
+  en classe**.
+
+Supprimer `/students/nouveau` obligerait à créer le compte puis à
+compléter profil et inscription depuis la fiche (parcours en deux temps,
+moins guidé) ; dupliquer la table d'Administration dans Apprenants
+recréerait un composant lourd sans gain. Le vrai manque — noms + vraie
+recherche sur la liste des apprenants — est comblé ci-dessus.
+
+#### Tests
+
+| Commande | Résultat |
+|---|---|
+| `./mvnw -o clean test-compile` | `BUILD SUCCESS` |
+| `./mvnw -o test -Dtest=EnrollmentIntegrationTests` | **11 / 0 échec** (+2 : numéro vide → `ESIC-\d{4}-\d{5}` + numéros distincts ; recherche par nom d'un apprenant `PENDING_ACTIVATION`, ligne portant nom + numéro généré) |
+| `… StudentProfileServiceTests` | 10 / 0 |
+| `… GlobalSearchIntegrationTests, DashboardIntegrationTests, DashboardCardsIntegrationTests, AttendanceIntegrationTests, StudentImportConfirmationIntegrationTests, UserManagementIntegrationTests, BulkUserIntegrationTests, DuplicateComparisonIntegrationTests, ModularityTests` | **toutes vertes** |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **107 fichiers / 929 tests / 0 échec** |
+| `cd frontend && npx ng build --configuration production` | **590 kio** initial, aucune alerte de budget |
+
+**Vérifié sur la Pi (API réelle)** : `POST /student-profiles` sans
+`studentNumber` → 201, `studentNumber = ESIC-2026-00002`, réponse
+portant `firstName` / `lastName` ; `GET /student-profiles?q=Verlaine`
+(nom) et `?q=margaux` (prénom, casse) → l'apprenant remonte, même en
+attente d'activation.
+
+**`NOT_PERFORMED`** : recette navigateur authentifiée de la liste des
+apprenants (rôle `ADMIN`, MFA au navigateur non franchie — couvert par
+tests d'intégration + tests de composant) ; suite back-end complète sur
+le commit déployé (tranches ciblées vertes).
+
 ### 8 septembre 2026 (nuit, 2) — tableaux de bord unifiés, top bar, affiche QR, courriel Brevo, purge du jeu de démo
 
 Branche `feat/demo-readiness-e2e-ui`. **Front-end + `.env` de la Pi +
