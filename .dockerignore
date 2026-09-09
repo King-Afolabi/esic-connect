@@ -33,8 +33,9 @@ node_modules/
 **/out-tsc/
 **/coverage/
 
-# Fichiers locaux Claude / IDE / OS
+# Fichiers locaux d'outillage / IDE / OS
 .claude/
+CLAUDE.md
 .vscode/
 .idea/
 *.iml
