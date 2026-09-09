@@ -131,20 +131,40 @@ même priorité des excuses). Détail :
 | `cd frontend && npx ng build --configuration production` | **590 kio** initial, aucune alerte de budget |
 | `npm audit` (frontend) | **0 vulnérabilité** |
 
-Specs Playwright ajustées (sélecteurs / périmètre) : `tests/02`
-(`/students` ouvert PM+TEACHER, plus d'entrée racine « Importer »),
-`tests/11` (« Non activées » = sous-nav `.esic-subnav`, titre
-« Invitations »), `tests/15` (fiche de site ouverte via le lien
-« Consulter », la ligne n'est plus cliquable), `tests/16` (focus rendu au
-champ « Code court » après fermeture du scanner — **vrai correctif a11y** :
-`afterNextRender` au lieu de `queueMicrotask`, le champ n'étant réinséré
-qu'au rendu suivant en zoneless).
+#### Recette navigateur Playwright — **exécutée, complète, verte**
 
-**`NOT_PERFORMED`** : suite Playwright **complète** relancée après ces
-corrections (pile de démonstration requise) ; recette navigateur
-authentifiée du changement de mot de passe et de la liste des apprenants
-pour un `PEDAGOGICAL_MANAGER` / `TEACHER` ; déploiement (le porteur
-déploie).
+`npm run test:e2e` (Chromium, `workers: 1`, pile démo profil `demo` /
+base `esic_connect_demo`, `LOGIN_ORIGIN_LIMIT` relevé et
+`ESIC_DEMO_TOTP_SECRET` déterministe en **variables de session
+uniquement, jamais committées**) — **run complet après toutes les
+corrections** :
+
+**202 passés / 0 échoué / 0 non exécuté** (33,2 min).
+
+Le run initial avait révélé **4 échecs de spec** (aucune régression
+produit) : `loginAndCaptureBearerToken` faisait `page.goto('/login')`
+alors qu'une session était déjà ouverte — depuis la continuité de
+session par cookie (6 sept.), ce rechargement dur est ré-authentifié en
+silence et rebondit hors de `/login` ; `tests/06:163` portait encore
+`.checkin__inline-error` (seule la ligne 146 avait été migrée) ;
+`tests/15` ouvrait le premier site sans vérifier qu'il possède une salle
+(le jeu de démo en a sans). Corrigés (`tests/support/auth.ts`,
+`tests/06`, `tests/15`) puis **rejoués — 202/202**.
+
+Specs ajustées aux refontes UI : `tests/02` (`/students` ouvert
+PM+TEACHER, plus d'entrée racine « Importer »), `tests/11` (« Non
+activées » = sous-nav `.esic-subnav`, titre « Invitations »), `tests/15`
+(fiche de site ouverte via le lien « Consulter »), `tests/16` (focus
+rendu au champ « Code court » après fermeture du scanner — **vrai
+correctif a11y** : `afterNextRender` au lieu de `queueMicrotask`, le
+champ n'étant réinséré qu'au rendu suivant en zoneless).
+
+Rapport HTML : `test-results/html-report/` (non versionné).
+
+**`NOT_PERFORMED`** : recette navigateur **manuelle par un humain** du
+changement de mot de passe et de la liste des apprenants pour un
+`PEDAGOGICAL_MANAGER` / `TEACHER` (un navigateur piloté par script n'en
+est pas une) ; déploiement (le porteur déploie).
 
 ### 9 septembre 2026 (passe de stabilisation) — audit global, durcissement en-têtes Nginx, validation complète, déploiement frontend
 
