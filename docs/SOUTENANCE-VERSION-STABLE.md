@@ -5,8 +5,8 @@
 | Produit | ESIC Connect — plateforme de gestion pédagogique, d'émargement et d'assiduité |
 | Porteur | Abubacar AFOLABI |
 | Branche | `feat/demo-readiness-e2e-ui` |
-| SHA | `c51474b` (voir `git log`) |
-| Date | 9 septembre 2026 |
+| SHA | `6a864a9` (voir `git log`) |
+| Date | 9 septembre 2026 (passe de correction : apprenants responsable/formateur, changement de mot de passe, ANO-UX-007, recette e2e rejouée) |
 | Environnement de démonstration | Raspberry Pi + tunnel Cloudflare — `https://drivers-revenues-alloy-guarantee.trycloudflare.com` (URL éphémère, à revérifier au démarrage) |
 
 Ce document accompagne la soutenance. L'état d'avancement détaillé et
@@ -113,7 +113,11 @@ authentification adaptative ; **anti-robot Turnstile** (validation
 serveur) ; **limitation de débit** Redis ; appareils de confiance ;
 déconnexion et révocation de session ; **rétablissement de session au
 rechargement** via cookie de renouvellement `HttpOnly` `SameSite=Strict`
-rotatif.
+rotatif ; **changement de mot de passe self-service** depuis « Sécurité
+de mon compte » (tout rôle ; ne modifie que son propre compte ; mot de
+passe actuel vérifié + politique côté serveur ; au succès, toutes les
+sessions du compte sont fermées et l'ancien mot de passe devient
+inutilisable).
 
 ### Référentiels et organisation — 12/13
 
@@ -134,6 +138,12 @@ l'historique, suivi à distance individuel ; import CSV **et Excel**,
 classeur **multifeuille**, simulation sans écriture puis confirmation
 **atomique**, correction de ligne avant confirmation, numéro étudiant
 `ESIC-{année}-{NNNNN}` (auto ou saisi), recherche de la liste par nom.
+La **liste des apprenants** est ouverte en **lecture** au
+`PEDAGOGICAL_MANAGER` (apprenants inscrits dans les classes de ses
+formations) et au `TEACHER` (apprenants des classes rattachées à ses
+séances) — **périmètre résolu côté serveur**, jamais d'un paramètre
+client ; une fiche hors périmètre renvoie `404`. Les écritures (création
+de profil, inscription, transfert) restent réservées à l'administration.
 *Non livré* : mapping de colonnes assisté par IA (`EF-IMP-005`).
 
 ### Planning — 11/13
@@ -186,6 +196,12 @@ vérifiable, tableaux de bord des 4 profils avec **tableau équivalent** à
 chaque graphique, recherche globale, **consultation et export de la piste
 d'audit** (aucune route d'écriture — audit inviolable), rapport des
 invitations non activées.
+**ANO-UX-007 corrigé** (9 sept., `03c95ef`) : le rollup d'assiduité des
+rapports et du tableau de bord regroupe désormais **par (inscription,
+jour)** et déduplique les points de contrôle par type, exactement comme
+le rapport journalier canonique — un jour d'alternance `SCHOOL` sans
+séance publiée ne gonfle plus le dénominateur. Aucune règle de gestion
+changée.
 *Non livré* : rapport des anomalies d'émargement (`EF-REP-009`).
 
 ### PWA — installable, hors ligne partiel
@@ -282,14 +298,14 @@ restauration de sauvegarde **non exécuté**.
 | Contrôle | Résultat |
 |---|---|
 | Frontend — lint | All files pass linting |
-| Frontend — tests unitaires | **107 fichiers / 929 tests / 0 échec** |
+| Frontend — tests unitaires | **107 fichiers / 935 tests / 0 échec** |
 | Frontend — build production | OK, aucune alerte de budget (initial ≈ 590 kio) |
 | Frontend — typecheck e2e (`tsc --noEmit`) | 0 erreur |
 | Frontend — `npm audit` | 0 vulnérabilité |
 | Backend — `clean test-compile` | BUILD SUCCESS |
 | Backend — `ModularityTests` | 19 modules, 0 cycle |
-| Backend — suite complète | dernier résultat vert connu **1231 tests / 0 échec** (schéma V34) ; ré-exécution consignée dans `CURRENT-STATE.md` |
-| Recette navigateur Playwright | dernier résultat vert connu **167 tests / 0 échec** ; captures : `artifacts/stable-release-2026-09-08/` |
+| Backend — suite complète (`./mvnw -o clean test`) | **1275 tests / 0 échec / 0 erreur** — `BUILD SUCCESS` (schéma V34, aucune migration) ; +15 vs 1260 : `RosterScopeIntegrationTests` (4), `PasswordChangeIntegrationTests` (7), `AttendanceRollupHalfDayIntegrationTests` (3), `EnrollmentSecurityTests` (+1) |
+| Recette navigateur Playwright | **202 passés / 0 échoué / 0 non exécuté** (33,2 min) — suite complète **rejouée après les correctifs du 9 septembre** ; captures : `artifacts/stable-release-2026-09-08/` |
 | Accessibilité (axe WCAG 2.1 AA) | dernier résultat **20/20**, 0 violation critique/sérieuse |
 | Performance (Pi) | rapport mensuel de classe **1,9 s à chaud** (cible < 2 s) ; dashboard responsable 2,2–2,7 s à chaud |
 | Migrations | V1 → V34 validées sur base vierge, 64 tables |
@@ -311,7 +327,6 @@ Présentées comme **prochaines étapes**, pas comme des manques :
 | RGPD avancé (export, rectification, purge/anonymisation) | non implémenté | 13 |
 | Exploitation complète (métriques, journaux structurés, CI/CD de bout en bout) | partiel (santé + Dependabot + CI de test) | 13 |
 | Test de restauration de sauvegarde | procédure prête, non exécutée | 13 |
-| ANO-UX-007 — dénominateur du rollup d'assiduité | défaut de calcul back-end identifié et spécifié ; le rapport journalier canonique est correct | à corriger (validation humaine) |
 | Fusion réelle des doublons | comparaison en lecture seule livrée ; fusion volontairement non implémentée (décision porteur) | à décider |
 
 ---
@@ -336,12 +351,22 @@ Présentées comme **prochaines étapes**, pas comme des manques :
 11. Rapports produits et exportés CSV / Excel / PDF ; attestation générée
     avec identifiant vérifiable.
 12. Consultation de la piste d'audit.
+13. Un `PEDAGOGICAL_MANAGER` (puis un `TEACHER`) se connecte, ouvre
+    « Apprenants » → il ne voit que les apprenants de son périmètre ;
+    viser la fiche d'un apprenant d'une autre formation → « introuvable ».
+14. N'importe quel rôle ouvre « Sécurité de mon compte » → « Mot de
+    passe » → change son mot de passe → renvoi vers `/login`, ancien mot
+    de passe refusé, nouveau accepté, autres sessions déconnectées.
 
 ---
 
 ## 8. Recommandation
 
-Version **stable candidate**. Avant présentation en jury, une validation
-humaine à froid est recommandée sur : le calcul du taux d'assiduité au
-tableau de bord (ANO-UX-007), la recette navigateur complète rejouée, et
-un test de restauration de sauvegarde consigné.
+Version **stable candidate**. La recette navigateur complète a été
+**rejouée après les correctifs (202/202)** et le calcul du taux
+d'assiduité (ANO-UX-007) est **corrigé en local**. Avant présentation en
+jury, restent recommandés : une validation humaine à froid **en
+navigateur** de la liste des apprenants et du changement de mot de passe
+pour un `PEDAGOGICAL_MANAGER` / `TEACHER`, la revue visuelle du taux
+d'assiduité d'un alternant, le déploiement par le porteur, et un test de
+restauration de sauvegarde consigné.

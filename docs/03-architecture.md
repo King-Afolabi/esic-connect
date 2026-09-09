@@ -557,6 +557,20 @@ iot            → attendance, coursesession, shared
 > | `coursesession.CourseSessionDirectory#searchSessions`, `#findTeacherSchedule`, `#findClassSchedule` | `coursesession` → `search`, `integration` | recherche et fenêtres de calendrier |
 > | `attendance.AttendanceDashboardDirectory#classDigests`, `#justificationThroughput` | `attendance` → `dashboard` | agrégats d'assiduité périmétrés |
 > | `claim.ClaimDashboardDirectory`, `audit.AuditDashboardDirectory`, `identity.AccountStatsDirectory#countPendingActivationAmong` | → `dashboard` | compteurs bornés des cartes complètes |
+>
+> | Port public ajouté (passe de correction du 9 septembre 2026) | Fournisseur → consommateur(s) | Objet |
+> |---|---|---|
+> | `coursesession.CourseSessionDirectory#findTaughtClassGroupPublicIds` | `coursesession` → `enrollment` | classes rattachées aux séances d'un formateur (principal ou remplaçant actif) — alimente le périmètre de consultation des apprenants du `TEACHER` |
+>
+> Nouvelle dépendance inter-module `enrollment → coursesession`, **sans
+> cycle** (`coursesession` ne dépend pas d'`enrollment`) ; `ModularityTests`
+> reste vert — 19 modules. `enrollment.internal.RosterScopeResolver` en est
+> le seul appelant : il unit le périmètre `academic.AcademicScopeDirectory`
+> (formations dont répond un `PEDAGOGICAL_MANAGER`) et ce nouveau port pour
+> restreindre `GET /api/v1/student-profiles` et `GET /api/v1/enrollments` —
+> lecture seule, résolu depuis le **contexte de sécurité**, jamais d'un
+> paramètre client ; une ressource hors périmètre renvoie `404` (cahier
+> §18.2). Les écritures restent réservées à `EnrollmentWeb.MANAGE_ROLES`.
 
 ## 7.1 `identity`
 
@@ -2353,6 +2367,34 @@ justificatif d'identité, et il doit survivre au rechargement pour que la
 fonction existe.
 
 **Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-007 — le changement volontaire de mot de passe re-connecte plutôt que de renouveler la session
+
+**Contexte.** Ajout d'un `POST /api/v1/auth/change-password` authentifié
+(tout rôle), demandé par le porteur : mot de passe actuel + nouveau +
+confirmation, depuis « Sécurité de mon compte ». Le compte visé est le
+**sujet du JWT** — un utilisateur ne peut jamais changer le mot de passe
+d'un autre. Que faire de la session courante après le changement ?
+
+**Décision.** `PasswordChangeService` avance `credentials_invalidated_at`
+(toutes les familles de session du compte sont invalidées, RG-010),
+révoque le jeton présenté, vide le cookie de renouvellement, et le front
+renvoie vers `/login?reason=password-changed`. **Aucune session n'est
+conservée ni « renouvelée en place ».**
+
+**Conséquences.** `AccessTokenIssuer.issue` date un jeton neuf à
+`max(now, credentialsInvalidatedAt)` et `credentials_invalidated_at` est
+arrondi à la seconde **supérieure** : une session fraîchement réémise
+dans la même seconde que le changement serait refusée à son premier
+renouvellement. Re-connecter est donc la seule forme sûre, et c'est déjà
+le contrat de `/reset-password`. Le mot de passe actuel est vérifié
+(BCrypt), la `PasswordPolicy` appliquée, un nouveau mot de passe
+identique à l'actuel refusé (`AUTH_PASSWORD_UNCHANGED`), le débit limité
+par compte sur une empreinte. Événements `PasswordChangedEvent`
+(`ORIGIN_SELF_SERVICE`) + `SessionsRevokedEvent` (`REASON_PASSWORD_CHANGE`)
+audités via l'outbox. `mot de passe oublié`, MFA et passkeys inchangés.
+
+**Statut.** Adoptée le 9 septembre 2026.
 
 ## DEC-S3-001 — les groupes temporaires vivent dans `enrollment`, pas dans `academic`
 

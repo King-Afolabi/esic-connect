@@ -2,7 +2,7 @@
 
 | Élément | Valeur |
 |---|---|
-| Version | Finalisation F6 — 31 août 2026 |
+| Version | Finalisation F6 — 31 août 2026 ; mis à jour le 9 septembre 2026 (session au rechargement, mot de passe oublié, changement de mot de passe, accès apprenants responsable/formateur) |
 | Périmètre | ce que chaque rôle peut réellement faire dans l'application livrée |
 | Référence | `docs/CURRENT-STATE.md` |
 
@@ -14,9 +14,12 @@ fonctions non implémentées sont signalées comme telles et ne doivent pas
 
 - **Connexion** : `/login`, adresse e-mail + mot de passe. En cas
   d'échec, message **générique** (aucune indication du motif).
-- **Session** : le jeton reste **en mémoire du navigateur**. Un
-  rechargement de page **déconnecte** (pas de « rester connecté » :
-  choix assumé à ce stade, JWT sans jeton de renouvellement).
+- **Session** : le jeton d'accès reste **en mémoire du navigateur**
+  (jamais dans `localStorage`). Un **rechargement de page en ligne
+  rétablit la session** via un cookie de renouvellement `HttpOnly`
+  `SameSite=Strict` rotatif (depuis le 6 septembre 2026). Un démarrage
+  **hors ligne** affiche l'écran de connexion (le cookie exige le
+  serveur). Expiration après 30 min d'inactivité.
 - **Sélecteur de contexte de rôle** (en haut à droite) : visible
   **uniquement si le compte a au moins deux rôles**. Il **restreint**
   l'affichage au rôle choisi ; il **n'élargit jamais** les droits réels
@@ -26,7 +29,16 @@ fonctions non implémentées sont signalées comme telles et ne doivent pas
   interdite renvoie « Accès refusé ».
 - **Activation de compte** : `/activation?token=…` (lien reçu par
   e-mail), **page publique** ; l'utilisateur y définit son mot de passe.
-- **Mot de passe oublié** : **non disponible** (non implémenté).
+- **Mot de passe oublié** : disponible — saisie de l'adresse, **réponse
+  neutre** (l'existence d'un compte n'est jamais révélée), lien à usage
+  unique et limité dans le temps ; à l'ouverture du lien, définition d'un
+  nouveau mot de passe puis révocation de toutes les sessions.
+- **Changer son mot de passe** : `/mon-compte/securite`, carte « Mot de
+  passe » — mot de passe actuel + nouveau + confirmation. Le mot de passe
+  actuel et la politique sont vérifiés **côté serveur** ; on ne peut
+  changer que **son propre** mot de passe (tous les rôles). Au succès,
+  **toutes les sessions du compte sont fermées** et l'utilisateur est
+  renvoyé vers `/login` ; l'ancien mot de passe devient inutilisable.
 
 ## 2. Rôles et écrans visibles
 
@@ -37,7 +49,7 @@ fonctions non implémentées sont signalées comme telles et ne doivent pas
 | Administration des comptes (`/administration`) | ✔ (R/W) | ✔ (R/W) | ✔ (lecture + suspend/réactiver) | — | — | — |
 | **Référentiel organisationnel (`/organization`)** | ✔ (R/W) | ✔ (R/W) | — | — | — | — |
 | Import apprenants (`/students/import`) | ✔ | ✔ | ✔ | ✔ (son périmètre) | — | — |
-| Apprenants (`/students`) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture) | — | — | — |
+| Apprenants (`/students`) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture, périmètre) | ✔ (lecture, classes de ses séances) | — |
 | Référentiels académiques (`/academic`) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture) | ✔ (lecture, périmètre) | — | — |
 | Alternance (`/alternation`) | ✔ (R/W) | ✔ (R/W) | ✔ (R/W) | ✔ (périmètre ; création de modèle : non) | — | — |
 | **Planning — import / publication (`/planning`)** | ✔ | ✔ | — | ✔ (son périmètre) | — | — |
@@ -48,6 +60,15 @@ fonctions non implémentées sont signalées comme telles et ne doivent pas
 
 R/W = lecture et écriture. « périmètre » = limité aux formations gérées
 par le responsable pédagogique, **décidé côté serveur**.
+
+Pour **Apprenants (`/students`)**, le périmètre du `PEDAGOGICAL_MANAGER`
+= apprenants inscrits (`ACTIVE`) dans les classes de ses formations ;
+celui du `TEACHER` = apprenants des classes rattachées à ses séances
+(formateur principal ou remplaçant actif). Le cumul de rôles = **union**
+des deux, jamais au-delà. Une fiche hors périmètre renvoie
+« introuvable » (`404`, pas `403`). Ces deux rôles n'ont **que la
+lecture** : créer un profil, inscrire ou transférer un apprenant reste
+réservé à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`.
 
 ## 3. Parcours par rôle
 
@@ -125,10 +146,13 @@ visible.
   non** (réservé à ADMIN / SUPER_ADMIN / SCHOOL_ADMINISTRATION).
 - **Séances** : création / ouverture / fermeture pour ses classes ;
   émargement, présences, corrections.
+- **Apprenants** (`/students`) : **lecture** des apprenants inscrits
+  (`ACTIVE`) dans les classes de ses formations (recherche par nom /
+  numéro, fiche). Périmètre résolu côté serveur ; une fiche hors
+  périmètre renvoie « introuvable » (`404`). Pas de création ni de
+  transfert (réservés à l'administration). La liste des inscriptions
+  (`GET /enrollments`) suit le même périmètre.
 - **Suivi d'assiduité** : rapports de son périmètre.
-- **Limite connue** : la liste des inscriptions (`GET /enrollments`) est
-  fermée au `PEDAGOGICAL_MANAGER` ; l'écran d'alternance propose alors
-  une saisie directe d'identifiant d'inscription en repli.
 - **Non disponible dans l'UI** : l'affectation d'un responsable
   pédagogique à une formation se fait par l'API (`ADMIN` / `SUPER_ADMIN`)
   ou, en démonstration, par `scripts/seed-demo.sh`.
@@ -141,9 +165,13 @@ visible.
   présence manuelle, corriger une présence (motif obligatoire), annuler
   une présence (logique, historisée), exporter le CSV de la séance,
   fermer la séance.
+- **Apprenants** (`/students`) : **lecture** des apprenants des classes
+  rattachées à ses séances (formateur principal ou remplaçant actif) —
+  recherche par nom / numéro, fiche. Périmètre serveur ; fiche hors
+  périmètre → `404`. Aucune écriture.
 - **Ne peut pas** : créer une séance depuis un planning (pas de
-  planning), examiner un justificatif, accéder aux rapports agrégés.
-- Pas d'accès aux autres écrans.
+  planning), examiner un justificatif, accéder aux rapports agrégés,
+  créer ou inscrire un apprenant.
 
 ### 3.6 `STUDENT`
 
@@ -311,46 +339,57 @@ pas** de notification pour les autres événements.
 
 `/organization` permet de créer, modifier et archiver **sites**,
 **bâtiments** et **salles**, et de gérer les **plages réseau CIDR**
-(contexte `SUPER_ADMIN`). Ces plages sont **enregistrées mais pas encore
-utilisées** pour contrôler l'émargement.
+(contexte `SUPER_ADMIN`). Ces plages sont **appliquées** au contrôle de
+l'émargement par QR fixe de salle depuis le sprint 8 (`EF-ATT-008`).
 
 ---
 
 ## 7. Fonctions non disponibles dans l'interface
 
-**Endpoints livrés mais sans écran** (API uniquement) :
+> Cette section a été refaite le 9 septembre 2026 : elle datait du
+> jalon F6 (31 août) et présentait comme absentes des fonctions livrées
+> depuis (sprints 8 à 11). **La source de vérité reste
+> `docs/CURRENT-STATE.md` §3 et §4.**
 
-- affectation d'un responsable pédagogique à une formation
-  (`pedagogical-assignments`) ;
+**Endpoints livrés mais sans écran dédié** (API uniquement) :
+
+- affectation d'un formateur à une association classe–matière–période
+  (`EF-TEA-002`) ;
 - création / modification / archivage des référentiels académiques
-  (`academic`) — l'UI est en **lecture seule** ;
-- création / transfert / clôture d'inscription (`enrollment`) — sauf via
-  l'import CSV ;
-- **émission / relance** d'une invitation d'activation (l'activation
-  elle-même a un écran).
+  (`academic`) — l'UI est en **lecture seule**, l'écriture passe par
+  l'API ;
+- création / transfert / clôture d'inscription hors import CSV
+  (`enrollment`) ;
+- configuration des plages réseau CIDR (`SUPER_ADMIN`) ;
+- résultat journalier d'assiduité `GET /api/v1/attendance/reports/daily`
+  (`EF-ATT-004`).
 
-**Non implémenté du tout** (à ne jamais présenter comme disponible) :
+**Partiel** (voir `CURRENT-STATE.md` §3) :
 
-- création manuelle d'un planning plein calendrier (`EF-PLAN-006`) ;
-  correction ligne à ligne d'un import de planning ; retour à une version
-  antérieure ;
-- `PATCH` d'une séance manuelle `PLANNED` ;
-- QR **fixe** de salle, contrôle réseau à l'émargement, **scan caméra**
-  (seul le **code court** est utilisable) ;
-- WebAuthn / passkeys, MFA TOTP, anti-bot ;
-- réclamations / messagerie, départ anticipé, import Excel `.xlsx` /
-  multifeuille ;
-- **analyse antivirus** des pièces jointes ;
-- notifications **push PWA**, **email métier**, préférences par type,
-  purge ; notification des **apprenants** et **responsables
-  pédagogiques** ;
-- service IA (mapping de colonnes, score d'anomalie) ;
-- IoT / MQTT / Raspberry Pi ;
-- PWA installable / hors ligne ;
-- mot de passe oublié, déconnexion serveur / révocation de session
-  (fermer l'onglet suffit : le jeton n'est qu'en mémoire) ;
-- rapports « officiels » (logo, PDF), export Excel.
+- notifications **push PWA réelles** (`EF-NOTIF-005`) — chiffrement
+  RFC 8291 vérifié, **aucun service de push réel sollicité** ;
+- consultation **hors ligne au démarrage à froid** (`EF-PWA-002`) — le
+  jeton ne vit qu'en mémoire ;
+- **Microsoft Graph / Teams réel** (`EF-INT-002/003`) — port et
+  adaptateurs écrits et testés, **aucun locataire Microsoft réel**.
 
-Détail et justifications : `docs/CURRENT-STATE.md` (« Fonctionnalités
-partielles » et « Hors périmètre assumé ») ;
-`docs/CURRENT-STATE.md`.
+**Non implémenté (perspective — sprints 12-13)** :
+
+- détection de conflits / incohérences de salle **hors** planning
+  (`EF-ORG-004`) ;
+- mapping d'import assisté par IA (`EF-IMP-005`) ; planning PDF texte +
+  mapping IA (`EF-PLAN-012/013`) ;
+- confirmation locale d'un émargement par WebAuthn (`EF-ATT-011`) ;
+  borne connectée MQTT (`EF-ATT-016`) ;
+- rapport des anomalies d'émargement (`EF-REP-009`) ;
+- service d'IA complet (`EF-AI-001..005`) ;
+- objets connectés — borne MQTT / Raspberry Pi + simulateur
+  (`EF-IOT-001..005`) ;
+- fournisseur de courriel réel (`EF-INT-004`) ;
+- RGPD avancé : export, rectification, purge / anonymisation
+  (`EF-RGPD-001..003`) ;
+- exploitation complète : métriques et journaux structurés, sauvegarde
+  et **restauration prouvée**, CI/CD de bout en bout, OpenAPI publiée
+  (`EF-OPS-001..004`).
+
+Détail et justifications : `docs/CURRENT-STATE.md`.

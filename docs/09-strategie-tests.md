@@ -106,7 +106,16 @@ Vérifie que la solution répond aux besoins du Product Owner.
 
 ## 2bis.1 Totaux mesurés
 
-| Suite | Commande | Résultat |
+> **Instantané daté du 2 septembre 2026 (HEAD `d3450e6`).** Les totaux
+> ci-dessous n'ont pas été mis à jour à chaque sprint : les chiffres
+> **courants** sont dans `docs/CURRENT-STATE.md` — au 9 septembre 2026
+> (passe de correction, `6a864a9`) : back-end **1275 tests / 0 échec**
+> (schéma V34), front-end **935 tests / 0 échec**, recette Playwright
+> **202 passés / 0 échoué / 0 non exécuté**. Nouvelles classes back-end
+> de cette passe : `RosterScopeIntegrationTests`,
+> `PasswordChangeIntegrationTests`, `AttendanceRollupHalfDayIntegrationTests`.
+
+| Suite | Commande | Résultat (2 septembre) |
 |---|---|---|
 | Back-end | `cd backend && ./mvnw clean test` | **811 tests, 0 échec, 0 erreur, 0 ignoré** — **96 classes** de test |
 | Front-end | `cd frontend && npm test -- --watch=false` | **71 fichiers / 602 tests / 0 échec** (Vitest + jsdom) |
