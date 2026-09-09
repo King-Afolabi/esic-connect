@@ -42,9 +42,79 @@ class DefaultUserDirectory implements UserDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.List<NamedUserRef> searchByName(String query, String roleCode, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        RoleCode role = parseRole(roleCode);
+        if (pattern == null || role == null) {
+            return java.util.List.of();
+        }
+        return userAccountRepository.searchByName(pattern, role, AccountStatus.ACTIVE,
+                        org.springframework.data.domain.PageRequest.of(0,
+                                com.esic.connect.shared.SearchPattern.bound(limit)))
+                .stream()
+                .map(account -> new NamedUserRef(account.getId(), account.getPublicId(),
+                        account.getFirstName(), account.getLastName()))
+                .toList();
+    }
+
+    /** Code de rôle inconnu : aucun résultat, jamais une exception. */
+    private static RoleCode parseRole(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            return null;
+        }
+        try {
+            return RoleCode.valueOf(roleCode.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException unknown) {
+            return null;
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, PersonName> findNames(java.util.Collection<Long> userInternalIds) {
+        if (userInternalIds == null || userInternalIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, PersonName> names = new java.util.HashMap<>();
+        for (UserAccount account : userAccountRepository.findAllById(
+                userInternalIds.stream().filter(java.util.Objects::nonNull).distinct().toList())) {
+            names.put(account.getId(), new PersonName(account.getFirstName(), account.getLastName()));
+        }
+        return names;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<PersonName> findName(long userInternalId) {
         return userAccountRepository.findById(userInternalId)
                 .map(account -> new PersonName(account.getFirstName(), account.getLastName()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> findActiveUserPublicIdsByRole(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            return Set.of();
+        }
+        RoleCode code;
+        try {
+            code = RoleCode.valueOf(roleCode.trim());
+        } catch (IllegalArgumentException unknown) {
+            return Set.of();
+        }
+        // Statut ACTIVE et non « non archivé » : un compte suspendu ou en
+        // attente d'activation ne peut pas se connecter, le notifier
+        // n'informerait personne.
+        return userRoleRepository
+                .findActiveAssignmentsByRoleCodeAndUserStatus(code, AccountStatus.ACTIVE).stream()
+                .map(userRole -> userRole.getUser().getPublicId())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> findEmailForDelivery(long userInternalId) {
+        return userAccountRepository.findById(userInternalId).map(UserAccount::getEmail);
     }
 
     private UserRef toRef(UserAccount account) {

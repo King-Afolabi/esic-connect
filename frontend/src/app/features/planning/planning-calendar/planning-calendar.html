@@ -1,0 +1,232 @@
+<section class="planning-calendar">
+  <h1>Construire un planning</h1>
+  <p class="planning-calendar__intro">
+    Les créneaux saisis ici forment un <strong>brouillon</strong>. Ils ne
+    deviennent des séances qu'après publication, avec les mêmes contrôles de
+    conflit qu'un import de fichier.
+  </p>
+
+  @if (classesError(); as message) {
+    <div class="planning-calendar__error" role="alert">
+      <p>{{ message }}</p>
+      <button mat-stroked-button type="button" (click)="loadClasses()">Réessayer</button>
+    </div>
+  }
+
+  <form class="planning-calendar__filters" [formGroup]="filters" (ngSubmit)="loadCalendar()">
+    <mat-form-field appearance="outline">
+      <mat-label>Classe</mat-label>
+      <mat-select formControlName="classGroupPublicId">
+        @for (group of classes(); track group.publicId) {
+          <mat-option [value]="group.publicId">{{ group.code }} — {{ group.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Du</mat-label>
+      <input matInput type="date" formControlName="from" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Au</mat-label>
+      <input matInput type="date" formControlName="to" />
+    </mat-form-field>
+
+    <button mat-flat-button color="primary" type="submit">Afficher</button>
+  </form>
+
+  @switch (calendarState().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement du calendrier" />
+    }
+    @case ('forbidden') {
+      <p class="planning-calendar__empty" role="status">
+        Vous n'êtes pas autorisé à consulter le planning de cette classe.
+      </p>
+    }
+    @case ('error') {
+      <div class="planning-calendar__error" role="alert">
+        <p>{{ calendarErrorMessage() }}</p>
+        <button mat-stroked-button type="button" (click)="loadCalendar()">Réessayer</button>
+      </div>
+    }
+    @case ('idle') {
+      <p class="planning-calendar__empty">Choisissez une classe pour commencer.</p>
+    }
+  }
+
+  @if (calendarState().kind === 'ready') {
+    <mat-card class="planning-calendar__card">
+      <mat-card-header>
+        <mat-card-title>
+          @if (editedRowId()) { Modifier le créneau } @else { Ajouter un créneau }
+        </mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <form class="planning-calendar__slot" [formGroup]="slotForm">
+          <mat-form-field appearance="outline">
+            <mat-label>Date</mat-label>
+            <input matInput type="date" formControlName="sessionDate" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Début</mat-label>
+            <input matInput type="time" formControlName="startTime" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fin</mat-label>
+            <input matInput type="time" formControlName="endTime" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fuseau</mat-label>
+            <input matInput formControlName="timeZoneId" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Intitulé</mat-label>
+            <input matInput formControlName="title" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Formateur (identifiant public)</mat-label>
+            <input matInput formControlName="teacherPublicId" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Salle</mat-label>
+            <input matInput formControlName="roomCode" />
+          </mat-form-field>
+
+          <div class="planning-calendar__actions">
+            @if (editedRowId()) {
+              <button mat-flat-button color="primary" type="button" [disabled]="busy()"
+                      (click)="saveEdit()">Enregistrer</button>
+              <button mat-stroked-button type="button" (click)="cancelEdit()">Annuler</button>
+            } @else {
+              <button mat-flat-button color="primary" type="button" [disabled]="busy()"
+                      (click)="addSlot()">Ajouter au brouillon</button>
+            }
+          </div>
+        </form>
+
+        @if (actionError(); as message) {
+          <p class="planning-calendar__error" role="alert">{{ message }}</p>
+        }
+
+        @if (job(); as current) {
+          <p class="planning-calendar__summary" role="status">
+            Brouillon : {{ current.totalRows }} créneau(x),
+            {{ current.errorRows }} en anomalie,
+            {{ current.warningRows }} avertissement(s).
+            @if (current.confirmable) {
+              <a [routerLink]="['/planning/import', current.publicId]">Revoir et publier</a>
+            } @else {
+              Corrigez les anomalies avant de publier.
+            }
+          </p>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="planning-calendar__card">
+      <mat-card-header>
+        <mat-card-title>Brouillon en cours</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (draft().length === 0) {
+          <p class="planning-calendar__empty">Aucun créneau en brouillon sur cette période.</p>
+        } @else {
+          <table mat-table [dataSource]="draft()" class="planning-calendar__table">
+            <ng-container matColumnDef="day">
+              <th mat-header-cell *matHeaderCellDef scope="col">Jour</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.day }}</td>
+            </ng-container>
+            <ng-container matColumnDef="window">
+              <th mat-header-cell *matHeaderCellDef scope="col">Horaire</th>
+              <td mat-cell *matCellDef="let slot">{{ slotWindow(slot) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="title">
+              <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.title ?? '—' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="room">
+              <th mat-header-cell *matHeaderCellDef scope="col">Salle</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.roomCode ?? '—' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef scope="col">État</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.rowStatus ?? '—' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef scope="col">Actions</th>
+              <td mat-cell *matCellDef="let slot">
+                <button mat-icon-button type="button" [disabled]="busy()"
+                        [attr.aria-label]="'Modifier le créneau du ' + slot.day"
+                        (click)="editSlot(slot)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button type="button" [disabled]="busy()"
+                        [attr.aria-label]="'Répéter le créneau du ' + slot.day"
+                        (click)="repeatSlot(slot)">
+                  <mat-icon>repeat</mat-icon>
+                </button>
+                <button mat-icon-button type="button" [disabled]="busy()"
+                        [attr.aria-label]="'Retirer le créneau du ' + slot.day"
+                        (click)="removeSlot(slot)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="slotColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: slotColumns"></tr>
+          </table>
+
+          <form class="planning-calendar__week" [formGroup]="weekForm">
+            <mat-form-field appearance="outline">
+              <mat-label>Semaine source</mat-label>
+              <input matInput type="date" formControlName="sourceWeekStart" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Semaine cible</mat-label>
+              <input matInput type="date" formControlName="targetWeekStart" />
+            </mat-form-field>
+            <button mat-stroked-button type="button" [disabled]="busy()"
+                    (click)="duplicateWeek()">Dupliquer la semaine</button>
+          </form>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="planning-calendar__card">
+      <mat-card-header>
+        <mat-card-title>
+          Planning publié
+          @if (publishedVersionNumber(); as version) { — version {{ version }} }
+        </mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (published().length === 0) {
+          <p class="planning-calendar__empty">Aucun créneau publié sur cette période.</p>
+        } @else {
+          <table mat-table [dataSource]="published()" class="planning-calendar__table">
+            <ng-container matColumnDef="day">
+              <th mat-header-cell *matHeaderCellDef scope="col">Jour</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.day }}</td>
+            </ng-container>
+            <ng-container matColumnDef="window">
+              <th mat-header-cell *matHeaderCellDef scope="col">Horaire</th>
+              <td mat-cell *matCellDef="let slot">{{ slotWindow(slot) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="title">
+              <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.title ?? '—' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="room">
+              <th mat-header-cell *matHeaderCellDef scope="col">Salle</th>
+              <td mat-cell *matCellDef="let slot">{{ slot.roomCode ?? '—' }}</td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="publishedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: publishedColumns"></tr>
+          </table>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+</section>

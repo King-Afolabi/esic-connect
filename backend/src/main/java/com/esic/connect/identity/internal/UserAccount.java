@@ -73,6 +73,20 @@ public class UserAccount extends BaseEntity {
     @Column(name = "external_synced_at")
     private Instant externalSyncedAt;
 
+    /**
+     * Instant à partir duquel les jetons d'accès déjà émis pour ce compte
+     * ne sont plus acceptés (EF-AUTH-014, RG-010 ; migration V17).
+     *
+     * <p>L'API étant sans état, un JWT valide resterait sinon utilisable
+     * jusqu'à son expiration après un changement de mot de passe ou une
+     * suspension. La comparaison se fait contre le claim {@code iat}, qui
+     * est exprimé en secondes : la valeur est donc arrondie à la seconde
+     * supérieure au moment de la révocation, afin qu'un jeton émis
+     * pendant la même seconde soit bien refusé.
+     */
+    @Column(name = "credentials_invalidated_at")
+    private Instant credentialsInvalidatedAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -209,6 +223,19 @@ public class UserAccount extends BaseEntity {
     }
 
     /** Horodate la dernière connexion réussie (docs/04 §10.1). */
+    public Instant getCredentialsInvalidatedAt() {
+        return credentialsInvalidatedAt;
+    }
+
+    /**
+     * Révoque tous les jetons d'accès déjà émis. Arrondi à la seconde
+     * supérieure : le claim {@code iat} d'un JWT n'a pas de précision
+     * inférieure, un jeton émis dans la même seconde doit être refusé.
+     */
+    public void invalidateCredentials(Instant revokedAt) {
+        this.credentialsInvalidatedAt = revokedAt.plusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+    }
+
     public void recordSuccessfulLogin(Instant loginAt) {
         this.lastLoginAt = loginAt;
     }

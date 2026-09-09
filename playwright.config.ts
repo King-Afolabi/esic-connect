@@ -7,7 +7,7 @@ import { defineConfig, devices } from '@playwright/test';
  * réellement déployée localement (`ng serve` sur :4200, backend Spring Boot
  * sur :8080, profil `demo` / base `esic_connect_demo`). Elle ne couvre QUE
  * les écrans qui existent réellement dans `frontend/src/app/app.routes.ts` ;
- * voir `audit-report.md` pour la matrice complète fonctionnalité attendue →
+ * voir `docs/09-strategie-tests.md` pour la matrice complète fonctionnalité attendue →
  * implémentée → testée, y compris les domaines volontairement hors
  * périmètre (aucun test n'est écrit contre un écran qui n'existe pas).
  *

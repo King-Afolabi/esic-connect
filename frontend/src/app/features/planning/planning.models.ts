@@ -183,3 +183,87 @@ export function formatInstant(value: string | null | undefined): string {
     date.getUTCHours(),
   )}:${pad(date.getUTCMinutes())}`;
 }
+
+/**
+ * Correction d'une ligne de planning avant publication (EF-PLAN-003).
+ *
+ * <p>Un champ absent reste inchangé ; une valeur vide efface le champ.
+ * La liste des colonnes corrigeables est fermée côté serveur : y ajouter
+ * un nom ici ne l'ouvrirait pas.
+ */
+export type PlanningRowCorrection = Partial<
+  Record<
+    | 'slot_key'
+    | 'session_date'
+    | 'start_time'
+    | 'end_time'
+    | 'time_zone_id'
+    | 'title'
+    | 'teacher_public_id'
+    | 'room_code',
+    string
+  >
+>;
+
+/**
+ * `PlanningRollbackService.RollbackResult` — retour à une version
+ * antérieure (EF-PLAN-008, AC-009).
+ *
+ * La version créée est **N+1** : `versionNumber` est donc toujours plus
+ * grand que `restoredFromNumber`. Rien n'est effacé (RG-046).
+ */
+export interface PlanningRollbackResponse {
+  versionPublicId: string;
+  versionNumber: number;
+  restoredFromPublicId: string;
+  restoredFromNumber: number;
+  entryCount: number;
+}
+
+// ---------------------------------------------------------------------
+// Construction directe dans le calendrier (EF-PLAN-006)
+// ---------------------------------------------------------------------
+
+/**
+ * `PlanningCalendarService.CalendarSlot`.
+ *
+ * `origin` distingue un créneau **publié** d'un créneau du **brouillon**
+ * en cours : les deux ne doivent jamais être mélangés à l'écran, sous
+ * peine de laisser croire qu'un brouillon fait déjà foi.
+ */
+export interface PlanningCalendarSlot {
+  publicId: string;
+  slotKey: string | null;
+  day: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  timeZoneId: string | null;
+  title: string | null;
+  teacherPublicId: string | null;
+  roomCode: string | null;
+  origin: 'PUBLISHED' | 'DRAFT';
+  rowStatus: PlanningRowStatus | null;
+}
+
+/** `PlanningCalendarService.CalendarView`. */
+export interface PlanningCalendarView {
+  classGroupPublicId: string;
+  from: string;
+  to: string;
+  publishedVersionNumber: number | null;
+  draftJobPublicId: string | null;
+  published: PlanningCalendarSlot[];
+  draft: PlanningCalendarSlot[];
+}
+
+/** Corps de `POST /api/v1/planning/slots` et du PATCH d'un créneau. */
+export interface PlanningSlotRequest {
+  slotKey?: string | null;
+  sessionDate: string;
+  startTime: string;
+  endTime: string;
+  timeZoneId: string;
+  title: string;
+  teacherPublicId?: string | null;
+  roomCode?: string | null;
+}

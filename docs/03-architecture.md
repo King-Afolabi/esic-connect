@@ -515,11 +515,48 @@ iot            → attendance, coursesession, shared
 > laisse **ni** notification **ni** trace d'audit de succès. **8 des 9
 > listeners d'audit** restent des `@EventListener` **synchrones** en
 > `REQUIRES_NEW` : dette assumée, décrite dans
-> `docs/reports/G1_FINAL_REPORT.md` §12.
+> `docs/CURRENT-STATE.md`.
 >
 > Les §6.2, §6.5 et §6.6 (listes de modules et règles de dépendance)
 > décrivent également le découpage cible et ne sont pas alignées sur les
 > 14 modules réels ci-dessus.
+>
+> **Mise à jour, sprints 9 à 11.** Le dépôt compte désormais
+> **19 modules** : les 14 ci-dessus, plus `claim` (S9), `outbox` (S10) et
+> `document`, `search`, `integration` (S11). `ModularityTests` reste vert.
+> Trois précisions sur les modules du sprint 11, parce qu'elles fixent des
+> règles de dépendance :
+>
+> - **`document`** ne connaît aucun métier. Il reçoit un titre, des faits,
+>   un en-tête et des lignes **déjà rendues en texte**, et les restitue en
+>   CSV, en classeur `.xlsx` ou en PDF. Il n'a ni table, ni autorisation,
+>   ni décision sur *quoi* montrer. Ce sont `attendance`, `audit` et
+>   `identity` qui dépendent de lui. Deux garanties transverses justifient
+>   de le centraliser plutôt que de recopier le travail : la
+>   neutralisation de l'injection de formule (AC-032) doit s'appliquer au
+>   CSV **comme** au classeur, et l'identité d'un document officiel
+>   (AC-033) doit figurer sur **toute** page PDF.
+> - **`search`** ne détient aucune donnée et n'a pas de migration. Chaque
+>   module cherche dans la sienne — lui seul sait ce qu'est un code de
+>   classe — via une méthode ajoutée à son **port public existant** ;
+>   `search` assemble les réponses et applique le périmètre, exactement
+>   comme `dashboard`.
+> - **`integration`** porte le flux iCalendar (table
+>   `calendar_subscription`, V34) et les **ports sortants**
+>   `MeetingProvider` / `ExternalCalendarWriter`, avec un adaptateur
+>   Microsoft Graph et un adaptateur **inactif** choisi par configuration.
+>   Aucun module métier ne dépend de lui : c'est lui qui lit leurs ports.
+>
+> | Port public ajouté | Fournisseur → consommateur(s) | Objet |
+> |---|---|---|
+> | `document.DocumentRenderer` | `document` → `attendance`, `audit`, `identity` | CSV, classeur, PDF d'un `TabularDocument` |
+> | `academic.ClassGroupDirectory#search`, `academic.AcademicReferenceDirectory#searchPrograms` | `academic` → `search` | recherche périmétrée sur le référentiel |
+> | `enrollment.EnrollmentDirectory#searchStudents` | `enrollment` → `search` | recherche d'apprenants, jamais par adresse |
+> | `identity.TeacherDirectory#searchEligibleTeachers`, `identity.UserDirectory#searchByName` | `identity` → `search`, `enrollment` | recherche d'identité civile |
+> | `organization.RoomDirectory#search` | `organization` → `search` | recherche de salles, jamais le jeton de QR fixe |
+> | `coursesession.CourseSessionDirectory#searchSessions`, `#findTeacherSchedule`, `#findClassSchedule` | `coursesession` → `search`, `integration` | recherche et fenêtres de calendrier |
+> | `attendance.AttendanceDashboardDirectory#classDigests`, `#justificationThroughput` | `attendance` → `dashboard` | agrégats d'assiduité périmétrés |
+> | `claim.ClaimDashboardDirectory`, `audit.AuditDashboardDirectory`, `identity.AccountStatsDirectory#countPendingActivationAmong` | → `dashboard` | compteurs bornés des cartes complètes |
 
 ## 7.1 `identity`
 
@@ -570,7 +607,7 @@ Responsabilités :
 ### État d’implémentation (lot TR-021, migration V8)
 
 Module Spring Modulith `com.esic.connect.alternation` livré et testé
-(voir `docs/09-matrice-rncp.md` TR-021 et `docs/CURRENT-STATE.md`) :
+(voir `docs/CURRENT-STATE.md`) :
 
 - agrégat `work_study_pattern` (modèle réutilisable de rythme :
   `THREE_DAYS_SCHOOL_TWO_DAYS_COMPANY`, `ONE_WEEK_SCHOOL_OUT_OF_FOUR`,
@@ -720,7 +757,7 @@ responsables pédagogiques** (nouveaux ports `enrollment` / `academic`
 requis — dette **G1-D-AUDIENCE**), **préférences** par type (non
 exigées), **email métier**, **push PWA**, **file persistante / DLQ** et
 **purge / rétention** (`À_DÉFINIR`, `R-G1-30`) — dettes documentées dans
-`docs/CURRENT-STATE.md`, `docs/reports/G1_IMPLEMENTATION_PROGRESS.md`
+`docs/CURRENT-STATE.md`
 (§ « Audit G1-D.1 ») et `docs/05-product-backlog.md` §9bis.
 
 ## 7.12 `reporting`
@@ -1375,7 +1412,7 @@ Spring Boot doit contrôler :
 
 ## 17.5 Absence de NFC
 
-Le prototype utilisera :
+Le produit utilise :
 
 - un bouton logiciel ;
 - une page locale ;
@@ -1753,19 +1790,19 @@ projet_final/
 │   ├── 02-cahier-des-charges.md
 │   ├── 03-architecture.md
 │   ├── 04-modele-donnees.md
-│   ├── 05-backlog.md
-│   ├── 06-risques.md
-│   ├── 07-securite-rgpd.md
-│   ├── 08-tests-recette.md
-│   ├── 09-matrice-rncp.md
-│   ├── 10-journal-ia.md
-│   ├── 11-guide-demonstration.md
+│   ├── 05-product-backlog.md
+│   ├── 06-roadmap-six-mois.md
+│   ├── 07-risques.md
+│   ├── 08-securite-rgpd.md
+│   ├── 09-strategie-tests.md
+│   ├── 10-guide-utilisateur.md
+│   ├── 11-guide-deploiement.md
+│   ├── 12-prerequis-externes.md
 │   ├── CURRENT-STATE.md
-│   └── adr/
+│   ├── demo-data/
+│   └── diagrams/
 │
-├── report/
-├── presentation/
-├── samples/
+├── tests/
 └── scripts/
 ```
 
@@ -1808,7 +1845,7 @@ Une offre gratuite peut avoir :
 - une suppression en cas d’inactivité ;
 - une architecture ARM.
 
-Le staging ne doit donc pas être l’unique support de la soutenance.
+L’environnement de recette ne doit donc pas être l’unique support d’une démonstration.
 
 Une démonstration locale et une vidéo de secours restent obligatoires.
 
@@ -2037,32 +2074,823 @@ Spring Boot doit détecter les doublons.
 
 ---
 
-# 30. Décisions d’architecture
+# 30. Décisions d’architecture — ADR
 
-## ADR à créer
+Les décisions structurantes sont consignées ici, avec leur contexte,
+leurs conséquences et leur date. Les identifiants sont **stables** : ils
+sont cités dans le code et dans les migrations, et ne doivent jamais être
+réattribués.
 
-```text
-docs/adr/
-├── ADR-001-monolithe-modulaire.md
-├── ADR-002-mysql-source-verite.md
-├── ADR-003-redis-cache-jetons.md
-├── ADR-004-angular-pwa.md
-├── ADR-005-sse-temps-reel.md
-├── ADR-006-service-ia-fastapi.md
-├── ADR-007-mqtt-iot.md
-├── ADR-008-stockage-fichiers.md
-├── ADR-009-environnements.md
-└── ADR-010-strategie-cloud.md
-```
+> **Note de traçabilité.** Les migrations `V10` à `V16` citent en
+> commentaire l'ancien chemin `docs/reports/G1_ARCHITECTURE_DECISIONS.md`,
+> supprimé le 3 septembre 2026. Ces commentaires sont **volontairement
+> laissés intacts** : modifier une migration déjà appliquée invalide sa
+> somme de contrôle Flyway et casse toute base existante. Les décisions
+> `DEC-G1-*` qu'ils citent sont reprises ci-dessous sous les mêmes
+> identifiants.
 
-Chaque ADR contiendra :
+## DEC-G1-001 à DEC-G1-012 — module planning et pièces jointes
 
-- contexte ;
-- options ;
-- décision ;
-- conséquences ;
-- statut ;
-- date.
+| Réf | Décision |
+|---|---|
+| `DEC-G1-001` | L'identité d'un créneau de planning est stable et déterministe (`course_session.planning_slot_public_id`) : une republication retrouve la séance existante au lieu d'en créer une seconde. |
+| `DEC-G1-002` | `planning` ne partage aucune entité JPA avec `coursesession` : l'écriture passe par le port public `PlanningSessionWriter`. |
+| `DEC-G1-003` | La correction d'une ligne d'import se fait, dans un premier temps, par annulation du travail puis réimport. La correction ligne à ligne est planifiée (EF-PLAN-003, sprint 5). |
+| `DEC-G1-004` | Le cycle de vie d'une séance est strict et sans réouverture : `PLANNED → OPEN → CLOSED`, plus `CANCELLED` avec motif. |
+| `DEC-G1-006` | Un créneau tombant sur une période d'alternance en entreprise produit un **avertissement**, jamais un blocage. |
+| `DEC-G1-007` | Les notifications sont produites après commit et rendues idempotentes par une empreinte de déduplication. |
+| `DEC-G1-008` | Le contenu d'une pièce jointe est stocké hors base et hors répertoire public ; seule sa description est en base. |
+| `DEC-G1-009` | La séquence base ↔ fichier est compensée, et les lignes restées en attente de stockage sont réconciliées par une tâche planifiée. |
+| `DEC-G1-010` | Le coût SQL du tableau de bord manager reste linéaire en nombre de séances ; le chargement par lot est une dette identifiée (T-03). |
+| `DEC-G1-012` | Toute table métier porte un identifiant public UUID distinct de sa clé primaire. |
+| `DEC-G1-E-ANTIVIRUS` | Aucune analyse antivirus n'est en place : les contrôles sont **structurels** (extension, type déclaré, contenu réel, taille). Ne jamais écrire que les fichiers sont garantis sans logiciel malveillant. Levée prévue au sprint 9. |
+
+## DEC-S2-001 — la limitation de débit laisse passer si Redis est indisponible
+
+**Contexte.** La limitation de débit protège la connexion, la demande de
+réinitialisation et la consommation d'un jeton (EF-AUTH-012). Ses
+compteurs vivent dans Redis. Que faire lorsque Redis ne répond pas ?
+
+**Options.** Refuser toute requête limitée (*fail closed*) ; ou la laisser
+passer en journalisant l'incident (*fail open*).
+
+**Décision.** *Fail open*, avec journalisation en `WARN`.
+
+**Conséquences.** Refuser fermerait l'authentification à **tous** les
+utilisateurs légitimes dès qu'une dépendance de simple protection tombe :
+la panne d'un garde-fou deviendrait un déni de service complet,
+déclenchable de l'extérieur en s'attaquant à Redis. Pendant une telle
+panne, les contrôles de fond restent actifs — hachage BCrypt, réponse
+uniforme, audit de chaque tentative — et seule la borne de fréquence
+disparaît.
+
+Ce choix est **l'inverse** de celui retenu pour l'émargement, où
+l'indisponibilité de Redis produit un `503` : là, Redis porte
+l'**autorité** de la décision (le jeton n'existe nulle part ailleurs), et
+non une protection périphérique. La règle générale est donc : *fail open*
+pour une protection, *fail closed* pour une autorité.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-002 — révocation des jetons : deux mécanismes distincts
+
+**Contexte.** L'API est sans état. Un JWT reste cryptographiquement
+valide jusqu'à son expiration, y compris après une déconnexion ou un
+changement de mot de passe (EF-AUTH-014, RG-010).
+
+**Décision.** Deux mécanismes complémentaires, vérifiés à chaque requête
+par un `OAuth2TokenValidator` :
+
+1. **liste de refus Redis**, indexée par `jti`, avec une durée de vie
+   égale au temps restant du jeton — c'est la déconnexion d'**une**
+   session ;
+2. **colonne `user_account.credentials_invalidated_at`** — tout jeton
+   dont le claim `iat` est antérieur est refusé. C'est la révocation
+   **globale** : changement de mot de passe, suspension, incident. Elle
+   couvre les jetons dont l'identifiant est inconnu du serveur, ce que la
+   liste de refus ne peut pas faire.
+
+**Conséquences.** Le claim `iat` n'a qu'une précision à la seconde. La
+révocation globale est donc arrondie à la seconde **supérieure**, et
+l'émission d'un jeton date l'`iat` au plus tard entre l'instant courant et
+cette borne : sans cela, une reconnexion immédiate après une révocation
+produirait un jeton aussitôt rejeté pendant près d'une seconde.
+
+Une panne de Redis n'invalide pas les sessions en cours : la liste de
+refus répond « non révoqué », tandis que la révocation qui compte —
+celle qui suit un changement de mot de passe — repose sur MySQL et reste
+appliquée.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-003 — l'audit des changements de mot de passe est publié après commit
+
+**Contexte.** Huit écouteurs d'audit sont des `@EventListener` synchrones
+en `REQUIRES_NEW`. Ce motif suspend la transaction appelante pour écrire
+la trace dans une transaction dédiée.
+
+**Décision.** Les écouteurs d'audit ajoutés à partir du sprint 2 écoutent
+en `AFTER_COMMIT`.
+
+**Conséquences.** Une transaction qui change un mot de passe a déjà
+modifié — donc verrouillé — la ligne `user_account` concernée. Un
+écouteur synchrone en `REQUIRES_NEW` tenterait d'insérer un
+`audit_event` dont la clé étrangère `actor_user_id` pointe vers cette
+ligne : la nouvelle transaction attendrait un verrou que seule l'ancienne
+peut libérer, jusqu'au *lock wait timeout*. Le défaut a été observé
+(cinquante secondes d'attente puis échec) avant d'être corrigé.
+
+Publier après le commit supprime la situation et donne la bonne
+sémantique : une transaction annulée ne laisse aucune trace (RG-097). La
+migration des huit écouteurs restants vers une outbox est la dette T-01,
+planifiée au sprint 10.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-004 — le contrôle anti-robot laisse passer si Cloudflare est injoignable
+
+**Contexte.** `EF-AUTH-011` protège la connexion (après échecs répétés),
+la demande de réinitialisation et l'activation de compte par Cloudflare
+Turnstile. La vérification du jeton exige un appel sortant vers
+Cloudflare. Que faire quand cet appel échoue ?
+
+**Décision.** Un fournisseur injoignable produit un verdict
+`providerUnavailable` qui **laisse passer**, avec journalisation en
+`WARN`. Un jeton explicitement refusé par Cloudflare, lui, bloque.
+
+**Conséquences.** Refuser en cas de panne du tiers transformerait
+l'indisponibilité d'un service externe en panne totale de la connexion et
+de la réinitialisation de mot de passe — un déni de service déclenchable
+depuis l'extérieur, contre un produit dont la disponibilité est une
+exigence. Les protections propres au produit restent actives pendant ce
+temps : limitation par identité et par origine, réponse uniforme, audit
+de chaque tentative, verrouillage progressif.
+
+C'est le même arbitrage que `DEC-S2-001` : la panne d'un garde-fou ne
+doit pas devenir une porte fermée sur les utilisateurs légitimes. Il est
+l'inverse de celui retenu pour l'émargement (`503` si Redis tombe), où
+Redis porte l'**autorité** de la décision et non une simple protection.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-005 — un compte privilégié sans second facteur est enrôlé pendant sa connexion
+
+**Contexte.** `RG-007` et `AC-021` imposent un second facteur à tout
+compte `SUPER_ADMIN` ou `ADMIN`. Or la politique doit pouvoir entrer en
+vigueur sur une base existante, où aucun compte n'en possède : si la
+connexion était simplement refusée, plus aucun administrateur ne pourrait
+se connecter — ni, donc, enrôler quoi que ce soit.
+
+**Décision.** `POST /auth/login` ne renvoie plus systématiquement un
+jeton. Lorsque la politique l'exige, il renvoie un **défi** :
+- `VERIFY` si un facteur actif existe ;
+- `ENROLL` sinon — le compte enrôle dans la foulée, et la session s'ouvre
+  à la confirmation, sans redemander le mot de passe.
+
+Le défi vit dans Redis, à usage unique, avec une durée de vie courte. Il
+vaut preuve de la première étape : il ne transite ni par l'URL, ni par un
+stockage persistant côté client.
+
+**Conséquences.** Aucun compte privilégié n'obtient de jeton contre son
+seul mot de passe, y compris à la toute première connexion — `AC-021` est
+satisfait sans exception ni période de grâce. En contrepartie, tout code
+appelant `/auth/login` doit gérer les deux issues ; c'est le rôle de
+`AuthTestSupport` côté tests et de `PendingChallengeStore` côté interface.
+
+Redis portant ici l'autorité de la décision, son indisponibilité produit
+un `503` et non un contournement — à l'inverse de `DEC-S2-001`.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S2-006 — l'appareil de confiance allège la connexion, il ne l'autorise jamais
+
+**Contexte.** `EF-AUTH-010` demande une authentification adaptative et
+`EF-AUTH-013` des appareils de confiance. La tentation est d'en faire un
+facteur d'authentification à part entière.
+
+**Décision.** L'appareil est identifié par une **empreinte** d'un
+identifiant aléatoire que le client conserve localement. Il n'ouvre
+jamais de session à lui seul : le mot de passe ou la passkey reste exigé.
+Sur un compte ordinaire déjà enrôlé, un appareil reconnu évite de
+redemander le code à chaque connexion. Sur un compte privilégié, il
+n'accorde **aucune** dispense.
+
+**Conséquences.** Le confort d'usage progresse sans que la surface
+d'attaque s'élargisse : voler l'identifiant d'appareil ne donne rien sans
+le mot de passe. L'identifiant brut n'est jamais stocké côté serveur
+(`RG-094`), et l'appareil n'est mémorisé qu'après une authentification
+**complète** — jamais après une tentative refusée.
+
+Le stockage local de cet identifiant côté navigateur n'est pas une
+entorse à « aucun jeton sensible dans `localStorage` » : ce n'est pas un
+justificatif d'identité, et il doit survivre au rechargement pour que la
+fonction existe.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S3-001 — les groupes temporaires vivent dans `enrollment`, pas dans `academic`
+
+**Contexte.** `EF-ACA-007` demande des groupes rassemblant des apprenants
+issus de plusieurs classes. Le réflexe est de les loger dans
+`academic`, avec les classes.
+
+**Décision.** `student_group` et `student_group_member` appartiennent au
+module `enrollment`.
+
+**Conséquences.** Un membre de groupe est une **inscription**, pas un
+profil : c'est ce qui permet à un apprenant changeant de classe en cours
+d'année de garder la trace de son appartenance pour la période concernée
+(`RG-006`). Or `enrollment → academic` existe déjà. Loger le groupe dans
+`academic` imposerait la dépendance inverse, donc un **cycle** — que
+`ModularityTests` refuse à juste titre.
+
+Deux ports publics ont été ajoutés à `academic` pour que `enrollment`
+résolve ce dont il a besoin sans importer d'interne :
+`AcademicReferenceDirectory` (formation, année scolaire) et
+`SubjectDirectory` (matière). `AcademicScopeDirectory` a été étendu au
+périmètre **formation** — un groupe est rattaché à une formation sans
+passer par une classe.
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S3-002 — le journal de délivrabilité ne stocke aucune adresse en clair
+
+**Contexte.** `EF-USER-008` demande de suivre la délivrabilité des
+courriels, en particulier pour repérer une adresse erronée. La façon
+évidente est de stocker l'adresse.
+
+**Décision.** `email_delivery` conserve une **empreinte** de l'adresse —
+pour rapprocher les envois d'une même adresse — et une **forme masquée**
+destinée à l'affichage (`c…e@e…c.test`). Jamais l'adresse complète.
+
+**Conséquences.** Un responsable reconnaît l'adresse qu'il vient de
+saisir et repère une faute de frappe ; un export de cette table ne
+constitue pas pour autant un annuaire exploitable. La table porte par
+ailleurs **deux statuts distincts** — ce que le produit a fait, ce que le
+fournisseur a constaté — parce que les confondre ferait croire qu'une
+invitation est arrivée alors que l'adresse est fausse, ce que le cahier
+demande explicitement d'éviter (docs/02 §11.3).
+
+En développement, Mailpit ne remonte rien : le statut fournisseur reste
+`UNKNOWN`, et l'interface l'affiche comme tel plutôt que d'inventer un
+« délivré ».
+
+**Statut.** Adoptée le 3 septembre 2026.
+
+## DEC-S4-001 — l'unicité d'une ligne d'import porte sur (travail, feuille, ligne)
+
+**Contexte.** La migration `V11` posait `UNIQUE (job, row_number)` : dans
+un fichier plat, un numéro de ligne identifie une ligne. Un classeur
+Excel casse cette hypothèse — la ligne 2 existe dans **chaque** feuille.
+
+**Décision.** La clé devient `(travail, feuille, ligne)`. Une colonne
+générée porte la feuille ramenée à la chaîne vide pour un CSV.
+
+**Conséquences.** Le défaut était réel et a été découvert par le test du
+classeur de trois feuilles : la deuxième feuille échouait sur une
+violation d'unicité, avec un `500`. Utiliser directement `sheet_name`,
+qui vaut `NULL` pour un CSV, aurait *affaibli* la garantie — MySQL
+autorise plusieurs `NULL` dans un index `UNIQUE`, et deux lignes CSV de
+même numéro seraient redevenues possibles.
+
+La détection de doublons intra-fichier a suivi : elle indexait ses
+anomalies sur le seul numéro de ligne, ce qui aurait mélangé les lignes 2
+de trois feuilles différentes.
+
+**Statut.** Adoptée le 4 septembre 2026.
+
+## DEC-S4-002 — une opération de masse est isolée par compte, pas atomique sur le lot
+
+**Contexte.** `EF-USER-004` demande des opérations groupées avec
+prévisualisation. Le réflexe est d'envelopper l'exécution dans une
+transaction unique : tout ou rien.
+
+**Décision.** Chaque bascule s'exécute dans sa propre transaction, celle
+de `UserManagementService`. Un compte refusé — protégé, auto-action,
+état incompatible — est reporté dans le résultat sans priver les autres
+de l'opération.
+
+**Conséquences.** La transaction unique semblait plus propre ; elle est
+en réalité fausse ici, et le test l'a montré. Un refus individuel
+remonte depuis une méthode `@Transactional` imbriquée, ce qui marque la
+transaction englobante `rollback-only` : le lot entier échouait à la
+validation, y compris les comptes traités sans problème, et sans que
+l'appelant comprenne pourquoi. Or le contrat de cette opération est
+précisément de **rendre compte compte par compte** (docs/02 §9.4 : « les
+erreurs, les éléments ignorés »).
+
+La prévisualisation, elle, reste obligatoire : sans `confirm: true`, rien
+n'est écrit (RG-034).
+
+**Statut.** Adoptée le 4 septembre 2026.
+
+## DEC-S5-001 — la séance conserve son code de salle, et le conflit de salle devient établissement-wide
+
+**Contexte.** `EF-PLAN-009` et `EF-ORG-004` demandent de détecter « une
+salle occupée simultanément ». Le planning transportait déjà
+`room_code` de bout en bout — colonne d'import, entrée de planning,
+commande de publication — mais la **séance créée ne le conservait pas**.
+Le contrôle ne pouvait donc s'exercer qu'à l'intérieur d'un même fichier.
+
+**Décision.** `course_session` porte un `room_code` (migration `V21`), et
+la simulation de planning contrôle la salle contre les séances déjà
+publiées, au même titre que le formateur et la classe.
+
+**Conséquences.** Deux imports successifs ne peuvent plus placer deux
+classes dans la même salle à la même heure sans que rien ne le signale.
+Le contrôle porte, comme il se doit, sur **tout l'établissement** : une
+salle n'appartient pas à une classe.
+
+Deux effets à connaître :
+- deux créneaux **sans** salle ne sont jamais en conflit — ils
+  n'occupent rien ;
+- le **même créneau republié** reste exclu du contrôle, par la règle
+  d'identité stable qui existait déjà.
+
+Cette portée établissement-wide a rendu plusieurs fixtures de test
+incorrectes : elles réutilisaient « A1 » pour des classes différentes, ce
+qui est désormais — à juste titre — un conflit. Chaque cas de test tire
+maintenant un code de salle unique.
+
+`room_code` reste un **code fonctionnel**, sans clé étrangère vers
+`room` : le cahier prévoit qu'une salle soit « laissée provisoirement
+indéterminée » puis affectée plus tard (`RG-044`).
+
+**Statut.** Adoptée le 4 septembre 2026.
+
+## DEC-S5-002 — corriger une ligne de planning réanalyse tout le lot
+
+**Contexte.** `EF-PLAN-003` demande de corriger une ligne en anomalie
+sans recommencer l'import. Pour l'import d'apprenants, revalider la seule
+ligne touchée suffit.
+
+**Décision.** Pour le planning, la correction rejoue l'analyse **de tout
+le travail**.
+
+**Conséquences.** Les conflits de planning sont par nature *croisés* :
+formateur, classe et salle se disputent un créneau **entre** lignes.
+Corriger l'heure d'une ligne peut lever le conflit d'une autre, ou en
+créer un ailleurs. Ne revalider que la ligne touchée laisserait le lot
+dans un état faux et plausible — le pire des deux.
+
+Le coût est assumé : une correction relit et réévalue toutes les lignes
+du travail. À l'échelle d'un planning de classe, c'est quelques dizaines
+de lignes.
+
+**Statut.** Adoptée le 4 septembre 2026.
+
+### DEC-S6-001 — Le calendrier interactif réutilise le pipeline d'import
+
+**Contexte.** `EF-PLAN-006` demande de construire un planning directement
+dans un calendrier : ajout, modification, déplacement, duplication d'une
+semaine, répétition, brouillon, publication.
+
+**Décision.** Un créneau saisi devient une ligne d'un travail d'import
+ordinaire (`planning_import_job` / `planning_import_row`), et chaque
+mutation rejoue `PlanningSimulationService.revalidate` sur le lot entier.
+La publication reste `POST /planning-imports/{id}/publish`.
+
+**Raison.** Le cahier exige que « les mêmes contrôles de conflit
+s'appliquent » (docs/02 §13.7). Un moteur de conflits propre au
+calendrier finirait par diverger de celui de l'import, et la divergence
+ne se verrait qu'au moment où deux classes se retrouveraient dans la même
+salle. Réutiliser le pipeline rend la divergence impossible par
+construction.
+
+**Conséquence.** Un travail né du calendrier n'a pas de fichier :
+`V23` assouplit la contrainte `file_size_bytes > 0` en `>= 0`. Un
+téléversement vide reste refusé par les gardes CSV et classeur, très en
+amont de la base.
+
+### DEC-S6-002 — Le retour arrière crée une version N+1 et refuse un planning devenu impubliable
+
+**Contexte.** `EF-PLAN-008` et `AC-009` demandent de revenir à une version
+antérieure sans effacer l'historique.
+
+**Décision.** Le retour arrière **copie** les entrées de la version
+choisie dans une version N+1, en conservant `slot_public_id`. Il est
+refusé si un formateur de la version cible n'est plus éligible
+(`ROLLBACK_TEACHER_UNAVAILABLE`) ou si la version est vide.
+
+**Raison.** Conserver `slot_public_id` fait que les séances existantes
+sont **réutilisées** et non recréées (RG-047) : un retour arrière ne perd
+ni les présences ni les points de contrôle déjà attachés. Le refus, lui,
+évite de restaurer un planning que la publication rejetterait aussitôt —
+mieux vaut un message explicite qu'une version morte dans l'historique.
+
+### DEC-S7-001 — Le suivi à distance est une décision tracée, pas un contrôle de localisation
+
+**Contexte.** `EF-ENR-004` demande d'autoriser un apprenant à suivre une
+séance à distance alors que sa classe est en présentiel, et de refuser le
+canal distant sans autorisation (docs/02 §15.3).
+
+**Décision.** L'apprenant **déclare** son suivi à distance au moment de la
+validation (`remote`). Sur une séance `ON_SITE`, le serveur exige une
+autorisation active couvrant le jour et la classe ; sinon
+`403 ATT_REMOTE_NOT_AUTHORIZED`. Le canal employé est enregistré
+(`REMOTE_QR` / `REMOTE_CODE`).
+
+**Ce que ce n'est pas.** Une preuve de localisation. Un client pourrait ne
+pas lever le drapeau. Le contrôle de présence sur site reste le QR fixe de
+salle associé à la plage réseau (`EF-ATT-008` / `EF-ATT-010`, sprint 8).
+Cette limite est documentée dans le code même, pour qu'aucune lecture
+ultérieure ne la prenne pour une garantie.
+
+**Conséquence assumée.** Le mécanisme apporte une décision pédagogique
+datée, motivée, révocable et auditée, et la traçabilité du canal dans les
+rapports — pas davantage.
+
+### DEC-S7-002 — La portée d'une autorisation est un intervalle de dates
+
+**Contexte.** Le cahier prévoit une autorisation « pour une séance, une
+période ou l'année » (docs/02 §15.3).
+
+**Décision.** Une seule représentation : `valid_from` / `valid_until`
+(borne haute inclusive, `NULL` = ouverte). Une autorisation d'une séance
+est un intervalle d'un jour.
+
+**Raison.** Trois portées énumérées auraient produit trois chemins de
+calcul de couverture, donc trois occasions de diverger. Une autorisation
+**générale** (sans classe) est en outre réservée au périmètre global :
+accordée par un responsable pédagogique, elle porterait au-delà de son
+périmètre.
+
+### DEC-S8-001 — Le QR de salle est un jeton serveur, jamais une référence saisie
+
+**Contexte.** `EF-ORG-003` et `EF-ATT-010` demandent un QR fixe imprimé,
+associé à une salle, permettant d'émarger avant le début d'une séance.
+`room.static_qr_reference` existait depuis V4 comme texte libre.
+
+**Décision.** Le jeton est **généré par le serveur** (`SecureRandom`, 32
+octets), unique en base, non saisissable par l'API, renouvelable et
+révocable. V26 efface les valeurs déjà saisies.
+
+**Raison.** Une référence choisie à la main est « A101 » : n'importe qui
+la fabrique, et un QR fabricable n'est pas un contrôle. Le renouvellement
+existe parce qu'une affiche se photographie et se diffuse ; sans lui, la
+seule parade serait de recréer la salle.
+
+**Ce que ce n'est pas.** Le QR seul ne prouve rien — il est public par
+construction. C'est la **plage réseau** qui atteste de la présence sur
+site (`DEC-S8-002`). Les deux ne valent qu'ensemble.
+
+### DEC-S8-002 — Le contrôle réseau décide, puis l'adresse disparaît
+
+**Contexte.** `EF-ATT-008` et docs/02 §16.7 exigent que le QR fixe ne soit
+accepté que depuis une plage réseau déclarée, et que l'adresse IP ne soit
+pas conservée dans l'audit métier (RG-094).
+
+**Décision.** L'adresse d'origine (`getRemoteAddr()`, jamais un en-tête
+fourni par le client) est comparée aux blocs CIDR actifs du site, sur les
+**octets** de l'adresse et sans résolution DNS. Elle n'est ni persistée,
+ni journalisée dans l'audit métier, ni renvoyée dans la réponse ou
+l'erreur. Le contrôle passe **avant** toute autre décision : inutile de
+révéler qu'une séance existe à qui n'est pas sur le réseau.
+
+**Refus par défaut.** Adresse absente, illisible, ou site sans plage
+déclarée : refus. L'absence de plage n'est pas une autorisation.
+
+### DEC-S8-003 — Une entrée provisoire est un signalement, pas une présence
+
+**Contexte.** `EF-ATT-007` et docs/02 §16.12 : le formateur enregistre une
+personne présente sans inscription ; l'entrée « ne crée pas d'inscription
+officielle » et « reste distincte d'un compte tant que la correspondance
+n'est pas validée ».
+
+**Décision.** Table `session_guest_attendance` distincte
+d'`attendance_record`. L'entrée n'entre dans aucun calcul d'assiduité
+tant qu'elle n'est pas régularisée ; la régularisation (rattachement ou
+mise à l'écart) est une décision humaine motivée et tracée, et le
+rattachement **ne crée pas** de présence.
+
+**Raison.** `attendance_record.enrollment_id` est `NOT NULL`. Le rendre
+facultatif ferait entrer une présence sans inscription dans tous les
+calculs — exactement ce que le cahier interdit. Et l'identité d'une
+entrée provisoire est *déclarée* par le formateur, pas vérifiée : la
+confondre avec une présence enregistrée reviendrait à traiter une
+affirmation comme un fait.
+
+### DEC-S9-001 — L'effet d'un départ anticipé est dérivé, jamais stocké
+
+**Contexte.** `EF-ATT-013` et docs/02 §16.13 : « L'effet est `PARTIAL`,
+`EXCUSED_PARTIAL` ou `TO_CONFIRM` ». Le dossier porte par ailleurs
+apprenant, séance, heure, motif, avis, décision, auteur et commentaire.
+
+**Décision.** `early_departure` (V29) ne porte **aucune** colonne
+d'effet : celui-ci se déduit du statut — accepté ⇒ `EXCUSED_PARTIAL`,
+refusé ⇒ `PARTIAL`, ouvert ⇒ `TO_CONFIRM`. Le résultat journalier
+consomme cette déduction et ne module que les journées `PARTIAL`.
+
+**Raison.** Une colonne d'effet serait une seconde vérité à tenir
+cohérente avec la décision, et divergerait à la première décision
+révisée. Et l'effet n'agit que sur une journée incomplète : une journée
+complète ne redevient pas incomplète parce qu'un dossier existe, et une
+absence totale n'est pas excusée par un départ — on ne part pas d'un
+endroit où l'on n'est jamais venu.
+
+**Conséquence.** `DailyAttendanceResult` gagne `EXCUSED_PARTIAL`, absent
+de la table de §16.3 : sans lui, une journée écourtée **avec** l'accord du
+responsable serait indistinguable d'une journée écourtée sans
+autorisation.
+
+### DEC-S9-002 — Transmettre n'est pas décider
+
+**Contexte.** docs/02 §16.13 donne quatre gestes au formateur : accepter,
+refuser, recommander favorablement, transmettre au responsable.
+
+**Décision.** « Recommander favorablement » et « transmettre » aboutissent
+au **même statut** `FORWARDED` et se distinguent par l'avis joint
+(`FAVOURABLE` / `UNFAVOURABLE` / aucun). Une fois le dossier transmis, le
+formateur ne peut plus trancher : la décision est réservée au responsable
+et au-dessus (`403 ATT_EARLY_DEPARTURE_DECISION_RESERVED`).
+
+**Raison.** Deux statuts distincts pour un même état obligeraient à
+décider deux fois la même chose. Et laisser le formateur reprendre la main
+après avoir transmis viderait la transmission de son sens : le dossier
+serait « chez le responsable » sans l'être.
+
+### DEC-S9-003 — Le journal de transparence nomme la fonction, jamais l'agent
+
+**Contexte.** `EF-ATT-014` (docs/02 §5.7) donne à l'apprenant le droit de
+consulter le journal de ses présences. `AC-018` exige qu'une correction
+affiche « l'ancienne valeur, la nouvelle, **l'auteur**, la date et le
+motif ».
+
+**Décision.** Deux niveaux de restitution. L'écran du **personnel** reçoit
+l'identité civile de l'auteur (`actorDisplayName`) — c'est le sens de
+« l'auteur » dans AC-018, et l'établissement doit pouvoir remonter à la
+personne. L'**apprenant** reçoit la seule fonction (`TEACHER`,
+`SCHOOL_ADMINISTRATION`…), et `SELF` pour ses propres gestes.
+
+**Raison.** Savoir qu'une correction vient du secrétariat plutôt que d'un
+formateur est un droit ; obtenir le nom d'un agent n'en est pas un et
+ajoute une donnée personnelle sans ajouter de droit (docs/02 §14).
+
+**Conséquence.** `AttendanceCorrectionResponse` gagne `actorRole` et
+`actorDisplayName`. Avant ce sprint, l'auteur n'était **pas exposé du
+tout** : AC-018 n'était donc pas satisfait, y compris côté personnel.
+
+### DEC-S9-004 — Le journal de transparence est dérivé, pas persisté
+
+**Décision.** `GET /api/v1/me/attendance/transparency` compose sa réponse
+à la lecture depuis `attendance_record`, l'historique append-only
+`attendance_correction` et `early_departure`. Aucune table de journal.
+
+**Raison.** Une table de journal serait une seconde vérité à maintenir
+cohérente avec un historique append-only qui existe déjà et qui, lui, est
+la source. L'apprenant est résolu depuis le **seul JWT** : aucun
+identifiant n'est accepté du client, sans quoi la route deviendrait un
+moyen de lire le journal d'autrui (`AC-017`).
+
+### DEC-S9-005 — Sans antivirus, le produit le déclare ; il ne le simule pas
+
+**Contexte.** docs/02 §19.2 : « Une analyse antivirus est appliquée avant
+mise à disposition. Tant qu'elle n'a pas rendu son verdict, la pièce est
+en quarantaine et n'est pas téléchargeable. »
+
+**Décision.** Port `AttachmentMalwareScanner` avec deux adaptateurs :
+`ClamAvMalwareScanner` (protocole `INSTREAM` de `clamd`, activé par
+`app.attendance.antivirus.enabled`) et `InactiveMalwareScanner`, qui
+n'analyse rien **et le déclare**. Le verdict est persisté (V30) parmi
+`NOT_SCANNED` / `CLEAN` / `INFECTED` / `UNAVAILABLE` et exposé par l'API.
+L'analyse a lieu **avant toute écriture** : un contenu reconnu malveillant
+ne touche jamais le disque (`422 ATT_ATTACHMENT_INFECTED`).
+
+La quarantaine est gouvernée par `app.attendance.antivirus.required` :
+à `true`, une pièce sans verdict exploitable n'est pas téléchargeable
+(`409 ATT_ATTACHMENT_QUARANTINED`) ; à `false` — le défaut — elle l'est,
+en portant explicitement `NOT_SCANNED`.
+
+**Raison.** Trois situations sont distinctes de « sain » : aucun
+analyseur, analyseur muet, signature détectée. Les confondre ferait
+passer une absence de contrôle pour un contrôle réussi. Un défaut à
+`required: true` rendrait par ailleurs le produit inutilisable en local
+sans ClamAV, ce qui pousserait à désactiver le mécanisme entier plutôt
+qu'à l'exploiter.
+
+**Limite assumée.** Sans ClamAV actif, **aucune pièce n'est analysée**.
+Ne jamais écrire « garanti sans logiciel malveillant » : le seul contrôle
+alors appliqué est structurel (extension, type déclaré, *magic bytes*,
+taille). Un antivirus reconnaît d'ailleurs ce qu'il connaît ; il ne rend
+pas un format dangereux inoffensif.
+
+### DEC-S9-006 — Une réclamation s'adresse à un guichet, pas à une personne
+
+**Contexte.** docs/02 §20 : la réclamation est adressée « au formateur, au
+responsable pédagogique ou à l'administration scolaire », et peut être
+transférée.
+
+**Décision.** `ClaimAudience` désigne une **fonction** — `TEACHER`,
+`PEDAGOGICAL_MANAGER`, `SCHOOL_ADMINISTRATION` — jamais un compte. Les
+messages (`claim_message`) et les décisions (`claim_event`) sont deux
+tables distinctes ; `author_role` est figé à l'écriture.
+
+**Raison.** Un destinataire nominatif rendrait le transfert impossible à
+définir proprement, et une réclamation deviendrait caduque au départ de la
+personne visée. Séparer messages et décisions garde lisible l'historique
+d'un dossier transféré puis rouvert (RG-088) — mélangés, ils formeraient
+un fil où l'on ne distinguerait plus ce qui a été dit de ce qui a été
+décidé.
+
+**Conséquence.** Une réclamation d'un apprenant **sans classe active** et
+adressée à un guichet à périmètre serait invisible de tous : elle est
+refusée à la création (`409 CLAIM_NO_SCOPE_FOR_AUDIENCE`) avec une
+orientation vers l'administration scolaire, plutôt qu'acceptée puis
+perdue.
+
+### DEC-S10-001 — L'outbox transactionnelle remplace deux motifs qui perdaient l'effet de bord
+
+**Contexte.** docs/02 §23.4 et §25.1 ; RG-096, RG-097 ; AC-027, AC-028.
+Deux mécanismes coexistaient, et perdaient l'effet de bord chacun à sa
+manière :
+
+- l'audit s'écrivait dans une transaction **séparée** (`REQUIRES_NEW`)
+  ouverte *avant* le commit métier. Une trace de succès pouvait donc
+  subsister derrière une action ensuite annulée (RG-097 non tenu), et un
+  incident d'écriture perdait la trace en silence (dette T-02) ;
+- les notifications s'écrivaient *après* commit, sans file ni reprise :
+  un arrêt de la JVM entre le commit et l'écriture perdait la
+  notification (dette T-01).
+
+**Décision.** Module `outbox` (16ᵉ module). Le module métier écrit une
+**intention** dans la table `outbox_message` (V31) *à l'intérieur* de sa
+propre transaction, via le port `OutboxPublisher`. Elle commite avec
+l'action, ou disparaît avec son annulation. Un diffuseur la traite
+ensuite, en routant `message_type` vers l'`OutboxHandler` publié par le
+module compétent — `outbox` ne connaît aucun métier.
+
+Le diffuseur a **deux déclencheurs** : un drain immédiat dans
+l'`afterCompletion` de la transaction métier, et une reprise planifiée
+pour ce que l'immédiat a manqué. Attente croissante plafonnée, puis
+**file d'échec** (`DEAD`) rejouable à la main (EF-OPS-005).
+
+**Raison.** Les deux garanties attendues — « rien si la transaction est
+annulée », « jamais perdu si le diffuseur échoue » — sont contradictoires
+tant que l'effet est produit directement : trop tôt, une annulation le
+laisse derrière elle ; trop tard, une panne le perd. Écrire l'intention
+dans la transaction lève la contradiction.
+
+**Effet de bord bénéfique.** La ligne d'outbox ne porte **aucune clé
+étrangère** vers `user_account`, là où `audit_event.actor_user_id` en
+porte une. Le motif `REQUIRES_NEW` devait donc être évité chaque fois que
+la transaction métier avait déjà verrouillé la ligne du compte concerné —
+changement de mot de passe, révocation de sessions — sous peine
+d'attendre un verrou que seule la transaction suspendue pouvait libérer.
+Ce piège disparaît, et les contournements `publishAfterCommit` de
+`MfaService`, `WebAuthnService` et `TrustedDeviceService` (DEC-S2-003)
+sont supprimés.
+
+**Exception unique et assumée.** `SecurityAuditEventListener.onLoginFailed`
+conserve un `REQUIRES_NEW`. La transaction de connexion est *toujours*
+annulée quand l'authentification échoue : la rejoindre ferait disparaître
+l'enregistrement de la tentative — donc l'essentiel de ce qu'un
+responsable sécurité cherche dans le journal. Ce n'est pas une entorse à
+RG-097 : cette règle interdit de produire l'effet de bord d'une action
+*annulée* ; ici rien n'est annulé, le refus a bien eu lieu.
+
+### DEC-S10-002 — Le diffuseur ouvre une transaction neuve autour des gestionnaires
+
+**Contexte.** Le drain immédiat s'exécute dans l'`afterCompletion` de la
+transaction métier. À cet instant, les ressources JPA sont encore liées
+au fil d'exécution alors que la transaction sous-jacente est déjà
+committée.
+
+**Décision.** `OutboxHandlerInvoker` exécute chaque gestionnaire en
+`REQUIRES_NEW`. Un gestionnaire dont l'effet principal est un appel
+**externe** — courriel, poussée — renvoie `transactional() == false` et
+porte lui-même des transactions courtes autour de ses écritures.
+
+Trois transactions distinctes par message : réclamer, exécuter,
+enregistrer le résultat. La réclamation repousse `next_attempt_at`
+(délai de visibilité) plutôt que de tenir un verrou pendant l'exécution.
+
+**Raison.** Un `@Transactional` ordinaire « participerait » à une
+transaction morte et échouerait sur *« no transaction is in progress »* —
+défaut constaté à l'exécution avant correction. Et regrouper les trois
+étapes dans une seule transaction aurait un défaut fatal : quand le
+gestionnaire échoue en marquant la transaction `rollback-only`,
+l'écriture du statut `FAILED` est annulée avec lui. La ligne repartirait
+indéfiniment sans que son compteur avance, et la file d'échec resterait
+vide pendant que le même effet échoue en boucle.
+
+Le délai de visibilité a un autre mérite : si la JVM s'arrête entre la
+réclamation et le résultat, la ligne redevient traitable d'elle-même,
+contrairement à un verrou en mémoire.
+
+### DEC-S10-003 — L'audience est décrite, puis résolue après commit
+
+**Contexte.** docs/02 §21.3 : chaque événement définit son audience —
+formateur, remplaçant, apprenants de la classe, responsable du périmètre.
+
+**Décision.** L'écouteur enregistre une **description** d'audience
+(« les apprenants de ces classes », « le formateur de cette séance »), et
+non une liste de comptes. `NotificationAudienceResolver` la résout au
+moment du traitement, après commit, par les ports publics de
+`coursesession`, `enrollment` et `academic`.
+
+Deux ports naissent de là : `EnrollmentDirectory.findActiveStudentUserPublicIds`
+— un `RosterEntry` porte l'identifiant du *profil*, qui ne désigne pas un
+destinataire — et `PedagogicalResponsibilityDirectory`, résolution
+**inverse** du périmètre : « qui répond de cette classe ? », là où
+`AcademicScopeDirectory` répond à « que voit l'appelant ? ».
+
+**Raison.** L'écouteur s'exécute dans la transaction métier, où
+l'effectif d'une classe est encore en cours de modification. Résoudre
+après commit donne l'état réellement établi. Cela garde aussi la ligne
+d'outbox petite : une classe de trente apprenants n'y écrit pas trente
+identifiants.
+
+`SessionNotificationInfo` porte désormais les classes rattachées, et non
+`findForAttendance` : celle-ci écarte les séances non opérationnelles, si
+bien qu'une séance **annulée** n'y répond plus — précisément quand il
+faut prévenir sa classe. Défaut constaté à l'exécution.
+
+**Choix d'audience assumé.** Une annulation prévient les apprenants ; un
+remplacement, non. Prévenir la classe de chaque changement de formateur
+transformerait le centre de notifications en bruit de fond, et ce qui
+compte s'y perdrait.
+
+### DEC-S10-004 — Une notification échoue par destinataire, pas en bloc
+
+**Contexte.** docs/02 §21.3 : « l'échec d'un destinataire n'interrompt
+jamais les autres ».
+
+**Décision.** `NotificationOutboxHandler` renvoie
+`transactional() == false` ; `NotificationRecipientWriter` écrit **un**
+destinataire par transaction `REQUIRES_NEW`, avec ses intentions de
+courriel et de poussée. Un échec partiel est journalisé, les autres
+destinataires sont servis, puis le gestionnaire **relance** l'exception :
+le message repasse en reprise, et l'idempotence (`dedup_key`) évite de
+notifier deux fois ceux qui l'étaient déjà.
+
+**Raison.** Une transaction unique priverait trente apprenants de leur
+notification pour une seule ligne fautive, et la reprise buterait
+indéfiniment sur la même ligne. La ligne de notification et ses envois
+commitent en revanche **ensemble** : les séparer ouvrirait le cas le plus
+désagréable — la notification apparaît à l'écran, le courriel n'est
+jamais parti, et la reprise passe son chemin parce que la ligne existe.
+
+### DEC-S10-005 — La file d'actions différées vit en mémoire
+
+**Contexte.** EF-PWA-003 et docs/02 §29.2 : une action réalisée hors
+ligne est mise en file et rejouée à la reconnexion. RG-063 : une présence
+enregistrée hors ligne n'est jamais définitive avant validation serveur.
+
+**Décision.** `OfflineQueueService` conserve la file **en mémoire**, pas
+dans `localStorage`. L'écran affiche « en attente de confirmation » — un
+état distinct du succès. Au rejeu : `409` vaut succès (la présence est
+déjà enregistrée, le résultat voulu est atteint), une erreur `4xx` est
+une décision définitive du serveur affichée avec son motif, une panne
+réseau ou un `5xx` laisse l'action en attente.
+
+**Raison.** Deux contraintes pointent dans le même sens. D'abord une
+règle : le corps d'un émargement contient le code court, c'est-à-dire un
+jeton, et RG-093 interdit d'en placer un dans `localStorage`. Ensuite un
+fait : ce code vit trente secondes. Une file qui survivrait au
+rechargement d'une page ne rejouerait que des codes expirés, et
+offrirait une promesse que le serveur refuserait.
+
+**Limite assumée.** La file couvre une coupure de quelques secondes
+pendant que l'application reste ouverte — le cas fréquent. Une coupure
+plus longue, ou une fermeture de l'application, se solde par un refus
+explicite du serveur : jamais par une présence silencieusement perdue, ni
+silencieusement inventée.
+
+### DEC-S10-006 — Un service worker écrit à la main plutôt que celui d'Angular
+
+**Contexte.** EF-PWA-001 à 003 et EF-NOTIF-005.
+
+**Décision.** Service worker propre (`frontend/public/sw.js`), sans
+`@angular/service-worker`.
+
+**Raison.** Un seul service worker peut être enregistré par portée. Celui
+d'Angular sait mettre en cache une coquille applicative, mais ne sait ni
+rejouer une action métier, ni servir de point d'entrée aux notifications
+poussées avec le contrôle voulu sur le contenu affiché. Le nôtre couvre
+les trois, et rend explicite ce qui est conservé sur l'appareil : la
+coquille, plus une **liste fermée** de réponses `GET` d'API. Les routes
+d'authentification et les jetons d'émargement n'y entrent jamais, et le
+cache de données est vidé à la déconnexion.
+
+**Limite assumée.** Le jeton ne vivant qu'en mémoire (RG-093),
+l'application démarre hors ligne mais **sans session** : elle affiche son
+écran de connexion. La consultation hors ligne couvre donc une coupure
+survenant application ouverte, pas un démarrage à froid sans réseau.
+
+### DEC-S10-007 — Le chiffrement de poussée est vérifié contre le vecteur de la RFC
+
+**Contexte.** EF-NOTIF-005 ; docs/02 §29.3 : « le contenu poussé ne
+comporte aucune donnée sensible ».
+
+**Décision.** `WebPushCrypto` implémente la RFC 8291 sur le codage
+`aes128gcm` de la RFC 8188, et `VapidSigner` la RFC 8292. La conformité
+est vérifiée contre le **vecteur de test officiel de la RFC 8291 §5**,
+octet pour octet.
+
+**Raison.** Le contenu est chiffré pour l'appareil de l'abonné : le
+service de poussée relaie un message qu'il ne peut pas lire. C'est cette
+propriété qui rend la poussée acceptable au regard du cahier, et elle
+repose entièrement sur quelques dérivations. Une implémentation
+légèrement fausse produirait des messages que le navigateur refuse de
+déchiffrer, sans qu'aucun test « maison » ne s'en aperçoive : chiffrer
+puis déchiffrer avec le même code fautif fonctionne parfaitement. Seule
+la comparaison à un résultat produit par quelqu'un d'autre prouve la
+conformité.
+
+**Limite assumée.** Aucun service de poussée réel n'a été sollicité :
+sans paire de clés VAPID, `InactiveWebPushSender` répond, et l'API
+**déclare** `providerActive: false` plutôt que de simuler un envoi.
+
+
+## ADR à rédiger
+
+Décisions déjà prises mais pas encore formalisées ici : monolithe
+modulaire, MySQL source de vérité, Redis pour les données temporaires,
+Angular et PWA, service d'IA FastAPI, MQTT pour l'IoT, stockage des
+fichiers, environnements, stratégie cloud.
+
+Chaque ADR contient : contexte, options, décision, conséquences, statut,
+date.
 
 ---
 

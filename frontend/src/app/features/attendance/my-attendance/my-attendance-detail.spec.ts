@@ -82,6 +82,8 @@ function fileInput(file: File | null): Event {
   return { target: input } as unknown as Event;
 }
 
+const ANTIVIRUS = '/api/v1/attendance/antivirus/status';
+
 function setup(roles: Role[] = ['STUDENT']) {
   localStorage.clear();
   sessionStorage.clear();
@@ -100,11 +102,32 @@ function setup(roles: Role[] = ['STUDENT']) {
   const fixture = TestBed.createComponent(MyAttendanceDetail);
   const http = TestBed.inject(HttpTestingController);
   fixture.detectChanges();
+  // État réel de l'analyse antivirus (sprint 10, dette T-04) : chargé au
+  // montage pour que l'écran puisse annoncer, AVANT le dépôt, qu'aucune
+  // analyse n'aura lieu. Répondu ici pour ne pas polluer les `verify()`.
+  http.expectOne(ANTIVIRUS).flush({ active: false, quarantineRequired: false });
   return { fixture, http, internals: fixture.componentInstance as unknown as Internals, effectiveRoles };
 }
 
 describe('MyAttendanceDetail — pièces jointes (G1-E)', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  /**
+   * Dette T-04 : le produit sait qu'aucun analyseur n'est en service, il
+   * doit le DIRE avant le dépôt. Le taire laisserait croire à une
+   * protection qui n'existe pas.
+   */
+  it('annonce, avant le dépôt, qu’aucune analyse antivirus n’est active', () => {
+    const { fixture, http } = setup();
+    http.expectOne(ATT).flush(DETAIL);
+    http.expectOne(JUS).flush(null, { status: 404, statusText: 'Not Found' });
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Aucune analyse antivirus n’est active');
+    expect(text).toContain('sans être analysée');
+    http.verify();
+  });
 
   it('loads the attachment metadata after the justification and shows it', () => {
     const { fixture, http } = setup();

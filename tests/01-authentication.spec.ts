@@ -14,7 +14,7 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
  * `HORS_PÉRIMÈTRE_ASSUMÉ` : mot de passe oublié, MFA, WebAuthn, Turnstile,
  * logout serveur / révocation de session, timeout de session mesurable
  * (30 min — trop long pour un test E2E, non simulé ici). Ces sous-domaines
- * ne sont donc PAS testés ci-dessous ; voir audit-report.md §4.5.
+ * ne sont donc PAS testés ci-dessous ; voir docs/09-strategie-tests.md
  */
 
 test.describe('Connexion — comptes réels par rôle', () => {

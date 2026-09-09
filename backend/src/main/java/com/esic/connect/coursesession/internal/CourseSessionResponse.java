@@ -4,6 +4,8 @@ import com.esic.connect.coursesession.AttendanceCheckpointStatus;
 import com.esic.connect.coursesession.AttendanceCheckpointType;
 import com.esic.connect.coursesession.SessionLifecycle;
 
+import com.esic.connect.coursesession.SessionAttendanceMode;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -26,10 +28,21 @@ record CourseSessionResponse(
         Instant startsAt,
         Instant endsAt,
         String timeZoneId,
+        /** Modalité d'enseignement (docs/02 §15). */
+        SessionAttendanceMode attendanceMode,
+        /** Lien distant ; {@code null} sur une séance {@code ON_SITE}. */
+        String remoteLink,
         Instant openedAt,
         Instant closedAt,
         String cancellationReason,
         Instant cancelledAt,
+        /**
+         * Séance de remplacement créée par un report (EF-SES-007). Non
+         * {@code null} uniquement sur une séance annulée puis reportée :
+         * le cahier veut que l'originale « reste consultable en
+         * historique » en portant le lien (docs/02 §14.4).
+         */
+        UUID postponedToPublicId,
         UUID checkpointPublicId,
         boolean checkpointOpen,
         List<CheckpointView> checkpoints,

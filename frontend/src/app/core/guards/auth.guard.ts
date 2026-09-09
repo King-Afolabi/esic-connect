@@ -8,7 +8,7 @@ import { AuthService } from '../auth/auth.service';
  *
  * Couche de confort de navigation uniquement : la protection réelle des
  * données est assurée par Spring Security à chaque appel d'API
- * (docs/07-securite-rgpd.md §7).
+ * (docs/08-securite-rgpd.md §7).
  */
 export const authGuard: CanActivateFn = (_route, state) => {
   const auth = inject(AuthService);

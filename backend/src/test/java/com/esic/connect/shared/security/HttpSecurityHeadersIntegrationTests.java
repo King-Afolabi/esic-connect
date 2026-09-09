@@ -63,6 +63,10 @@ class HttpSecurityHeadersIntegrationTests {
                 .doesNotContain("'unsafe-eval'");
         // script-src ne doit pas autoriser l'inline (style-src le peut, pour Swagger UI).
         assertThat(csp).doesNotContain("script-src 'self' 'unsafe-inline'");
+        // Une seule origine externe est tolérée : le widget anti-robot
+        // (EF-AUTH-011). Toute autre serait une porte ouverte.
+        assertThat(csp).contains("script-src 'self' https://challenges.cloudflare.com");
+        assertThat(csp).contains("frame-src https://challenges.cloudflare.com");
 
         assertThat(headers.getFirst("Referrer-Policy")).isEqualTo("no-referrer");
 

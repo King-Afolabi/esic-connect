@@ -56,7 +56,19 @@ class StudentImportException extends RuntimeException {
         /** Échec d'allocation d'un numéro étudiant après le nombre maximal de tentatives. */
         STUDENT_NUMBER_ALLOC_FAILED,
         /** La séquence de numéros a dépassé la borne configurée pour l'année. */
-        STUDENT_NUMBER_EXHAUSTED
+        STUDENT_NUMBER_EXHAUSTED,
+
+        // --- Correction de ligne (EF-IMP-006, docs/02 §13.6) ---
+        /** Aucune ligne pour ce {@code public_id} dans ce travail d'import. */
+        ROW_NOT_FOUND,
+        /** Le travail n'est plus à l'état {@code SIMULATED} : il n'est plus corrigeable. */
+        JOB_NOT_SIMULATED,
+        /** La simulation a expiré : plus rien n'y est modifiable. */
+        JOB_EXPIRED,
+        /** Champ de correction inconnu — la liste est fermée, jamais devinée. */
+        CORRECTION_UNKNOWN_FIELD,
+        /** Valeur corrigée inexploitable (date, booléen). */
+        CORRECTION_INVALID_VALUE
     }
 
     private final Kind kind;

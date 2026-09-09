@@ -42,6 +42,8 @@ class AttendanceManagementService {
     private final AttendanceRecordPersister recordPersister;
     private final AttendanceCorrectionRepository correctionRepository;
     private final AttendanceChangePublisher changePublisher;
+    private final AttendanceActorResolver actorResolver;
+    private final com.esic.connect.document.DocumentRenderer documentRenderer;
     private final Clock clock;
 
     AttendanceManagementService(CourseSessionDirectory courseSessionDirectory,
@@ -51,6 +53,8 @@ class AttendanceManagementService {
                                 AttendanceRecordPersister recordPersister,
                                 AttendanceCorrectionRepository correctionRepository,
                                 AttendanceChangePublisher changePublisher,
+                                AttendanceActorResolver actorResolver,
+                                com.esic.connect.document.DocumentRenderer documentRenderer,
                                 Clock clock) {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
@@ -59,6 +63,8 @@ class AttendanceManagementService {
         this.recordPersister = recordPersister;
         this.correctionRepository = correctionRepository;
         this.changePublisher = changePublisher;
+        this.actorResolver = actorResolver;
+        this.documentRenderer = documentRenderer;
         this.clock = clock;
     }
 
@@ -116,8 +122,11 @@ class AttendanceManagementService {
         changePublisher.publishRecord(saved.getPublicId(), actorId, AttendanceChangeAction.MANUAL_RECORDED,
                 "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
                         + ";status=" + status.name());
+        // Une présence saisie manuellement est DÉJÀ validée par un humain :
+        // exiger une seconde validation n'aurait aucun sens.
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
-                session.title(), status, lateMinutes, saved.getRecordedAt(), AttendanceRecordSource.MANUAL);
+                session.title(), status, lateMinutes, false, saved.getRecordedAt(),
+                AttendanceRecordSource.MANUAL);
     }
 
     @Transactional
@@ -197,8 +206,13 @@ class AttendanceManagementService {
                                                String callerSubject) {
         CourseSessionDirectory.SessionRef session = requireSession(sessionPublicId, AccessLevel.READ);
         AttendanceRecord record = requireRecord(session, attendancePublicId);
+        // L'écran du personnel doit pouvoir remonter à la personne :
+        // c'est le sens de « l'auteur » dans AC-018.
+        AttendanceActorResolver.Lookup actors = actorResolver.lookup();
         return correctionRepository.findByAttendanceRecordIdOrderByOccurredAtAscIdAsc(record.getId()).stream()
-                .map(AttendanceCorrectionResponse::from)
+                .map(correction -> AttendanceCorrectionResponse.from(correction,
+                        actors.role(correction.getActorUserId()),
+                        actors.displayName(correction.getActorUserId())))
                 .toList();
     }
 
@@ -266,9 +280,16 @@ class AttendanceManagementService {
                         record.getSource() != null ? record.getSource().name() : ""));
             }
         }
-        String content = AttendanceCsvWriter.write(List.of(
-                "point_de_controle", "numero_etudiant", "prenom", "nom", "statut", "retard_minutes",
-                "enregistre_le", "canal"), body);
+        // Un seul écrivain CSV pour tout le produit (module `document`) :
+        // deux implémentations finiraient par diverger, et c'est
+        // exactement ainsi qu'un jour une seule des deux neutraliserait
+        // l'injection de formule (AC-032). Titre vide : cet export est un
+        // fichier de travail, pas un document en-tête.
+        String content = new String(documentRenderer.toCsv(com.esic.connect.document.TabularDocument.of(
+                "", null,
+                List.of("point_de_controle", "numero_etudiant", "prenom", "nom", "statut",
+                        "retard_minutes", "enregistre_le", "canal"),
+                body)), java.nio.charset.StandardCharsets.UTF_8);
         String fileName = "attendance-session_" + session.publicId() + ".csv";
         return new SessionCsv(fileName, content);
     }
@@ -280,8 +301,8 @@ class AttendanceManagementService {
                 .filter(cp -> cp.internalId() == record.getAttendanceCheckpointId())
                 .map(CheckpointRef::publicId).findFirst().orElse(null);
         return new AttendanceRecordResponse(record.getPublicId(), session.publicId(), checkpointPublicId,
-                session.title(), record.getStatus(), record.getLateMinutes(), record.getRecordedAt(),
-                record.getSource());
+                session.title(), record.getStatus(), record.getLateMinutes(), false,
+                record.getRecordedAt(), record.getSource());
     }
 
     private CourseSessionDirectory.SessionRef requireSession(String sessionPublicId, AccessLevel level) {

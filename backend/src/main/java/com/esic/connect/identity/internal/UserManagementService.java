@@ -181,6 +181,51 @@ public class UserManagementService {
         publish(target, caller, AccountLifecycleAction.ACCOUNT_ARCHIVED, detail);
     }
 
+    /**
+     * Crée un compte en attente d'activation (EF-USER-001).
+     *
+     * <p><strong>Aucun mot de passe n'est défini ici</strong>, et il n'y
+     * en a pas de champ : le compte naît en {@code PENDING_ACTIVATION}, et
+     * c'est la personne qui choisira son mot de passe via le lien
+     * d'invitation. Transmettre un mot de passe par un tiers — ou par
+     * courriel — serait précisément ce que le cahier interdit
+     * (docs/02 §11.2).
+     *
+     * <p>Le rôle demandé est attribué immédiatement, et l'invitation est
+     * émise dans la foulée si {@code sendInvitation} le demande : créer un
+     * compte sans jamais l'inviter produirait un compte fantôme.
+     *
+     * @return le compte créé, tel qu'exposé par {@code GET /users/{id}}
+     */
+    public UserDetailResponse createUser(CreateUserRequest request, String callerSubject,
+                                         Collection<String> callerRoles) {
+        CallerContext caller = resolveCaller(callerSubject, callerRoles);
+        requireAdminLevel(caller);
+        RoleCode roleCode = parseRole(request.role());
+        guardSuperAdminRole(caller, roleCode);
+
+        String email = EmailNormalization.normalize(request.email());
+        if (userAccountRepository.findByEmail(email).isPresent()) {
+            // RG-001 : une adresse correspond à un seul utilisateur. On ne
+            // crée jamais de doublon silencieux.
+            throw new UserManagementException(UserManagementException.Kind.EMAIL_ALREADY_USED);
+        }
+        Role role = roleRepository.findByCode(roleCode)
+                .filter(Role::isActive)
+                .orElseThrow(() -> new UserManagementException(UserManagementException.Kind.ROLE_UNKNOWN));
+
+        UserAccount account = userAccountRepository.saveAndFlush(new UserAccount(email,
+                request.firstName().trim(), request.lastName().trim(),
+                AccountStatus.PENDING_ACTIVATION));
+        UserRole assignment = new UserRole(account, role, Instant.now(), true);
+        assignment.recordAssignment(caller.internalId(), "Attribue a la creation du compte");
+        userRoleRepository.saveAndFlush(assignment);
+
+        publish(account, caller, AccountLifecycleAction.ACCOUNT_CREATED,
+                roleCode.name());
+        return getUser(account.getPublicId());
+    }
+
     // ------------------------------------------------------------------
     // Rôles
     // ------------------------------------------------------------------

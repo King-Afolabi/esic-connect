@@ -10,6 +10,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { routes } from './app.routes';
 import { AuthService } from './core/auth/auth.service';
+import { PwaService } from './core/pwa/pwa.service';
 import { authTokenInterceptor } from './core/http/auth-token.interceptor';
 import { apiErrorInterceptor } from './core/http/api-error.interceptor';
 
@@ -26,5 +27,9 @@ export const appConfig: ApplicationConfig = {
     // persistance client autorisée, cet appel se termine sans session
     // aujourd'hui (voir AuthService.restoreSession).
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
+    // Enregistrement du service worker (EF-PWA-001). Silencieux si le
+    // navigateur ne le prend pas en charge : la PWA est un supplément,
+    // jamais une condition d'accès à l'application.
+    provideAppInitializer(() => inject(PwaService).register()),
   ],
 };

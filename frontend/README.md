@@ -29,7 +29,7 @@ npm run lint                # ESLint (angular-eslint)
 
 La recette **end-to-end navigateur** (Playwright, 149 tests) vit à la
 racine du dépôt, pas ici : `npm run test:e2e` depuis `..` avec la pile
-complète démarrée. Voir `../docs/13-guide-deploiement.md` §5.
+complète démarrée. Voir `../docs/11-guide-deploiement.md` §5.
 
 Vue d'ensemble de tout ce qui doit être vert : `../scripts/verify-all.sh`.
 
@@ -239,7 +239,7 @@ un lien vers `/login`.
 
 - `POST /api/v1/auth/login` renvoie un bearer JWT (`{ accessToken, tokenType, expiresInSeconds }`).
 - Le jeton est conservé **en mémoire uniquement** (aucun `localStorage`,
-  `sessionStorage` ni cookie écrit en JS) — docs/07-securite-rgpd.md §6, RG-085.
+  `sessionStorage` ni cookie écrit en JS) — docs/08-securite-rgpd.md §6, RG-085.
 - Conséquence : un rechargement de page perd la session et renvoie vers la
   connexion. `AuthService.restoreSession()` est le point d'ancrage d'un futur
   cookie `HttpOnly` + refresh token (stratégie cible docs/03 §15.2), non

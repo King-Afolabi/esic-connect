@@ -22,6 +22,7 @@ import {
   SubstitutionResponse,
   TeacherOptionResponse,
   ValidateAttendanceRequest,
+  ValidateRoomQrRequest,
 } from './sessions.models';
 
 type HttpResponseBlob = import('@angular/common/http').HttpResponse<Blob>;
@@ -282,6 +283,19 @@ export class SessionsApiService {
    */
   validateAttendance(body: ValidateAttendanceRequest): Observable<AttendanceRecordResponse> {
     return this.http.post<AttendanceRecordResponse>(`${this.base}/attendance/validate`, body);
+  }
+
+  /**
+   * `POST /api/v1/attendance/room-qr` — émargement par le QR **fixe de
+   * salle** (EF-ATT-010).
+   *
+   * Le corps ne porte que le jeton de l'affiche : le serveur détermine la
+   * salle, la séance imminente, l'inscription et la fenêtre. Il refuse
+   * hors plage réseau de l'établissement (EF-ATT-008) et après le début
+   * de la séance (RG-051).
+   */
+  validateRoomQr(body: ValidateRoomQrRequest): Observable<AttendanceRecordResponse> {
+    return this.http.post<AttendanceRecordResponse>(`${this.base}/attendance/room-qr`, body);
   }
 }
 

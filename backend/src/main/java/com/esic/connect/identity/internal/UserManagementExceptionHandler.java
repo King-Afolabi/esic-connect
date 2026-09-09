@@ -70,6 +70,11 @@ class UserManagementExceptionHandler {
                 code = "USER_ROLE_UNKNOWN";
                 message = "Code de rôle inconnu.";
             }
+            case EMAIL_ALREADY_USED -> {
+                status = HttpStatus.CONFLICT;
+                code = "USER_EMAIL_ALREADY_USED";
+                message = "Un compte existe déjà pour cette adresse électronique.";
+            }
             case INVALID_SORT -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "USER_INVALID_SORT";
@@ -84,5 +89,19 @@ class UserManagementExceptionHandler {
         ApiError body = new ApiError(Instant.now(), status.value(), code, message,
                 request.getRequestURI(), UUID.randomUUID().toString(), List.of());
         return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * Action critique demandée avec un jeton obtenu par mot de passe
+     * seul (EF-AUTH-015). Code stable pour que l'interface propose la
+     * réauthentification au lieu d'un refus définitif.
+     */
+    @ExceptionHandler(StepUpRequiredException.class)
+    ResponseEntity<ApiError> handleStepUp(StepUpRequiredException exception,
+                                          HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError(
+                Instant.now(), HttpStatus.FORBIDDEN.value(), "AUTH_STEP_UP_REQUIRED",
+                exception.getMessage(), request.getRequestURI(),
+                UUID.randomUUID().toString(), List.of()));
     }
 }

@@ -70,6 +70,14 @@ public interface CourseSessionDirectory {
     Optional<SessionRef> findSessionByCheckpointPublicId(UUID checkpointPublicId);
 
     /**
+     * Séance par son identifiant interne. Consommé par {@code attendance}
+     * pour les entrées provisoires (EF-ATT-007), qui stockent la clé
+     * étrangère et doivent revenir à l'identifiant public pour appliquer
+     * le contrôle d'accès habituel.
+     */
+    Optional<SessionRef> findSessionByInternalId(long sessionInternalId);
+
+    /**
      * Toutes les séances dont le début tombe dans {@code [from, to]}
      * ({@code null} = borne ouverte), <strong>sans</strong> contrôle
      * d'accès — le module {@code attendance} filtre ensuite chaque séance
@@ -96,6 +104,37 @@ public interface CourseSessionDirectory {
      * remplaçant d'une même séance ne la voit qu'une fois).
      */
     List<SessionRef> findUpcomingForTeacher(UUID teacherPublicId, Instant from, Instant to, int limit);
+
+    /**
+     * Séances confiées au formateur sur une <strong>fenêtre de
+     * planning</strong>, y compris les séances annulées.
+     *
+     * <p>Distinct de {@link #findUpcomingForTeacher}, dont la borne est
+     * volontairement réduite à dix lignes : un tableau de bord affiche
+     * les prochaines séances, un <em>calendrier</em> les affiche toutes.
+     * Le flux iCalendar (EF-INT-001) inclut en outre les séances
+     * {@code CANCELLED} : un agenda externe a besoin de recevoir
+     * l'annulation pour la refléter — la retirer du flux laisserait le
+     * cours dans l'agenda de la personne.
+     *
+     * @param limit borne haute, écrêtée par l'implémentation
+     */
+    List<SessionRef> findTeacherSchedule(UUID teacherPublicId, Instant from, Instant to, int limit);
+
+    /**
+     * Séances des classes données sur une fenêtre, <strong>séances
+     * annulées comprises</strong> — même motif que
+     * {@link #findTeacherSchedule}.
+     */
+    List<SessionRef> findClassSchedule(Set<UUID> classGroupPublicIds, Instant from, Instant to, int limit);
+
+    /**
+     * Séances dont le titre contient {@code query} (EF-USER-009).
+     *
+     * @param visibleClassGroupPublicIds restriction de périmètre ;
+     *        {@code null} pour un appelant à périmètre global
+     */
+    List<SessionRef> searchSessions(String query, Set<UUID> visibleClassGroupPublicIds, int limit);
 
     /**
      * Fenêtres des séances <strong>opérationnelles</strong> (hors
@@ -138,12 +177,24 @@ public interface CourseSessionDirectory {
      * @param title                        libellé libre de la séance ({@code null} possible)
      * @param principalTeacherPublicId     formateur principal ({@code user_account.public_id})
      * @param substituteTeacherPublicIds   remplaçants {@code ACTIVE} ({@code user_account.public_id})
+     * @param classGroupPublicIds          classes rattachées, d'où se
+     *                                     déduisent apprenants et
+     *                                     responsables (EF-NOTIF-003).
+     *                                     Portées ici, et non lues par
+     *                                     {@link #findForAttendance}, parce
+     *                                     que celle-ci écarte les séances
+     *                                     non opérationnelles : une séance
+     *                                     <em>annulée</em> n'y répond plus,
+     *                                     alors que c'est justement le
+     *                                     moment où il faut prévenir sa
+     *                                     classe.
      */
     record SessionNotificationInfo(
             UUID sessionPublicId,
             String title,
             UUID principalTeacherPublicId,
-            Set<UUID> substituteTeacherPublicIds) {
+            Set<UUID> substituteTeacherPublicIds,
+            Set<UUID> classGroupPublicIds) {
     }
 
     /**
@@ -158,6 +209,11 @@ public interface CourseSessionDirectory {
      * @param classGroupPublicIds  classes rattachées
      * @param startsAt             début (UTC)
      * @param endsAt               fin (UTC)
+     * @param roomCode             code fonctionnel de salle, ou {@code null}
+     *                             si elle est indéterminée. Sans lui, le
+     *                             conflit de salle ne pouvait s'exercer
+     *                             qu'à l'intérieur d'un même fichier
+     *                             (EF-PLAN-009, EF-ORG-004).
      */
     record ExistingSessionWindow(
             UUID sessionPublicId,
@@ -165,7 +221,8 @@ public interface CourseSessionDirectory {
             UUID teacherPublicId,
             Set<UUID> classGroupPublicIds,
             Instant startsAt,
-            Instant endsAt) {
+            Instant endsAt,
+            String roomCode) {
     }
 
     /** Niveau d'accès demandé sur une séance. */
@@ -221,7 +278,20 @@ public interface CourseSessionDirectory {
             Set<UUID> classGroupPublicIds,
             String timeZoneId,
             Instant startsAt,
-            Instant endsAt) {
+            Instant endsAt,
+            /**
+             * Modalité d'enseignement (docs/02 §15). Le module
+             * {@code attendance} en a besoin pour décider si un canal
+             * distant est recevable sans autorisation individuelle.
+             */
+            SessionAttendanceMode attendanceMode,
+            /**
+             * Code fonctionnel de salle, ou {@code null} si elle est
+             * indéterminée (RG-044). Nécessaire à l'émargement par QR fixe :
+             * le QR identifie une salle, le serveur en déduit la séance
+             * (docs/02 §16.6).
+             */
+            String roomCode) {
 
         /** Point de contrôle {@code publicId} de la séance, s'il existe. */
         public Optional<CheckpointRef> checkpoint(UUID checkpointPublicId) {

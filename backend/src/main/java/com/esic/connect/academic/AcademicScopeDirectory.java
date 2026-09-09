@@ -45,4 +45,25 @@ public interface AcademicScopeDirectory {
      *         des identifiants internes de classes visibles
      */
     Optional<Set<Long>> visibleClassGroupIds();
+
+    /**
+     * Périmètre au niveau <em>formation</em> — nécessaire dès qu'une
+     * ressource est rattachée à une formation sans passer par une classe,
+     * comme un groupe temporaire (EF-ACA-007).
+     *
+     * @param programPublicId identifiant public d'une formation ; peut
+     *                        être {@code null}
+     * @return {@code true} si l'appelant a l'accès global, ou si la
+     *         formation existe et relève de son périmètre effectif au jour
+     *         courant ; {@code false} sinon (formation inconnue comprise)
+     */
+    boolean isProgramInScope(UUID programPublicId);
+
+    /**
+     * Identifiants internes des formations visibles par l'appelant.
+     *
+     * @return {@link Optional#empty()} si l'appelant a l'accès global
+     *         (aucun filtre) ; sinon l'ensemble — éventuellement vide
+     */
+    Optional<Set<Long>> visibleProgramIds();
 }

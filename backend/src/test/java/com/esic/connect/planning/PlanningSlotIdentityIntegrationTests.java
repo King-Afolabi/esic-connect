@@ -1,5 +1,6 @@
 package com.esic.connect.planning;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -64,6 +65,26 @@ class PlanningSlotIdentityIntegrationTests {
     private static final String HEADER =
             "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n";
 
+    /**
+     * Salle unique par cas de test.
+     *
+     * <p>Depuis la migration {@code V21}, la séance conserve son code de
+     * salle et le conflit de salle s'exerce à l'échelle de
+     * l'établissement, pas d'une classe (EF-PLAN-009). Réutiliser « A1 »
+     * d'un cas à l'autre ferait entrer ces tests en collision entre eux —
+     * un faux échec sans rapport avec ce qu'ils vérifient. Le code reste
+     * en revanche constant à l'intérieur d'un cas : le comparer d'une
+     * version à la suivante est justement ce que certains d'entre eux
+     * mesurent.
+     */
+    private String room;
+
+    @BeforeEach
+    void freshRoomPerTest() {
+        room = "R" + UUID.randomUUID().toString().substring(0, 8)
+                .toUpperCase(java.util.Locale.ROOT);
+    }
+
     @TestConfiguration
     static class NoopMailerConfig {
         @Bean
@@ -97,15 +118,19 @@ class PlanningSlotIdentityIntegrationTests {
         String teacher = teacherPublicId();
 
         String v1 = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n"
-                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-08,09:00,12:00,Europe/Paris,Cours B," + teacher + ","
+                + room + "\n";
         String job1 = (String) upload(v1, admin, classId).getBody().get("publicId");
         post("/api/v1/planning-imports/" + job1 + "/publish", admin);
         String versionOneId = versionIds(admin, classId).get(0);
 
         String v2 = HEADER
-                + "S1,2026-09-07,10:00,13:00,Europe/Paris,Cours A," + teacher + ",A1\n"
-                + "S3,2026-09-09,09:00,12:00,Europe/Paris,Cours C," + teacher + ",A1\n";
+                + "S1,2026-09-07,10:00,13:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n"
+                + "S3,2026-09-09,09:00,12:00,Europe/Paris,Cours C," + teacher + ","
+                + room + "\n";
         String job2 = (String) upload(v2, admin, classId).getBody().get("publicId");
         post("/api/v1/planning-imports/" + job2 + "/publish", admin);
         String versionTwoId = versionIds(admin, classId).stream()
@@ -140,9 +165,12 @@ class PlanningSlotIdentityIntegrationTests {
         // Formateurs et créneaux distincts : aucun conflit inter-séances,
         // le test ne porte que sur l'identité de créneau par planning.
         String csvA = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours,"
-                + teacherPublicId() + ",A1\n";
+                + teacherPublicId() + ","
+                + room + "\n";
+        // Salle également unique : le conflit de salle est désormais
+        // établissement-wide, « B2 » entrerait en collision avec d'autres cas.
         String csvB = HEADER + "S1,2026-09-14,13:00,16:00,Europe/Paris,Cours,"
-                + teacherPublicId() + ",B2\n";
+                + teacherPublicId() + "," + room + "B\n";
         String jobA = (String) upload(csvA, admin, classA).getBody().get("publicId");
         post("/api/v1/planning-imports/" + jobA + "/publish", admin);
         String jobB = (String) upload(csvB, admin, classB).getBody().get("publicId");
@@ -266,12 +294,7 @@ class PlanningSlotIdentityIntegrationTests {
 
     private String adminToken() {
         Account a = account(RoleCode.ADMIN);
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", a.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, a.email(), PASSWORD);
     }
 
     private static String code() {

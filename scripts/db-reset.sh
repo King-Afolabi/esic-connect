@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Remise à zéro complète et traçable d'une base ESIC Connect.
 #
-# Traite le finding CRITIQUE F-ENV-1 (audit-report.md §3) : la base
+# Traite le finding CRITIQUE F-ENV-1 (docs/09-strategie-tests.md) : la base
 # `esic_connect` a été polluée par ~27 000 comptes issus des fixtures de la
 # suite back-end. Aucune démonstration n'est crédible dessus, et aucun
 # nettoyage ligne à ligne n'est fiable (les fixtures touchent des dizaines

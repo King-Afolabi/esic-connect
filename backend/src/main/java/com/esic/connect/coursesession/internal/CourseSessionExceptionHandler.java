@@ -156,7 +156,12 @@ class CourseSessionExceptionHandler {
             case CHECKPOINT_INVALID_TYPE -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ATT_CHECKPOINT_INVALID_TYPE";
-                message = "Type de point de contrôle invalide (START, END ou CUSTOM attendu).";
+                message = "Type de point de contrôle invalide.";
+            }
+            case CHECKPOINT_TYPE_ALREADY_PRESENT -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_CHECKPOINT_TYPE_ALREADY_PRESENT";
+                message = "Cette séance porte déjà un point de contrôle de ce type.";
             }
             case CHECKPOINT_ORDER_CONFLICT -> {
                 status = HttpStatus.CONFLICT;
@@ -172,6 +177,21 @@ class CourseSessionExceptionHandler {
                 status = HttpStatus.CONFLICT;
                 code = "ATT_CHECKPOINT_INVALID_STATE";
                 message = "La séance doit être ouverte pour gérer ses points de contrôle.";
+            }
+            case ALREADY_POSTPONED -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_ALREADY_POSTPONED";
+                message = "Cette séance a déjà été reportée.";
+            }
+            case CANCELLATION_ALREADY_REQUESTED -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_CANCELLATION_ALREADY_REQUESTED";
+                message = "Une demande d'annulation est déjà en attente sur cette séance.";
+            }
+            case CANCELLATION_REQUEST_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SESSION_CANCELLATION_REQUEST_NOT_FOUND";
+                message = "Aucune demande d'annulation ne correspond à cet identifiant.";
             }
             default -> {
                 status = HttpStatus.BAD_REQUEST;

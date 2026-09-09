@@ -21,7 +21,8 @@ import java.util.UUID;
         AttendanceManagementController.class,
         StudentAttendanceController.class,
         AttendanceJustificationController.class,
-        AttendanceReportController.class})
+        AttendanceReportController.class,
+        EarlyDepartureController.class})
 class AttendanceExceptionHandler {
 
     @ExceptionHandler(AttendanceException.class)
@@ -50,6 +51,34 @@ class AttendanceExceptionHandler {
                 status = HttpStatus.CONFLICT;
                 code = "ATT_NOT_ENROLLED";
                 message = "Vous n'êtes pas inscrit à une classe de cette séance.";
+            }
+            case ROOM_QR_UNKNOWN -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ROOM_QR_UNKNOWN";
+                message = "Ce QR de salle n'est pas reconnu.";
+            }
+            case ROOM_QR_OUT_OF_NETWORK -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ATT_ROOM_QR_OUT_OF_NETWORK";
+                message = "Ce QR de salle ne peut être utilisé que depuis le réseau de "
+                        + "l'établissement.";
+            }
+            case ROOM_QR_SESSION_STARTED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ROOM_QR_SESSION_STARTED";
+                message = "La séance a commencé : demandez au formateur d'afficher son code.";
+            }
+            case ROOM_QR_NO_SESSION -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ROOM_QR_NO_SESSION";
+                message = "Aucune séance ne vous attend dans cette salle à cette heure.";
+            }
+            case REMOTE_NOT_AUTHORIZED -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ATT_REMOTE_NOT_AUTHORIZED";
+                message = "Cette séance se tient en présentiel et vous n'êtes pas autorisé "
+                        + "à la suivre à distance. Demandez l'autorisation à votre responsable "
+                        + "pédagogique.";
             }
             case ENROLLMENT_AMBIGUOUS -> {
                 status = HttpStatus.CONFLICT;
@@ -141,6 +170,56 @@ class AttendanceExceptionHandler {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ATT_REPORT_INVALID_SORT";
                 message = "Champ ou direction de tri de rapport non autorisé.";
+            }
+            case ATTESTATION_SUBJECT_NOT_FOUND -> {
+                // 404 et non 403 : hors périmètre et inexistant se
+                // répondent de la même façon (docs/02 §18.2).
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ATTESTATION_SUBJECT_NOT_FOUND";
+                message = "Aucun apprenant ne correspond, ou aucune donnée d'assiduité "
+                        + "sur la période demandée.";
+            }
+            case ATTESTATION_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_ATTESTATION_NOT_FOUND";
+                message = "Aucune attestation ne correspond à cet identifiant de document.";
+            }
+            case ATTACHMENT_INFECTED -> {
+                status = HttpStatus.UNPROCESSABLE_ENTITY;
+                code = "ATT_ATTACHMENT_INFECTED";
+                message = "Ce fichier a été refusé par l'analyse antivirus.";
+            }
+            case ATTACHMENT_QUARANTINED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_ATTACHMENT_QUARANTINED";
+                message = "Cette pièce jointe est en attente du verdict de l'analyse antivirus "
+                        + "et n'est pas encore téléchargeable.";
+            }
+            case EARLY_DEPARTURE_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ATT_EARLY_DEPARTURE_NOT_FOUND";
+                message = "Ce dossier de départ anticipé est introuvable.";
+            }
+            case EARLY_DEPARTURE_INVALID_STATE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_EARLY_DEPARTURE_INVALID_STATE";
+                message = "Ce dossier de départ anticipé a déjà été traité.";
+            }
+            case EARLY_DEPARTURE_ALREADY_OPEN -> {
+                status = HttpStatus.CONFLICT;
+                code = "ATT_EARLY_DEPARTURE_ALREADY_OPEN";
+                message = "Un départ anticipé est déjà en cours d'examen pour cette séance.";
+            }
+            case EARLY_DEPARTURE_DECISION_RESERVED -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ATT_EARLY_DEPARTURE_DECISION_RESERVED";
+                message = "Ce dossier a été transmis au responsable pédagogique : "
+                        + "la décision lui revient.";
+            }
+            case EARLY_DEPARTURE_TIME_OUTSIDE_SESSION -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ATT_EARLY_DEPARTURE_TIME_OUTSIDE_SESSION";
+                message = "L'heure de départ doit être comprise dans les horaires de la séance.";
             }
             default -> {
                 status = HttpStatus.FORBIDDEN;

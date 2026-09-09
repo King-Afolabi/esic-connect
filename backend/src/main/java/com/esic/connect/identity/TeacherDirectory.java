@@ -38,6 +38,31 @@ public interface TeacherDirectory {
     Optional<TeacherRef> findEligibleTeacher(UUID userPublicId);
 
     /**
+     * Résout un formateur par son identifiant <strong>interne</strong>.
+     *
+     * <p>Nécessaire au retour à une version antérieure de planning
+     * (EF-PLAN-008) : les entrées de planning stockent la clé interne du
+     * formateur, alors que la commande de publication attend un
+     * identifiant public. Sans cette résolution, une version restaurée
+     * perdrait son formateur.
+     *
+     * @return la référence si le compte existe encore et reste éligible ;
+     *         {@link Optional#empty()} sinon — un formateur parti depuis
+     *         doit être signalé, pas silencieusement remplacé
+     */
+    Optional<TeacherRef> findEligibleTeacherByInternalId(long userInternalId);
+
+    /**
+     * Formateurs éligibles dont le nom ou le prénom contient {@code query}
+     * (EF-USER-009).
+     *
+     * <p>L'adresse électronique n'est pas un critère : la rechercher
+     * reviendrait à confirmer l'existence d'un compte à partir d'une
+     * adresse devinée.
+     */
+    List<TeacherRef> searchEligibleTeachers(String query, int limit);
+
+    /**
      * Référence technique d'un compte formateur, strictement suffisante
      * pour qu'une séance stocke la clé étrangère {@code teacher_user_id}
      * et affiche l'identité du formateur.

@@ -25,4 +25,15 @@ interface PlanningImportJobRepository
     List<PlanningImportJob> findByStatusAndExpiresAtBefore(PlanningImportJobStatus status, Instant cutoff);
 
     Page<PlanningImportJob> findAll(org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Brouillon de calendrier ouvert d'une classe pour un auteur
+     * (EF-PLAN-006). Le nom de source distingue un travail saisi d'un
+     * travail issu d'un fichier : les deux partagent la table, pas
+     * l'origine.
+     */
+    Optional<PlanningImportJob>
+            findFirstByClassGroupIdAndAcademicYearIdAndOriginalFileNameAndRequestedByIdAndStatusOrderByIdDesc(
+            Long classGroupId, Long academicYearId, String originalFileName, Long requestedById,
+            PlanningImportJobStatus status);
 }

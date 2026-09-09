@@ -1,924 +1,418 @@
 # Cahier des charges fonctionnel et technique — ESIC Connect
 
-## Métadonnées du document
+## Métadonnées
 
 | Élément | Valeur |
 |---|---|
-| Nom du projet | ESIC Connect |
-| Type de document | Cahier des charges fonctionnel et technique |
+| Produit | ESIC Connect |
+| Type | Cahier des charges fonctionnel et technique |
 | Établissement | ESIC |
-| Porteur du projet | Abubacar AFOLABI |
-| Certification préparée | RNCP 39394 — Expert en systèmes d’information et sécurité |
-| Version | 1.0 |
-| Date | 27 août 2026 |
-| Statut | Version initiale à valider |
-| Document de référence | `docs/01-cadrage.md` |
-| Durée de réalisation du prototype | Trois jours |
-| Environnement initial | Développement local conteneurisé |
-| Architecture cible | Cloud AWS |
-| Niveau de confidentialité | Interne au projet |
+| Porteur | Abubacar AFOLABI |
+| Version | **2.0** |
+| Date | 3 septembre 2026 |
+| Statut | Référence active |
+| Remplace | version 1.0 du 27 août 2026 et ses addendums F2 et G1 |
+| Document de cadrage | `docs/01-cadrage.md` v3.0 |
+| Horizon | version 1.0 du produit, 13 sprints de deux semaines |
 
 ---
 
-# 1. Objet du document
+# 0. Ce que cette version change
 
-Le présent cahier des charges décrit les exigences fonctionnelles,
-techniques, organisationnelles, sécuritaires et réglementaires du projet
-**ESIC Connect**.
+La version 1.0 décrivait les exigences d'une **preuve de concept de
+trois jours**. Elle classait la majorité des domaines en « souhaité »,
+« expérimental » ou « hors périmètre », et deux addendums successifs
+avaient d'abord retiré puis réintégré le domaine planning.
 
-Il constitue la référence permettant :
+Cette version 2.0 décrit les exigences d'une **application complète**.
 
-- de définir les besoins du projet ;
-- de fixer le périmètre du prototype ;
-- de décrire les parcours utilisateurs ;
-- d’identifier les règles de gestion ;
-- de préciser les critères d’acceptation ;
-- de guider le développement assisté par Claude Code ;
-- d’organiser les tests et la recette ;
-- d’assurer la traçabilité avec les blocs du titre RNCP 39394 ;
-- de distinguer les fonctions réellement réalisées des fonctions
-  simulées, conçues ou reportées.
+| Ancienne notion | Devient |
+|---|---|
+| §4.2 périmètre obligatoire du prototype | supprimé |
+| §4.3 périmètre souhaité | exigences `MUST` ou `SHOULD` de la v1.0 |
+| §4.4 périmètre expérimental | exigences `MUST` ou `SHOULD` de la v1.0 |
+| §4.5.1 addendum F2 (planning exclu) | supprimé |
+| §4.5.2 addendum G1 (planning réintégré) | supprimé — absorbé dans le corps du document |
+| §4.5 hors périmètre | §3 exclusions de conception, réduites |
+| Priorité `FUTURE` | supprimée — tout ce qui est décrit est à réaliser |
 
-Le document doit être lu conjointement avec :
-
-- `docs/01-cadrage.md` ;
-- `docs/03-architecture.md` ;
-- `docs/04-modele-donnees.md` ;
-- `docs/05-backlog.md` ;
-- `docs/06-risques.md` ;
-- `docs/07-securite-rgpd.md` ;
-- `docs/08-tests-recette.md` ;
-- `docs/09-matrice-rncp.md` ;
-- `docs/CURRENT-STATE.md`.
+**Toutes les exigences de ce document sont à réaliser.** La priorité
+`MUST` / `SHOULD` / `COULD` ordonne le travail dans le temps ; elle ne
+désigne plus ce qui sera abandonné.
 
 ---
 
-# 2. Présentation générale
+# 1. Objet
 
-## 2.1 Description synthétique
+Ce cahier des charges décrit les exigences fonctionnelles, techniques,
+sécuritaires et réglementaires d'ESIC Connect. Il constitue la référence
+pour :
 
-**ESIC Connect** est une plateforme web responsive et mobile de gestion
-pédagogique destinée à centraliser :
+- définir le produit attendu ;
+- décrire les parcours utilisateurs ;
+- fixer les règles de gestion ;
+- fixer les critères d'acceptation ;
+- organiser le backlog, le développement et la recette ;
+- distinguer ce qui est réalisé de ce qui reste à faire.
 
-- les utilisateurs ;
-- les formations ;
-- les promotions ;
-- les classes ;
-- les rythmes d’alternance ;
-- les plannings ;
-- les séances ;
-- les présences ;
-- les absences ;
-- les retards ;
-- les justificatifs ;
-- les réclamations ;
-- les notifications ;
-- les rapports d’assiduité ;
-- les événements de sécurité ;
-- les dispositifs connectés.
-
-Le système couvre le processus suivant :
-
-```text
-Création des référentiels
-→ Importation des apprenants
-→ Activation des comptes
-→ Importation du planning
-→ Contrôle et publication
-→ Création des séances
-→ Notification des utilisateurs
-→ Ouverture de la séance
-→ Émargement
-→ Contrôles journaliers
-→ Traitement des absences
-→ Production des rapports
-```
-
-## 2.2 Contexte actuel
-
-À l’ESIC, le responsable pédagogique crée actuellement le planning et le
-met à disposition des apprenants sur Microsoft Teams.
-
-Les semaines et journées de cours sont indiquées dans le planning
-partagé sur le canal concerné.
-
-Il n’existe pas, dans le fonctionnement observé, de logiciel centralisé
-permettant de :
-
-- construire et publier les plannings ;
-- générer automatiquement les séances ;
-- affecter les formateurs ;
-- gérer les présences ;
-- traiter les justificatifs ;
-- consolider les rapports ;
-- détecter les incohérences ;
-- conserver une piste d’audit homogène.
-
-Les réunions Microsoft Teams ne sont pas automatiquement créées depuis
-le planning. Lorsqu’un cours se déroule à distance, le formateur ou le
-responsable pédagogique crée généralement la réunion et partage le lien.
-
-Les listes d’apprenants et les présences peuvent être conservées sur :
-
-- des documents papier ;
-- des feuilles d’émargement ;
-- des fichiers Excel ;
-- d’autres supports construits manuellement.
-
-L’administration contrôle les absences et les justificatifs en
-sollicitant, selon les situations :
-
-- le formateur ;
-- le responsable pédagogique ;
-- les conseillers ;
-- les autres acteurs administratifs.
-
-## 2.3 Problèmes identifiés
-
-Les principaux problèmes sont :
-
-1. l’absence d’automatisation ;
-2. le manque de centralisation ;
-3. la faible fiabilité des documents papier ;
-4. la perte ou la dégradation possible des feuilles ;
-5. les erreurs de ressaisie ;
-6. les doublons ;
-7. la difficulté de vérifier la réalité d’une présence ;
-8. la difficulté de calculer les taux d’assiduité ;
-9. la production manuelle des attestations ou certificats d’assiduité ;
-10. le manque de traçabilité ;
-11. le manque de visibilité immédiate ;
-12. l’absence de parcours homogène pour les cours hybrides ;
-13. la difficulté à gérer les remplacements ;
-14. la difficulté à suivre les comptes non activés ;
-15. la difficulté à identifier les anomalies.
+Il se lit avec : `docs/01-cadrage.md`, `docs/03-architecture.md`,
+`docs/04-modele-donnees.md`, `docs/05-product-backlog.md`,
+`docs/07-risques.md`, `docs/08-securite-rgpd.md`,
+`docs/09-strategie-tests.md`, `docs/CURRENT-STATE.md`.
 
 ---
 
-# 3. Objectifs
+# 2. Périmètre fonctionnel
 
-## 3.1 Objectif principal
+Le produit couvre les domaines suivants, **tous inclus dans la version
+1.0** :
 
-Concevoir un système d’information centralisé, sécurisé et performant
-permettant de gérer le parcours allant de l’intégration des apprenants
-jusqu’à la production des rapports d’assiduité.
-
-## 3.2 Objectifs opérationnels
-
-La solution doit permettre de :
-
-- réduire les opérations manuelles ;
-- diminuer les erreurs ;
-- supprimer progressivement les feuilles papier ;
-- améliorer la fiabilité des présences ;
-- automatiser la création des séances ;
-- avertir les utilisateurs des changements ;
-- simplifier le travail des responsables pédagogiques ;
-- simplifier l’appel réalisé par les formateurs ;
-- donner aux apprenants une visibilité sur leur situation ;
-- automatiser les calculs d’assiduité ;
-- produire des exports ;
-- préparer la génération d’attestations ;
-- garantir la traçabilité des modifications ;
-- renforcer la sécurité ;
-- démontrer une intégration de l’IA et de l’IoT.
-
-## 3.3 Objectifs mesurables du prototype
-
-Le prototype sera considéré comme fonctionnel si les parcours suivants
-sont démontrables :
-
-1. connexion d’un utilisateur ;
-2. application de ses rôles ;
-3. création d’une formation ;
-4. création d’une classe ;
-5. importation d’une liste d’apprenants ;
-6. prévisualisation de l’import ;
-7. confirmation de l’import ;
-8. création des comptes ;
-9. importation d’un planning CSV ;
-10. prévisualisation des séances ;
-11. publication du planning ;
-12. consultation du planning par le formateur ;
-13. ouverture d’une séance ;
-14. génération d’un QR code ;
-15. émargement d’un apprenant ;
-16. affichage immédiat de la présence ;
-17. calcul d’une demi-journée ;
-18. correction auditée ;
-19. production d’un rapport ;
-20. export CSV ou Excel ;
-21. démonstration d’un mécanisme de sécurité avancé ;
-22. démonstration ou simulation d’un événement IoT ;
-23. démonstration d’une assistance d’importation.
+| # | Domaine | Contenu |
+|---|---|---|
+| D01 | Identité et accès | authentification, passkeys, MFA, anti-robot, limitation, sessions, appareils de confiance |
+| D02 | Utilisateurs | cycle de vie des comptes, rôles, opérations de masse, doublons |
+| D03 | Référentiels pédagogiques | années, formations, niveaux, promotions, classes, matières |
+| D04 | Organisation physique | sites, bâtiments, salles, équipements, plages réseau |
+| D05 | Inscriptions | profils apprenants, inscriptions historisées, changements de classe |
+| D06 | Alternance | rythmes, affectations, exceptions individuelles et collectives |
+| D07 | Import de population | CSV, Excel, classeur multifeuille, simulation, confirmation |
+| D08 | Invitations | jetons, envoi, délivrabilité, réémission, activation |
+| D09 | Corps enseignant | formateurs internes, externes, affectations, remplacements |
+| D10 | Planning | import CSV/Excel/PDF texte, assistant IA, correction, conflits, versions, publication |
+| D11 | Séances | création, cycle de vie, annulation, report, remplacement |
+| D12 | Émargement | cinq canaux, jetons, points de contrôle, anti-rejeu |
+| D13 | Assiduité | statuts, demi-journées, retards, corrections auditées |
+| D14 | Justificatifs | dépôt, pièces jointes, examen, décision, effets |
+| D15 | Réclamations | conversation, transfert, cycle de vie, historique |
+| D16 | Notifications | in-app, email, push PWA, préférences, centre |
+| D17 | Restitution | tableaux de bord, rapports, exports CSV/Excel/PDF, attestations |
+| D18 | Intelligence artificielle | assistance à l'import, anomalies, prévention du décrochage |
+| D19 | Objets connectés | borne MQTT, identité, télémétrie, mode dégradé, simulateur |
+| D20 | Intégrations | Microsoft Graph, Teams, iCalendar, Google Calendar, SMTP |
+| D21 | Mobilité | PWA installable, hors ligne, file d'actions différées |
+| D22 | Sécurité et audit | autorisations, piste d'audit, incidents, durcissement |
+| D23 | Conformité | RGPD, conservation, purge, droits des personnes |
+| D24 | Exploitation | santé, métriques, journaux, sauvegarde, restauration, déploiement |
 
 ---
 
-# 4. Périmètre
+# 3. Exclusions de conception
 
-## 4.1 Périmètre fonctionnel global
-
-La solution cible comprend les domaines suivants :
-
-- identité et accès ;
-- référentiels pédagogiques ;
-- gestion des apprenants ;
-- gestion des formateurs ;
-- gestion des promotions et classes ;
-- rythmes pédagogiques et alternance ;
-- importation des plannings ;
-- création manuelle contrôlée des plannings ;
-- gestion des séances ;
-- gestion des salles ;
-- remplacement et annulation ;
-- émargement ;
-- gestion des cours distanciels et hybrides ;
-- justificatifs ;
-- réclamations ;
-- messagerie ;
-- notifications ;
-- tableaux de bord ;
-- rapports ;
-- audit ;
-- cybersécurité ;
-- intelligence artificielle ;
-- IoT ;
-- supervision ;
-- intégrations externes.
-
-## 4.2 Périmètre obligatoire du prototype
-
-Le prototype de trois jours doit prioritairement comprendre :
-
-- authentification ;
-- gestion des rôles ;
-- cumul des rôles ;
-- gestion des utilisateurs ;
-- gestion des formations ;
-- gestion des classes ;
-- gestion des promotions ;
-- gestion des inscriptions annuelles ;
-- import CSV des apprenants ;
-- prévisualisation de l’import ;
-- confirmation de l’import ;
-- statut d’activation ;
-- import CSV du planning ;
-- prévisualisation du planning ;
-- publication du planning ;
-- création des séances ;
-- consultation du planning ;
-- ouverture d’une séance ;
-- QR code temporaire ;
-- émargement ;
-- au moins deux points de contrôle ;
-- calcul simple de présence ;
-- correction d’une présence ;
-- rapport simple ;
-- export CSV ;
-- audit ;
-- cache Redis ;
-- tests critiques ;
-- documentation OpenAPI ;
-- lancement local par Docker Compose.
-
-## 4.3 Périmètre souhaité
-
-Si le temps le permet :
-
-- import Excel `.xlsx` ;
-- classeur Excel multifeuille ;
-- mot de passe oublié ;
-- invitation locale par email ;
-- PWA installable ;
-- WebAuthn ;
-- notifications internes ;
-- remplacement d’un formateur ;
-- justificatifs ;
-- réclamations ;
-- rapport Excel ;
-- simulateur MQTT ;
-- Raspberry Pi 4 ;
-- assistance intelligente d’importation.
-
-## 4.4 Périmètre expérimental
-
-Les fonctions suivantes pourront être réalisées sous forme de preuve
-technique indépendante ou de simulation :
-
-- MFA TOTP ;
-- authentification adaptative ;
-- Cloudflare Turnstile ;
-- notifications push ;
-- détection d’anomalies par Isolation Forest ;
-- lecteur de planning semi-structuré ;
-- PDF texte ;
-- file de messages ;
-- Dead Letter Queue ;
-- intégration Microsoft Graph ;
-- synchronisation Teams ;
-- synchronisation Outlook ;
-- borne NFC.
-
-## 4.5 Hors périmètre
-
-Sont exclus du prototype :
+Seules ces exclusions sont définitives. Elles sont motivées dans
+`docs/01-cadrage.md` §19.
 
 - reconnaissance faciale centralisée ;
-- collecte ou stockage d’empreintes digitales ;
+- stockage de données biométriques brutes ;
 - géolocalisation permanente ;
-- reconnaissance universelle de tous les PDF ;
-- application iOS publiée ;
-- déploiement généralisé dans l’établissement ;
-- haute disponibilité réelle ;
-- Kubernetes ;
-- remplacement complet de Microsoft Teams ;
+- reconnaissance de PDF scanné (le PDF **texte** est pris en charge) ;
 - décision disciplinaire automatisée ;
-- suppression automatique d’un apprenant ;
-- reconnaissance biométrique effectuée par le serveur.
+- suppression automatique d'un apprenant ;
+- remplacement de Microsoft Teams comme outil de visioconférence ;
+- application iOS native publiée sur l'App Store ;
+- Kubernetes et architecture en microservices.
 
-### 4.5.1 Addendum de finalisation F2 (31 août 2026) — exclusion de l'import du planning — **CADUC**
-
-> **Statut : caduc depuis le 3 septembre 2026.** Section conservée pour la
-> traçabilité de la décision, jamais comme description de l'état courant.
-> Elle est remplacée par le § 4.5.2.
-
-Décision prise le 31 août 2026 : le domaine **planning** (import CSV,
-prévisualisation, correction de lignes, publication, versionnement,
-création automatique des séances depuis un planning publié) était déclaré
-non implémenté et les exigences `EF-PLAN-001` à `EF-PLAN-007`,
-`EF-SES-001`, `RG-016`, `AC-007`, `AC-008` classées
-`HORS_PÉRIMÈTRE_ASSUMÉ`.
-
-### 4.5.2 Addendum de reprise de périmètre G1 (3 septembre 2026) — le planning est livré
-
-Le lot G1 (PR #40, commit `d3450e6`, 1er septembre 2026 — **postérieur**
-à l'addendum ci-dessus) a livré le module `planning` : import CSV borné
-jamais écrit sur disque, simulation sans création de séance (invariant
-T1, `AC-007`), détection de conflits formateur / classe / salle,
-publication atomique versionnée N/N+1 avec `SUPERSEDED` (`AC-008`),
-création des séances via le port public
-`coursesession.PlanningSessionWriter`, identité de créneau stable
-(`course_session.planning_slot_public_id`). Migrations `V12` / `V13`.
-
-L'audit QA du 3 septembre 2026 a rejoué ce parcours dans un navigateur
-réel (`tests/05-planning.spec.ts`) ; voir `audit-report.md` § 2 et
-finding F-DOC-1.
-
-**Statut retenu pour cette livraison :**
-
-| Exigence | Statut |
-|---|---|
-| `EF-PLAN-001`, `EF-PLAN-002`, `EF-PLAN-004`, `EF-PLAN-005`, `EF-PLAN-007` | `IMPLEMENTED_AND_TESTED` |
-| `EF-SES-001`, `RG-016`, `AC-007`, `AC-008` | `IMPLEMENTED_AND_TESTED` |
-| `EF-PLAN-003` (correction ligne à ligne dans l'écran de revue) | `PARTIAL` — repli : annulation du job puis réimport (`DEC-G1-003`) |
-| `EF-PLAN-007` — retour à une version antérieure, conflit **salle** contre les séances publiées | `PARTIAL` — non détecté / non implémenté |
-| `EF-PLAN-006` (planning plein calendrier saisi manuellement) | `HORS_PÉRIMÈTRE_ASSUMÉ` |
-
-Les sections fonctionnelles du présent document décrivant le planning
-sont donc à lire comme **exigences réalisées**, aux réserves `PARTIAL`
-ci-dessus près. État par capacité : `docs/CURRENT-STATE.md`.
+Tout le reste est **dans le périmètre**.
 
 ---
 
-# 5. Terminologie
+# 4. Terminologie
 
 | Terme | Définition |
 |---|---|
-| Formation | Parcours pédagogique, par exemple BTS, Bachelor ou Master |
-| Niveau | Niveau au sein d’un cursus, par exemple BTS 1, BTS 2, Master 1 ou Master 2 |
-| Promotion | Cohorte associée à une année ou période pédagogique |
-| Classe | Groupe principal auquel un apprenant appartient pour une période |
-| Inscription | Association historique entre un apprenant, une classe et une période |
-| Séance | Occurrence datée et planifiée d’un cours |
-| Demi-journée | Période pédagogique du matin ou de l’après-midi |
-| Point de contrôle | Moment auquel l’apprenant doit confirmer sa présence |
-| Planning | Organisation prévisionnelle des séances d’une classe |
-| Publication | Mise à disposition d’une version validée du planning |
-| Émargement | Action de confirmer une présence |
-| Justificatif | Document destiné à expliquer une absence ou un retard |
-| Réclamation | Demande adressée par un utilisateur à un acteur compétent |
-| WebAuthn | Mécanisme d’authentification cryptographique utilisant l’authentificateur du terminal |
-| PWA | Application web progressive installable |
-| MQTT | Protocole léger de communication pour objets connectés |
-| IA | Fonction d’assistance ou d’analyse reposant sur un modèle ou un ensemble de règles |
-| MVP | Version minimale démontrable du produit |
-| Audit | Historique des opérations significatives |
-| DLQ | File contenant les messages dont le traitement a échoué |
+| Formation | parcours pédagogique — BTS, Bachelor, Mastère |
+| Niveau | échelon dans un cursus — BTS 1, Master 2 |
+| Promotion | cohorte rattachée à une formation et à une année |
+| Classe | groupe principal d'appartenance d'un apprenant sur une période |
+| Inscription | association historisée apprenant / classe / période |
+| Rythme | modèle d'alternance école / entreprise |
+| Créneau | ligne de planning : classe, date, horaire, cours, formateur, salle |
+| Séance | occurrence datée d'un cours, issue d'un créneau publié ou créée exceptionnellement |
+| Point de contrôle | moment auquel une présence doit être confirmée |
+| Demi-journée | unité de mesure de l'assiduité — matin ou après-midi |
+| Publication | mise à disposition d'une version validée du planning, créant les séances |
+| Émargement | action de confirmer une présence |
+| Canal | moyen par lequel une présence a été enregistrée |
+| Justificatif | document expliquant une absence ou un retard |
+| Réclamation | demande adressée par un utilisateur à un acteur compétent |
+| Attestation | document d'assiduité produit par le système, identifiable |
+| Passkey | justificatif d'identité WebAuthn lié à un appareil |
+| Outbox | table d'effets de bord garantissant l'exactement-une-fois après commit |
+| Borne | dispositif d'émargement en salle communiquant en MQTT |
+| Audit | historique inaltérable des opérations significatives |
 
 ---
 
-# 6. Utilisateurs et rôles
+# 5. Acteurs et rôles
 
-## 6.1 Principes généraux
+## 5.1 Principes
 
-Un utilisateur peut posséder plusieurs rôles.
+Un utilisateur peut posséder plusieurs rôles. Les autorisations sont
+contrôlées à quatre niveaux : **route**, **service métier**,
+**ressource**, **périmètre pédagogique**.
 
-Les autorisations doivent être contrôlées :
+Le cumul de rôles ne permet jamais de contourner une restriction de
+périmètre. Un utilisateur multi-rôles choisit un **contexte d'usage**
+dans l'interface ; ce contexte est transmis au serveur et vérifié contre
+les autorités réellement détenues.
 
-- au niveau de la route ;
-- au niveau du service métier ;
-- au niveau de la ressource ;
-- au niveau du périmètre pédagogique.
+## 5.2 `SUPER_ADMIN`
 
-Le cumul des rôles ne doit pas permettre de contourner les restrictions
-de périmètre.
+Contrôle technique global. Peut : gérer les comptes administrateurs,
+configurer les paramètres critiques et les politiques de sécurité,
+consulter les journaux de sécurité, gérer les dispositifs connectés et
+les révoquer, gérer les plages réseau autorisées, révoquer des sessions,
+suspendre un compte compromis, superviser les intégrations, lancer les
+procédures de maintenance, consulter les résultats de sauvegarde,
+supprimer un doublon après contrôle.
 
-Un utilisateur possédant plusieurs rôles doit pouvoir sélectionner un
-contexte d’utilisation dans l’interface.
+Contraintes : compte distinct du compte quotidien ; MFA **obligatoire** ;
+actions fortement auditées ; jamais utilisé pour les tâches courantes ;
+aucune suppression définitive sans double confirmation.
 
-Exemple :
+## 5.3 `ADMIN`
 
-```text
-Utilisateur : responsable@example.test
+Administration fonctionnelle. Peut : gérer les utilisateurs, attribuer
+les rôles non critiques, administrer tous les référentiels, gérer les
+années scolaires, suivre les imports, traiter les doublons, consulter et
+relancer les invitations, gérer les paramètres fonctionnels, consulter
+l'audit fonctionnel, assister les responsables pédagogiques.
 
-Rôles :
-- PEDAGOGICAL_MANAGER
-- TEACHER
+Ne peut pas : modifier les secrets techniques, effacer l'audit, créer un
+super administrateur.
 
-Contextes disponibles :
-- Gérer mes formations
-- Consulter mes séances de formateur
-```
+## 5.4 `SCHOOL_ADMINISTRATION`
 
-## 6.2 `SUPER_ADMIN`
+Peut : importer des apprenants, rechercher un apprenant ou une classe,
+consulter les présences, gérer les justificatifs, intervenir dans les
+réclamations, produire tous les rapports, générer les attestations,
+exporter les données autorisées, consulter les statistiques globales,
+suspendre ou archiver un compte selon la procédure.
 
-Le super administrateur est responsable des opérations techniques
-critiques.
+## 5.5 `PEDAGOGICAL_MANAGER`
 
-### Droits
+Propriétaire fonctionnel de son périmètre. Peut : gérer ses formations,
+promotions et classes ; importer des apprenants ; émettre et suivre les
+invitations ; créer les comptes de formateurs externes ; importer,
+construire, corriger, versionner et publier un planning ; affecter un
+formateur ; nommer un remplaçant ; annuler ou reporter une séance ;
+créer une séance exceptionnelle ; gérer les liens distanciels ; traiter
+justificatifs et réclamations ; autoriser un suivi à distance ;
+consulter tableaux de bord et rapports de son périmètre ; autoriser le
+téléchargement du rapport par un apprenant.
 
-- gérer les comptes `ADMIN` ;
-- configurer les paramètres critiques ;
-- consulter les journaux de sécurité ;
-- gérer les dispositifs ;
-- révoquer les sessions ;
-- suspendre un compte compromis ;
-- gérer les domaines autorisés ;
-- configurer les plages réseau ESIC ;
-- consulter les incidents ;
-- configurer les intégrations ;
-- lancer certaines procédures de maintenance ;
-- supprimer un doublon après contrôle ;
-- consulter les résultats des sauvegardes.
+Ne peut pas : sortir de son périmètre, supprimer définitivement un
+utilisateur, supprimer un historique pédagogique, modifier les
+paramètres techniques.
 
-### Contraintes
+## 5.6 `TEACHER`
 
-- le compte `SUPER_ADMIN` doit être distinct du compte quotidien ;
-- le MFA doit être obligatoire ;
-- les actions doivent être fortement auditées ;
-- le rôle ne doit pas être utilisé pour les tâches courantes ;
-- aucune suppression définitive ne doit être faite sans confirmation.
+Peut : consulter son planning et ses séances, y compris celles qui lui
+sont déléguées ; demander une annulation ; proposer un remplaçant ;
+ouvrir et clôturer une séance ; afficher le QR dynamique et le code
+court ; suivre les présences en direct ; enregistrer une présence
+manuelle motivée ; ajouter un apprenant provisoire ; saisir un motif de
+retard ; autoriser exceptionnellement un émargement tardif ; enregistrer
+un départ anticipé ; joindre un justificatif transmis en classe ;
+corriger une présence pendant la période autorisée ; répondre aux
+réclamations liées à ses séances.
 
-## 6.3 `ADMIN`
+Ne peut pas : créer librement une séance de planning, publier un
+planning, valider son propre remplacement, supprimer une présence,
+modifier une présence ancienne sans autorisation.
 
-### Droits
+## 5.7 `STUDENT`
 
-- gérer les utilisateurs ;
-- attribuer les rôles non critiques ;
-- gérer les formations ;
-- gérer les référentiels ;
-- gérer les années scolaires ;
-- consulter les imports ;
-- traiter les doublons ;
-- consulter les erreurs d’invitation ;
-- relancer une invitation ;
-- gérer les paramètres fonctionnels ;
-- consulter les audits fonctionnels ;
-- assister les responsables pédagogiques.
+Peut : activer son compte ; enregistrer et gérer ses passkeys ; consulter
+son planning et s'y abonner depuis un agenda externe ; recevoir les
+notifications et régler ses préférences ; scanner un QR ou saisir un
+code court ; confirmer sa présence ; consulter son historique et son
+taux d'assiduité ; consulter le journal de transparence de ses
+présences ; déposer un justificatif ; créer une réclamation et suivre
+ses réponses ; télécharger son rapport lorsque cette fonction est
+autorisée ; exercer ses droits RGPD.
 
-### Restrictions
-
-- ne peut pas modifier les secrets techniques ;
-- ne peut pas effacer les audits ;
-- ne peut pas créer un autre super administrateur.
-
-## 6.4 `SCHOOL_ADMINISTRATION`
-
-### Droits
-
-- importer des apprenants ;
-- rechercher un apprenant ;
-- rechercher une classe ;
-- consulter les présences ;
-- gérer les justificatifs ;
-- intervenir dans les réclamations ;
-- produire les rapports ;
-- exporter les données ;
-- consulter les statistiques globales autorisées ;
-- suspendre ou archiver des comptes selon une procédure autorisée.
-
-## 6.5 `PEDAGOGICAL_MANAGER`
-
-Le responsable pédagogique est propriétaire fonctionnel de son
-périmètre.
-
-### Droits
-
-- gérer une ou plusieurs formations ;
-- créer des classes ;
-- gérer les promotions ;
-- importer des apprenants ;
-- déplacer un apprenant vers une nouvelle classe ;
-- importer un planning ;
-- créer un planning ;
-- sauvegarder un brouillon ;
-- publier un planning ;
-- affecter un formateur ;
-- affecter un remplaçant ;
-- annuler une séance ;
-- créer une séance exceptionnelle ;
-- gérer les liens distanciels ;
-- traiter les corrections anciennes ;
-- traiter les justificatifs ;
-- consulter les tableaux de bord ;
-- produire les rapports ;
-- autoriser un apprenant à télécharger son rapport ;
-- traiter les réclamations ;
-- gérer les autorisations de suivi à distance.
-
-### Restrictions
-
-- ne consulte que ses formations ;
-- ne supprime pas définitivement un utilisateur ;
-- ne supprime pas l’historique pédagogique ;
-- ne modifie pas les paramètres techniques.
-
-## 6.6 `TEACHER`
-
-### Droits
-
-- consulter son planning ;
-- consulter ses séances ;
-- consulter les séances de remplacement ;
-- demander une annulation ;
-- proposer un remplaçant ;
-- ouvrir une séance ;
-- afficher le QR code ;
-- consulter les présences en temps réel ;
-- enregistrer manuellement une présence ;
-- ajouter un apprenant provisoire ;
-- saisir un motif de retard ;
-- joindre un justificatif transmis en classe ;
-- corriger une présence pendant la période autorisée ;
-- autoriser exceptionnellement un émargement tardif ;
-- enregistrer une demande de départ anticipé ;
-- transmettre une réclamation ;
-- clôturer la séance.
-
-### Restrictions
-
-- ne crée pas librement une séance normale ;
-- ne publie pas le planning ;
-- ne valide pas son propre remplacement ;
-- ne supprime pas une présence ;
-- ne modifie pas une présence ancienne sans autorisation.
-
-## 6.7 `STUDENT`
-
-### Droits
-
-- activer son compte ;
-- configurer son moyen d’authentification ;
-- consulter son planning ;
-- recevoir les notifications ;
-- consulter les changements ;
-- scanner un QR code ;
-- saisir un code temporaire ;
-- confirmer sa présence ;
-- consulter son historique ;
-- consulter son taux d’assiduité ;
-- consulter ses demi-journées ;
-- déposer un justificatif ;
-- créer une réclamation ;
-- consulter les réponses ;
-- télécharger son rapport lorsque cette fonction est autorisée ;
-- consulter l’historique des modifications de ses présences.
-
-### Restrictions
-
-- ne consulte aucune donnée d’un autre apprenant ;
-- ne modifie pas directement une présence ;
-- ne peut pas valider une présence hors séance autorisée ;
-- ne peut pas utiliser un jeton expiré.
+Ne peut pas : consulter la donnée d'un autre apprenant, modifier
+directement une présence, émarger hors d'une séance autorisée, utiliser
+un jeton expiré.
 
 ---
 
-# 7. Référentiels pédagogiques
+# 6. Référentiels pédagogiques
 
-## 7.1 Formations
-
-Le système doit permettre de gérer :
-
-- BTS ;
-- Bachelor ;
-- Master ;
-- autres formations configurables.
-
-Une formation doit comporter :
+## 6.1 Formations
 
 | Champ | Obligatoire | Description |
 |---|---:|---|
-| Identifiant | Oui | Identifiant interne non prédictible |
-| Code | Oui | Code unique et lisible |
-| Nom | Oui | Intitulé |
-| Type | Oui | BTS, Bachelor, Master ou autre |
-| Description | Non | Présentation |
-| Statut | Oui | Actif, inactif ou archivé |
-| Responsable principal | Oui | Responsable pédagogique principal |
-| Date de création | Oui | Horodatage |
-| Date de modification | Oui | Horodatage |
+| Identifiant public | Oui | UUID non prédictible |
+| Code | Oui | code unique lisible |
+| Nom | Oui | intitulé |
+| Type | Oui | BTS, Bachelor, Mastère, autre |
+| Description | Non | présentation |
+| Statut | Oui | actif, inactif, archivé |
+| Responsable principal | Oui | un `PEDAGOGICAL_MANAGER` |
+| Responsables délégués | Non | plusieurs possibles |
+| Horodatages | Oui | création, modification |
 
-## 7.2 Niveaux
+## 6.2 Niveaux, années, promotions
 
-Les niveaux doivent être configurables.
+Les niveaux sont configurables (BTS 1, Bachelor 3, Master 2…).
 
-Exemples :
+Une **année scolaire** porte un nom, une date de début, une date de fin,
+un statut et une éventuelle période d'archivage. Elle n'est pas limitée
+à une convention figée.
 
-- BTS 1 ;
-- BTS 2 ;
-- Bachelor 1 ;
-- Bachelor 2 ;
-- Bachelor 3 ;
-- Master 1 ;
-- Master 2.
+Une **promotion** rattache une cohorte à une formation et à une année.
 
-## 7.3 Année scolaire
+## 6.3 Classes
 
-La période pédagogique est définie depuis le planning ou depuis les
-paramètres de la promotion.
+Une classe porte : code unique dans son contexte, nom, formation,
+niveau, promotion, année, responsable pédagogique, capacité, rythme
+d'alternance, statut, liste d'inscriptions.
 
-Elle ne doit pas être limitée à une convention figée.
+Un apprenant n'appartient qu'à **une seule classe principale active**
+par période, mais conserve toutes ses inscriptions historiques. Lors
+d'un changement de classe : l'ancienne inscription est clôturée,
+l'historique conservé, la nouvelle créée, aucune donnée écrasée, et
+l'opération auditée.
 
-Une année scolaire contient :
+## 6.4 Matières
 
-- un nom ;
-- une date de début ;
-- une date de fin ;
-- un statut ;
-- éventuellement une période d’archivage.
+Une matière porte un code, un nom, un volume horaire indicatif et un
+rattachement possible à une ou plusieurs formations. Une matière n'a
+**pas** de formateur unique global : l'affectation se fait au niveau de
+la séance, d'une période, ou d'une association classe–matière–période.
 
-## 7.4 Promotion
+## 6.5 Cours communs et groupes
 
-Une promotion représente une cohorte rattachée à une formation et à une
-période.
+Une séance peut concerner **plusieurs classes**. Le système distingue la
+classe principale de l'apprenant, les classes concernées par une séance,
+et la liste réelle des participants attendus.
 
-Exemple :
-
-```text
-Formation : ESI
-Promotion : 2026-2027
-Classe : ESI 2026-2027
-```
-
-## 7.5 Classe
-
-Une classe doit contenir :
-
-- un code unique dans son contexte ;
-- un nom ;
-- une formation ;
-- un niveau ;
-- une promotion ;
-- une année scolaire ;
-- un responsable pédagogique ;
-- une capacité ;
-- un rythme pédagogique ;
-- un statut ;
-- une liste d’inscriptions.
-
-## 7.6 Appartenance à une classe
-
-Un apprenant ne peut appartenir qu’à une seule classe principale active
-pour une même période.
-
-Il peut toutefois posséder plusieurs inscriptions historiques.
-
-Lors d’un changement de classe :
-
-1. l’ancienne inscription est clôturée ;
-2. son historique est conservé ;
-3. la nouvelle inscription est créée ;
-4. les données déjà enregistrées ne sont pas écrasées ;
-5. l’opération est auditée.
-
-## 7.7 Cours communs à plusieurs classes
-
-Une séance peut concerner plusieurs classes lorsque plusieurs groupes
-suivent un cours commun.
-
-Le système doit donc distinguer :
-
-- la classe principale de l’apprenant ;
-- les classes concernées par une séance ;
-- la liste réelle des participants attendus.
-
-Une table d’association entre les séances et les classes doit être
-prévue.
-
-## 7.8 Groupes temporaires
-
-Les groupes temporaires ne sont pas requis dans le MVP.
-
-Le modèle doit néanmoins permettre une évolution future vers :
-
-- groupes de langues ;
-- groupes d’options ;
-- groupes de projet ;
-- regroupements temporaires.
+Les **groupes temporaires** (langues, options, projets) sont pris en
+charge : un groupe rassemble des apprenants issus d'une ou plusieurs
+classes pour une période, et peut être la cible d'un créneau de
+planning.
 
 ---
 
-# 8. Rythmes pédagogiques et alternance
+# 7. Organisation physique
+
+## 7.1 Sites, bâtiments, salles
+
+Une salle porte : code, nom, bâtiment, étage, capacité, équipements,
+état, QR fixe, identifiant de borne connectée éventuelle.
+
+Un site porte une ou plusieurs **plages réseau** au format CIDR IPv4 ou
+IPv6, utilisées pour vérifier qu'une requête d'émargement par QR fixe
+provient bien de l'établissement.
+
+## 7.2 Affectation et conflits
+
+Une salle peut être connue à l'import, affectée plus tard, modifiée
+avant la séance, ou laissée provisoirement indéterminée.
+
+Le système signale : deux séances simultanées dans la même salle, une
+capacité insuffisante, une salle inactive ou absente, une incohérence
+entre la modalité et la salle (par exemple une salle affectée à une
+séance entièrement distancielle).
+
+---
+
+# 8. Alternance
 
 ## 8.1 Objectif
 
-Le système doit distinguer :
+Distinguer une **absence réelle** d'une journée sans cours, d'une
+journée en entreprise, d'une semaine hors établissement prévue, ou d'une
+exception imposant une présence.
 
-- une absence réelle ;
-- une journée sans cours ;
-- une journée en entreprise ;
-- une semaine hors établissement prévue ;
-- une exception imposant une présence à l’école.
+## 8.2 Rythmes pris en charge
 
-## 8.2 Rythmes obligatoires du MVP
-
-Le système doit prendre en charge les trois rythmes suivants :
-
-### Rythme A — Trois jours à l’école et deux jours en entreprise
-
-Exemple :
-
-```text
-Lundi     : école
-Mardi     : école
-Mercredi  : école
-Jeudi     : entreprise
-Vendredi  : entreprise
-```
-
-Le rythme réel doit rester configurable.
-
-### Rythme B — Une semaine à l’école sur quatre
-
-Une semaine de cours est suivie de semaines normalement prévues en
-entreprise.
-
-### Rythme C — Deux semaines à l’école sur quatre
-
-Deux semaines sont planifiées à l’école et deux semaines hors école.
-
-## 8.3 Rythme personnalisé
-
-Le système doit permettre de définir :
-
-- un rythme au niveau de la classe ;
-- une exception au niveau d’une période ;
-- une exception individuelle ;
-- une présence exceptionnelle à l’école ;
-- un cours exceptionnel hors calendrier habituel.
-
-## 8.4 Règles
-
-- une période en entreprise ne doit pas être comptabilisée comme une
-  absence ;
-- seules les séances publiées créent une attente de présence ;
-- une séance exceptionnelle peut remplacer la règle d’alternance ;
-- toute exception doit être datée ;
-- toute exception doit être auditée ;
-- le calcul d’assiduité doit se baser sur les séances réellement
-  attendues pour l’apprenant.
-
----
-
-# 9. Gestion des utilisateurs
-
-## 9.1 Données minimales
-
-Les données communes sont :
-
-| Champ | Obligatoire |
-|---|---:|
-| Identifiant technique | Oui |
-| Nom | Oui |
-| Prénom | Oui |
-| Adresse électronique | Oui |
-| Téléphone | Non |
-| Statut | Oui |
-| Rôles | Oui |
-| Date de création | Oui |
-| Date de dernière modification | Oui |
-
-## 9.2 Données apprenant
-
-Les champs supplémentaires peuvent comprendre :
-
-| Champ | Priorité |
+| Rythme | Description |
 |---|---|
-| Numéro étudiant | Obligatoire |
-| Date de naissance | Facultative |
-| Statut d’alternance | Obligatoire si concerné |
-| Entreprise d’alternance | Facultative |
-| Classe active | Obligatoire |
-| Historique des inscriptions | Obligatoire |
-| Date d’entrée | Facultative |
-| Date de sortie | Facultative |
-| Autorisation de suivi distant | Selon situation |
-| Téléchargement du rapport autorisé | Oui/non |
+| A | trois jours à l'école, deux jours en entreprise, jours configurables |
+| B | une semaine à l'école sur quatre |
+| C | deux semaines à l'école sur quatre |
+| Personnalisé | calendrier défini par le responsable pédagogique |
 
-## 9.3 Adresse électronique
+Un rythme se définit au niveau de la classe, avec exception possible au
+niveau d'une période, d'un groupe ou d'un individu.
 
-L’adresse électronique doit être unique par utilisateur.
+## 8.3 Règles
 
-Une même adresse peut être conservée pendant tout le parcours de
-l’apprenant, du BTS au Master.
-
-Le changement de classe ou d’année ne crée pas un nouveau compte.
-
-## 9.4 Statuts de compte
-
-- `PENDING_ACTIVATION` ;
-- `ACTIVE` ;
-- `SUSPENDED` ;
-- `LOCKED` ;
-- `ARCHIVED`.
-
-## 9.5 Suspension et archivage
-
-Lorsqu’un apprenant quitte l’établissement :
-
-- son compte n’est pas supprimé ;
-- il est suspendu ou archivé ;
-- il ne peut plus se connecter ;
-- son historique est conservé ;
-- une réactivation est possible ;
-- la réactivation nécessite une action autorisée ;
-- la justification est auditée.
-
-## 9.6 Gestion groupée
-
-Le système doit permettre :
-
-- la suspension groupée ;
-- l’archivage groupé ;
-- le déplacement groupé ;
-- l’activation groupée ;
-- la relance groupée des invitations.
-
-Avant une opération de masse, le système doit afficher :
-
-- le nombre d’utilisateurs concernés ;
-- les conséquences ;
-- les erreurs ;
-- les éléments ignorés ;
-- une demande de confirmation.
-
-## 9.7 Suppression
-
-La suppression fonctionnelle est remplacée par l’archivage.
-
-La suppression définitive est réservée :
-
-- aux doublons avérés ;
-- aux données de démonstration ;
-- aux demandes validées selon la procédure ;
-- aux administrateurs autorisés.
-
-Une suppression définitive doit être :
-
-- exceptionnelle ;
-- confirmée ;
-- auditée ;
-- impossible si elle détruit un historique requis.
+- une période en entreprise n'est **jamais** comptée comme une absence ;
+- seules les séances publiées créent une attente de présence ;
+- une séance exceptionnelle prime sur la règle d'alternance ;
+- toute exception est datée, motivée et auditée ;
+- le calcul d'assiduité se fonde sur les séances **réellement attendues**
+  pour l'apprenant considéré ;
+- la publication d'un planning **avertit** lorsqu'un créneau tombe sur
+  une période résolue en entreprise pour la classe visée.
 
 ---
 
-# 10. Importation des apprenants
+# 9. Utilisateurs
 
-## 10.1 Acteurs autorisés
+## 9.1 Données
 
-Les rôles autorisés sont :
+Communes : identifiant public, nom, prénom, adresse électronique,
+téléphone (facultatif), statut, rôles, horodatages.
 
-- `ADMIN` ;
-- `SCHOOL_ADMINISTRATION` ;
-- `PEDAGOGICAL_MANAGER`.
+Apprenant : numéro étudiant, date de naissance (facultative), statut
+d'alternance, entreprise (facultative), classe active, historique des
+inscriptions, dates d'entrée et de sortie, autorisation de suivi à
+distance, autorisation de téléchargement du rapport.
 
-Le responsable pédagogique est limité à son périmètre.
+Formateur : organisme éventuel, matières, période d'intervention,
+caractère interne ou externe.
 
-## 10.2 Formats
+## 9.2 Adresse électronique
 
-- CSV obligatoire ;
-- XLSX souhaité ;
-- classeur multifeuille souhaité.
+Unique par utilisateur, vérifiée, utilisée comme identifiant de
+connexion. Une même adresse accompagne l'apprenant du BTS au Mastère :
+un changement de classe ou d'année ne crée jamais un nouveau compte.
 
-## 10.3 Volume
+## 9.3 Statuts de compte
 
-Le système doit accepter au minimum :
+`PENDING_ACTIVATION`, `ACTIVE`, `SUSPENDED`, `LOCKED`, `ARCHIVED`.
 
-- 100 apprenants par import ;
-- plusieurs imports successifs ;
-- plusieurs classes dans un classeur.
+Un départ d'établissement suspend ou archive le compte : il n'est pas
+supprimé, la connexion est refusée, l'historique est conservé, la
+réactivation reste possible par une action autorisée et auditée.
 
-## 10.4 Colonnes de référence
+## 9.4 Opérations de masse
+
+Suspension, archivage, déplacement, activation et relance groupées.
+Avant exécution, le système affiche le nombre d'utilisateurs concernés,
+les conséquences, les erreurs, les éléments ignorés, et demande
+confirmation.
+
+## 9.5 Suppression
+
+La suppression fonctionnelle est remplacée par l'archivage. La
+suppression définitive est réservée aux doublons avérés, aux données de
+démonstration et aux demandes validées ; elle est exceptionnelle,
+doublement confirmée, auditée, et impossible si elle détruit un
+historique requis.
+
+---
+
+# 10. Import de la population
+
+## 10.1 Acteurs et formats
+
+Autorisés : `ADMIN`, `SCHOOL_ADMINISTRATION`, `PEDAGOGICAL_MANAGER`
+(limité à son périmètre).
+
+Formats : **CSV** et **Excel `.xlsx`**, y compris **classeur
+multifeuille**.
+
+## 10.2 Volume
+
+Au minimum 500 apprenants par import, plusieurs imports successifs,
+plusieurs classes dans un classeur.
+
+## 10.3 Colonnes de référence
 
 ```text
 student_number
@@ -937,240 +431,141 @@ work_study_pattern
 company_name
 ```
 
-## 10.5 Classeur multifeuille
+## 10.4 Classeur multifeuille
 
-Chaque feuille peut correspondre à une classe.
+Une feuille peut correspondre à une classe. La correspondance est
+déterminée par le nom de la feuille, une colonne `class_code`, une
+sélection manuelle, ou une suggestion de l'assistant d'importation.
+**Aucune affectation n'est appliquée sans confirmation humaine.**
 
-La correspondance peut être déterminée par :
+## 10.5 Deux phases obligatoires
 
-1. le nom de la feuille ;
-2. une colonne `class_code` ;
-3. une sélection manuelle ;
-4. une suggestion de l’assistant d’importation.
+**Simulation** — lecture, normalisation, validation, détection des
+doublons intra-fichier et contre l'existant, calcul des changements,
+affichage des anomalies. **Aucune écriture métier.**
 
-Aucune affectation ne doit être appliquée sans confirmation.
+**Application** — après confirmation : création, mise à jour,
+changement de classe, invitation, rapport d'importation, audit. Une
+transaction unique ; toute exception annule l'ensemble.
 
-## 10.6 Mode simulation
+## 10.6 Utilisateur existant
 
-L’importation doit fonctionner en deux phases :
+Si l'adresse ou le numéro étudiant existe : aucun doublon n'est créé, le
+compte existant est affiché, une mise à jour est proposée, la classe
+actuelle et la classe cible sont montrées, la confirmation est demandée,
+l'ancienne inscription est clôturée si nécessaire, la nouvelle est
+créée, l'historique est conservé.
 
-### Phase 1 — Simulation
+## 10.7 Erreurs
 
-- lecture ;
-- normalisation ;
-- validation ;
-- détection des doublons ;
-- détection des utilisateurs existants ;
-- calcul des changements ;
-- affichage des erreurs ;
-- aucune écriture métier définitive.
+Chaque anomalie indique : fichier, feuille, ligne, colonne, valeur
+reçue, motif, correction attendue, gravité (`INFO`, `WARNING`, `ERROR`,
+`BLOCKING`). Une anomalie `BLOCKING` empêche la confirmation.
 
-### Phase 2 — Application
+## 10.8 Assistance IA
 
-- confirmation ;
-- création ;
-- mise à jour ;
-- changement de classe ;
-- invitation ;
-- rapport d’importation ;
-- audit.
+L'assistant propose une correspondance de colonnes avec un score de
+confiance, reconnaît les synonymes d'en-tête, normalise les formats, et
+signale les résultats incertains. Une proposition de confiance faible
+n'est jamais appliquée sans confirmation.
 
-## 10.7 Gestion d’un utilisateur existant
+## 10.9 Critères d'acceptation
 
-Si l’adresse ou le numéro étudiant existe :
-
-- le système ne crée pas de doublon ;
-- il affiche le compte existant ;
-- il propose une mise à jour ;
-- il affiche la classe actuelle ;
-- il affiche la classe cible ;
-- il demande confirmation ;
-- il clôture l’ancienne inscription si nécessaire ;
-- il crée la nouvelle inscription ;
-- il conserve l’historique.
-
-## 10.8 Gestion des erreurs
-
-Chaque erreur doit indiquer :
-
-- le fichier ;
-- la feuille ;
-- le numéro de ligne ;
-- la colonne ;
-- la valeur reçue ;
-- le motif ;
-- la correction attendue ;
-- la gravité.
-
-Niveaux :
-
-- `INFO` ;
-- `WARNING` ;
-- `ERROR` ;
-- `BLOCKING`.
-
-## 10.9 Critères d’acceptation
-
-### IMP-STU-01
-
-**Étant donné** un fichier valide de 100 apprenants,
-**quand** le responsable lance la simulation,
-**alors** toutes les lignes doivent être analysées sans création
-définitive de compte.
-
-### IMP-STU-02
-
-**Étant donné** un apprenant déjà présent,
-**quand** il apparaît dans une nouvelle classe,
-**alors** le système doit proposer une mise à jour sans doublon.
-
-### IMP-STU-03
-
-**Étant donné** une ligne invalide,
-**quand** l’import est analysé,
-**alors** la ligne, la colonne et la raison doivent être affichées.
-
-### IMP-STU-04
-
-**Étant donné** une opération de masse,
-**quand** l’utilisateur confirme,
-**alors** le bilan doit indiquer les créations, mises à jour, erreurs et
-lignes ignorées.
+**IMP-STU-01** — 500 apprenants valides : toutes les lignes analysées,
+aucun compte créé avant confirmation.
+**IMP-STU-02** — apprenant déjà présent dans une nouvelle classe : mise à
+jour proposée, aucun doublon.
+**IMP-STU-03** — ligne invalide : ligne, colonne et raison affichées.
+**IMP-STU-04** — après confirmation : bilan des créations, mises à jour,
+déplacements, erreurs et lignes ignorées.
+**IMP-STU-05** — classeur de trois feuilles : trois classes correctement
+rattachées après confirmation du mapping.
 
 ---
 
 # 11. Invitation et activation
 
-## 11.1 Invitation automatique
+## 11.1 Cycle
 
-Après création d’un compte apprenant :
+Création du compte en `PENDING_ACTIVATION` → génération d'un jeton
+aléatoire (empreinte seule stockée) → durée de validité d'un mois →
+préparation du courriel → envoi asynchrone → définition du mot de passe
+→ proposition d'enregistrement d'une passkey → activation →
+journalisation.
 
-1. le compte reçoit le statut `PENDING_ACTIVATION` ;
-2. un jeton est généré ;
-3. le jeton est associé au compte ;
-4. sa durée de validité est fixée à un mois ;
-5. un email d’invitation est préparé ;
-6. l’événement est journalisé.
+## 11.2 Contenu du message
 
-## 11.2 Contenu de l’invitation
+Identité de la plateforme, motif de l'invitation, établissement, lien
+temporaire, date d'expiration, procédure en cas d'erreur, mentions de
+sécurité. Aucun mot de passe n'est transmis par courriel.
 
-Le message doit indiquer :
+## 11.3 Suivi
 
-- l’identité de la plateforme ;
-- la raison de l’invitation ;
-- l’établissement ;
-- un lien temporaire ;
-- la date d’expiration ;
-- la procédure en cas d’erreur ;
-- les informations de sécurité.
+Statuts internes : `QUEUED`, `SENT_TO_PROVIDER`, `PROCESSING_FAILED`.
+Statuts de délivrabilité, lorsque le fournisseur les remonte :
+`DELIVERED`, `BOUNCED`, `REJECTED`, `COMPLAINED`, `UNKNOWN`.
 
-## 11.3 Traçabilité
+Un message n'est jamais considéré comme délivré du seul fait de sa
+remise au serveur de messagerie.
 
-Statuts internes :
-
-- `QUEUED` ;
-- `SENT_TO_PROVIDER` ;
-- `PROCESSING_FAILED`.
-
-Statuts externes, si disponibles :
-
-- `DELIVERED` ;
-- `BOUNCED` ;
-- `REJECTED` ;
-- `COMPLAINED` ;
-- `UNKNOWN`.
-
-## 11.4 Réémission
-
-Un acteur autorisé peut :
-
-- corriger l’adresse ;
-- révoquer l’ancien jeton ;
-- générer un nouveau jeton ;
-- relancer l’envoi ;
-- consulter la nouvelle tentative.
+L'interface permet de consulter le statut, la date de dernière
+tentative, un motif d'erreur non sensible, de corriger l'adresse, de
+révoquer l'ancien jeton, d'en générer un nouveau, de relancer l'envoi,
+et d'auditer chaque action.
 
 ---
 
-# 12. Formateurs internes, externes et remplaçants
+# 12. Corps enseignant
 
-## 12.1 Formateur interne
+## 12.1 Formateurs externes
 
-Un formateur interne peut utiliser :
+Créés sans adresse institutionnelle. Champs : nom, prénom, adresse
+électronique, téléphone, organisme, matières, dates d'intervention. Le
+domaine de l'adresse n'est **jamais** utilisé comme seul critère de
+confiance. Activation par invitation sécurisée.
 
-- son compte Microsoft institutionnel ;
-- une adresse autorisée par l’établissement ;
-- à terme, une connexion Microsoft 365.
+## 12.2 Affectation
 
-## 12.2 Formateur externe
+Un formateur enseigne plusieurs matières, dans plusieurs classes, à
+différentes dates, pour plusieurs formations. L'affectation se fait au
+niveau de la séance, d'une période, ou d'une association
+classe–matière–période.
 
-Un formateur externe peut utiliser une adresse personnelle ou
-professionnelle externe.
+## 12.3 Remplacement
 
-Les contrôles ne doivent pas se baser uniquement sur le domaine du mail.
+Le responsable pédagogique désigne un remplaçant, sélectionne les
+séances, saisit un motif, définit une période et choisit si les
+apprenants sont notifiés. Le formateur initial peut **proposer** un
+remplaçant, demander son remplacement ou une annulation, mais ne valide
+jamais lui-même.
 
-## 12.3 Affectation pédagogique
+Une substitution porte : séance ou période, formateur initial,
+remplaçant, auteur, motif, dates de validité, statut, état de
+notification. Le formateur principal n'est jamais écrasé. Le remplaçant
+obtient les droits de gestion **uniquement** pendant sa période.
 
-Un formateur peut enseigner :
-
-- plusieurs matières ;
-- dans plusieurs classes ;
-- à différentes dates ;
-- pour plusieurs formations.
-
-La matière ne doit donc pas posséder un formateur unique global.
-
-L’affectation doit se faire :
-
-- au niveau de la séance ;
-- au niveau d’une période ;
-- ou au niveau d’une association classe-matière-période.
-
-## 12.4 Remplacement
-
-Le responsable pédagogique peut :
-
-- désigner un remplaçant ;
-- sélectionner les séances ;
-- renseigner un motif ;
-- définir une période ;
-- notifier les acteurs.
-
-Le formateur initial peut :
-
-- proposer un remplaçant ;
-- demander son remplacement ;
-- demander une annulation.
-
-Il ne peut pas valider lui-même le remplacement.
-
-## 12.5 Notification du remplacement
-
-Le responsable pédagogique choisit si les apprenants doivent être
-notifiés.
-
-Le formateur initial et le remplaçant doivent toujours être notifiés.
+Le formateur initial et le remplaçant sont **toujours** notifiés.
 
 ---
 
-# 13. Gestion du planning
+# 13. Planning
 
-## 13.1 Sources actuelles
+## 13.1 Responsabilité
 
-Les plannings existants peuvent provenir de :
+Le responsable pédagogique est propriétaire du planning de son
+périmètre. Il importe, construit, enregistre un brouillon, consulte les
+anomalies, corrige, valide, publie, republie une version corrigée et
+peut revenir à une version antérieure.
 
-- Microsoft Excel ;
-- Google Sheets exporté ;
-- tableaux contenant les jours ;
-- colonnes matin et après-midi ;
-- cellules regroupant le cours et le formateur.
+## 13.2 Sources et formats
 
-## 13.2 Stratégie d’intégration
-
-Le MVP doit proposer un modèle structuré.
-
-L’architecture cible doit prévoir un assistant capable de transformer un
-planning existant vers ce modèle.
+| Format | Statut |
+|---|---|
+| CSV | pris en charge |
+| Excel `.xlsx`, multifeuille | pris en charge |
+| PDF **texte** structuré | pris en charge, avec revue obligatoire |
+| Construction directe dans le calendrier | prise en charge |
+| PDF scanné (image) | exclu — voir §3 |
 
 ## 13.3 Colonnes de référence
 
@@ -1179,6 +574,7 @@ academic_year
 formation_code
 promotion_code
 class_code
+group_code
 session_date
 half_day
 start_time
@@ -1193,1570 +589,840 @@ work_study_exception
 notes
 ```
 
-## 13.4 Planning annuel par classe
-
-Un planning peut être importé pour :
-
-- une classe ;
-- une année scolaire ;
-- une période ;
-- une version.
-
-Le responsable peut ensuite compléter progressivement :
-
-- la matière ;
-- le formateur ;
-- la salle ;
-- le lien distant ;
-- les exceptions.
-
-## 13.5 Création manuelle
-
-Le responsable pédagogique doit pouvoir :
-
-- créer un planning depuis l’interface ;
-- ajouter une plage ;
-- modifier une plage ;
-- dupliquer une semaine ;
-- répéter une séance ;
-- appliquer un rythme ;
-- enregistrer un brouillon ;
-- publier.
-
-## 13.6 Statuts
-
-- `DRAFT` ;
-- `VALIDATING` ;
-- `READY_TO_PUBLISH` ;
-- `PUBLISHED` ;
-- `ARCHIVED` ;
-- `REJECTED`.
-
-## 13.7 Versionnement
-
-Le système conserve au minimum les trois dernières versions.
-
-Pour chaque version :
-
-- numéro ;
-- auteur ;
-- date ;
-- motif ;
-- nombre de changements ;
-- statut ;
-- version précédente.
-
-Le responsable peut revenir à une version précédente.
-
-## 13.8 Publication
-
-La publication :
-
-- crée ou met à jour les séances ;
-- rend le planning visible ;
-- prépare les notifications ;
-- invalide les caches concernés ;
-- conserve une preuve ;
-- refuse les conflits bloquants.
-
-## 13.9 Modification d’une séance publiée
-
-Toute modification doit :
-
-- créer une nouvelle version ;
-- identifier les champs modifiés ;
-- notifier le formateur ;
-- notifier les apprenants lorsque nécessaire ;
-- mettre à jour les calendriers ;
-- invalider le cache ;
-- être auditée.
-
-## 13.10 Assistant intelligent d’importation
-
-### Objectifs
-
-L’assistant doit réduire le travail nécessaire lorsque le fichier ne
-respecte pas exactement le modèle.
-
-### Capacités
-
-- détecter la ligne d’en-tête ;
-- reconnaître des synonymes ;
-- séparer un cours et un formateur présents dans une même cellule ;
-- identifier un jour ;
-- reconnaître le matin ou l’après-midi ;
-- normaliser les horaires ;
-- proposer une matière existante ;
-- proposer un formateur existant ;
-- signaler un résultat incertain ;
-- produire un score de confiance.
-
-### Règles
-
-- aucune transformation incertaine n’est automatiquement publiée ;
-- les propositions restent modifiables ;
-- le fichier d’origine est conservé pour la traçabilité ;
-- la confirmation humaine est obligatoire.
-
-### Statuts des propositions
-
-- `CONFIDENT` ;
-- `TO_REVIEW` ;
-- `UNRESOLVED`.
-
----
-
-# 14. Gestion des salles
-
-## 14.1 Référentiel
-
-Une salle peut comporter :
-
-- code ;
-- nom ;
-- bâtiment ;
-- étage ;
-- capacité ;
-- équipement ;
-- état ;
-- QR code fixe ;
-- plage réseau autorisée ;
-- identifiant de borne IoT.
-
-## 14.2 Affectation
-
-La salle peut être :
-
-- connue à l’import ;
-- affectée plus tard ;
-- modifiée avant la séance ;
-- gérée par l’administration ;
-- laissée provisoirement indéterminée.
-
-## 14.3 Conflits
-
-Le système doit signaler :
-
-- deux séances dans la même salle ;
-- une capacité insuffisante ;
-- une salle inactive ;
-- une salle absente ;
-- une incohérence entre le mode et la salle.
-
----
-
-# 15. Gestion des séances
-
-## 15.1 Création
-
-Une séance normale provient d’un planning publié.
-
-Une séance exceptionnelle peut être créée par un responsable
-pédagogique avec :
-
-- classe ;
-- matière ;
-- formateur ;
-- date ;
-- horaire ;
-- salle ou lien ;
-- motif ;
-- type d’exception.
-
-## 15.2 Statuts
-
-- `DRAFT` ;
-- `PLANNED` ;
-- `OPEN` ;
-- `CLOSED` ;
-- `CANCELLED` ;
-- `POSTPONED`.
-
-## 15.3 Horaires de référence
-
-L’établissement fonctionne habituellement selon les plages suivantes :
+## 13.4 Cycle d'importation
 
 ```text
-Matin :
-- début : 09:00
-- fin indicative : 12:30
-
-Après-midi :
-- début : 13:30
-- fin habituelle : 17:00
-
-Vendredi :
-- fin habituelle : 16:00
+Téléversement
+    ↓ contrôle du type réel du fichier (magic bytes)
+Analyse des colonnes  ←  assistance IA (score de confiance)
+    ↓
+Normalisation
+    ↓
+Validation métier
+    ↓
+Détection des conflits
+    ↓
+Prévisualisation
+    ↓
+Correction ligne à ligne
+    ↓
+Confirmation humaine
+    ↓
+Publication atomique versionnée
+    ↓
+Création ou mise à jour des séances
+    ↓
+Notification des acteurs concernés
 ```
 
-Ces horaires doivent être configurables.
+Le fichier téléversé n'est **jamais écrit sur disque** ; seule son
+empreinte est conservée pour la traçabilité.
 
-## 15.4 Annulation
+## 13.5 Conflits détectés
 
-Le responsable pédagogique peut annuler une séance.
+Intra-fichier **et** contre les séances déjà publiées :
 
-Le formateur peut demander l’annulation.
+- un formateur affecté à deux créneaux simultanés ;
+- une classe affectée à deux cours simultanés ;
+- une **salle** occupée simultanément ;
+- un créneau hors des plages horaires autorisées ;
+- une durée inhabituelle ;
+- une capacité de salle insuffisante ;
+- un créneau tombant sur une période d'alternance en entreprise
+  (avertissement, non bloquant) ;
+- une séance sans formateur affecté (avertissement).
 
-Une annulation doit contenir :
+Un conflit **bloquant** interdit la publication.
 
-- auteur ;
-- demandeur ;
-- motif ;
-- date ;
-- décision ;
-- notifications ;
-- éventuel commentaire.
+## 13.6 Correction ligne à ligne
 
-Une séance annulée n’est pas automatiquement reportée.
+L'écran de revue permet de corriger une ligne en anomalie sans
+recommencer l'import : modification de la valeur, revalidation immédiate
+de la ligne et du lot, journalisation de la correction avec son auteur.
+L'annulation du travail d'import puis le réimport restent possibles.
 
-Le responsable pédagogique définit une nouvelle date si nécessaire.
+## 13.7 Construction directe
 
-## 15.5 Demande d’annulation
+Le responsable pédagogique construit un planning dans un calendrier
+interactif : ajout d'un créneau, modification, déplacement, duplication
+d'une semaine, répétition d'une séance, application d'un rythme
+d'alternance, enregistrement d'un brouillon, publication. Les mêmes
+contrôles de conflit s'appliquent.
 
-Statuts :
+## 13.8 Statuts
 
-- `REQUESTED` ;
-- `APPROVED` ;
-- `REJECTED` ;
-- `CANCELLED`.
+`DRAFT`, `VALIDATING`, `READY_TO_PUBLISH`, `PUBLISHED`, `SUPERSEDED`,
+`ARCHIVED`, `REJECTED`.
 
----
+## 13.9 Versionnement
 
-# 16. Cours présentiels, distanciels et hybrides
+Chaque version porte : numéro, auteur, date, motif, nombre de
+changements, statut, version précédente. Au minimum **trois versions**
+sont conservées. Le responsable peut **revenir à une version
+antérieure** : l'opération crée une nouvelle version dont le contenu est
+celui de la version choisie, et n'efface jamais l'historique.
 
-## 16.1 Présentiel
+La publication est **atomique** : verrou sur le planning, revalidation
+complète, création de la version N+1, passage de la version N en
+`SUPERSEDED`, création ou mise à jour des séances. Une publication
+concurrente est strictement idempotente.
 
-L’apprenant est attendu sur le site et utilise :
+L'identité d'un créneau est **stable et déterministe** : une republication
+retrouve la même séance plutôt que d'en créer une seconde.
 
-- le QR fixe de la salle avant le début ;
-- le QR dynamique du formateur après le début ;
-- ou une validation manuelle exceptionnelle.
+## 13.10 Modification d'une séance publiée
 
-## 16.2 Distanciel collectif
-
-Une séance peut être déclarée à distance pour toute la classe.
-
-Le lien peut être :
-
-- ajouté manuellement ;
-- partagé dans l’application ;
-- synchronisé à terme avec Teams.
-
-## 16.3 Distanciel individuel
-
-Un apprenant peut être autorisé à distance alors que le reste de la
-classe est en présentiel.
-
-L’autorisation peut être valable :
-
-- pour une séance ;
-- pour une période ;
-- pour l’année scolaire.
-
-Elle doit comporter :
-
-- l’apprenant ;
-- l’auteur ;
-- le motif ;
-- la période ;
-- le statut ;
-- la date de décision.
-
-## 16.4 Mode hybride
-
-Une même séance peut contenir :
-
-- des participants en présentiel ;
-- des participants à distance.
-
-Le canal de présence doit être enregistré.
-
-Valeurs :
-
-- `ROOM_STATIC_QR` ;
-- `TEACHER_DYNAMIC_QR` ;
-- `REMOTE_QR` ;
-- `REMOTE_CODE` ;
-- `TEACHER_MANUAL` ;
-- `PEDAGOGICAL_MANUAL` ;
-- `IOT_TERMINAL`.
+Toute modification crée une nouvelle version, identifie les champs
+modifiés, notifie le formateur et, si nécessaire, les apprenants, met à
+jour les calendriers synchronisés, invalide le cache et est auditée.
 
 ---
 
-# 17. Émargement
+# 14. Séances
 
-## 17.1 Principes
+## 14.1 Création
 
-L’émargement doit être :
+Une séance **normale** provient d'un planning publié. Une séance
+**exceptionnelle** est créée par un responsable pédagogique avec classe
+ou groupe, matière, formateur, date, horaires, salle ou lien, motif et
+type d'exception.
 
-- rapide ;
-- sécurisé ;
-- accessible ;
-- traçable ;
-- compatible avec les cours hybrides ;
-- résistant au rejeu ;
-- compatible avec un contrôle humain.
+## 14.2 Statuts
 
-## 17.2 Points de contrôle journaliers
+`DRAFT`, `PLANNED`, `OPEN`, `CLOSED`, `CANCELLED`, `POSTPONED`.
 
-Le système doit permettre quatre contrôles :
+Le cycle est strict : `PLANNED → OPEN → CLOSED`, sans réouverture.
+`PLANNED` ou `OPEN → CANCELLED` avec motif. Une séance annulée reste
+consultable en historique. Une séance supersédée est inactive partout.
 
-1. arrivée du matin ;
-2. retour de la pause du matin ;
-3. arrivée ou retour après la pause de midi ;
-4. retour de la pause de l’après-midi.
+## 14.3 Horaires de référence
 
-Les horaires exacts sont définis par le planning ou les paramètres de la
-séance.
+```text
+Matin      : 09:00 → 12:30
+Après-midi : 13:30 → 17:00
+Vendredi   : fin habituelle 16:00
+```
 
-## 17.3 Types de point de contrôle
+Ces plages sont **configurables** par l'établissement.
 
-- `MORNING_ARRIVAL` ;
-- `MORNING_BREAK_RETURN` ;
-- `AFTERNOON_ARRIVAL` ;
-- `AFTERNOON_BREAK_RETURN`.
+## 14.4 Annulation et report
 
-## 17.4 Calcul par demi-journée
+Le responsable pédagogique annule ; le formateur demande une annulation
+(`REQUESTED`, `APPROVED`, `REJECTED`, `CANCELLED`). Une annulation
+porte auteur, demandeur, motif, date, décision, notifications et
+commentaire. Une séance annulée n'est pas reportée automatiquement : le
+responsable définit une nouvelle date, ce qui crée une séance liée à
+l'originale.
 
-### Matin
+---
 
-Le matin est validé lorsque :
+# 15. Modalités d'enseignement
 
-- l’arrivée du matin est validée ;
-- le retour de la pause du matin est validé.
+## 15.1 Présentiel
 
-### Après-midi
+L'apprenant est attendu sur site. Il utilise le QR fixe de salle avant
+le début, le QR dynamique du formateur ensuite, ou une validation
+manuelle exceptionnelle.
 
-L’après-midi est validé lorsque :
+## 15.2 Distanciel collectif
 
-- l’arrivée de l’après-midi est validée ;
-- le retour de la pause de l’après-midi est validé.
+La séance est déclarée à distance pour toute la classe. Le lien est
+saisi manuellement, partagé dans l'application, ou **créé
+automatiquement dans Teams** lorsque l'intégration Microsoft est active.
 
-## 17.5 Calcul journalier
+## 15.3 Distanciel individuel
 
-| Résultat | Règle générale |
+Un apprenant peut être autorisé à distance alors que sa classe est en
+présentiel. L'autorisation vaut pour une séance, une période ou l'année,
+et porte apprenant, auteur, motif, période, statut et date de décision.
+Sans autorisation, le canal distant est refusé ; le formateur peut
+signaler l'exception et le responsable régulariser.
+
+## 15.4 Hybride
+
+Une même séance mélange participants sur site et à distance. Le **canal
+de présence** est enregistré :
+
+`ROOM_STATIC_QR`, `TEACHER_DYNAMIC_QR`, `REMOTE_QR`, `REMOTE_CODE`,
+`TEACHER_MANUAL`, `PEDAGOGICAL_MANUAL`, `IOT_TERMINAL`.
+
+---
+
+# 16. Émargement
+
+## 16.1 Principes
+
+L'émargement doit être rapide, sécurisé, accessible, traçable,
+compatible avec les cours hybrides, résistant au rejeu, et toujours
+doublé d'un contrôle humain possible.
+
+## 16.2 Points de contrôle journaliers
+
+Quatre points de contrôle nommés :
+
+| Type | Moment |
 |---|---|
-| Journée complète | Quatre validations cohérentes |
-| Demi-journée matin | Deux validations cohérentes du matin |
-| Demi-journée après-midi | Deux validations cohérentes de l’après-midi |
-| Partiel | Validations incomplètes |
-| À confirmer | Incohérence ou incident signalé |
-| Absent | Aucune validation et aucune correction |
-| Excusé | Absence justifiée et validée |
+| `MORNING_ARRIVAL` | arrivée du matin |
+| `MORNING_BREAK_RETURN` | retour de la pause du matin |
+| `AFTERNOON_ARRIVAL` | arrivée ou retour après la pause de midi |
+| `AFTERNOON_BREAK_RETURN` | retour de la pause de l'après-midi |
 
-## 17.6 Tolérance de retard
+Les horaires exacts découlent du planning ou des paramètres de la
+séance. Des points de contrôle supplémentaires de type `CUSTOM` restent
+possibles pour les formats atypiques.
 
-Règle validée :
+## 16.3 Calcul par demi-journée
 
-- de 0 à 15 minutes après le début : `PRESENT` ;
-- de 16 à 30 minutes : `LATE` ;
-- après 30 minutes : `LATE` avec validation manuelle ;
-- après la fenêtre normale : autorisation exceptionnelle du formateur.
+Le **matin** est validé lorsque `MORNING_ARRIVAL` et
+`MORNING_BREAK_RETURN` sont validés de façon cohérente.
+L'**après-midi** est validé lorsque `AFTERNOON_ARRIVAL` et
+`AFTERNOON_BREAK_RETURN` le sont.
 
-## 17.7 Ouverture de l’émargement
+| Résultat journalier | Règle |
+|---|---|
+| Journée complète | quatre validations cohérentes |
+| Demi-journée matin | deux validations cohérentes du matin |
+| Demi-journée après-midi | deux validations cohérentes de l'après-midi |
+| `PARTIAL` | validations incomplètes |
+| `TO_CONFIRM` | incohérence ou incident signalé |
+| `ABSENT` | aucune validation, aucune correction |
+| `EXCUSED` | absence justifiée et acceptée |
 
-L’émargement peut être ouvert :
+## 16.4 Tolérance de retard
 
-- 15 minutes avant le début ;
-- automatiquement ou par le formateur ;
-- jusqu’à 15 minutes après le début dans le parcours standard.
+| Délai après le début | Résultat |
+|---|---|
+| 0 → 15 minutes | `PRESENT` |
+| 16 → 30 minutes | `LATE` |
+| au-delà de 30 minutes | `LATE` **et** validation manuelle requise |
+| après la fenêtre normale | autorisation exceptionnelle du formateur |
 
-Après cette période :
+Les seuils sont configurables par l'établissement.
 
-- le QR fixe n’est plus accepté ;
-- le QR dynamique du formateur peut être utilisé ;
-- le formateur contrôle la situation ;
-- une présence tardive peut être enregistrée exceptionnellement.
+## 16.5 Fenêtre d'émargement
 
-## 17.8 QR fixe de salle
+L'émargement ouvre 15 minutes avant le début, automatiquement ou sur
+action du formateur, et reste ouvert jusqu'à 15 minutes après le début
+dans le parcours standard. Au-delà : le QR fixe de salle n'est plus
+accepté, le QR dynamique du formateur reste utilisable sous son
+contrôle, et une présence tardive peut être enregistrée
+exceptionnellement.
 
-Le QR fixe :
+## 16.6 QR fixe de salle
 
-- est imprimé ;
-- est associé à une salle ;
-- ne contient pas de donnée personnelle ;
-- est utilisable avant et jusqu’au début de la séance ;
-- nécessite une séance active ou imminente ;
-- nécessite le réseau ESIC ;
-- est rejeté hors fenêtre ;
-- est rejeté hors plage réseau autorisée.
+Imprimé, associé à une salle, sans donnée personnelle. Il identifie une
+**ressource de salle**, jamais directement une séance : le serveur
+détermine la salle, la séance active ou imminente, l'apprenant, son
+inscription et la fenêtre applicable.
 
-Le QR fixe identifie une ressource de salle, pas directement une séance.
+Il est **refusé** après le début de la séance, hors plage réseau
+autorisée, et en l'absence de séance correspondante.
 
-Le serveur détermine :
+## 16.7 Contrôle réseau
 
-- la salle ;
-- la séance active ;
-- l’apprenant ;
-- son inscription ;
-- la fenêtre d’émargement.
+Le serveur vérifie que la requête provient d'une plage réseau autorisée,
+configurée par le super administrateur. L'adresse IP est utilisée
+**pendant la décision uniquement** : elle n'est jamais conservée dans
+l'audit métier ni exposée dans un rapport. Sa présence éventuelle dans
+les journaux techniques est limitée en durée et en accès.
 
-## 17.9 Contrôle réseau
+## 16.8 QR dynamique du formateur
 
-Le système doit vérifier temporairement si la requête provient d’une
-plage réseau autorisée.
+Lié à une séance et à un point de contrôle, généré côté serveur, stocké
+dans Redis avec expiration, affiché sur l'écran du formateur, utilisable
+en salle comme à distance selon la modalité.
 
-Les plages réseau sont configurées par le super administrateur.
+Le code visuel change toutes les **10 secondes**. Le serveur accepte le
+code courant et, pendant une brève période de grâce, le code
+immédiatement précédent, afin d'absorber la latence, le temps de scan et
+les écarts d'horloge.
 
-L’adresse IP :
+## 16.9 Code court
 
-- est utilisée pendant la décision ;
-- n’est pas conservée dans l’audit métier ;
-- ne doit pas apparaître dans les rapports ;
-- peut être présente temporairement dans les journaux techniques du
-  serveur selon la configuration, avec accès limité et durée maîtrisée.
+Chaque QR dynamique s'accompagne d'un **code court** saisissable, de
+même durée de vie, soumis aux mêmes vérifications. Il sert au
+distanciel, aux problèmes de caméra, et à l'apprenant qui suit le cours
+sur le téléphone avec lequel il devrait scanner.
 
-## 17.10 QR dynamique du formateur
+## 16.10 Prévention du rejeu
 
-Le QR dynamique :
+Le serveur vérifie systématiquement : identifiant du jeton, expiration,
+point de contrôle visé, séance, état du jeton, unicité de la validation,
+identité de l'utilisateur, inscription et autorisation. Une seconde
+validation du même point de contrôle par le même apprenant est refusée
+sans effet de bord.
 
-- est lié à une séance ;
-- change périodiquement ;
-- est généré côté serveur ;
-- utilise Redis ;
-- possède une expiration ;
-- peut être affiché sur l’écran du formateur ;
-- est utilisable dans la salle ou à distance selon le mode.
+## 16.11 Présence manuelle
 
-### Fréquence cible
+Le formateur enregistre une présence manuelle lorsque l'apprenant n'a
+pas de smartphone, que la caméra est défaillante, que WebAuthn est
+indisponible, qu'un incident technique survient, qu'un retard
+exceptionnel est justifié, ou que l'apprenant suit à distance depuis un
+ordinateur. La saisie comprend motif, canal, heure, auteur et
+justification éventuelle. Elle est auditée.
 
-Le code visuel peut changer toutes les 10 secondes.
+## 16.12 Apprenant non inscrit
 
-Le serveur peut accepter :
+Le formateur crée une entrée provisoire (`UNREGISTERED_GUEST` ou
+`PENDING_REGISTRATION`) avec nom, prénom, adresse si connue,
+commentaire, séance et auteur. Cette entrée ne crée pas d'inscription
+officielle, est signalée au responsable pédagogique, doit être
+régularisée, et reste distincte d'un compte tant que la correspondance
+n'est pas validée.
 
-- le code courant ;
-- éventuellement le code immédiatement précédent pendant une courte
-  période de grâce.
+## 16.13 Départ anticipé
 
-Cette tolérance vise à absorber :
+L'apprenant signale son départ au formateur, qui accepte, refuse,
+recommande favorablement ou transmet au responsable pédagogique. Le
+dossier porte apprenant, séance, heure de départ, motif, avis du
+formateur, décision, auteur et commentaire. L'effet est `PARTIAL`,
+`EXCUSED_PARTIAL` ou `TO_CONFIRM`.
 
-- la latence ;
-- le temps de scan ;
-- les variations d’horloge.
+## 16.14 Correction
 
-## 17.11 Durée globale d’émargement
+Toute correction porte l'ancienne valeur, la nouvelle valeur, le motif,
+l'auteur, la date, l'heure et l'origine. L'historique est
+**append-only** ; aucune présence n'est supprimée, seulement annulée
+logiquement.
 
-La disponibilité du QR dynamique doit dépendre :
+## 16.15 Détection de fraude
 
-- du statut de la séance ;
-- de la fenêtre d’émargement ;
-- d’une décision du formateur ;
-- du point de contrôle en cours.
-
-Après la fenêtre initiale, le formateur peut réafficher un QR pour une
-validation tardive jusqu’à la limite autorisée.
-
-## 17.12 Code alternatif
-
-Chaque QR dynamique peut être accompagné d’un code court :
-
-- limité dans le temps ;
-- lié à la séance ;
-- saisissable dans l’application ;
-- soumis aux mêmes vérifications.
-
-Le code alternatif est destiné :
-
-- au distanciel ;
-- aux problèmes de caméra ;
-- aux utilisateurs suivant le cours sur le même téléphone.
-
-## 17.13 Prévention du rejeu
-
-Le serveur doit vérifier :
-
-- l’identifiant du jeton ;
-- sa date d’expiration ;
-- son point de contrôle ;
-- sa séance ;
-- son état ;
-- l’unicité de la validation ;
-- l’utilisateur ;
-- son autorisation.
-
-## 17.14 Présence manuelle
-
-Le formateur peut enregistrer manuellement une présence lorsque :
-
-- l’apprenant n’a pas de smartphone ;
-- la caméra ne fonctionne pas ;
-- WebAuthn est indisponible ;
-- un incident technique est constaté ;
-- un retard exceptionnel est justifié ;
-- l’apprenant suit à distance depuis un ordinateur.
-
-La saisie doit comprendre :
-
-- le motif ;
-- le canal ;
-- l’heure ;
-- l’auteur ;
-- la justification éventuelle.
-
-## 17.15 Apprenant non inscrit
-
-Le formateur peut créer une entrée provisoire pour un nouvel apprenant.
-
-Statut :
-
-- `UNREGISTERED_GUEST` ;
-- ou `PENDING_REGISTRATION`.
-
-Données minimales :
-
-- nom ;
-- prénom ;
-- email si connu ;
-- commentaire ;
-- séance ;
-- auteur.
-
-Cette entrée :
-
-- ne crée pas automatiquement une inscription officielle ;
-- est signalée au responsable pédagogique ;
-- doit être régularisée ;
-- reste séparée d’un compte officiel tant que la correspondance n’est
-  pas validée.
+Le système vérifie : expiration du jeton, doublons, nombre de
+tentatives, utilisations simultanées, usage d'un même appareil par
+plusieurs comptes, événements d'une borne non reconnue, ouverture
+effective de la séance, appartenance de l'apprenant à la classe,
+existence d'un remplacement autorisé. Les anomalies sont **signalées**,
+jamais sanctionnées automatiquement.
 
 ---
 
-# 18. WebAuthn et authentification adaptée
+# 17. Authentification
 
-## 18.1 Objectif
+## 17.1 Identifiant et mot de passe
 
-WebAuthn doit permettre :
+L'adresse électronique vérifiée est l'identifiant. Les mots de passe
+sont hachés (BCrypt, migration Argon2id prévue), soumis à une longueur
+minimale, contrôlés contre une liste de mots de passe courants, jamais
+conservés en clair, jamais journalisés, et sans expiration périodique
+arbitraire.
 
-- une connexion simplifiée sur un appareil enregistré ;
-- une confirmation locale de l’émargement ;
-- une réduction de l’usage répétitif des mots de passe ;
-- une meilleure résistance à l’hameçonnage.
+La réponse est **uniforme** pour un email inconnu, un mot de passe
+erroné ou un compte inactif.
 
-## 18.2 Première connexion
+## 17.2 WebAuthn et passkeys
 
-Le parcours cible est :
+WebAuthn permet une connexion sans mot de passe sur un appareil
+enregistré, une confirmation locale de l'émargement, et une meilleure
+résistance à l'hameçonnage.
 
-1. saisie de l’adresse électronique ;
-2. mot de passe ;
-3. second facteur lorsque requis ;
-4. activation ou vérification du compte ;
-5. proposition d’enregistrement d’une passkey ;
-6. confirmation locale ;
-7. appareil ajouté comme appareil de confiance.
+**Première connexion** : email → mot de passe → second facteur si requis
+→ activation → proposition d'enregistrer une passkey → confirmation
+locale → appareil ajouté aux appareils de confiance.
 
-## 18.3 Connexions suivantes
+**Connexions suivantes** : sur un appareil reconnu, l'utilisateur emploie
+sa passkey ; l'authentificateur local peut être une empreinte, une
+reconnaissance faciale du terminal ou un code PIN.
 
-Sur un appareil reconnu :
+ESIC Connect ne stocke ni empreinte ni modèle facial, ne reçoit aucune
+donnée biométrique, et n'obtient qu'une réponse cryptographique. La
+vérification reste sur le terminal.
 
-- l’utilisateur peut utiliser WebAuthn ;
-- l’authentificateur local peut être une empreinte, Face ID ou un PIN ;
-- l’utilisateur n’a pas à saisir un second facteur à chaque ouverture ;
-- la session peut être renouvelée selon la politique de sécurité.
+**Secours** : mot de passe, code TOTP, codes de récupération, procédure
+de récupération, validation manuelle contrôlée, réenrôlement d'appareil.
 
-## 18.4 Réauthentification forte
+## 17.3 Second facteur TOTP
 
-Une vérification renforcée est demandée lorsque :
+Obligatoire pour `SUPER_ADMIN` et `ADMIN`, ainsi que pour les opérations
+sensibles du `PEDAGOGICAL_MANAGER`. Adaptatif pour les apprenants :
+demandé à la première connexion, sur un nouvel appareil, lors d'un
+changement inhabituel, lors d'une récupération de compte, d'une
+réinitialisation de l'application ou d'un changement de moyen
+d'authentification.
 
-- l’utilisateur change d’appareil ;
-- l’utilisateur change de pays de manière inhabituelle ;
-- l’utilisateur réinitialise l’application ;
-- le mot de passe est réinitialisé ;
-- une passkey est supprimée ;
-- une nouvelle passkey est ajoutée ;
-- une connexion est jugée inhabituelle ;
-- une action critique est demandée.
+Le système gère l'enrôlement, la confirmation, les codes de
+récupération, la révocation et l'audit des changements.
 
-Cette approche correspond à une authentification adaptative : les
-contrôles supplémentaires sont déclenchés selon le risque plutôt qu’à
-chaque action ordinaire. ([cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html?utm_source=openai))
+## 17.4 Authentification adaptative
 
-## 18.5 Protection des données biométriques
+Une vérification renforcée est exigée lorsque l'utilisateur change
+d'appareil, change de pays de façon inhabituelle, réinitialise
+l'application, réinitialise son mot de passe, ajoute ou supprime une
+passkey, ou demande une action critique.
 
-ESIC Connect :
+## 17.5 Tentatives échouées
 
-- ne stocke aucune empreinte ;
-- ne stocke aucun modèle facial ;
-- ne reçoit pas les données biométriques ;
-- reçoit une réponse cryptographique ;
-- laisse la vérification au système d’exploitation.
+Après trois échecs : ralentissement progressif, puis challenge
+anti-robot, puis verrouillage **temporaire** si les tentatives
+continuent. Aucun verrouillage définitif automatique. L'utilisateur peut
+être notifié.
 
-## 18.6 Solutions de secours
+## 17.6 Limitation de débit
 
-- mot de passe ;
-- code TOTP ;
-- codes de récupération ;
-- procédure de récupération ;
-- validation manuelle contrôlée ;
-- réenrôlement d’un appareil.
+Redis limite : connexions répétées, demandes de réinitialisation,
+validations de jeton d'émargement, réémissions de courriels, créations
+de réclamations, et les appels sensibles de l'API. Les compteurs sont
+fondés sur une empreinte d'identité et non sur une donnée personnelle en
+clair.
 
----
+## 17.7 Sessions et jetons
 
-# 19. Présence à distance
+Jeton d'accès de courte durée, jeton de renouvellement avec rotation,
+cookie `HttpOnly` `Secure` et `SameSite` approprié, protection CSRF
+adaptée, politique CORS restrictive. **Aucun jeton sensible dans
+`localStorage`.**
 
-## 19.1 QR distant
+Expiration après 30 minutes d'inactivité, durée absolue configurable.
+Un appareil de confiance bénéficie d'une reconnexion simplifiée sans
+empêcher la révocation ni la réauthentification.
 
-Le formateur peut :
+La session est invalidée lors de la déconnexion, de l'expiration, d'une
+réinitialisation de mot de passe, d'une révocation, d'un incident ou
+d'une désactivation de compte.
 
-- partager son écran ;
-- afficher le QR dynamique ;
-- afficher le code court ;
-- envoyer une notification d’ouverture.
+## 17.8 Mot de passe oublié
 
-## 19.2 Appareil unique
+Saisie de l'adresse → **réponse neutre** → limitation du nombre de
+demandes → challenge anti-robot si nécessaire → génération d'un jeton
+aléatoire à usage unique et limité dans le temps, stocké sous forme
+d'empreinte → envoi → vérification → définition du nouveau mot de passe
+→ invalidation du jeton → révocation des sessions → notification →
+audit.
 
-Si l’apprenant suit le cours sur son téléphone :
+Le système ne révèle jamais si une adresse existe.
 
-- il utilise le code court ;
-- ou un lien profond ouvre ESIC Connect ;
-- il confirme localement son identité ;
-- la présence est transmise au serveur.
+## 17.9 Protection anti-robot
 
-## 19.3 Connexion et déconnexion
+Cloudflare Turnstile protège la connexion après comportement suspect, la
+demande de réinitialisation, l'activation de compte et les formulaires
+publics. Le jeton est **validé côté serveur** ; un contrôle uniquement
+présent dans le front n'est pas une protection. Les jetons sont à usage
+unique et rejetés lorsqu'ils sont expirés ou déjà consommés.
 
-Le système doit pouvoir enregistrer :
-
-- l’heure de validation du point de contrôle ;
-- le canal distant ;
-- l’heure de connexion déclarée ou intégrée ;
-- l’heure de déconnexion si une intégration est disponible.
-
-Dans le MVP, les quatre points de contrôle sont prioritaires sur une
-mesure continue de la connexion.
-
-## 19.4 Autorisation individuelle
-
-L’autorisation à distance doit être contrôlée lors de l’émargement.
-
-Sans autorisation :
-
-- le canal distant est refusé ;
-- le formateur peut signaler l’exception ;
-- le responsable peut régulariser.
+Le service reste fonctionnel si le fournisseur est indisponible : la
+politique de repli est définie et documentée.
 
 ---
 
-# 20. Départ anticipé
+# 18. Autorisations
 
-## 20.1 Demande
+## 18.1 Modèle
 
-L’apprenant signale son départ au formateur.
+Contrôle d'accès par rôle, contrôle de périmètre pour les formations,
+contrôle de propriété pour les données individuelles, contrôle
+contextuel pour les séances.
 
-Le formateur peut :
+## 18.2 Règles
 
-- accepter ;
-- refuser ;
-- recommander favorablement la demande ;
-- transmettre au responsable pédagogique.
+Refus par défaut. Vérification côté serveur à chaque opération. Aucun
+droit fondé sur l'affichage Angular. Identifiants exposés non
+prédictibles. Tests systématiques des réponses `401` et `403`.
 
-## 20.2 Données
+Une ressource hors périmètre renvoie `404` plutôt que `403` lorsque
+l'existence même de la ressource est une information à protéger.
 
-- apprenant ;
-- séance ;
-- heure de départ ;
-- motif ;
-- avis du formateur ;
-- décision ;
-- auteur ;
-- commentaire.
+## 18.3 Cumul de rôles
 
-## 20.3 Impact
-
-Le départ anticipé peut produire :
-
-- `PARTIAL` ;
-- `EXCUSED_PARTIAL` dans une évolution ;
-- `TO_CONFIRM`.
+Le cumul ne donne jamais un accès transversal non prévu. Un responsable
+pédagogique également formateur gère ses formations et enseigne ses
+séances, sans jamais voir les formations d'un autre responsable.
 
 ---
 
-# 21. Justificatifs
+# 19. Justificatifs
 
-## 21.1 Acteurs
+## 19.1 Dépôt et portée
 
-Un justificatif peut être déposé par :
+Déposé par l'apprenant, par le formateur pour son compte, par le
+responsable pédagogique ou par l'administration. Il concerne une séance,
+une demi-journée, une journée ou une période.
 
-- l’apprenant ;
-- le formateur pour le compte de l’apprenant ;
-- le responsable pédagogique ;
-- l’administration scolaire.
+## 19.2 Pièces jointes
 
-## 21.2 Portée
+Formats : JPEG, PNG, PDF. Taille maximale : **5 Mo par fichier**.
 
-Un justificatif peut concerner :
+Contrôles obligatoires : extension, type MIME déclaré, **type réel
+dérivé du contenu** (magic bytes, rejet des archives et conteneurs),
+taille. Nom interne généré. Fichiers non exécutables, stockés **hors
+base et hors répertoire public**, droits d'accès restreints, traversée
+de chemin impossible.
 
-- une séance ;
-- une demi-journée ;
-- une journée ;
-- une période.
+Une **analyse antivirus** est appliquée avant mise à disposition. Tant
+qu'elle n'a pas rendu son verdict, la pièce est en quarantaine et n'est
+pas téléchargeable.
 
-## 21.3 Formats
+Le téléchargement force `Content-Disposition: attachment` et
+`X-Content-Type-Options: nosniff`, et n'est accessible qu'au
+propriétaire et à un examinateur de son périmètre.
 
-- JPEG ;
-- PNG ;
-- PDF.
+## 19.3 Cycle
 
-## 21.4 Taille
+`SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`,
+`ADDITIONAL_INFORMATION_REQUIRED`, `EXPIRED`.
 
-Taille maximale :
+Le responsable pédagogique ou l'administration décide ; un refus exige
+un motif. L'apprenant dispose d'un mois pour transmettre son
+justificatif, délai configurable.
 
-```text
-5 Mo par fichier
-```
+## 19.4 Effet
 
-## 21.5 Sécurité des fichiers
+Un justificatif accepté transforme `ABSENT` en `EXCUSED`. Il ne
+transforme jamais une absence en présence et n'efface jamais
+l'historique de l'absence.
 
-Le système doit :
+## 19.5 Conservation
 
-- vérifier l’extension ;
-- vérifier le type MIME ;
-- vérifier la taille ;
-- générer un nom interne ;
-- ne pas exécuter les fichiers ;
-- stocker les fichiers hors répertoire public ;
-- limiter les droits d’accès ;
-- prévoir une analyse antivirus ;
-- empêcher les traversées de chemin.
-
-## 21.6 Statuts
-
-- `SUBMITTED` ;
-- `UNDER_REVIEW` ;
-- `ACCEPTED` ;
-- `REJECTED` ;
-- `ADDITIONAL_INFORMATION_REQUIRED` ;
-- `EXPIRED`.
-
-## 21.7 Validation
-
-Le responsable pédagogique ou le formateur autorisé peut valider ou
-refuser.
-
-L’administration peut intervenir selon son périmètre.
-
-Un refus exige un motif.
-
-## 21.8 Délai
-
-L’apprenant dispose d’un mois pour transmettre son justificatif.
-
-Le délai doit être configurable.
-
-## 21.9 Effet d’une validation
-
-Un justificatif accepté transforme :
-
-```text
-ABSENT → EXCUSED
-```
-
-Il ne transforme pas une absence en présence.
-
-## 21.10 Conservation
-
-Les justificatifs sont conservés pendant 12 mois dans la configuration
-initiale, puis supprimés ou archivés selon la politique validée.
-
-Les métadonnées nécessaires à la traçabilité peuvent être conservées
-plus longtemps si cela est justifié.
+12 mois par défaut, puis suppression ou archivage selon la politique
+validée. Les métadonnées de traçabilité peuvent être conservées plus
+longtemps si cela est justifié. Un balayage périodique détecte et
+supprime les fichiers orphelins.
 
 ---
 
-# 22. Réclamations et messagerie
+# 20. Réclamations
 
-## 22.1 Principe
+## 20.1 Principe
 
-La réclamation doit offrir un échange conversationnel sans devenir une
-messagerie instantanée générale.
+Échange conversationnel encadré, adressé au formateur, au responsable
+pédagogique ou à l'administration scolaire. Ce n'est pas une messagerie
+instantanée générale.
 
-## 22.2 Destinataires
+## 20.2 Contenu
 
-- formateur ;
-- responsable pédagogique ;
-- administration scolaire.
+Auteur, catégorie, sujet, description, séance ou période concernée,
+destinataire fonctionnel, priorité, statut, pièces jointes, fil de
+messages, historique complet.
 
-## 22.3 Portée
+Chaque message porte auteur, rôle utilisé, date, contenu, pièce jointe
+éventuelle et visibilité.
 
-Une réclamation peut concerner :
+## 20.3 Transfert
 
-- une séance ;
-- une demi-journée ;
-- une période ;
-- un justificatif ;
-- un planning ;
-- une présence ;
-- une question administrative.
+Le formateur transfère au responsable pédagogique ; le responsable
+transfère à l'administration. Chaque transfert est motivé, daté, audité
+et visible dans l'historique.
 
-## 22.4 Données
+## 20.4 Statuts
 
-- auteur ;
-- catégorie ;
-- sujet ;
-- description ;
-- séance ou période ;
-- destinataire fonctionnel ;
-- priorité ;
-- statut ;
-- pièces jointes ;
-- messages ;
-- historique.
+`OPEN`, `IN_PROGRESS`, `WAITING_FOR_STUDENT`, `TRANSFERRED`,
+`RESOLVED`, `CLOSED`, `REJECTED`, `REOPENED`.
 
-## 22.5 Conversation
-
-Chaque message comporte :
-
-- auteur ;
-- rôle utilisé ;
-- date ;
-- contenu ;
-- pièce jointe éventuelle ;
-- visibilité.
-
-## 22.6 Transfert
-
-Le formateur peut transférer au responsable pédagogique.
-
-Le responsable pédagogique peut transférer à l’administration.
-
-Chaque transfert doit être :
-
-- motivé ;
-- daté ;
-- audité ;
-- visible dans l’historique.
-
-## 22.7 Statuts
-
-- `OPEN` ;
-- `IN_PROGRESS` ;
-- `WAITING_FOR_STUDENT` ;
-- `TRANSFERRED` ;
-- `RESOLVED` ;
-- `CLOSED` ;
-- `REJECTED` ;
-- `REOPENED`.
-
-## 22.8 Réouverture
-
-Une réclamation clôturée peut être rouverte.
-
-La réouverture exige :
-
-- un motif ;
-- un nouveau message ;
-- une notification ;
-- une trace d’audit.
+Une réclamation clôturée peut être rouverte avec motif, nouveau message,
+notification et trace d'audit.
 
 ---
 
-# 23. Notifications
+# 21. Notifications
 
-## 23.1 Canaux
+## 21.1 Canaux
 
-- notification dans l’application ;
-- email ;
-- notification push PWA ;
-- Microsoft Teams en perspective.
+Notification dans l'application, courrier électronique, **notification
+push PWA**, et Microsoft Teams lorsque l'intégration est active.
 
-## 23.2 Notifications prioritaires
+## 21.2 Événements notifiés
 
-Les notifications prioritaires sont :
+Invitation ; publication d'un planning ; modification d'une séance ;
+annulation ; changement ou remplacement de formateur ; rappel d'un cours
+à venir ; ouverture de l'émargement ; confirmation de présence ;
+correction d'une présence ; décision sur un justificatif ; mise à jour
+d'une réclamation ; alerte de sécurité sur le compte.
 
-1. rappel d’un cours à venir ;
-2. heure de début ;
-3. formateur ;
-4. salle ou lien distant ;
-5. modification d’une séance ;
-6. annulation ;
-7. changement de formateur ;
-8. ouverture de l’émargement ;
-9. résultat d’une correction ;
-10. mise à jour d’une réclamation.
+## 21.3 Audience
 
-## 23.3 Paramètres
+Chaque événement définit son audience : formateur concerné, remplaçant,
+apprenants de la classe, responsable pédagogique du périmètre,
+administration. L'échec d'un destinataire n'interrompt jamais les
+autres.
 
-Un utilisateur peut configurer certains canaux.
+## 21.4 Garanties
 
-Les notifications critiques peuvent rester obligatoires.
+Les notifications sont produites **après le commit** de la transaction
+métier — une transaction annulée ne produit aucune notification — et
+sont **idempotentes**. Une **outbox transactionnelle** garantit la
+reprise : une panne du diffuseur ne perd pas la notification.
 
-## 23.4 Centre de notifications
+## 21.5 Centre de notifications
 
-Fonctions :
+Titre, message, type, date, état lu ou non lu, lien vers la ressource
+concernée. Fonctions : consulter, marquer comme lu, tout marquer,
+ouvrir, filtrer, masquer sans effacer l'audit métier.
 
-- consulter ;
-- marquer comme lu ;
-- marquer toutes comme lues ;
-- ouvrir la ressource ;
-- filtrer ;
-- supprimer l’affichage sans effacer l’audit métier.
+Les liens de navigation sont calculés côté client à partir d'une liste
+blanche par rôle : le serveur ne transmet jamais un chemin d'interface.
+
+## 21.6 Préférences
+
+L'utilisateur règle ses canaux par catégorie. Les notifications
+critiques de sécurité restent obligatoires.
 
 ---
 
-# 24. Rapports
+# 22. Restitution
 
-## 24.1 Acteurs autorisés
-
-### Responsable pédagogique
-
-- rapports de son périmètre ;
-- rapports individuels ;
-- rapports de classe ;
-- rapports de formation.
-
-### Administration
-
-- rapports globaux ;
-- rapports individuels ;
-- rapports d’assiduité ;
-- certificats ou attestations futurs.
-
-### Apprenant
-
-- consultation personnelle ;
-- téléchargement uniquement si autorisé.
-
-## 24.2 Unité de calcul
-
-Le calcul prioritaire repose sur les demi-journées.
+## 22.1 Unité de calcul
 
 ```text
 Deux demi-journées validées = une journée
-Une demi-journée validée = 0,5 journée
+Une demi-journée validée    = 0,5 journée
 ```
 
 Les horaires restent affichés, mais la mesure principale ne dépend pas
-d’une connexion permanente à l’application.
+d'une connexion permanente à l'application.
 
-## 24.3 Rapports obligatoires
+## 22.2 Filtres
 
-### Rapport journalier d’une classe
+Formation, promotion, classe, groupe, apprenant, formateur, matière,
+date, semaine, mois, année scolaire, statut d'assiduité, modalité,
+canal de présence.
 
-- classe ;
-- date ;
-- séances ;
-- liste des apprenants ;
-- présence du matin ;
-- présence de l’après-midi ;
-- retards ;
-- absences ;
-- excusés ;
-- anomalies.
+## 22.3 Rapports
 
-### Rapport mensuel d’une classe
+| Rapport | Contenu |
+|---|---|
+| Journalier de classe | séances, apprenants, matin, après-midi, retards, absences, excusés, anomalies |
+| Hebdomadaire et mensuel de classe | demi-journées attendues, présentes, absentes, excusées, taux, retards, évolution |
+| Annuel de classe | statistiques mensuelles, taux global, répartition par matière et par modalité, apprenants à suivre |
+| Individuel | identité, numéro étudiant, formation, historique de classe, périodes attendues, présences, absences, retards, excuses, taux, détail par séance |
+| Par formation, par matière, par formateur | agrégats du périmètre |
+| Anomalies | événements détectés, score, statut de revue |
+| Réclamations | volumes, délais de traitement, statuts |
+| Invitations non activées | comptes en attente, dernière relance |
 
-- période ;
-- demi-journées attendues ;
-- demi-journées présentes ;
-- demi-journées absentes ;
-- demi-journées excusées ;
-- taux d’assiduité ;
-- retards ;
-- évolution.
+## 22.4 Exports et documents
 
-### Rapport annuel d’une classe
+Formats : **CSV**, **Excel `.xlsx`**, **PDF**, plus l'impression
+navigateur. Les exports CSV sont en UTF-8 avec BOM, séparateur
+point-virgule, et neutralisent les injections de formule.
 
-- année scolaire ;
-- statistiques mensuelles ;
-- taux global ;
-- répartition par matière ;
-- répartition par modalité ;
-- apprenants nécessitant un suivi.
+Les documents officiels portent le logo de l'ESIC, le nom du rapport, la
+période, la date de génération, l'auteur ou le système émetteur, un
+**identifiant de document** et la mention de document électronique.
 
-### Rapport individuel
+Une **attestation d'assiduité** peut être générée pour un apprenant sur
+une période : elle porte un identifiant vérifiable et n'est produite que
+par un acteur autorisé.
 
-- identité ;
-- numéro étudiant ;
-- formation ;
-- historique de classe ;
-- année scolaire ;
-- périodes attendues ;
-- présences ;
-- absences ;
-- retards ;
-- absences excusées ;
-- taux d’assiduité ;
-- détails par séance.
-
-## 24.4 Exports
-
-Priorités :
-
-1. Excel ;
-2. CSV ;
-3. impression ;
-4. PDF.
-
-## 24.5 Identité visuelle
-
-Les rapports officiels doivent prévoir :
-
-- le logo ESIC ;
-- le nom du rapport ;
-- la période ;
-- la date de génération ;
-- l’auteur ou le système émetteur ;
-- un identifiant de document ;
-- une mention indiquant qu’il s’agit d’un document électronique.
-
-## 24.6 Autorisation de téléchargement étudiant
-
-Le champ suivant doit être disponible :
+## 22.5 Autorisation de téléchargement étudiant
 
 ```text
 student_report_download_enabled = true | false
 ```
 
-Lorsque la valeur est `false` :
+Lorsque la valeur est `false`, l'action est désactivée avec une
+explication, et l'apprenant peut demander l'autorisation.
 
-- le bouton est grisé ;
-- une explication est affichée ;
-- l’apprenant peut éventuellement demander l’autorisation.
+## 22.6 Tableaux de bord
 
----
+| Rôle | Contenu |
+|---|---|
+| Responsable pédagogique | taux par formation et par classe, évolution, retards, absences non justifiées, comptes non activés, invitations échouées, réclamations ouvertes, séances sans formateur, conflits récents, changements récents |
+| Administration | taux global, comparaison des formations, volume et délai de traitement des justificatifs, comptes suspendus, anomalies, exports récents, dernières opérations d'audit |
+| Formateur | séances du jour, participants attendus, présents, absents, retardataires, apprenants non inscrits, demandes en attente, remplacements actifs |
+| Apprenant | prochain cours, prochaine action d'émargement, taux d'assiduité, absences, justificatifs, réclamations, notifications |
 
-# 25. Tableaux de bord et graphiques
+Tout graphique dispose d'un titre, d'une légende, de valeurs
+accessibles, d'un **tableau équivalent**, d'une palette contrastée, et
+ne dépend jamais uniquement de la couleur.
 
-## 25.1 Responsable pédagogique
+## 22.7 Recherche globale
 
-- taux d’assiduité par formation ;
-- taux par classe ;
-- évolution mensuelle ;
-- retards ;
-- absences non justifiées ;
-- comptes non activés ;
-- invitations échouées ;
-- réclamations ouvertes ;
-- séances sans formateur ;
-- changements récents.
-
-## 25.2 Administration
-
-- taux global ;
-- comparaison des formations ;
-- volume de justificatifs ;
-- délais de traitement ;
-- utilisateurs suspendus ;
-- anomalies ;
-- exports récents.
-
-## 25.3 Formateur
-
-- séances du jour ;
-- participants attendus ;
-- présents ;
-- absents ;
-- retardataires ;
-- apprenants non inscrits ;
-- demandes en attente.
-
-## 25.4 Apprenant
-
-- prochain cours ;
-- prochaine action d’émargement ;
-- taux d’assiduité ;
-- absences ;
-- justificatifs ;
-- réclamations ;
-- notifications.
-
-## 25.5 Accessibilité des graphiques
-
-Tout graphique doit disposer :
-
-- d’un titre ;
-- d’une légende ;
-- de valeurs accessibles ;
-- d’un tableau équivalent ;
-- d’une palette contrastée ;
-- d’une absence de dépendance exclusive à la couleur.
+Recherche unique sur apprenants, formateurs, classes, formations,
+salles et séances, restreinte au périmètre de l'utilisateur, avec accès
+direct à la fiche trouvée.
 
 ---
 
-# 26. Authentification
+# 23. Audit
 
-## 26.1 Identifiant
+## 23.1 Opérations auditées
 
-L’adresse électronique vérifiée est utilisée comme identifiant de
-connexion.
+Connexion réussie et échouée ; déconnexion ; activation ; récupération
+de compte ; changement de mot de passe ; ajout ou suppression d'un
+facteur ou d'une passkey ; création d'utilisateur ; changement de rôle
+ou de statut ; import d'apprenants ; import de planning ; confirmation
+d'import ; publication ; retour à une version antérieure ; modification
+de planning ; annulation ; remplacement ; ouverture et clôture de
+séance ; correction de présence ; ajout manuel ; décision sur un
+justificatif ; transfert de réclamation ; export de données ; génération
+d'attestation ; modification des plages réseau ; gestion d'un dispositif
+connecté ; suppression d'un doublon ; opération de masse ; toute action
+du super administrateur.
 
-## 26.2 Mot de passe
+## 23.2 Contenu d'un événement
 
-- longueur minimale ;
-- hachage Argon2id ou BCrypt ;
-- blocage des mots de passe courants ;
-- aucune conservation en clair ;
-- aucune journalisation ;
-- aucun changement périodique arbitraire.
+Identifiant, acteur, rôle ou contexte, action, catégorie, ressource,
+date et heure, résultat, ancienne et nouvelle valeur si pertinent,
+motif, identifiant de corrélation.
 
-## 26.3 MFA
+## 23.3 Exclusions
 
-### Obligatoire
+Jamais de mot de passe, de secret, de jeton complet, de donnée
+biométrique, de contenu sensible inutile, ni d'**adresse IP** dans
+l'audit métier.
 
-- `SUPER_ADMIN` ;
-- `ADMIN` ;
-- opérations sensibles du `PEDAGOGICAL_MANAGER`.
+## 23.4 Garanties
 
-### Adaptatif pour les apprenants
+L'écriture d'audit passe par l'**outbox transactionnelle** : elle n'est
+jamais perdue par un échec de listener et n'est jamais produite si la
+transaction métier est annulée. L'audit est consultable par les rôles
+autorisés, filtrable, exportable, et ne peut être modifié ni effacé.
 
-Le second facteur n’est pas demandé à chaque utilisation.
+## 23.5 Conservation
 
-Il est demandé notamment lors :
-
-- de la première connexion ;
-- d’un nouvel appareil ;
-- d’un changement inhabituel ;
-- d’une récupération de compte ;
-- d’une réinitialisation de l’application ;
-- d’un changement de moyen d’authentification.
-
-## 26.4 Tentatives échouées
-
-Après trois échecs :
-
-- ralentissement progressif ;
-- challenge anti-bot ;
-- notification éventuelle ;
-- verrouillage temporaire si les tentatives continuent.
-
-Aucun verrouillage définitif automatique.
-
-## 26.5 Session
-
-### Inactivité
-
-Expiration après 30 minutes d’inactivité.
-
-### Durée absolue
-
-Une durée maximale configurable doit être prévue.
-
-### Appareil de confiance
-
-Un appareil de confiance peut bénéficier d’une reconnexion simplifiée,
-sans empêcher :
-
-- la révocation ;
-- la réauthentification ;
-- le contrôle du risque.
-
-## 26.6 Stockage des jetons
-
-La stratégie recommandée est :
-
-- jeton d’accès court ;
-- cookie `HttpOnly` ;
-- attribut `Secure` ;
-- politique `SameSite` appropriée ;
-- rotation du jeton de renouvellement ;
-- protection CSRF ;
-- absence de stockage du jeton sensible dans `localStorage`.
-
-La session doit être invalidée lors :
-
-- de la déconnexion ;
-- de l’expiration ;
-- d’une réinitialisation de mot de passe ;
-- d’une révocation ;
-- d’un incident ;
-- d’une désactivation du compte.
-
-Les identifiants de session doivent être difficiles à prédire, protégés
-pendant tout leur cycle de vie et correctement invalidés. ([cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html?utm_source=openai))
+Politique à trois niveaux : audit actif, archivage intermédiaire, purge
+ou anonymisation. Les durées sont définies dans
+`docs/08-securite-rgpd.md`.
 
 ---
 
-# 27. Mot de passe oublié
+# 24. Cache et données temporaires
 
-## 27.1 Parcours
+## 24.1 Usages autorisés de Redis
 
-1. saisie de l’adresse ;
-2. réponse neutre ;
-3. limitation du nombre de demandes ;
-4. challenge anti-bot si nécessaire ;
-5. génération d’un jeton ;
-6. envoi ;
-7. contrôle de l’expiration ;
-8. définition du nouveau mot de passe ;
-9. invalidation du jeton ;
-10. révocation des sessions ;
-11. notification ;
-12. audit.
+Jetons d'émargement et codes courts ; jetons d'activation et de
+réinitialisation ; compteurs de limitation de débit ; données
+temporaires de session ; plannings fréquemment consultés ; paramètres de
+salle ; droits calculés ; compteurs ; résultats de tableaux de bord
+coûteux ; listes de révocation.
 
-## 27.2 Sécurité
+## 24.2 Usages interdits
 
-Le système ne doit pas révéler si l’adresse existe.
+Redis n'est jamais la source de vérité des présences définitives, des
+utilisateurs, des inscriptions, des décisions de justificatif ni de
+l'audit.
 
-Le jeton doit être :
+## 24.3 Clés
 
-- aléatoire ;
-- à usage unique ;
-- limité dans le temps ;
-- stocké sous forme protégée ;
-- invalidé après utilisation.
-
----
-
-# 28. Protection anti-bot
-
-## 28.1 Solution cible
-
-Cloudflare Turnstile est retenu comme solution cible.
-
-## 28.2 Formulaires concernés
-
-- connexion après risque détecté ;
-- mot de passe oublié ;
-- activation ;
-- récupération de compte ;
-- formulaires publics futurs.
-
-## 28.3 Validation
-
-La validation côté serveur est obligatoire.
-
-Un contrôle uniquement présent dans Angular ne constitue pas une
-protection suffisante.
-
-Les jetons Turnstile doivent être transmis au serveur, validés par
-l’API Siteverify, puis refusés lorsqu’ils sont expirés ou déjà utilisés.
-Les jetons Turnstile sont à usage unique et valables cinq minutes.
-([developers.cloudflare.com](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/?utm_source=openai))
-
----
-
-# 29. Autorisations
-
-## 29.1 Modèle
-
-Le système utilise :
-
-- RBAC pour les rôles ;
-- contrôle de périmètre pour les formations ;
-- contrôle de propriété pour les données individuelles ;
-- contrôle contextuel pour les séances.
-
-## 29.2 Règles
-
-- refus par défaut ;
-- vérification côté serveur ;
-- aucun droit basé uniquement sur l’affichage Angular ;
-- vérification à chaque opération ;
-- identifiants non prédictibles ;
-- tests systématiques des réponses `403`.
-
-## 29.3 Cumul des rôles
-
-Le cumul ne doit jamais donner un accès transversal non prévu.
-
-Exemple :
-
-Un responsable pédagogique également formateur peut :
-
-- gérer ses formations ;
-- enseigner ses séances ;
-- mais ne peut pas consulter les formations d’un autre responsable.
-
----
-
-# 30. Audit
-
-## 30.1 Actions obligatoirement auditées
-
-- connexion réussie ;
-- connexion échouée ;
-- déconnexion ;
-- activation ;
-- récupération de compte ;
-- changement de mot de passe ;
-- ajout ou suppression d’un facteur ;
-- ajout ou suppression d’une passkey ;
-- création d’un utilisateur ;
-- changement de rôle ;
-- changement de statut ;
-- import d’apprenants ;
-- import de planning ;
-- confirmation d’import ;
-- publication ;
-- modification de planning ;
-- annulation ;
-- remplacement ;
-- ouverture et clôture de séance ;
-- correction d’une présence ;
-- ajout manuel ;
-- validation d’un justificatif ;
-- refus d’un justificatif ;
-- transfert d’une réclamation ;
-- export de données ;
-- modification des plages réseau ;
-- gestion d’un dispositif ;
-- suppression d’un doublon ;
-- opération de masse ;
-- action du super administrateur.
-
-## 30.2 Contenu
-
-- identifiant de l’événement ;
-- acteur ;
-- rôle ou contexte ;
-- action ;
-- catégorie ;
-- ressource ;
-- date et heure ;
-- résultat ;
-- ancienne valeur si pertinente ;
-- nouvelle valeur si pertinente ;
-- motif ;
-- identifiant de corrélation.
-
-## 30.3 Données à exclure
-
-- mot de passe ;
-- secret ;
-- jeton complet ;
-- donnée biométrique ;
-- contenu sensible inutile ;
-- adresse IP dans l’audit métier.
-
-## 30.4 Conservation
-
-La durée exacte doit être validée selon :
-
-- les finalités ;
-- les obligations administratives ;
-- les besoins d’audit ;
-- la sécurité ;
-- les droits des personnes.
-
-Une politique à plusieurs niveaux doit être prévue :
-
-- audit actif ;
-- archivage intermédiaire ;
-- purge ou anonymisation.
-
----
-
-# 31. Cache Redis
-
-## 31.1 Usages autorisés
-
-- jetons de QR ;
-- codes temporaires ;
-- rate limiting ;
-- sessions ;
-- données de planning ;
-- paramètres de salle ;
-- droits calculés ;
-- compteurs ;
-- tableaux de bord ;
-- révocation de jetons ;
-- événements temporaires.
-
-## 31.2 Usages interdits
-
-Redis ne doit pas devenir la source principale pour :
-
-- les présences définitives ;
-- les utilisateurs ;
-- les inscriptions ;
-- les décisions de justificatif ;
-- l’audit durable.
-
-## 31.3 Clés
-
-Les clés doivent être :
-
-- préfixées ;
-- versionnées si nécessaire ;
-- contextualisées ;
-- non exposées au client.
-
-Exemples :
+Préfixées, versionnées si nécessaire, **contextualisées par périmètre
+d'autorisation**, jamais exposées au client.
 
 ```text
 attendance:token:{sessionId}:{checkpoint}
+attendance:shortcode:{sessionId}:{checkpoint}
 rate-limit:login:{identityHash}
 schedule:class:{classId}:{version}
 permissions:user:{userId}:{context}
+dashboard:{role}:{scopeHash}
 ```
 
-## 31.4 Invalidation
+## 24.4 Invalidation
 
-Le cache est invalidé après :
+Après modification ou publication d'un planning, changement de rôle,
+changement de classe, remplacement, annulation, ou changement de
+paramètre.
 
-- modification du planning ;
-- changement de rôle ;
-- changement de classe ;
-- publication ;
-- remplacement ;
-- annulation ;
-- changement de paramètre.
+## 24.5 Indisponibilité
 
-## 31.5 Performance
-
-L’objectif de moins de 100 ms concerne prioritairement :
-
-- lecture d’un planning en cache ;
-- génération d’un code ;
-- lecture d’un référentiel ;
-- contrôle d’un jeton.
-
-Il doit être mesuré et documenté.
+Si Redis est indisponible, les fonctions qui en dépendent renvoient une
+erreur explicite (`503`) : **aucune validation dégradée** n'est acceptée.
 
 ---
 
-# 32. Emails asynchrones
+# 25. Messagerie et effets de bord
 
-## 32.1 Types
+## 25.1 Flux
 
-- activation ;
-- mot de passe oublié ;
-- modification du planning ;
-- annulation ;
-- remplacement ;
-- réclamation ;
-- justificatif ;
-- alerte de sécurité.
+```text
+Action métier (transaction)
+    ↓ écriture dans l'outbox, même transaction
+Commit
+    ↓
+Diffuseur (worker)
+    ↓
+Fournisseur (SMTP, push, MQTT, audit)
+    ↓
+Retour de statut
+    ↓
+Mise à jour de la traçabilité
+```
 
-## 32.2 Traitement
+## 25.2 Reprise
 
-L’envoi ne doit pas bloquer la requête métier.
+Plusieurs tentatives, attente croissante, statut d'erreur, passage en
+**file d'échec** après épuisement, relance manuelle possible depuis
+l'interface d'administration.
 
-Le système crée une tâche.
+Données de suivi : destinataire, type, nombre de tentatives, dernière
+erreur, prochaine tentative, statut, dates de création et de traitement.
 
-Un worker traite la tâche.
+## 25.3 Environnements
 
-## 32.3 Nouvelle tentative
-
-La politique cible prévoit :
-
-- plusieurs tentatives ;
-- attente croissante ;
-- statut d’erreur ;
-- passage en DLQ ;
-- possibilité de relance manuelle.
-
-## 32.4 Environnement local
-
-Le prototype peut utiliser Mailpit ou un service SMTP local.
-
-La délivrabilité externe peut être simulée.
+En local, un serveur SMTP de développement (Mailpit) reçoit les
+messages. En production, un fournisseur réel remonte les statuts de
+délivrabilité.
 
 ---
 
-# 33. Intelligence artificielle
+# 26. Intelligence artificielle
 
-## 33.1 Priorité du projet
+## 26.1 Service
 
-La priorité IA est l’assistance intelligente à l’importation.
+Service Python / FastAPI isolé, appelé par l'application via un port
+dédié. Il ne possède aucune donnée : il reçoit ce qui lui est transmis,
+**pseudonymisé**, et répond.
 
-## 33.2 Entrées
+## 26.2 Assistance à l'importation
 
-- noms de feuilles ;
-- en-têtes ;
-- contenu des cellules ;
-- exemples de lignes ;
-- référentiels internes ;
-- règles de format.
+Entrées : noms de feuilles, en-têtes, contenu des cellules, exemples de
+lignes, référentiels internes, règles de format.
 
-## 33.3 Sorties
+Sorties : proposition de correspondance, valeur normalisée, score de
+confiance, liste d'erreurs, suggestion de correction, résumé lisible.
 
-- proposition de correspondance ;
-- valeur normalisée ;
-- score de confiance ;
-- liste d’erreurs ;
-- suggestion de correction ;
-- résumé.
+Capacités attendues : détecter la ligne d'en-tête ; reconnaître les
+synonymes ; séparer un cours et un formateur présents dans une même
+cellule ; identifier un jour ; reconnaître matin et après-midi ;
+normaliser les horaires et les dates ; proposer une matière et un
+formateur existants ; signaler un résultat incertain.
 
-## 33.4 Approche MVP
+Statuts de proposition : `CONFIDENT`, `TO_REVIEW`, `UNRESOLVED`.
 
-Le MVP peut utiliser :
+Mise en œuvre : dictionnaire de synonymes, règles, expressions
+régulières, mesures de similarité et correspondance approximative, puis
+modèle statistique local si le gain est démontré.
 
-- dictionnaire de synonymes ;
-- règles ;
-- expressions régulières ;
-- mesures de similarité ;
-- correspondance approximative ;
-- service Python ;
-- éventuellement un modèle local ou une API autorisée.
+## 26.3 Détection d'anomalies
 
-## 33.5 Détection d’anomalies
+Sortie : score de 0 à 1, niveau `LOW` / `MEDIUM` / `HIGH`, liste de
+raisons, recommandation de vérification humaine.
 
-En évolution :
+Facteurs : jeton expiré, tentatives répétées, validations simultanées,
+appareil associé à plusieurs comptes, comportement inhabituel d'un
+dispositif, horaire anormal, durée de présence incohérente, séquence de
+points de contrôle incohérente.
 
-- scan tardif inhabituel ;
-- tentatives répétées ;
-- utilisation simultanée ;
-- appareil partagé ;
-- événement IoT anormal ;
-- séquence de présence incohérente.
+## 26.4 Prévention du décrochage
 
-## 33.6 Contrôle humain
+Repérage des absences répétées, de l'évolution du taux d'assiduité, des
+retards fréquents, de la participation partielle et d'une rupture
+soudaine par rapport aux habitudes. Le résultat est une **information**
+adressée au responsable pédagogique.
 
-Chaque proposition doit pouvoir être :
+## 26.5 Limites impératives
 
-- acceptée ;
-- corrigée ;
-- rejetée.
+L'IA ne prononce aucune sanction, ne supprime aucune présence, ne refuse
+aucun justificatif, ne publie aucun planning, ne transmet aucune donnée
+à un acteur non autorisé, et n'utilise aucune donnée réelle dans un
+service non approuvé.
 
-## 33.7 Traçabilité
+## 26.6 Traçabilité
 
-Le système doit conserver :
-
-- version du mécanisme ;
-- entrée ou référence de l’entrée ;
-- proposition ;
-- score ;
-- décision humaine ;
-- correction.
-
-## 33.8 Données
-
-Le prototype utilise des données synthétiques.
-
-Aucune liste réelle d’apprenants ne doit être envoyée à un service
-public d’IA non approuvé.
+Sont conservés : version du mécanisme, entrée ou référence de l'entrée,
+proposition, score, décision humaine, correction. Chaque proposition
+peut être acceptée, corrigée ou rejetée.
 
 ---
 
-# 34. IoT et Raspberry Pi
+# 27. Objets connectés
 
-## 34.1 Matériel disponible
+## 27.1 Dispositif
 
-- Raspberry Pi 4 ;
-- smartphone ;
-- aucun lecteur NFC/RFID au lancement.
+Une borne repose sur une Raspberry Pi 4. Elle possède un identifiant
+unique, s'authentifie, publie un signal de vie, transmet de la
+télémétrie, lit ou simule un badge, envoie un événement d'émargement,
+reçoit un accusé de réception, met ses événements en file locale en cas
+de coupure et rejoue à la reconnexion.
 
-## 34.2 Prototype
-
-La Raspberry Pi peut démontrer :
-
-- son identité ;
-- un signal de vie ;
-- un événement simulé ;
-- une communication MQTT ;
-- une confirmation serveur ;
-- une file locale ;
-- une reprise après coupure.
-
-## 34.3 Cas d’usage
-
-La Pi représente une borne de salle.
-
-Le téléphone peut :
-
-- déclencher un événement ;
-- appeler une page locale ;
-- simuler un badge ;
-- servir d’interface à la borne.
-
-## 34.4 NFC futur
-
-Un lecteur NFC USB ou compatible GPIO peut être ajouté ultérieurement.
-
-Il n’est pas obligatoire pour le prototype.
-
-## 34.5 MQTT
-
-Topics proposés :
+## 27.2 Topics MQTT
 
 ```text
 esic/devices/{deviceId}/heartbeat
@@ -2765,1461 +1431,914 @@ esic/devices/{deviceId}/status
 esic/devices/{deviceId}/commands
 ```
 
-## 34.6 Message
+## 27.3 Message
 
 ```json
 {
-  "eventId": "uuid",
-  "deviceId": "room-a-terminal-01",
-  "eventType": "ATTENDANCE_SCAN",
-  "sessionId": "uuid",
-  "checkpoint": "MORNING_ARRIVAL",
-  "subjectReference": "pseudonymous-reference",
-  "occurredAt": "2026-08-27T09:01:00Z",
-  "sequence": 42
+  "eventId": "uuid",
+  "deviceId": "room-a-terminal-01",
+  "eventType": "ATTENDANCE_SCAN",
+  "sessionId": "uuid",
+  "checkpoint": "MORNING_ARRIVAL",
+  "subjectReference": "pseudonymous-reference",
+  "occurredAt": "2026-08-27T09:01:00Z",
+  "sequence": 42,
+  "signature": "..."
 }
 ```
 
-## 34.7 Sécurité
+## 27.4 Sécurité
 
-- identité du dispositif ;
-- authentification ;
-- TLS en cible ;
-- secret hors du code ;
-- protection contre le rejeu ;
-- identifiant unique d’événement ;
-- numéro de séquence ;
-- liste d’autorisation ;
-- révocation ;
-- journalisation.
+Identité de dispositif, authentification, TLS, secret hors du code,
+liste de dispositifs autorisés, révocation, protection contre le rejeu
+par identifiant unique d'événement et numéro de séquence, journalisation
+des événements rejetés, stockage local minimal, file locale et reprise
+contrôlée.
+
+Un événement provenant d'un dispositif inconnu ou révoqué est **rejeté**
+et journalisé comme incident de sécurité.
+
+## 27.5 Simulateur
+
+Un simulateur logiciel reproduit le protocole complet : identité, signal
+de vie, émargement, coupure réseau, file locale, rejeu, doublon
+d'événement. Il permet de développer, tester et démontrer la chaîne sans
+matériel.
+
+## 27.6 NFC
+
+Un lecteur NFC USB ou GPIO peut être ajouté ultérieurement au dispositif
+sans modification du protocole : l'identifiant de badge est
+**pseudonymisé** avant transmission.
 
 ---
 
-# 35. Architecture logicielle
+# 28. Intégrations externes
 
-## 35.1 Style
+## 28.1 Principe
 
-Le prototype utilise un monolithe modulaire Spring Boot.
+Toute intégration est encapsulée derrière un **port**. Le produit
+fonctionne intégralement sans elle, avec un adaptateur local. L'activation
+se fait par configuration, sans modification de code.
 
-Ce choix réduit :
+## 28.2 Microsoft Graph et Teams
 
-- le temps d’implémentation ;
-- la complexité ;
-- le nombre de déploiements ;
-- les problèmes de communication interservices.
+- lecture de l'annuaire pour rapprocher un compte formateur ;
+- création automatique d'une réunion Teams pour une séance distancielle
+  ou hybride, et publication du lien dans la séance ;
+- écriture des séances dans le calendrier du formateur et, en option,
+  des apprenants ;
+- mise à jour et suppression lors d'une modification ou d'une annulation.
 
-## 35.2 Modules back-end
+## 28.3 Calendriers
+
+Un **flux iCalendar** signé, propre à chaque utilisateur et révocable,
+permet l'abonnement depuis Outlook, Google Calendar, Apple Calendar ou
+tout agenda compatible. Le flux ne contient aucune donnée sensible
+au-delà du planning de la personne.
+
+## 28.4 Messagerie
+
+Adaptateur SMTP : Mailpit en local, fournisseur réel en production, avec
+remontée des statuts de délivrabilité lorsque le fournisseur les expose.
+
+## 28.5 Anti-robot
+
+Adaptateur Cloudflare Turnstile, avec validation serveur et politique de
+repli définie en cas d'indisponibilité.
+
+---
+
+# 29. Application mobile et hors ligne
+
+## 29.1 PWA
+
+L'application est **installable** sur Android, iOS et poste de travail :
+manifeste, icônes, écran de démarrage, mode autonome.
+
+## 29.2 Hors ligne
+
+La coquille applicative est mise en cache. Sont consultables sans
+réseau : le planning récent, la prochaine séance, l'historique
+d'assiduité récent et les notifications déjà reçues.
+
+Une action réalisée hors ligne est **mise en file** et rejouée à la
+reconnexion, avec résolution de conflit. Une présence enregistrée hors
+ligne n'est **jamais définitive** avant validation par le serveur :
+l'interface indique clairement l'état « en attente de confirmation ».
+
+## 29.3 Notifications push
+
+Abonnement par appareil, révocable, avec préférences par catégorie. Le
+contenu poussé ne comporte aucune donnée sensible : il renvoie vers
+l'application.
+
+## 29.4 Accessibilité mobile
+
+Toute fonction reposant sur la caméra dispose d'une alternative (code
+court). Toute fonction reposant sur WebAuthn dispose d'une alternative.
+Les cibles tactiles respectent les tailles minimales recommandées.
+
+---
+
+# 30. API REST
+
+## 30.1 Principes
+
+Préfixe `/api`, versionnement, JSON, validation systématique, codes HTTP
+cohérents, pagination, filtres, tri borné, erreurs structurées,
+identifiant de corrélation, documentation OpenAPI publiée et versionnée
+dans le dépôt.
+
+Une erreur d'appel du client produit un `400` explicite, jamais un
+`500`.
+
+## 30.2 Routes principales
 
 ```text
-auth
-identity
-user
-academic
-enrollment
-alternation
-planning
-room
-session
-attendance
-justification
-claim
-notification
-reporting
-audit
-security
-integration
-iot
-ai
-shared
+POST   /api/v1/auth/login
+POST   /api/v1/auth/logout
+POST   /api/v1/auth/refresh
+GET    /api/v1/auth/me
+POST   /api/v1/auth/forgot-password
+POST   /api/v1/auth/reset-password
+POST   /api/v1/auth/mfa/enroll
+POST   /api/v1/auth/mfa/verify
+POST   /api/v1/auth/webauthn/register/options
+POST   /api/v1/auth/webauthn/register
+POST   /api/v1/auth/webauthn/login/options
+POST   /api/v1/auth/webauthn/login
+GET    /api/v1/auth/devices
+DELETE /api/v1/auth/devices/{id}
+
+GET    /api/v1/users
+POST   /api/v1/users
+PATCH  /api/v1/users/{id}
+POST   /api/v1/users/{id}/suspend
+POST   /api/v1/users/{id}/restore
+POST   /api/v1/users/bulk
+
+GET    /api/v1/programs
+POST   /api/v1/programs
+GET    /api/v1/classes
+POST   /api/v1/classes
+GET    /api/v1/subjects
+GET    /api/v1/rooms
+GET    /api/v1/alternation-patterns
+
+POST   /api/v1/student-imports/simulate
+POST   /api/v1/student-imports/{id}/confirm
+GET    /api/v1/student-imports/{id}
+
+POST   /api/v1/planning-imports
+POST   /api/v1/planning-imports/{id}/rows/{rowId}
+POST   /api/v1/planning-imports/{id}/publish
+GET    /api/v1/planning/versions
+POST   /api/v1/planning/versions/{id}/rollback
+GET    /api/v1/planning/calendar
+POST   /api/v1/planning/slots
+
+GET    /api/v1/sessions
+POST   /api/v1/sessions
+POST   /api/v1/sessions/{id}/open
+POST   /api/v1/sessions/{id}/close
+POST   /api/v1/sessions/{id}/cancel
+POST   /api/v1/sessions/{id}/substitute
+
+GET    /api/v1/sessions/{id}/attendance-token
+POST   /api/v1/attendance/validate
+POST   /api/v1/attendance/manual
+PATCH  /api/v1/attendance/{id}
+POST   /api/v1/attendance/early-departure
+
+POST   /api/v1/justifications
+POST   /api/v1/justifications/{id}/attachments
+PATCH  /api/v1/justifications/{id}/decision
+
+POST   /api/v1/claims
+POST   /api/v1/claims/{id}/messages
+POST   /api/v1/claims/{id}/transfer
+POST   /api/v1/claims/{id}/reopen
+
+GET    /api/v1/me/dashboard
+GET    /api/v1/me/notifications
+GET    /api/v1/me/calendar.ics
+GET    /api/v1/me/attendance
+
+GET    /api/v1/reports/class
+GET    /api/v1/reports/student
+GET    /api/v1/reports/export
+POST   /api/v1/reports/attestation
+
+GET    /api/v1/audit-events
+GET    /api/v1/devices
+POST   /api/v1/devices/{id}/revoke
+GET    /api/v1/anomalies
+POST   /api/v1/anomalies/{id}/review
 ```
-
-## 35.3 Front-end
-
-Modules ou espaces :
-
-```text
-auth
-student
-teacher
-pedagogical-manager
-school-administration
-admin
-super-admin
-shared
-```
-
-## 35.4 Service IA
-
-Python et FastAPI peuvent être séparés afin de :
-
-- isoler les traitements ;
-- utiliser les bibliothèques Python ;
-- démontrer une intégration intertechnologies.
-
-## 35.5 Base principale
-
-MySQL constitue la source de vérité.
-
-## 35.6 Données temporaires
-
-Redis gère :
-
-- les jetons ;
-- le cache ;
-- les limites ;
-- les sessions ;
-- certaines files temporaires.
 
 ---
 
-# 36. Architecture de déploiement local
+# 31. Modèle de données
 
-```text
-Navigateur / PWA
-       |
-       v
-Angular / Nginx
-       |
-       v
-Spring Boot
-  |      |       |        |
-  v      v       v        v
-MySQL  Redis  FastAPI   Mailpit
-                  |
-                  v
-             Modèles IA
+Entités principales : `User`, `Role`, `UserRole`, `TrustedDevice`,
+`WebAuthnCredential`, `MfaSecret`, `RecoveryCode`, `Program`, `Level`,
+`AcademicYear`, `Promotion`, `ClassGroup`, `StudentGroup`,
+`StudentProfile`, `TeacherProfile`, `Enrollment`,
+`PedagogicalAssignment`, `WorkStudyPattern`, `WorkStudyException`,
+`Subject`, `Site`, `Building`, `Room`, `NetworkRange`, `Schedule`,
+`ScheduleVersion`, `ScheduleImport`, `ScheduleImportRow`,
+`StudentImport`, `StudentImportRow`, `CourseSession`, `SessionClass`,
+`Substitution`, `CancellationRequest`, `AttendanceCheckpoint`,
+`AttendanceRecord`, `AttendanceCorrection`, `EarlyDeparture`,
+`Justification`, `JustificationAttachment`, `Claim`, `ClaimMessage`,
+`Notification`, `NotificationPreference`, `PushSubscription`,
+`OutboxMessage`, `EmailDelivery`, `AuditEvent`, `IoTDevice`, `IoTEvent`,
+`AnomalyAlert`, `AiSuggestion`, `CalendarSubscription`,
+`ReportDocument`.
 
-Raspberry Pi 4
-       |
-      MQTT
-       |
-       v
-Mosquitto
-       |
-       v
-Spring Boot
-```
+Principes : identifiants exposés sous forme d'UUID ; contraintes
+d'unicité et clés étrangères systématiques ; suppression logique ;
+horodatage et auteur des modifications ; verrouillage optimiste sur les
+entités concurrentes ; aucune entité partagée entre modules.
 
-## 36.1 Docker Compose
-
-Services prévus :
-
-- `frontend` ;
-- `backend` ;
-- `mysql` ;
-- `redis` ;
-- `ai-service` ;
-- `mosquitto` ;
-- `mailpit`.
+Le détail figure dans `docs/04-modele-donnees.md`.
 
 ---
 
-# 37. Architecture cible AWS
+# 32. Exigences non fonctionnelles
 
-La cible pourra comprendre :
+## 32.1 Performance
 
-- S3 et CloudFront pour Angular ;
-- ECS, App Runner ou EC2 pour Spring Boot ;
-- RDS MySQL ;
-- ElastiCache ou Valkey ;
-- AWS IoT Core ;
-- SQS ;
-- Dead Letter Queue ;
-- SES ;
-- CloudWatch ;
-- Secrets Manager ;
-- WAF ;
-- certificat TLS ;
-- sauvegardes ;
-- VPC.
-
-Cette architecture est une cible, pas une fonctionnalité obligatoirement
-déployée dans le prototype.
-
----
-
-# 38. Exigences non fonctionnelles
-
-## 38.1 Performance
-
-| Référence | Exigence |
+| Réf | Exigence |
 |---|---|
-| NFR-PERF-01 | Les lectures simples en cache doivent viser moins de 100 ms localement |
-| NFR-PERF-02 | L’émargement doit être traité sans attente perceptible excessive |
-| NFR-PERF-03 | Un import de 100 apprenants doit être analysé dans un délai acceptable |
-| NFR-PERF-04 | Les emails doivent être asynchrones |
-| NFR-PERF-05 | Les rapports lourds peuvent être générés de façon asynchrone |
+| NFR-PERF-01 | lecture en cache d'un planning < 100 ms |
+| NFR-PERF-02 | génération d'un jeton d'émargement < 100 ms |
+| NFR-PERF-03 | validation d'un émargement < 300 ms |
+| NFR-PERF-04 | simulation d'un import de 500 apprenants < 10 s |
+| NFR-PERF-05 | rapport mensuel de classe < 2 s |
+| NFR-PERF-06 | chargement initial de l'application < 2,5 s en 4G |
+| NFR-PERF-07 | 200 émargements par minute soutenus sans erreur |
+| NFR-PERF-08 | coût SQL borné : aucune requête proportionnelle au nombre d'éléments affichés |
+| NFR-PERF-09 | courriels et notifications toujours asynchrones |
 
-## 38.2 Disponibilité
+## 32.2 Disponibilité et exploitation
 
-- mécanismes de santé ;
-- redémarrage reproductible ;
-- sauvegarde ;
-- restauration ;
-- mode de démonstration local ;
-- vidéo de secours.
+Sondes de santé et de disponibilité ; redémarrage reproductible ;
+sauvegarde planifiée ; **restauration testée et documentée** ; procédure
+d'incident ; environnement de recette.
 
-## 38.3 Maintenabilité
+## 32.3 Sécurité
 
-- architecture modulaire ;
-- conventions ;
-- migrations ;
-- tests ;
-- documentation ;
-- commentaires utiles ;
-- journal des décisions.
+En-têtes durcis (`nosniff`, `X-Frame-Options: DENY`, CSP,
+`Referrer-Policy`, anti-cache sur les réponses sensibles) ; CORS
+restrictif piloté par configuration, jamais `*` ; secrets hors du
+dépôt ; dépendances surveillées et mises à jour ; analyse statique de
+sécurité en intégration continue.
 
-## 38.4 Commentaires du code
+## 32.4 Maintenabilité
 
-Les commentaires doivent expliquer :
+Architecture modulaire vérifiée automatiquement ; conventions
+homogènes ; migrations ; tests ; documentation à jour ; journal des
+décisions d'architecture ; commentaires expliquant les règles métier
+complexes, les décisions de sécurité et les algorithmes non évidents,
+jamais paraphrasant le code.
 
-- une règle métier complexe ;
-- une décision de sécurité ;
-- un algorithme non évident ;
-- une contrainte ;
-- une solution temporaire.
+## 32.5 Accessibilité
 
-Ils ne doivent pas paraphraser chaque ligne.
+Conformité **WCAG 2.1 niveau AA** visée : navigation clavier complète,
+lien d'évitement, libellés, contrastes, messages d'erreur explicites,
+tableau alternatif à tout graphique, alternative à la caméra,
+alternative à la biométrie, compatibilité avec les technologies
+d'assistance. Vérification outillée et manuelle.
 
-Les fonctions et classes publiques importantes doivent être documentées
-de façon concise.
+## 32.6 Compatibilité
 
-## 38.5 Accessibilité
+Navigateurs modernes ; Android ; iOS via navigateur ; ordinateurs,
+tablettes, smartphones ; conception adaptative.
 
-- navigation clavier ;
-- libellés ;
-- contrastes ;
-- messages explicites ;
-- tableau alternatif aux graphiques ;
-- solution sans caméra ;
-- solution sans biométrie ;
-- responsive design.
+## 32.7 Internationalisation
 
-## 38.6 Compatibilité
-
-Cible :
-
-- navigateurs modernes ;
-- Android ;
-- iOS via navigateur ;
-- ordinateurs ;
-- smartphones ;
-- tablettes.
-
-## 38.7 Internationalisation
-
-Le MVP est en français.
-
-L’architecture peut prévoir l’externalisation des textes.
+Interface en français. Tous les textes sont externalisés afin qu'une
+seconde langue puisse être ajoutée sans refonte.
 
 ---
 
-# 39. Données et conservation
+# 33. Données et conservation
 
-## 39.1 Présences
-
-Durée proposée :
-
-```text
-5 années scolaires
-```
-
-Cette durée doit être validée avec :
-
-- la direction ;
-- le DPO ou référent ;
-- les obligations applicables ;
-- la finalité des audits.
-
-Le RGPD ne fixe pas une durée universelle pour toutes les données :
-l’organisme doit définir et justifier la durée selon la finalité, puis
-prévoir archivage et purge. ([cnil.fr](https://cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees?utm_source=openai))
-
-## 39.2 Justificatifs
-
-Durée initiale :
-
-```text
-12 mois
-```
-
-## 39.3 Comptes archivés
-
-Les données doivent être séparées entre :
-
-- compte actif ;
-- compte suspendu ;
-- archivage intermédiaire ;
-- anonymisation ou suppression.
-
-## 39.4 Audits
-
-La conservation peut être pluriannuelle, sous réserve d’une
-justification formalisée.
-
-## 39.5 Purge
-
-Une tâche doit permettre :
-
-- d’identifier les données arrivées à échéance ;
-- de produire une prévisualisation ;
-- de supprimer ou anonymiser ;
-- de conserver une preuve de purge ;
-- de ne pas détruire les données sous litige.
-
----
-
-# 40. RGPD
-
-## 40.1 Données minimales
-
-Données indispensables :
-
-- nom ;
-- prénom ;
-- email ;
-- numéro étudiant ;
-- classe ;
-- historique d’inscription ;
-- présence ;
-- statut du compte.
-
-## 40.2 Données conditionnelles
-
-- téléphone ;
-- date de naissance ;
-- entreprise ;
-- justificatif ;
-- informations de réclamation ;
-- moyen d’authentification enregistré.
-
-## 40.3 Principes
-
-- minimisation ;
-- finalité ;
-- transparence ;
-- sécurité ;
-- contrôle d’accès ;
-- limitation de conservation ;
-- exactitude ;
-- traçabilité.
-
-## 40.4 Droits
-
-Le système doit préparer les procédures concernant :
-
-- accès ;
-- rectification ;
-- limitation ;
-- opposition lorsque applicable ;
-- suppression lorsque applicable ;
-- export.
-
-## 40.5 Analyse d’impact
-
-Une analyse d’impact devra être évaluée si le système est déployé
-réellement avec :
-
-- suivi systématique ;
-- authentification renforcée ;
-- analyse comportementale ;
-- données à grande échelle ;
-- dispositifs connectés.
-
----
-
-# 41. API REST
-
-## 41.1 Principes
-
-- préfixe `/api` ;
-- versionnement ;
-- JSON ;
-- validation ;
-- codes HTTP cohérents ;
-- pagination ;
-- filtres ;
-- documentation OpenAPI ;
-- erreurs structurées ;
-- identifiant de corrélation.
-
-## 41.2 Routes indicatives
-
-```text
-POST   /api/v1/auth/login
-POST   /api/v1/auth/logout
-POST   /api/v1/auth/refresh
-GET    /api/v1/auth/me
-POST   /api/v1/auth/forgot-password
-POST   /api/v1/auth/reset-password
-
-GET    /api/v1/users
-POST   /api/v1/users
-PATCH  /api/v1/users/{id}
-POST   /api/v1/users/{id}/suspend
-POST   /api/v1/users/{id}/restore
-
-GET    /api/v1/programs
-POST   /api/v1/programs
-GET    /api/v1/classes
-POST   /api/v1/classes
-
-POST   /api/v1/student-imports/simulate
-POST   /api/v1/student-imports/{id}/confirm
-GET    /api/v1/student-imports/{id}
-
-POST   /api/v1/schedule-imports/simulate
-POST   /api/v1/schedule-imports/{id}/confirm
-POST   /api/v1/schedules/{id}/publish
-GET    /api/v1/schedules/{id}/versions
-
-GET    /api/v1/sessions
-POST   /api/v1/sessions/{id}/open
-POST   /api/v1/sessions/{id}/close
-POST   /api/v1/sessions/{id}/cancel
-POST   /api/v1/sessions/{id}/substitute
-
-GET    /api/v1/sessions/{id}/attendance-token
-POST   /api/v1/attendance/validate
-POST   /api/v1/attendance/manual
-PATCH  /api/v1/attendance/{id}
-
-POST   /api/v1/justifications
-PATCH  /api/v1/justifications/{id}/decision
-
-POST   /api/v1/claims
-POST   /api/v1/claims/{id}/messages
-POST   /api/v1/claims/{id}/transfer
-POST   /api/v1/claims/{id}/reopen
-
-GET    /api/v1/reports/class
-GET    /api/v1/reports/student
-GET    /api/v1/reports/export
-
-GET    /api/v1/audit-events
-```
-
----
-
-# 42. Modèle de données conceptuel
-
-## 42.1 Entités principales
-
-- `User` ;
-- `Role` ;
-- `UserRole` ;
-- `TrustedDevice` ;
-- `WebAuthnCredential` ;
-- `Program` ;
-- `Level` ;
-- `AcademicYear` ;
-- `Promotion` ;
-- `ClassGroup` ;
-- `StudentProfile` ;
-- `TeacherProfile` ;
-- `Enrollment` ;
-- `PedagogicalAssignment` ;
-- `WorkStudyPattern` ;
-- `WorkStudyException` ;
-- `Subject` ;
-- `Room` ;
-- `Schedule` ;
-- `ScheduleVersion` ;
-- `ScheduleImport` ;
-- `ScheduleImportRow` ;
-- `StudentImport` ;
-- `StudentImportRow` ;
-- `CourseSession` ;
-- `SessionClass` ;
-- `Substitution` ;
-- `CancellationRequest` ;
-- `AttendanceCheckpoint` ;
-- `AttendanceRecord` ;
-- `AttendanceCorrection` ;
-- `Justification` ;
-- `Claim` ;
-- `ClaimMessage` ;
-- `Notification` ;
-- `EmailDelivery` ;
-- `AuditEvent` ;
-- `IoTDevice` ;
-- `IoTEvent` ;
-- `AnomalyAlert`.
-
-## 42.2 Principes
-
-- UUID pour les identifiants exposés ;
-- contraintes d’unicité ;
-- clés étrangères ;
-- suppression logique ;
-- horodatage ;
-- auteur des modifications ;
-- verrouillage optimiste si nécessaire.
-
----
-
-# 43. Règles de gestion consolidées
-
-## Identité
-
-- **RG-001** : une adresse email correspond à un seul utilisateur.
-- **RG-002** : un utilisateur peut posséder plusieurs rôles.
-- **RG-003** : le compte super administrateur est distinct du compte quotidien.
-- **RG-004** : un compte archivé ne peut pas se connecter.
-- **RG-005** : une invitation expire après un mois.
-- **RG-006** : l’historique n’est pas supprimé lors d’un changement de classe.
-
-## Pédagogie
-
-- **RG-010** : une formation possède un responsable pédagogique principal unique.
-- **RG-011** : un responsable peut gérer plusieurs formations.
-- **RG-012** : un apprenant appartient à une seule classe principale active.
-- **RG-013** : une séance peut concerner plusieurs classes.
-- **RG-014** : une séance possède un formateur principal.
-- **RG-015** : une séance peut posséder un remplaçant autorisé.
-- **RG-016** : une séance normale provient d’un planning publié.
-- **RG-017** : une séance exceptionnelle exige un motif.
-
-## Import
-
-- **RG-020** : un import est simulé avant application.
-- **RG-021** : une erreur bloquante empêche la confirmation.
-- **RG-022** : un utilisateur existant est mis à jour, pas dupliqué.
-- **RG-023** : un changement de classe conserve l’historique.
-- **RG-024** : une opération groupée exige une confirmation.
-- **RG-025** : les suggestions IA restent soumises à confirmation.
-
-## Planning
-
-- **RG-030** : le responsable pédagogique publie son planning.
-- **RG-031** : le formateur ne publie pas le planning.
-- **RG-032** : trois versions sont conservées.
-- **RG-033** : une modification publiée génère une notification.
-- **RG-034** : un conflit bloquant interdit la publication.
-- **RG-035** : une salle peut être affectée après l’import.
-
-## Émargement
-
-- **RG-040** : le QR fixe est lié à une salle.
-- **RG-041** : le QR fixe est utilisable jusqu’au début de la séance.
-- **RG-042** : le QR fixe exige une connexion au réseau ESIC.
-- **RG-043** : le QR dynamique change périodiquement.
-- **RG-044** : un jeton est limité dans le temps.
-- **RG-045** : une validation est unique par point de contrôle.
-- **RG-046** : quatre contrôles peuvent être réalisés par journée.
-- **RG-047** : deux contrôles cohérents valident une demi-journée.
-- **RG-048** : quatre contrôles cohérents valident une journée.
-- **RG-049** : une validation incomplète produit `PARTIAL` ou `TO_CONFIRM`.
-- **RG-050** : une correction manuelle exige un motif.
-- **RG-051** : une présence exceptionnelle est auditée.
-- **RG-052** : un apprenant non inscrit est enregistré provisoirement.
-
-## Retards
-
-- **RG-060** : jusqu’à 15 minutes, l’apprenant reste présent.
-- **RG-061** : de 16 à 30 minutes, il est en retard.
-- **RG-062** : après 30 minutes, une validation manuelle est requise.
-- **RG-063** : un cas exceptionnel peut être accepté par le formateur.
-
-## Justificatifs
-
-- **RG-070** : un justificatif peut porter sur une séance ou une période.
-- **RG-071** : la taille maximale est de 5 Mo.
-- **RG-072** : les formats acceptés sont JPEG, PNG et PDF.
-- **RG-073** : un refus exige un motif.
-- **RG-074** : le délai initial est d’un mois.
-- **RG-075** : un justificatif accepté produit `EXCUSED`.
-- **RG-076** : un justificatif n’efface pas l’historique de l’absence.
-
-## Sécurité
-
-- **RG-080** : aucune donnée personnelle n’est placée dans le QR.
-- **RG-081** : aucune donnée biométrique brute n’est conservée.
-- **RG-082** : le MFA est obligatoire pour les comptes privilégiés.
-- **RG-083** : le MFA apprenant est adaptatif.
-- **RG-084** : après trois échecs, les contrôles sont renforcés.
-- **RG-085** : le jeton sensible n’est pas stocké dans `localStorage`.
-- **RG-086** : l’adresse IP n’est pas conservée dans l’audit métier.
-- **RG-087** : le cache ne contourne jamais les autorisations.
-- **RG-088** : une action critique exige une réauthentification.
-
----
-
-# 44. Exigences fonctionnelles détaillées
-
-## Priorités
-
-- `MUST` : obligatoire pour le parcours principal ;
-- `SHOULD` : important ;
-- `COULD` : souhaitable ;
-- `FUTURE` : évolution.
-
-| ID | Exigence | Priorité |
+| Catégorie | Durée initiale | Remarque |
 |---|---|---|
-| EF-AUTH-001 | Se connecter avec email et mot de passe | MUST |
-| EF-AUTH-002 | Gérer plusieurs rôles | MUST |
-| EF-AUTH-003 | Choisir un contexte de rôle | MUST |
-| EF-AUTH-004 | Activer un compte par invitation | SHOULD |
-| EF-AUTH-005 | Réinitialiser un mot de passe | SHOULD |
-| EF-AUTH-006 | Enregistrer une passkey | SHOULD |
-| EF-AUTH-007 | Utiliser une authentification adaptative | SHOULD |
-| EF-AUTH-008 | Activer le MFA privilégié | SHOULD |
-| EF-USER-001 | Créer un utilisateur | MUST |
-| EF-USER-002 | Suspendre un utilisateur | MUST |
-| EF-USER-003 | Archiver un utilisateur | SHOULD |
-| EF-USER-004 | Réaliser une opération de masse | SHOULD |
-| EF-USER-005 | Détecter les doublons | MUST |
-| EF-ACA-001 | Gérer les formations | MUST |
-| EF-ACA-002 | Gérer les niveaux | MUST |
-| EF-ACA-003 | Gérer les promotions | MUST |
-| EF-ACA-004 | Gérer les classes | MUST |
-| EF-ACA-005 | Gérer les années scolaires | MUST |
-| EF-ACA-006 | Gérer trois rythmes d’alternance | MUST |
-| EF-IMP-001 | Simuler un import apprenant CSV | MUST |
-| EF-IMP-002 | Confirmer un import apprenant | MUST |
-| EF-IMP-003 | Importer un classeur Excel | SHOULD |
-| EF-IMP-004 | Gérer plusieurs feuilles | SHOULD |
-| EF-IMP-005 | Proposer un mapping intelligent | SHOULD |
-| EF-PLAN-001 | Importer un planning CSV | MUST |
-| EF-PLAN-002 | Prévisualiser le planning | MUST |
-| EF-PLAN-003 | Corriger les lignes | SHOULD |
-| EF-PLAN-004 | Publier le planning | MUST |
-| EF-PLAN-005 | Versionner le planning | SHOULD |
-| EF-PLAN-006 | Créer un planning dans l’interface | SHOULD |
-| EF-PLAN-007 | Conserver trois versions | SHOULD |
-| EF-ROOM-001 | Gérer les salles | MUST |
-| EF-ROOM-002 | Gérer un QR fixe par salle | SHOULD |
-| EF-SES-001 | Créer des séances depuis le planning | MUST |
-| EF-SES-002 | Ouvrir une séance | MUST |
-| EF-SES-003 | Clôturer une séance | MUST |
-| EF-SES-004 | Annuler une séance | SHOULD |
-| EF-SES-005 | Affecter un remplaçant | SHOULD |
-| EF-ATT-001 | Générer un QR dynamique | MUST |
-| EF-ATT-002 | Valider une présence | MUST |
-| EF-ATT-003 | Gérer quatre points de contrôle | MUST |
-| EF-ATT-004 | Calculer les demi-journées | MUST |
-| EF-ATT-005 | Gérer les retards | MUST |
-| EF-ATT-006 | Saisir manuellement une présence | MUST |
-| EF-ATT-007 | Ajouter un apprenant provisoire | SHOULD |
-| EF-ATT-008 | Contrôler le réseau local | SHOULD |
-| EF-JUS-001 | Déposer un justificatif | SHOULD |
-| EF-JUS-002 | Valider ou refuser | SHOULD |
-| EF-CLAIM-001 | Créer une réclamation | SHOULD |
-| EF-CLAIM-002 | Échanger sous forme conversationnelle | SHOULD |
-| EF-NOTIF-001 | Afficher des notifications internes | SHOULD |
-| EF-NOTIF-002 | Notifier les modifications | SHOULD |
-| EF-REP-001 | Produire un rapport de classe | MUST |
-| EF-REP-002 | Produire un rapport individuel | MUST |
-| EF-REP-003 | Exporter en CSV | MUST |
-| EF-REP-004 | Exporter en Excel | SHOULD |
-| EF-AUD-001 | Auditer les opérations critiques | MUST |
-| EF-IOT-001 | Recevoir un événement MQTT | SHOULD |
-| EF-IOT-002 | Gérer l’identité d’une borne | SHOULD |
-| EF-AI-001 | Suggérer un mapping de colonnes | SHOULD |
-| EF-AI-002 | Produire un score de confiance | SHOULD |
-| EF-AI-003 | Détecter une anomalie | COULD |
+| Présences et assiduité | 5 années scolaires | à valider avec la direction et le référent RGPD |
+| Justificatifs | 12 mois | métadonnées conservables plus longtemps si justifié |
+| Réclamations | 3 ans | historique complet |
+| Audit métier | 3 ans actifs, puis archivage | politique à trois niveaux |
+| Journaux techniques | 30 jours | accès restreint |
+| Comptes archivés | jusqu'à anonymisation décidée | historique préservé |
+| Jetons et données Redis | durée de vie propre à chaque usage | jamais au-delà du besoin |
+
+Une tâche de purge identifie les données échues, produit une
+prévisualisation, supprime ou anonymise, conserve une preuve de purge,
+et ne détruit jamais une donnée sous litige.
+
+Droits des personnes outillés : accès, rectification, limitation,
+opposition lorsque applicable, effacement lorsque applicable, export
+dans un format lisible.
+
+Le détail figure dans `docs/08-securite-rgpd.md`.
 
 ---
 
-# 45. Critères d’acceptation principaux
+# 34. Interface utilisateur
 
-## AC-001 — Authentification
+## 34.1 Principes
 
-Un utilisateur actif doit pouvoir se connecter avec des identifiants
-valides.
+Angular Material ; conception adaptative ; cohérence des parcours ;
+actions primaires visibles ; confirmation des actions risquées ; états
+de chargement ; erreurs contextualisées ; formulaires validés ; aide
+concise ; aucune information sensible affichée sans nécessité.
 
-Un utilisateur suspendu doit recevoir un refus sans divulgation
-d’information sensible.
+## 34.2 Écrans
 
-## AC-002 — Périmètre pédagogique
+**Communs** : connexion, connexion par passkey, second facteur,
+activation, mot de passe oublié, réinitialisation, profil, sécurité du
+compte et appareils, choix du contexte de rôle, notifications,
+préférences, recherche globale.
 
-Un responsable pédagogique ne doit pas pouvoir lire les classes d’une
-formation hors de son périmètre.
+**Responsable pédagogique** : tableau de bord, formations, promotions,
+classes, groupes, matières, apprenants, import d'apprenants,
+invitations, calendrier de planning, import de planning, revue et
+correction, versions, séances, remplacements, justificatifs,
+réclamations, rapports, anomalies.
 
-L’API doit renvoyer `403`.
+**Formateur** : séances du jour, calendrier, ouverture de séance,
+affichage QR et code, présences en direct, ajout manuel, apprenant
+provisoire, départ anticipé, clôture, demandes, réclamations.
 
-## AC-003 — Cumul des rôles
+**Apprenant** : prochain cours, planning, abonnement calendrier, écran
+d'émargement, historique, journal de transparence, justificatifs,
+réclamations, rapport, préférences, sécurité du compte.
 
-Un responsable également formateur doit pouvoir accéder aux deux
-contextes sans perdre les restrictions de périmètre.
+**Administration** : recherche globale, rapports, attestations,
+justificatifs, comptes, invitations, anomalies, exports.
 
-## AC-004 — Import des apprenants
+**Super administrateur** : dispositifs connectés, plages réseau,
+politiques de sécurité, journaux de sécurité, intégrations, sessions,
+file d'échec des effets de bord, maintenance.
 
-Un fichier de 100 apprenants valides doit produire une simulation
-contenant :
+## 34.3 Messages d'erreur
 
-- nombre de créations ;
-- nombre de mises à jour ;
-- nombre de déplacements ;
-- nombre d’erreurs ;
-- nombre d’avertissements.
-
-## AC-005 — Anti-doublon
-
-Un apprenant existant ne doit pas être recréé.
-
-## AC-006 — Historique
-
-Après un changement de classe, l’ancienne inscription doit rester
-consultable.
-
-## AC-007 — Import planning
-
-Un planning valide doit produire des séances uniquement après
-confirmation et publication.
-
-## AC-008 — Versionnement
-
-Une modification d’un planning publié doit créer une nouvelle version.
-
-## AC-009 — QR fixe
-
-Le QR fixe d’une salle doit être refusé :
-
-- après le début ;
-- hors réseau ESIC ;
-- sans séance correspondante.
-
-## AC-010 — QR dynamique
-
-Le QR dynamique doit changer périodiquement et être refusé après
-expiration.
-
-## AC-011 — Retard
-
-Une validation réalisée 20 minutes après le début doit produire `LATE`.
-
-## AC-012 — Demi-journée
-
-Les deux contrôles du matin doivent produire une demi-journée présente.
-
-## AC-013 — Journée
-
-Les quatre contrôles doivent produire une journée présente.
-
-## AC-014 — Justificatif
-
-Un justificatif accepté doit transformer `ABSENT` en `EXCUSED`.
-
-## AC-015 — Audit
-
-Une correction doit afficher :
-
-- l’ancienne valeur ;
-- la nouvelle ;
-- l’auteur ;
-- la date ;
-- le motif.
-
-## AC-016 — Rapport
-
-Le rapport individuel doit afficher le calcul des demi-journées.
-
-## AC-017 — Sécurité
-
-Un étudiant ne doit jamais consulter le rapport d’un autre étudiant.
-
-## AC-018 — WebAuthn
-
-Le serveur ne doit recevoir aucune donnée biométrique brute.
-
-## AC-019 — Raspberry Pi
-
-Un événement MQTT possédant un identifiant déjà traité doit être rejeté
-ou ignoré comme doublon.
-
-## AC-020 — IA
-
-Une suggestion à faible confiance ne doit pas être appliquée sans
-confirmation.
-
----
-
-# 46. Tests
-
-## 46.1 Tests unitaires
-
-- calcul des retards ;
-- calcul des demi-journées ;
-- calcul journalier ;
-- contrôle d’inscription ;
-- contrôle de périmètre ;
-- détection des doublons ;
-- validation de fichier ;
-- expiration du jeton ;
-- règles d’alternance ;
-- conversion `ABSENT` vers `EXCUSED`.
-
-## 46.2 Tests d’intégration
-
-- authentification ;
-- migrations ;
-- MySQL ;
-- Redis ;
-- import ;
-- publication ;
-- émargement ;
-- audit ;
-- rapport ;
-- MQTT ;
-- service Python.
-
-## 46.3 Tests de sécurité
-
-- accès sans authentification ;
-- accès hors rôle ;
-- accès hors périmètre ;
-- IDOR ;
-- injection ;
-- XSS ;
-- CSRF ;
-- CORS ;
-- rejeu ;
-- brute force ;
-- fichier malveillant ;
-- exposition de secrets ;
-- expiration ;
-- élévation de privilège.
-
-## 46.4 Tests de performance
-
-- lecture du planning sans cache ;
-- lecture avec cache ;
-- génération du QR ;
-- validation de présence ;
-- import de 100 apprenants ;
-- rapport mensuel.
-
-## 46.5 Tests d’accessibilité
-
-- navigation clavier ;
-- lecteur d’écran ;
-- contrastes ;
-- erreurs ;
-- alternative au QR ;
-- alternative à WebAuthn.
-
----
-
-# 47. Recette
-
-## 47.1 Acteurs
-
-- porteur du projet ;
-- responsable pédagogique fictif ;
-- formateur fictif ;
-- apprenant fictif ;
-- administration fictive.
-
-## 47.2 Scénario de recette principal
-
-1. l’administrateur crée une formation ;
-2. le responsable crée une classe ;
-3. il importe 10 apprenants ;
-4. il confirme l’import ;
-5. les comptes sont créés ;
-6. il importe un planning ;
-7. il publie ;
-8. le formateur consulte sa séance ;
-9. il ouvre la séance ;
-10. le QR est généré ;
-11. l’apprenant émarge ;
-12. le formateur voit la présence ;
-13. une correction est réalisée ;
-14. l’audit est affiché ;
-15. le rapport est exporté.
-
-## 47.3 Critères de validation
-
-- aucun blocage ;
-- données cohérentes ;
-- autorisations respectées ;
-- erreurs lisibles ;
-- preuves disponibles ;
-- documentation mise à jour.
-
----
-
-# 48. Interface utilisateur
-
-## 48.1 Principes
-
-- Angular Material ;
-- responsive ;
-- interface cohérente ;
-- actions primaires visibles ;
-- confirmations pour les actions risquées ;
-- états de chargement ;
-- erreurs contextualisées ;
-- formulaires validés ;
-- aide concise.
-
-## 48.2 Écrans communs
-
-- connexion ;
-- activation ;
-- récupération ;
-- profil ;
-- choix du rôle ;
-- notifications ;
-- paramètres de sécurité.
-
-## 48.3 Responsable pédagogique
-
-- tableau de bord ;
-- formations ;
-- classes ;
-- apprenants ;
-- import des apprenants ;
-- planning ;
-- import du planning ;
-- calendrier ;
-- séances ;
-- remplacements ;
-- justificatifs ;
-- réclamations ;
-- rapports.
-
-## 48.4 Formateur
-
-- séances du jour ;
-- calendrier ;
-- ouverture ;
-- QR ;
-- présences en direct ;
-- ajout manuel ;
-- clôture ;
-- demandes.
-
-## 48.5 Apprenant
-
-- prochain cours ;
-- planning ;
-- écran d’émargement ;
-- historique ;
-- justificatifs ;
-- réclamations ;
-- rapport.
-
-## 48.6 Administration
-
-- recherche globale ;
-- rapports ;
-- justificatifs ;
-- comptes ;
-- invitations ;
-- anomalies.
-
----
-
-# 49. Messages d’erreur
-
-Les messages doivent :
-
-- être compréhensibles ;
-- indiquer l’action possible ;
-- éviter les informations sensibles ;
-- inclure un identifiant de corrélation si utile.
-
-Exemples :
+Compréhensibles, indiquant l'action possible, sans information
+sensible, avec identifiant de corrélation lorsque c'est utile.
 
 ```text
-Le fichier ne contient pas la colonne obligatoire "email".
+Le fichier ne contient pas la colonne obligatoire « email ».
 Corrigez le fichier, puis relancez la simulation.
 
-Cette séance n’est pas encore ouverte.
+Cette séance n'est pas encore ouverte.
 
-Le code d’émargement a expiré. Demandez au formateur d’afficher
+Le code d'émargement a expiré. Demandez au formateur d'afficher
 un nouveau code.
 
 Votre présence a déjà été enregistrée pour ce point de contrôle.
 
-Vous n’êtes pas autorisé à consulter cette formation.
+Vous n'êtes pas autorisé à consulter cette formation.
 ```
 
 ---
 
-# 50. Sauvegarde et restauration
+# 35. Règles de gestion consolidées
 
-## 50.1 Sauvegarde
+## Identité et accès
 
-Le prototype doit prévoir :
+- **RG-001** — une adresse électronique correspond à un seul utilisateur.
+- **RG-002** — un utilisateur peut posséder plusieurs rôles.
+- **RG-003** — le compte super administrateur est distinct du compte quotidien.
+- **RG-004** — un compte archivé ou suspendu ne peut pas se connecter.
+- **RG-005** — une invitation expire après un mois.
+- **RG-006** — l'historique n'est jamais supprimé lors d'un changement de classe.
+- **RG-007** — le second facteur est obligatoire pour `SUPER_ADMIN` et `ADMIN`.
+- **RG-008** — une passkey est liée à un appareil et révocable individuellement.
+- **RG-009** — une réauthentification est exigée avant toute action critique.
+- **RG-010** — la réponse d'authentification est uniforme quel que soit le motif d'échec.
 
-- export MySQL ;
-- sauvegarde des fichiers ;
-- script documenté ;
-- date de sauvegarde ;
-- emplacement protégé.
+## Pédagogie
 
-## 50.2 Restauration
+- **RG-020** — une formation possède un responsable pédagogique principal unique.
+- **RG-021** — un responsable peut gérer plusieurs formations.
+- **RG-022** — un apprenant appartient à une seule classe principale active.
+- **RG-023** — une séance peut concerner plusieurs classes ou un groupe.
+- **RG-024** — une séance possède un formateur principal.
+- **RG-025** — une séance peut posséder un remplaçant autorisé et daté.
+- **RG-026** — une séance normale provient d'un planning publié.
+- **RG-027** — une séance exceptionnelle exige un motif.
+- **RG-028** — une période en entreprise n'est jamais comptée comme une absence.
 
-Une procédure doit décrire :
+## Import
 
-- arrêt contrôlé ;
-- restauration ;
-- migrations ;
-- vérification ;
-- test de connexion ;
-- contrôle d’intégrité.
+- **RG-030** — un import est simulé avant d'être appliqué.
+- **RG-031** — une anomalie bloquante empêche la confirmation.
+- **RG-032** — un utilisateur existant est mis à jour, jamais dupliqué.
+- **RG-033** — un changement de classe conserve l'historique.
+- **RG-034** — une opération groupée exige une confirmation explicite.
+- **RG-035** — une suggestion de l'IA reste soumise à confirmation humaine.
+- **RG-036** — le fichier téléversé n'est jamais écrit sur disque.
+- **RG-037** — l'application d'un import est atomique : tout ou rien.
 
-## 50.3 Preuve
+## Planning
 
-Au moins un test de restauration doit être documenté.
+- **RG-040** — le responsable pédagogique publie son planning ; le formateur ne le publie pas.
+- **RG-041** — au minimum trois versions sont conservées.
+- **RG-042** — un conflit bloquant interdit la publication.
+- **RG-043** — une modification publiée génère une notification.
+- **RG-044** — une salle peut être affectée après l'import.
+- **RG-045** — la publication est atomique et idempotente.
+- **RG-046** — un retour à une version antérieure crée une nouvelle version, sans effacer l'historique.
+- **RG-047** — l'identité d'un créneau est stable entre deux publications.
 
----
+## Émargement
 
-# 51. Supervision
+- **RG-050** — le QR fixe est lié à une salle, pas à une séance.
+- **RG-051** — le QR fixe est utilisable jusqu'au début de la séance.
+- **RG-052** — le QR fixe exige une connexion depuis une plage réseau autorisée.
+- **RG-053** — le QR dynamique change périodiquement.
+- **RG-054** — un jeton est limité dans le temps et à usage unique.
+- **RG-055** — une validation est unique par apprenant et par point de contrôle.
+- **RG-056** — quatre points de contrôle sont possibles par journée.
+- **RG-057** — deux contrôles cohérents valident une demi-journée.
+- **RG-058** — quatre contrôles cohérents valident une journée.
+- **RG-059** — une validation incomplète produit `PARTIAL` ou `TO_CONFIRM`.
+- **RG-060** — une correction manuelle exige un motif.
+- **RG-061** — une présence exceptionnelle est auditée.
+- **RG-062** — un apprenant non inscrit est enregistré provisoirement et régularisé.
+- **RG-063** — une présence enregistrée hors ligne n'est jamais définitive sans validation serveur.
+- **RG-064** — un événement de borne déjà traité est ignoré.
 
-## 51.1 Santé
+## Retards
 
-- santé de Spring Boot ;
-- connexion MySQL ;
-- connexion Redis ;
-- service IA ;
-- broker MQTT ;
-- service email.
+- **RG-070** — jusqu'à 15 minutes, l'apprenant est `PRESENT`.
+- **RG-071** — de 16 à 30 minutes, il est `LATE`.
+- **RG-072** — au-delà de 30 minutes, une validation manuelle est requise.
+- **RG-073** — un cas exceptionnel peut être accepté par le formateur, avec motif.
 
-## 51.2 Indicateurs
+## Justificatifs et réclamations
 
-- temps de réponse ;
-- erreurs ;
-- connexions échouées ;
-- taux de cache ;
-- volume d’émargements ;
-- files d’emails ;
-- événements IoT ;
-- alertes.
+- **RG-080** — un justificatif porte sur une séance, une demi-journée, une journée ou une période.
+- **RG-081** — la taille maximale d'une pièce jointe est de 5 Mo.
+- **RG-082** — les formats acceptés sont JPEG, PNG et PDF, contrôlés par leur contenu réel.
+- **RG-083** — une pièce jointe est analysée avant mise à disposition.
+- **RG-084** — un refus exige un motif.
+- **RG-085** — le délai de dépôt initial est d'un mois.
+- **RG-086** — un justificatif accepté produit `EXCUSED`.
+- **RG-087** — un justificatif n'efface jamais l'historique de l'absence.
+- **RG-088** — une réclamation conserve son historique complet, y compris après réouverture.
 
-## 51.3 Journaux
+## Sécurité et données
 
-- structurés ;
-- niveaux adaptés ;
-- identifiant de corrélation ;
-- aucun secret ;
-- rotation ;
-- durée définie.
-
----
-
-# 52. Documentation technique
-
-Les documents attendus sont :
-
-```text
-docs/01-cadrage.md
-docs/02-cahier-des-charges.md
-docs/03-architecture.md
-docs/04-modele-donnees.md
-docs/05-backlog.md
-docs/06-risques.md
-docs/07-securite-rgpd.md
-docs/08-tests-recette.md
-docs/09-matrice-rncp.md
-docs/10-journal-ia.md
-docs/11-guide-demonstration.md
-docs/CURRENT-STATE.md
-```
-
-## 52.1 Architecture Decision Records
-
-Les décisions importantes doivent être documentées :
-
-- choix du monolithe ;
-- choix de MySQL ;
-- choix de Redis ;
-- choix de PWA ;
-- choix de WebAuthn ;
-- stratégie de session ;
-- QR fixe et dynamique ;
-- conservation ;
-- stratégie d’import ;
-- usage de l’IA.
-
----
-
-# 53. Utilisation de Claude Code
-
-## 53.1 Source de vérité
-
-Claude doit lire :
-
-1. `CLAUDE.md` ;
-2. le cahier des charges ;
-3. l’architecture ;
-4. le modèle de données ;
-5. le backlog ;
-6. l’état courant.
-
-## 53.2 Règle
-
-Claude ne doit jamais :
-
-- inventer un test ;
-- inventer une fonctionnalité ;
-- déclarer une fonction terminée sans preuve ;
-- changer une règle métier sans documenter ;
-- placer un secret dans Git ;
-- utiliser des données réelles ;
-- réécrire inutilement tous les documents.
-
-## 53.3 Statuts
-
-Chaque exigence doit être marquée :
-
-- `TODO` ;
-- `IN_PROGRESS` ;
-- `IMPLEMENTED` ;
-- `TESTED` ;
-- `DEMONSTRATED` ;
-- `SIMULATED` ;
-- `DEFERRED`.
-
-## 53.4 Traçabilité
-
-```text
-Exigence
-→ User story
-→ Code
-→ Test
-→ Capture ou preuve
-→ Bloc RNCP
-```
+- **RG-090** — aucune donnée personnelle n'est placée dans un QR code.
+- **RG-091** — aucune donnée biométrique brute n'est reçue ni conservée.
+- **RG-092** — après trois échecs, les contrôles sont renforcés.
+- **RG-093** — aucun jeton sensible n'est stocké dans `localStorage`.
+- **RG-094** — l'adresse IP n'est pas conservée dans l'audit métier.
+- **RG-095** — le cache ne contourne jamais une autorisation.
+- **RG-096** — tout effet de bord externe passe par l'outbox transactionnelle.
+- **RG-097** — une transaction annulée ne produit aucun effet de bord.
+- **RG-098** — les données transmises à l'IA sont pseudonymisées.
+- **RG-099** — la démonstration utilise exclusivement des données fictives.
 
 ---
 
-# 54. Livrables
+# 36. Exigences fonctionnelles
 
-## 54.1 Fonctionnels
+Priorités : `MUST` obligatoire pour la version 1.0 ; `SHOULD` important ;
+`COULD` souhaitable. **Toutes sont à réaliser dans les six mois.** La
+colonne « Sprint » renvoie à `docs/06-roadmap-six-mois.md`.
 
-- prototype ;
-- interface web ;
-- API ;
-- base ;
-- imports ;
-- émargement ;
-- rapports ;
-- audit.
+## 36.1 Identité et accès
 
-## 54.2 Techniques
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-AUTH-001 | Se connecter par email et mot de passe | MUST | 1 |
+| EF-AUTH-002 | Gérer plusieurs rôles par utilisateur | MUST | 1 |
+| EF-AUTH-003 | Choisir un contexte de rôle vérifié côté serveur | MUST | 1 |
+| EF-AUTH-004 | Activer un compte par invitation | MUST | 1 |
+| EF-AUTH-005 | Réinitialiser un mot de passe oublié | MUST | 2 |
+| EF-AUTH-006 | Enregistrer et gérer une passkey WebAuthn | MUST | 2 |
+| EF-AUTH-007 | Se connecter par passkey sans mot de passe | MUST | 2 |
+| EF-AUTH-008 | Activer un second facteur TOTP | MUST | 2 |
+| EF-AUTH-009 | Générer et consommer des codes de récupération | MUST | 2 |
+| EF-AUTH-010 | Appliquer une authentification adaptative selon le risque | SHOULD | 2 |
+| EF-AUTH-011 | Protéger les formulaires publics par anti-robot | MUST | 2 |
+| EF-AUTH-012 | Limiter les tentatives sur les routes sensibles | MUST | 2 |
+| EF-AUTH-013 | Gérer et révoquer les appareils de confiance | SHOULD | 2 |
+| EF-AUTH-014 | Se déconnecter et révoquer une session | MUST | 2 |
+| EF-AUTH-015 | Exiger une réauthentification avant une action critique | SHOULD | 2 |
 
-- code ;
-- Docker Compose ;
-- migrations ;
-- tests ;
-- OpenAPI ;
-- scripts ;
-- configuration d’exemple ;
-- simulateur MQTT.
+## 36.2 Utilisateurs
 
-## 54.3 Soutenance
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-USER-001 | Créer un utilisateur en attente d'activation | MUST | 1 |
+| EF-USER-002 | Suspendre et réactiver un utilisateur | MUST | 1 |
+| EF-USER-003 | Archiver et restaurer un utilisateur | MUST | 1 |
+| EF-USER-004 | Réaliser une opération de masse avec prévisualisation | SHOULD | 4 |
+| EF-USER-005 | Détecter et traiter les doublons | MUST | 4 |
+| EF-USER-006 | Attribuer et retirer un rôle avec gardes fines | MUST | 1 |
+| EF-USER-007 | Émettre, suivre et réémettre une invitation depuis l'interface | MUST | 3 |
+| EF-USER-008 | Suivre la délivrabilité des courriels d'invitation | SHOULD | 3 |
+| EF-USER-009 | Rechercher globalement dans son périmètre | SHOULD | 11 |
 
-- rapport ;
-- présentation ;
-- captures ;
-- vidéo ;
-- scénario ;
-- matrice RNCP ;
-- journal IA.
+## 36.3 Référentiels
 
----
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-ACA-001 | Gérer les formations | MUST | 1 |
+| EF-ACA-002 | Gérer les niveaux | MUST | 1 |
+| EF-ACA-003 | Gérer les promotions | MUST | 1 |
+| EF-ACA-004 | Gérer les classes | MUST | 1 |
+| EF-ACA-005 | Gérer les années scolaires | MUST | 1 |
+| EF-ACA-006 | Gérer les matières | MUST | 3 |
+| EF-ACA-007 | Gérer les groupes temporaires | SHOULD | 3 |
+| EF-ACA-008 | Affecter un responsable pédagogique à des formations | MUST | 1 |
+| EF-ACA-009 | Gérer les rythmes d'alternance et leurs exceptions | MUST | 4 |
+| EF-ORG-001 | Gérer sites, bâtiments et salles | MUST | 1 |
+| EF-ORG-002 | Gérer les plages réseau autorisées | MUST | 1 |
+| EF-ORG-003 | Gérer un QR fixe par salle | MUST | 8 |
+| EF-ORG-004 | Détecter les conflits et incohérences de salle | MUST | 6 |
 
-# 55. Traçabilité RNCP 39394
+## 36.4 Inscriptions et imports
 
-## 55.1 Bloc 1
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-ENR-001 | Gérer les profils apprenants | MUST | 3 |
+| EF-ENR-002 | Inscrire un apprenant dans une classe | MUST | 3 |
+| EF-ENR-003 | Changer un apprenant de classe en conservant l'historique | MUST | 3 |
+| EF-ENR-004 | Autoriser un suivi à distance individuel | MUST | 7 |
+| EF-IMP-001 | Simuler un import d'apprenants CSV | MUST | 3 |
+| EF-IMP-002 | Confirmer un import d'apprenants de façon atomique | MUST | 3 |
+| EF-IMP-003 | Importer un classeur Excel `.xlsx` | MUST | 4 |
+| EF-IMP-004 | Gérer un classeur multifeuille | SHOULD | 4 |
+| EF-IMP-005 | Proposer un mapping de colonnes assisté par l'IA | SHOULD | 12 |
+| EF-IMP-006 | Corriger une ligne en anomalie avant confirmation | SHOULD | 4 |
 
-Preuves :
+## 36.5 Corps enseignant
 
-- cadrage ;
-- cahier des charges ;
-- analyse de l’existant ;
-- périmètre ;
-- risques ;
-- priorités ;
-- gouvernance ;
-- indicateurs ;
-- conduite du changement ;
-- feuille de route.
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-TEA-001 | Créer un formateur externe sans adresse institutionnelle | MUST | 3 |
+| EF-TEA-002 | Affecter un formateur à une classe, une matière et une période | MUST | 3 |
+| EF-TEA-003 | Désigner un remplaçant sur une séance ou une période | MUST | 6 |
+| EF-TEA-004 | Proposer un remplaçant sans pouvoir le valider soi-même | MUST | 6 |
+| EF-TEA-005 | Notifier formateur initial et remplaçant | MUST | 6 |
 
-## 55.2 Bloc 2
+## 36.6 Planning
 
-Preuves :
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-PLAN-001 | Importer un planning CSV | MUST | 5 |
+| EF-PLAN-002 | Prévisualiser le planning importé sans créer de séance | MUST | 5 |
+| EF-PLAN-003 | Corriger les lignes en anomalie dans l'écran de revue | MUST | 5 |
+| EF-PLAN-004 | Publier le planning de façon atomique | MUST | 5 |
+| EF-PLAN-005 | Versionner le planning | MUST | 5 |
+| EF-PLAN-006 | Construire un planning dans un calendrier interactif | MUST | 6 |
+| EF-PLAN-007 | Conserver au moins trois versions | MUST | 5 |
+| EF-PLAN-008 | Revenir à une version antérieure | MUST | 6 |
+| EF-PLAN-009 | Détecter les conflits formateur, classe, salle et horaire | MUST | 5 |
+| EF-PLAN-010 | Avertir d'un créneau tombant en période d'entreprise | SHOULD | 6 |
+| EF-PLAN-011 | Importer un planning Excel `.xlsx` | SHOULD | 6 |
+| EF-PLAN-012 | Importer un planning PDF texte structuré | COULD | 12 |
+| EF-PLAN-013 | Proposer un mapping de planning assisté par l'IA | SHOULD | 12 |
 
-- Angular ;
-- Spring Boot ;
-- API ;
-- MySQL ;
-- Redis ;
-- imports ;
-- tableaux de bord ;
-- PWA ;
-- WebAuthn ;
-- Python ;
-- tests.
+## 36.7 Séances
 
-## 55.3 Bloc 3
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-SES-001 | Créer les séances depuis un planning publié | MUST | 5 |
+| EF-SES-002 | Ouvrir une séance | MUST | 7 |
+| EF-SES-003 | Clôturer une séance | MUST | 7 |
+| EF-SES-004 | Annuler une séance avec motif | MUST | 6 |
+| EF-SES-005 | Affecter un remplaçant à une séance | MUST | 6 |
+| EF-SES-006 | Créer une séance exceptionnelle | MUST | 6 |
+| EF-SES-007 | Reporter une séance annulée | SHOULD | 6 |
+| EF-SES-008 | Gérer une demande d'annulation par le formateur | SHOULD | 6 |
+| EF-SES-009 | Rattacher plusieurs classes ou un groupe à une séance | SHOULD | 6 |
 
-Preuves :
+## 36.8 Émargement et assiduité
 
-- Docker ;
-- authentification ;
-- MFA ;
-- autorisations ;
-- audit ;
-- anti-bot ;
-- cache ;
-- sauvegarde ;
-- supervision ;
-- réponse aux incidents ;
-- détection d’anomalies.
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-ATT-001 | Générer un QR dynamique rotatif | MUST | 7 |
+| EF-ATT-002 | Valider une présence par jeton | MUST | 7 |
+| EF-ATT-003 | Gérer les quatre points de contrôle nommés | MUST | 8 |
+| EF-ATT-004 | Calculer demi-journées et journées | MUST | 8 |
+| EF-ATT-005 | Appliquer les paliers de retard 15 et 30 minutes | MUST | 8 |
+| EF-ATT-006 | Saisir manuellement une présence avec motif | MUST | 7 |
+| EF-ATT-007 | Ajouter un apprenant provisoire | SHOULD | 8 |
+| EF-ATT-008 | Contrôler la plage réseau pour le QR fixe | MUST | 8 |
+| EF-ATT-009 | Émarger par code court | MUST | 7 |
+| EF-ATT-010 | Émarger par QR fixe de salle | MUST | 8 |
+| EF-ATT-011 | Confirmer localement un émargement par WebAuthn | SHOULD | 8 |
+| EF-ATT-012 | Corriger une présence avec motif et historique | MUST | 7 |
+| EF-ATT-013 | Enregistrer un départ anticipé | SHOULD | 9 |
+| EF-ATT-014 | Consulter le journal de transparence de ses présences | SHOULD | 9 |
+| EF-ATT-015 | Suivre les présences en direct | MUST | 7 |
+| EF-ATT-016 | Émarger depuis une borne connectée | SHOULD | 12 |
 
-## 55.4 Bloc 4
+## 36.9 Justificatifs et réclamations
 
-Preuves :
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-JUS-001 | Déposer un justificatif | MUST | 9 |
+| EF-JUS-002 | Joindre une pièce contrôlée et analysée | MUST | 9 |
+| EF-JUS-003 | Examiner et décider avec motif | MUST | 9 |
+| EF-JUS-004 | Transformer `ABSENT` en `EXCUSED` après acceptation | MUST | 9 |
+| EF-CLAIM-001 | Créer une réclamation | MUST | 9 |
+| EF-CLAIM-002 | Échanger sous forme conversationnelle | MUST | 9 |
+| EF-CLAIM-003 | Transférer une réclamation avec motif | SHOULD | 9 |
+| EF-CLAIM-004 | Rouvrir une réclamation clôturée | SHOULD | 9 |
 
-- Raspberry Pi 4 ;
-- MQTT ;
-- identité du dispositif ;
-- protection contre le rejeu ;
-- télémétrie ;
-- mode dégradé ;
-- analyse des événements.
+## 36.10 Notifications et mobilité
 
----
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-NOTIF-001 | Afficher un centre de notifications persistant | MUST | 10 |
+| EF-NOTIF-002 | Notifier les modifications de planning et de séance | MUST | 10 |
+| EF-NOTIF-003 | Notifier apprenants, formateurs et responsables selon l'audience | MUST | 10 |
+| EF-NOTIF-004 | Envoyer les notifications par courriel | MUST | 10 |
+| EF-NOTIF-005 | Envoyer des notifications push PWA | SHOULD | 10 |
+| EF-NOTIF-006 | Régler ses préférences de notification | SHOULD | 10 |
+| EF-PWA-001 | Rendre l'application installable | MUST | 10 |
+| EF-PWA-002 | Consulter planning et assiduité hors ligne | SHOULD | 10 |
+| EF-PWA-003 | Mettre une action en file hors ligne et la rejouer | SHOULD | 10 |
 
-# 56. Matrice de priorisation finale
+## 36.11 Restitution
 
-## MUST
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-REP-001 | Produire un rapport de classe | MUST | 11 |
+| EF-REP-002 | Produire un rapport individuel | MUST | 11 |
+| EF-REP-003 | Exporter en CSV | MUST | 11 |
+| EF-REP-004 | Exporter en Excel | MUST | 11 |
+| EF-REP-005 | Exporter en PDF avec identité visuelle | MUST | 11 |
+| EF-REP-006 | Générer une attestation d'assiduité identifiable | SHOULD | 11 |
+| EF-REP-007 | Produire les tableaux de bord des quatre profils | MUST | 11 |
+| EF-REP-008 | Fournir un tableau équivalent à chaque graphique | MUST | 11 |
+| EF-REP-009 | Produire le rapport des anomalies | SHOULD | 12 |
+| EF-REP-010 | Produire le rapport des invitations non activées | SHOULD | 11 |
 
-- authentification ;
-- rôles ;
-- formations ;
-- classes ;
-- inscriptions historiques ;
-- rythmes d’alternance ;
-- import CSV des apprenants ;
-- simulation ;
-- import CSV du planning ;
-- publication ;
-- séances ;
-- QR dynamique ;
-- quatre points de contrôle ;
-- calcul des demi-journées ;
-- présence manuelle ;
-- rapports ;
-- export CSV ;
-- audit ;
-- Redis ;
-- Docker Compose ;
-- tests critiques.
+## 36.12 Intelligence artificielle et objets connectés
 
-## SHOULD
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-AI-001 | Suggérer une correspondance de colonnes | SHOULD | 12 |
+| EF-AI-002 | Produire un score de confiance exploitable | SHOULD | 12 |
+| EF-AI-003 | Détecter une anomalie d'émargement | SHOULD | 12 |
+| EF-AI-004 | Signaler un risque de décrochage | COULD | 12 |
+| EF-AI-005 | Soumettre toute proposition à validation humaine | MUST | 12 |
+| EF-IOT-001 | Recevoir un événement d'émargement MQTT | SHOULD | 12 |
+| EF-IOT-002 | Gérer l'identité et la révocation d'une borne | SHOULD | 12 |
+| EF-IOT-003 | Ignorer un événement déjà traité | MUST | 12 |
+| EF-IOT-004 | Recevoir la télémétrie et le signal de vie | COULD | 12 |
+| EF-IOT-005 | Rejouer une file locale après coupure | SHOULD | 12 |
 
-- Excel ;
-- multifeuille ;
-- invitations ;
-- mot de passe oublié ;
-- WebAuthn ;
-- PWA ;
-- QR fixe ;
-- réseau ESIC ;
-- remplacement ;
-- annulation ;
-- justificatifs ;
-- réclamations ;
-- Excel export ;
-- assistant intelligent ;
-- Raspberry Pi.
+## 36.13 Intégrations
 
-## COULD
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-INT-001 | Publier un flux iCalendar signé et révocable | SHOULD | 11 |
+| EF-INT-002 | Créer une réunion Teams depuis une séance distancielle | SHOULD | 11 |
+| EF-INT-003 | Écrire les séances dans un calendrier Microsoft | COULD | 11 |
+| EF-INT-004 | Envoyer les courriels via un fournisseur réel | MUST | 13 |
 
-- MFA TOTP complet ;
-- Turnstile ;
-- notifications push ;
-- Isolation Forest ;
-- DLQ ;
-- rapport PDF ;
-- graphique avancé ;
-- lecteur NFC.
+## 36.14 Transverse
 
-## FUTURE
-
-- Microsoft Graph ;
-- Teams ;
-- Outlook ;
-- AWS complet ;
-- passkeys généralisées ;
-- borne NFC industrielle ;
-- génération automatique d’attestation ;
-- moteur d’accompagnement pédagogique.
-
----
-
-# 57. Risques majeurs
-
-| Risque | Impact | Réponse |
-|---|---:|---|
-| Périmètre irréalisable en trois jours | Critique | Respecter les priorités MUST |
-| Authentification trop complexe | Élevé | Commencer par le flux simple, puis WebAuthn |
-| Import hétérogène | Élevé | Modèle CSV et simulation |
-| Règles d’émargement complexes | Élevé | Tests unitaires avant l’interface |
-| Quatre contrôles difficiles à démontrer | Moyen | Accélérer l’horloge en mode démo |
-| Raspberry Pi indisponible | Moyen | Simulateur MQTT |
-| Données non conformes | Élevé | Données fictives |
-| Perte de temps sur AWS | Élevé | Tout faire en local |
-| Rapport incohérent avec le code | Critique | Mise à jour après chaque fonctionnalité |
-| Code généré mal compris | Critique | Relecture et démonstration manuelle |
-
----
-
-# 58. Fonctionnalités différenciantes
-
-## 58.1 Import intelligent contrôlé
-
-Le système ne se limite pas à importer un modèle fixe. Il prépare une
-reconnaissance semi-automatique avec confirmation humaine.
-
-## 58.2 Double QR
-
-Le système combine :
-
-- QR fixe de salle avant la séance ;
-- QR dynamique du formateur pendant la séance.
-
-## 58.3 Présence par continuité
-
-Les quatre points de contrôle permettent de détecter :
-
-- une arrivée ;
-- un départ pendant la matinée ;
-- une absence après midi ;
-- un départ pendant l’après-midi.
-
-## 58.4 Gestion réelle de l’alternance
-
-Le système ne considère pas une journée en entreprise comme une absence.
-
-## 58.5 Journal de transparence
-
-L’apprenant peut comprendre :
-
-- quand sa présence a été enregistrée ;
-- comment ;
-- qui l’a modifiée ;
-- pourquoi.
-
-## 58.6 Authentification adaptative
-
-L’expérience reste simple sur un appareil reconnu tout en renforçant le
-contrôle lors d’un changement à risque.
-
-## 58.7 Parcours de régularisation
-
-Un nouvel apprenant peut être enregistré provisoirement sans bloquer son
-premier cours.
-
-## 58.8 Simulateur de calendrier
-
-Une évolution pourra permettre au responsable de tester l’effet :
-
-- d’un rythme d’alternance ;
-- d’un changement de semaine ;
-- d’un déplacement de cours ;
-- d’une indisponibilité de formateur.
-
-## 58.9 Détection prédictive des conflits
-
-L’assistant pourra prévenir :
-
-- un conflit de salle ;
-- un conflit de formateur ;
-- une classe surchargée ;
-- une séance sans enseignant ;
-- un calendrier incompatible avec le rythme.
+| ID | Exigence | Priorité | Sprint |
+|---|---|---|---|
+| EF-AUD-001 | Auditer les opérations critiques | MUST | 1 |
+| EF-AUD-002 | Consulter et exporter la piste d'audit | SHOULD | 11 |
+| EF-AUD-003 | Garantir l'audit par outbox transactionnelle | MUST | 10 |
+| EF-RGPD-001 | Exporter les données personnelles d'une personne | SHOULD | 13 |
+| EF-RGPD-002 | Rectifier et limiter le traitement sur demande | SHOULD | 13 |
+| EF-RGPD-003 | Purger ou anonymiser les données échues | MUST | 13 |
+| EF-OPS-001 | Exposer santé, métriques et journaux structurés | MUST | 13 |
+| EF-OPS-002 | Sauvegarder et restaurer, avec preuve | MUST | 13 |
+| EF-OPS-003 | Déployer par intégration et livraison continues | MUST | 13 |
+| EF-OPS-004 | Publier la documentation OpenAPI versionnée | MUST | 13 |
+| EF-OPS-005 | Rejouer manuellement un effet de bord en échec | SHOULD | 10 |
 
 ---
 
-# 59. Définition de terminé
+# 37. Critères d'acceptation
 
-Une fonctionnalité est terminée lorsque :
+| ID | Critère |
+|---|---|
+| AC-001 | Un utilisateur actif se connecte avec des identifiants valides ; un utilisateur suspendu reçoit un refus sans divulgation. |
+| AC-002 | Un responsable pédagogique ne peut pas lire les classes d'une formation hors de son périmètre : l'API renvoie `403` ou `404`. |
+| AC-003 | Un responsable également formateur accède aux deux contextes sans perdre les restrictions de périmètre. |
+| AC-004 | Un import de 500 apprenants valides produit une simulation chiffrant créations, mises à jour, déplacements, erreurs et avertissements. |
+| AC-005 | Un apprenant existant n'est jamais recréé. |
+| AC-006 | Après un changement de classe, l'ancienne inscription reste consultable. |
+| AC-007 | Un planning valide ne produit des séances qu'après confirmation et publication. |
+| AC-008 | La modification d'un planning publié crée une nouvelle version, l'ancienne passant en `SUPERSEDED`. |
+| AC-009 | Un retour à une version antérieure crée une version N+1 dont le contenu est celui de la version choisie. |
+| AC-010 | Le QR fixe est refusé après le début de la séance, hors plage réseau autorisée, et sans séance correspondante. |
+| AC-011 | Le QR dynamique change périodiquement et est refusé après expiration. |
+| AC-012 | Une validation réalisée 20 minutes après le début produit `LATE`. |
+| AC-013 | Les deux contrôles du matin produisent une demi-journée présente. |
+| AC-014 | Les quatre contrôles produisent une journée présente. |
+| AC-015 | Une journée en entreprise n'apparaît jamais comme une absence. |
+| AC-016 | Un justificatif accepté transforme `ABSENT` en `EXCUSED` sans effacer l'absence. |
+| AC-017 | Un apprenant ne consulte jamais la donnée d'un autre apprenant. |
+| AC-018 | Une correction affiche l'ancienne valeur, la nouvelle, l'auteur, la date et le motif. |
+| AC-019 | Le rapport individuel affiche le calcul en demi-journées. |
+| AC-020 | Le serveur ne reçoit aucune donnée biométrique brute lors d'une opération WebAuthn. |
+| AC-021 | Un second facteur est exigé pour toute connexion `SUPER_ADMIN` ou `ADMIN`. |
+| AC-022 | Après trois échecs de connexion, un contrôle renforcé est déclenché. |
+| AC-023 | Une demande de réinitialisation renvoie la même réponse, que l'adresse existe ou non. |
+| AC-024 | Un événement MQTT dont l'identifiant a déjà été traité est ignoré. |
+| AC-025 | Un événement provenant d'un dispositif inconnu est rejeté et journalisé. |
+| AC-026 | Une suggestion de l'IA à faible confiance n'est jamais appliquée sans confirmation. |
+| AC-027 | Une transaction métier annulée ne produit ni notification, ni courriel, ni trace d'audit. |
+| AC-028 | Un effet de bord en échec est repris automatiquement, puis placé en file d'échec et rejouable. |
+| AC-029 | Une réclamation conserve tout son historique après transfert et réouverture. |
+| AC-030 | Une pièce jointe dont le contenu réel ne correspond pas au type déclaré est rejetée. |
+| AC-031 | Une présence enregistrée hors ligne est signalée « en attente » et n'est définitive qu'après validation serveur. |
+| AC-032 | Un export CSV neutralise les injections de formule. |
+| AC-033 | Une attestation porte un identifiant de document et l'émetteur. |
+| AC-034 | Le flux iCalendar d'un utilisateur ne contient que son propre planning et se révoque. |
+| AC-035 | Toute page dispose d'un lien d'évitement et est parcourable entièrement au clavier. |
+| AC-036 | Une restauration de sauvegarde est effectuée et documentée avec sa preuve. |
 
-- l’exigence est identifiée ;
+---
+
+# 38. Tests
+
+## 38.1 Unitaires
+
+Calcul des retards, des demi-journées et du résultat journalier ;
+contrôle d'inscription ; contrôle de périmètre ; détection des doublons ;
+validation de fichier ; expiration et unicité des jetons ; règles
+d'alternance ; transformation `ABSENT` → `EXCUSED` ; normalisation
+d'import ; résolution des conflits de planning.
+
+## 38.2 Intégration
+
+Authentification et MFA ; migrations et validation du schéma ; MySQL ;
+Redis ; imports ; publication ; émargement ; outbox ; notifications ;
+audit ; rapports ; MQTT ; service d'IA ; intégrations externes en
+double.
+
+## 38.3 Sécurité
+
+Accès sans authentification ; accès hors rôle ; accès hors périmètre ;
+référence directe à un objet ; injection ; XSS ; CSRF ; CORS ; rejeu ;
+force brute ; fichier malveillant ; exposition de secrets ; expiration ;
+élévation de privilège ; en-têtes de sécurité.
+
+## 38.4 Concurrence
+
+Inscriptions simultanées ; affectations concurrentes ; double
+émargement ; corrections simultanées ; confirmations d'import
+concurrentes ; publications de planning concurrentes. Aucune de ces
+situations ne produit d'erreur `500`.
+
+## 38.5 Performance
+
+Lecture de planning avec et sans cache ; génération de jeton ;
+validation de présence ; import de 500 apprenants ; rapport mensuel ;
+tenue de charge d'émargement. Les mesures sont publiées, y compris
+lorsqu'une cible n'est pas atteinte.
+
+## 38.6 Bout en bout navigateur
+
+Parcours complets pilotés dans un navigateur réel, avec captures
+d'écran, pour chaque profil et chaque parcours prioritaire.
+
+## 38.7 Accessibilité
+
+Contrôle outillé sur chaque écran ; navigation clavier ; contrastes ;
+messages d'erreur ; alternatives à la caméra et à la biométrie.
+
+## 38.8 Règle de vérité
+
+Aucun test n'est écrit contre un écran qui n'existe pas. Aucune
+fonctionnalité n'est déclarée testée sans commande exécutée et
+reproductible.
+
+---
+
+# 39. Recette
+
+## 39.1 Scénario principal
+
+1. l'administrateur crée une formation, un niveau et une année ;
+2. le responsable crée une promotion et une classe ;
+3. il importe une liste d'apprenants et confirme ;
+4. les comptes sont créés et les invitations parties ;
+5. un apprenant active son compte et enregistre une passkey ;
+6. le responsable importe un planning, corrige une ligne et publie ;
+7. les séances sont créées et notifiées ;
+8. le formateur consulte et ouvre sa séance ;
+9. le QR dynamique et le code court sont affichés ;
+10. un apprenant émarge par QR, un autre par code court ;
+11. un troisième est saisi manuellement avec motif ;
+12. les présences apparaissent en direct ;
+13. le formateur clôture la séance ;
+14. un apprenant dépose un justificatif avec pièce jointe ;
+15. le responsable l'accepte, l'absence devient `EXCUSED` ;
+16. un apprenant ouvre une réclamation, elle est traitée ;
+17. une correction est réalisée et auditée ;
+18. les rapports sont produits et exportés en CSV, Excel et PDF ;
+19. une attestation est générée ;
+20. la piste d'audit est consultée.
+
+## 39.2 Critères de validation
+
+Aucun blocage ; données cohérentes ; autorisations respectées ; erreurs
+lisibles ; preuves disponibles ; documentation à jour.
+
+---
+
+# 40. Exploitation
+
+## 40.1 Supervision
+
+Santé de l'application, de MySQL, de Redis, du service d'IA, du broker
+MQTT et du service de messagerie. Métriques : temps de réponse, erreurs,
+connexions échouées, taux de succès du cache, volume d'émargements,
+files d'effets de bord, événements de dispositifs, alertes.
+
+Journaux structurés, niveaux adaptés, identifiant de corrélation, aucun
+secret, rotation et durée définies.
+
+## 40.2 Sauvegarde et restauration
+
+Export de la base, sauvegarde des pièces jointes, script documenté,
+horodatage, emplacement protégé. La procédure de restauration décrit
+l'arrêt contrôlé, la restauration, les migrations, la vérification, le
+test de connexion et le contrôle d'intégrité. **Au moins un test de
+restauration est réalisé et documenté.**
+
+## 40.3 Environnements
+
+| Environnement | Base | Usage |
+|---|---|---|
+| Local | `esic_connect` | développement |
+| Démonstration | `esic_connect_demo` | jeu de données fictives |
+| Tests | `esic_test` | suite automatisée |
+| Intégration continue | `esic_connect_ci` | pipeline |
+| Recette | dédiée | validation |
+| Production | dédiée | exploitation |
+
+Ces bases ne sont jamais confondues : le profil de test lit une variable
+distincte de celle du profil applicatif.
+
+---
+
+# 41. Définition de terminé
+
+Une exigence est terminée lorsque :
+
+- l'exigence est identifiée et tracée ;
 - le code compile ;
-- les tests passent ;
-- les erreurs sont gérées ;
-- l’autorisation est testée ;
-- l’API est documentée ;
-- la documentation est à jour ;
-- une preuve existe ;
-- le statut est mis à jour ;
-- la fonctionnalité peut être expliquée.
+- les tests unitaires, d'intégration, de sécurité et de bout en bout la
+  couvrent et passent ;
+- les erreurs sont gérées et lisibles ;
+- les autorisations sont testées, y compris les refus ;
+- la performance attendue est mesurée ;
+- l'accessibilité est vérifiée ;
+- l'API est documentée ;
+- la documentation et `docs/CURRENT-STATE.md` sont à jour ;
+- une preuve existe (test, capture, mesure) ;
+- la fonctionnalité peut être expliquée et démontrée.
 
 ---
 
-# 60. Validation du cahier des charges
+# 42. Gouvernance documentaire
 
-Le présent cahier des charges doit être considéré comme :
+Ce cahier des charges est la **référence fonctionnelle unique**. Toute
+modification majeure précise l'ancienne règle, la nouvelle, la raison,
+l'impact, la priorité, la date et l'auteur.
 
-- la référence fonctionnelle initiale ;
-- un document évolutif versionné ;
-- une base pour le backlog ;
-- une base pour l’architecture ;
-- une base pour les tests ;
-- une base pour le rapport.
+Interdits absolus lors de la rédaction ou de l'implémentation :
 
-Toute modification majeure doit préciser :
+- inventer une fonctionnalité, un test ou un résultat ;
+- déclarer terminé sans preuve ;
+- confondre implémenté, testé, vérifié et démontré ;
+- modifier une règle de gestion sans documenter le changement ;
+- placer un secret dans le dépôt ;
+- utiliser des données réelles ;
+- réécrire intégralement un document pour une modification mineure.
 
-- l’ancienne règle ;
-- la nouvelle règle ;
-- la raison ;
-- l’impact ;
-- la priorité ;
-- la date ;
-- l’auteur.
+L'état réel de l'implémentation ne figure **pas** dans ce document : il
+est tenu dans `docs/CURRENT-STATE.md`, mis à jour à chaque livraison.
 
 ---
 
-# 61. Approbation
+# 43. Approbation
 
 | Rôle | Nom | Décision | Date |
 |---|---|---|---|
-| Porteur du projet | Abubacar AFOLABI | À valider | |
+| Porteur du produit | Abubacar AFOLABI | Adopté | 3 septembre 2026 |
 | Responsable pédagogique consulté | À compléter | À valider | |
 | Référent technique | À compléter | À valider | |
-| Référent sécurité/RGPD | À compléter | À valider | |
-
----
-
-# 62. Conclusion
-
-ESIC Connect doit être présenté comme une transformation complète du
-processus pédagogique et administratif de suivi de l’assiduité.
-
-Le prototype ne vise pas à reproduire immédiatement l’intégralité d’une
-solution industrielle. Il doit démontrer de manière cohérente :
-
-- le pilotage d’un système d’information ;
-- la formalisation des besoins ;
-- le développement d’une application web ;
-- la sécurisation des identités ;
-- la gestion des données ;
-- l’utilisation pertinente de Redis ;
-- l’intégration de WebAuthn ;
-- la gestion intelligente des plannings ;
-- la production de rapports ;
-- l’exploitation d’une Raspberry Pi ;
-- l’utilisation contrôlée de l’intelligence artificielle ;
-- la traçabilité avec les quatre blocs du titre RNCP 39394.
-
-Le parcours prioritaire reste :
-
-```text
-Importation des apprenants
-→ Importation du planning
-→ Publication
-→ Création des séances
-→ Consultation par le formateur
-→ Ouverture de l’émargement
-→ Validation des présences
-→ Calcul de l’assiduité
-→ Production du rapport
-```
+| Référent sécurité et RGPD | À compléter | À valider | |

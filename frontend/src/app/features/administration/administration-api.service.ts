@@ -6,6 +6,7 @@ import { environment } from '../../../environments/environment';
 import {
   AccountActionRequest,
   AssignRoleRequest,
+  CreateUserRequest,
   PageResponse,
   UserDetailResponse,
   UserListQuery,
@@ -45,6 +46,22 @@ export class AdministrationApiService {
         size: query.size,
       }),
     });
+  }
+
+  /**
+   * `POST /api/v1/users` — crée un compte en attente d'activation
+   * (EF-USER-001) et, sauf demande contraire, lui émet son invitation.
+   *
+   * <p>Aucun mot de passe n'est transmis, et il n'y a pas de champ pour
+   * en transmettre un : la personne le choisira via son lien
+   * d'invitation (docs/02 §11.2).
+   *
+   * <p>Le domaine de l'adresse n'a aucune importance : c'est ainsi qu'un
+   * formateur externe est créé (EF-TEA-001), le domaine n'étant jamais un
+   * critère de confiance.
+   */
+  createUser(request: CreateUserRequest): Observable<UserDetailResponse> {
+    return this.http.post<UserDetailResponse>(`${this.base}/users`, request);
   }
 
   /** `GET /api/v1/users/{publicId}` — détail + historique complet des rôles. */

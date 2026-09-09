@@ -34,17 +34,20 @@ class StudentAttendanceService {
     private final AttendanceRecordRepository recordRepository;
     private final AttendanceJustificationRepository justificationRepository;
     private final AttendanceCorrectionRepository correctionRepository;
+    private final AttendanceActorResolver actorResolver;
 
     StudentAttendanceService(CourseSessionDirectory courseSessionDirectory,
                              EnrollmentDirectory enrollmentDirectory,
                              AttendanceRecordRepository recordRepository,
                              AttendanceJustificationRepository justificationRepository,
-                             AttendanceCorrectionRepository correctionRepository) {
+                             AttendanceCorrectionRepository correctionRepository,
+                             AttendanceActorResolver actorResolver) {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.recordRepository = recordRepository;
         this.justificationRepository = justificationRepository;
         this.correctionRepository = correctionRepository;
+        this.actorResolver = actorResolver;
     }
 
     @Transactional(readOnly = true)
@@ -68,9 +71,12 @@ class StudentAttendanceService {
                 .findFirst()
                 .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.RECORD_NOT_FOUND));
         AttendanceRecord record = recordRepository.findByPublicId(target).orElseThrow();
+        // L'apprenant voit la FONCTION de l'auteur, jamais son nom.
+        AttendanceActorResolver.Lookup actors = actorResolver.lookup();
         List<AttendanceCorrectionResponse> history = correctionRepository
                 .findByAttendanceRecordIdOrderByOccurredAtAscIdAsc(record.getId()).stream()
-                .map(AttendanceCorrectionResponse::from)
+                .map(correction -> AttendanceCorrectionResponse.from(correction,
+                        actors.role(correction.getActorUserId()), null))
                 .toList();
         JustificationResponse justification = justificationRepository
                 .findByAttendanceRecordIdOrderBySubmittedAtDesc(record.getId()).stream().findFirst()

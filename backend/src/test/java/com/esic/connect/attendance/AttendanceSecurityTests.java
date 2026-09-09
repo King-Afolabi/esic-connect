@@ -1,5 +1,6 @@
 package com.esic.connect.attendance;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -257,11 +258,6 @@ class AttendanceSecurityTests {
         account = userAccountRepository.saveAndFlush(account);
         Role r = roleRepository.findByCode(role).orElseThrow();
         userRoleRepository.saveAndFlush(new UserRole(account, r, Instant.now(), true));
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.getEmail(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, account.getEmail(), PASSWORD);
     }
 }

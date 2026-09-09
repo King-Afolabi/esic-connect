@@ -35,9 +35,18 @@ class UserAccountController {
     private static final String ADMIN_ROLES = "hasAnyRole('ADMIN','SUPER_ADMIN')";
 
     private final UserManagementService userManagementService;
+    private final AccountInvitationService invitationService;
+    private final BulkUserService bulkUserService;
+    private final StepUpGuard stepUpGuard;
 
-    UserAccountController(UserManagementService userManagementService) {
+    UserAccountController(UserManagementService userManagementService,
+                          AccountInvitationService invitationService,
+                          BulkUserService bulkUserService,
+                          StepUpGuard stepUpGuard) {
         this.userManagementService = userManagementService;
+        this.invitationService = invitationService;
+        this.bulkUserService = bulkUserService;
+        this.stepUpGuard = stepUpGuard;
     }
 
     @GetMapping
@@ -55,6 +64,60 @@ class UserAccountController {
     @PreAuthorize(READ_ROLES)
     UserDetailResponse get(@PathVariable String publicId) {
         return userManagementService.getUser(parseUuid(publicId));
+    }
+
+    /**
+     * Crée un compte en attente d'activation et, sauf demande contraire,
+     * lui émet immédiatement son invitation (EF-USER-001, EF-USER-007).
+     *
+     * <p>La création et l'invitation sont deux transactions distinctes et
+     * assumées comme telles : le compte existe même si le courriel
+     * échoue, et le journal de délivrabilité (EF-USER-008) montre alors
+     * qu'il faut corriger l'adresse et réémettre. L'inverse — perdre le
+     * compte parce que le serveur SMTP est tombé — serait pire.
+     */
+    @PostMapping
+    @PreAuthorize(ADMIN_ROLES)
+    @ResponseStatus(HttpStatus.CREATED)
+    UserDetailResponse create(@Valid @RequestBody CreateUserRequest request,
+                              @AuthenticationPrincipal Jwt caller) {
+        UserDetailResponse created = userManagementService.createUser(request,
+                subject(caller), roles(caller));
+        if (request.shouldSendInvitation()) {
+            invitationService.issue(request.email(), RoleCode.valueOf(request.role().toUpperCase(
+                    java.util.Locale.ROOT)), subject(caller));
+        }
+        return created;
+    }
+
+    /**
+     * Opération groupée (EF-USER-004 ; docs/02 §9.4 et §30.2 :
+     * {@code POST /users/bulk}).
+     *
+     * <p>Sans {@code confirm: true}, l'appel <strong>prévisualise</strong> :
+     * rien n'est écrit, et la réponse chiffre les comptes éligibles,
+     * ignorés et refusés. C'est le cahier qui l'exige (RG-034), et c'est
+     * la seule protection contre un clic qui suspendrait cinq cents
+     * comptes.
+     */
+    @PostMapping("/bulk")
+    @PreAuthorize(LIFECYCLE_ROLES)
+    BulkUserWeb.BulkResult bulk(@Valid @RequestBody BulkUserWeb.BulkRequest request,
+                                @AuthenticationPrincipal Jwt caller) {
+        return bulkUserService.execute(request, subject(caller), roles(caller));
+    }
+
+    /**
+     * Comptes soupçonnés d'être des doublons (EF-USER-005).
+     *
+     * <p>Le service <em>signale</em>, il ne fusionne ni ne supprime : une
+     * suppression de doublon reste une action humaine, exceptionnelle et
+     * doublement confirmée (docs/02 §9.5).
+     */
+    @GetMapping("/duplicates")
+    @PreAuthorize(ADMIN_ROLES)
+    java.util.List<BulkUserWeb.DuplicateGroup> duplicates() {
+        return bulkUserService.findDuplicates();
     }
 
     @PostMapping("/{publicId}/suspend")
@@ -93,6 +156,10 @@ class UserAccountController {
     void assignRole(@PathVariable String publicId,
                     @Valid @RequestBody AssignRoleRequest request,
                     @AuthenticationPrincipal Jwt caller) {
+        // Modifier les droits d'autrui est une action critique : le jeton
+        // doit attester d'un facteur fort, pas seulement d'un mot de passe
+        // (EF-AUTH-015, RG-009).
+        stepUpGuard.requireStrongAuthentication(caller);
         userManagementService.assignRole(parseUuid(publicId), request.role(), request.reason().trim(),
                 subject(caller), roles(caller));
     }
@@ -104,6 +171,7 @@ class UserAccountController {
                     @PathVariable String roleCode,
                     @Valid @RequestBody AccountActionRequest request,
                     @AuthenticationPrincipal Jwt caller) {
+        stepUpGuard.requireStrongAuthentication(caller);
         userManagementService.revokeRole(parseUuid(publicId), roleCode, request.reason().trim(),
                 subject(caller), roles(caller));
     }

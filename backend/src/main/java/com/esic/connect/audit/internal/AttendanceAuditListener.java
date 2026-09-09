@@ -3,8 +3,6 @@ package com.esic.connect.audit.internal;
 import com.esic.connect.attendance.AttendanceChangeEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
@@ -14,35 +12,34 @@ import java.time.Instant;
  * « ajout manuel » ; ici l'enregistrement initial d'une présence).
  * Aucune dépendance vers les classes internes de {@code attendance}.
  *
- * <p>Transaction dédiée ({@code REQUIRES_NEW}). Aucun jeton, code court,
- * numéro étudiant ni nom : seulement l'identifiant public de la présence,
- * l'action et un complément non sensible.
+ * <p><strong>Écriture par l'outbox transactionnelle</strong> (EF-AUD-003 ;
+ * docs/02 §23.4). Cet écouteur est un {@link EventListener} synchrone
+ * <em>sans</em> {@code REQUIRES_NEW} : il rejoint la transaction métier et
+ * n'écrit rien lui-même. Il enregistre l'intention via
+ * {@link AuditRecorder} ; la ligne d'outbox commite avec l'action — ou
+ * disparaît avec son annulation (RG-097, AC-027) — et le diffuseur écrit
+ * la trace après commit, avec reprise garantie (RG-096).
  *
- * <p><strong>Dette transactionnelle connue (non résolue dans cette PR).</strong>
- * Comme les autres listeners d'audit du projet, celui-ci est un
- * {@link EventListener} synchrone en {@code REQUIRES_NEW} : la migration
- * globale vers {@code @TransactionalEventListener(AFTER_COMMIT)} reste à
- * planifier pour tous les modules.
+ * <p>Le motif précédent ({@code REQUIRES_NEW}) écrivait la trace dans une
+ * transaction séparée ouverte AVANT le commit métier : une action ensuite
+ * annulée laissait sa trace de succès, et un incident d'écriture perdait
+ * la trace en silence.
  */
 @Component
 public class AttendanceAuditListener {
 
-    private final AuditEventRepository auditEventRepository;
+    private final AuditRecorder recorder;
 
-    public AttendanceAuditListener(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public AttendanceAuditListener(AuditRecorder recorder) {
+        this.recorder = recorder;
     }
 
     @EventListener
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onAttendanceChange(AttendanceChangeEvent event) {
-        String action = "ATTENDANCE_" + event.action().name();
-        AuditEvent auditEvent = new AuditEvent(Instant.now(), event.actorUserId(), action,
-                "ATTENDANCE", event.resourceType().name(), "SUCCESS");
-        auditEvent.setResourcePublicId(event.resourcePublicId());
-        if (event.detail() != null) {
-            auditEvent.setReason(event.detail());
-        }
-        auditEventRepository.save(auditEvent);
+        recorder.record(AuditIntent
+                .of(Instant.now(), event.actorUserId(), "ATTENDANCE_" + event.action().name(),
+                        "ATTENDANCE", event.resourceType().name(), "SUCCESS")
+                .withResource(event.resourcePublicId())
+                .withReason(event.detail()));
     }
 }

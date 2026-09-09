@@ -1,0 +1,78 @@
+<section class="pending" aria-labelledby="pending-title">
+  <h1 id="pending-title">Invitations non activées</h1>
+  <p class="pending__intro">
+    Comptes créés dont l'invitation n'a pas encore été utilisée.
+    L'adresse n'est affichée que masquée&nbsp;: corrigez-la depuis le suivi des invitations.
+  </p>
+
+  <div class="pending__actions">
+    <button mat-button type="button" (click)="reload()">
+      <mat-icon aria-hidden="true">refresh</mat-icon> Actualiser
+    </button>
+    @for (format of exportFormats; track format.value) {
+      <button mat-stroked-button type="button" (click)="exportAs(format.value)"
+              [disabled]="exporting()"
+              [attr.aria-label]="'Exporter le rapport au format ' + format.label">
+        <mat-icon aria-hidden="true">download</mat-icon> {{ format.label }}
+      </button>
+    }
+  </div>
+
+  @switch (state().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    }
+    @case ('forbidden') {
+      <div class="pending__panel" role="alert">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p>Vous n'êtes pas autorisé à consulter ce rapport.</p>
+      </div>
+    }
+    @case ('error') {
+      <div class="pending__panel" role="alert">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <p>Le rapport n'a pas pu être chargé.</p>
+      </div>
+    }
+    @case ('ready') {
+      @if (state(); as s) {
+        @if (s.kind === 'ready') {
+          <p class="pending__count" role="status">
+            {{ s.rows.length }} compte(s) en attente, dont {{ expiredCount() }} invitation(s) expirée(s).
+          </p>
+          @if (s.rows.length) {
+            <table class="pending__table">
+              <caption class="pending__caption">Comptes en attente d'activation</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Nom</th>
+                  <th scope="col">Prénom</th>
+                  <th scope="col">Adresse (masquée)</th>
+                  <th scope="col">Dernière relance</th>
+                  <th scope="col">Expire le</th>
+                  <th scope="col">État</th>
+                  <th scope="col">Jours d'attente</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of s.rows; track row.invitationPublicId) {
+                  <tr>
+                    <th scope="row">{{ row.lastName || '—' }}</th>
+                    <td>{{ row.firstName || '—' }}</td>
+                    <td>{{ row.maskedEmail }}</td>
+                    <td>{{ row.lastSentAt }}</td>
+                    <td>{{ row.expiresAt }}</td>
+                    <td>{{ row.expired ? 'Expirée' : 'En attente' }}</td>
+                    <td>{{ row.daysPending }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="pending__empty">Aucun compte en attente d'activation.</p>
+          }
+        }
+      }
+    }
+  }
+</section>

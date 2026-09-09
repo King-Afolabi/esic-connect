@@ -1,5 +1,6 @@
 package com.esic.connect.attendance;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.audit.internal.AuditEvent;
 import com.esic.connect.audit.internal.AuditEventRepository;
 import com.esic.connect.identity.internal.AccountStatus;
@@ -32,6 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -146,6 +148,148 @@ class AttendanceIntegrationTests {
         Map<String, Object> record = post("/api/v1/attendance/validate",
                 Map.of("token", token), tokenFor(fx.students().get(0)), HttpStatus.OK);
         assertThat(record.get("source")).isEqualTo("DYNAMIC_QR");
+    }
+
+    // ------------------------------------------------------------------
+    // EF-ENR-004 — suivi à distance individuel (docs/02 §15.3)
+    // ------------------------------------------------------------------
+
+    @Test
+    void leCanalDistantEstRefuseSurUneSeancePresentielleSansAutorisation() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        // « Sans autorisation, le canal distant est refusé » (docs/02 §15.3).
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(denied.getBody().get("code")).isEqualTo("ATT_REMOTE_NOT_AUTHORIZED");
+    }
+
+    @Test
+    void unApprenantAutoriseEmargeADistanceEtLeCanalEstTrace() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", fx.classA(),
+                "reason", "immobilisation médicale",
+                "validFrom", "2026-08-01"), admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)), HttpStatus.OK);
+
+        // Le canal distinct est enregistré : un rapport peut distinguer une
+        // présence à distance d'une présence en salle (docs/02 §15.4).
+        assertThat(record.get("source")).isEqualTo("REMOTE_CODE");
+    }
+
+    @Test
+    void uneAutorisationRevoqueeReFermeLeCanalDistant() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> authorization = created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", fx.classA(),
+                "reason", "immobilisation médicale",
+                "validFrom", "2026-08-01"), admin);
+        post("/api/v1/remote-attendance-authorizations/" + authorization.get("publicId") + "/revoke",
+                Map.of("reason", "reprise sur site"), admin, HttpStatus.OK);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void uneAutorisationExpireeNeCouvrePlusLaSeance() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        // La séance est du 10 septembre 2026 ; l'autorisation s'arrête au 31 août.
+        created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", fx.classA(),
+                "reason", "immobilisation terminée",
+                "validFrom", "2026-08-01",
+                "validUntil", "2026-08-31"), admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void uneAutorisationDUneAutreClasseNeCouvrePasLaSeance() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Chain other = academicChain(admin);
+        created("/api/v1/remote-attendance-authorizations", Map.of(
+                "studentUserPublicId", fx.students().get(0).publicId(),
+                "classGroupPublicId", other.classA(),
+                "reason", "autorisation d'un autre périmètre",
+                "validFrom", "2026-08-01"), admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)));
+
+        // Une autorisation rattachée à une classe ne vaut que pour elle :
+        // l'étendre silencieusement serait pire que de refuser.
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void surUneSeanceDistancielleAucuneAutorisationIndividuelleNEstExigee() {
+        String admin = adminToken();
+        Fixture fx = openRemoteSessionWithEnrolledStudent(admin);
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode"), "remote", true),
+                tokenFor(fx.students().get(0)), HttpStatus.OK);
+
+        // La classe entière est attendue à distance : l'autorisation
+        // individuelle n'a pas d'objet (docs/02 §15.2).
+        assertThat(record.get("source")).isEqualTo("REMOTE_CODE");
+    }
+
+    @Test
+    void uneSeancePresentielleNeConservePasDeLienDistant() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        Map<String, Object> body = new java.util.HashMap<>(
+                sessionBody(teacher.publicId(), List.of(chain.classA())));
+        body.put("attendanceMode", "ON_SITE");
+        body.put("remoteLink", "https://teams.example.test/meet/abc");
+
+        Map<String, Object> session = created("/api/v1/sessions", body, admin);
+
+        assertThat(session.get("attendanceMode")).isEqualTo("ON_SITE");
+        // Garder le lien laisserait croire qu'un suivi à distance est prévu.
+        assertThat(session.get("remoteLink")).isNull();
     }
 
     @Test
@@ -288,7 +432,7 @@ class AttendanceIntegrationTests {
     void lateArrivalIsClassifiedAsLate() {
         String admin = adminToken();
         // Séance dont l'heure de début est largement dépassée : émargement
-        // au-delà du seuil app.attendance.late-threshold -> LATE.
+        // au-delà du premier palier app.attendance.late-threshold -> LATE.
         Fixture fx = openSessionWithEnrolledStudents(admin, 1,
                 "2026-08-01T08:00:00Z", "2026-08-01T12:00:00Z");
         Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
@@ -297,6 +441,209 @@ class AttendanceIntegrationTests {
                 Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)), HttpStatus.OK);
         assertThat(record.get("status")).isEqualTo("LATE");
         assertThat(((Number) record.get("lateMinutes")).intValue()).isPositive();
+    }
+
+    // ------------------------------------------------------------------
+    // EF-ATT-005 — paliers de retard (docs/02 §16.4 ; RG-070 à RG-072)
+    // ------------------------------------------------------------------
+
+    @Test
+    void unEmargementDansLaToleranceEstPresentSansValidationManuelle() {
+        String admin = adminToken();
+        // Séance commençant à l'instant : bien en deçà du premier palier.
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1, now.toString(),
+                now.plusSeconds(4 * 3600).toString());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)),
+                HttpStatus.OK);
+
+        assertThat(record.get("status")).isEqualTo("PRESENT");
+        assertThat(record.get("lateMinutes")).isNull();
+        assertThat(record.get("manualValidationRequired")).isEqualTo(false);
+    }
+
+    @Test
+    void unRetardEntreLesDeuxPaliersEstLateSansValidationManuelle() {
+        String admin = adminToken();
+        // 20 minutes de retard : au-delà de 15, en deçà de 30 (AC-012).
+        Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(20 * 60);
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1, start.toString(),
+                start.plusSeconds(4 * 3600).toString());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)),
+                HttpStatus.OK);
+
+        assertThat(record.get("status")).isEqualTo("LATE");
+        assertThat(((Number) record.get("lateMinutes")).intValue()).isBetween(19, 21);
+        assertThat(record.get("manualValidationRequired")).isEqualTo(false);
+    }
+
+    @Test
+    void auDelaDuSecondPalierLaPresenceEstEnregistreeMaisDemandeUneValidationHumaine() {
+        String admin = adminToken();
+        // 45 minutes de retard : au-delà du second palier (RG-072).
+        Instant start = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(45 * 60);
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1, start.toString(),
+                start.plusSeconds(4 * 3600).toString());
+        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+                null, admin, HttpStatus.OK);
+
+        Map<String, Object> record = post("/api/v1/attendance/validate",
+                Map.of("shortCode", issued.get("shortCode")), tokenFor(fx.students().get(0)),
+                HttpStatus.OK);
+
+        // La présence est ENREGISTRÉE : refuser produirait une absence là
+        // où il y a un retard constaté. Le cahier demande une validation
+        // humaine, pas une porte fermée.
+        assertThat(record.get("status")).isEqualTo("LATE");
+        assertThat(record.get("manualValidationRequired")).isEqualTo(true);
+    }
+
+    // ------------------------------------------------------------------
+    // EF-ATT-007 — apprenant provisoire (docs/02 §16.12)
+    // ------------------------------------------------------------------
+
+    @Test
+    void leFormateurSignaleUnApprenantProvisoireSansCreerDInscription() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST",
+                        "comment", "présente en salle, non inscrite"), admin);
+
+        assertThat(guest.get("status")).isEqualTo("UNREGISTERED_GUEST");
+        assertThat(guest.get("linkedEnrollmentPublicId")).isNull();
+
+        // Elle ne devient PAS une présence : l'effectif attendu et les
+        // présences comptées restent ceux des inscrits.
+        Map<String, Object> roster = getMap("/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        assertThat(((Number) roster.get("expectedCount")).longValue()).isEqualTo(1);
+        assertThat(((Number) roster.get("presentCount")).intValue()).isZero();
+    }
+
+    @Test
+    void unStatutDeRegularisationEstRefuseALaCreation() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        ResponseEntity<Map<String, Object>> refused = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux", "status", "LINKED"), admin);
+
+        // LINKED est un RÉSULTAT de décision : l'accepter ici créerait une
+        // entrée « déjà régularisée » que personne n'a régularisée.
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void uneEntreeProvisoireEstRattacheeAUneInscriptionReelle() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "PENDING_REGISTRATION"), admin);
+
+        Map<String, Object> resolved = post("/api/v1/sessions/" + fx.sessionId()
+                        + "/attendance/guests/" + guest.get("publicId") + "/resolve",
+                Map.of("link", true, "enrollmentPublicId", fx.enrollments().get(0),
+                        "comment", "inscription retrouvée"), admin, HttpStatus.OK);
+
+        assertThat(resolved.get("status")).isEqualTo("LINKED");
+        assertThat(resolved.get("linkedEnrollmentPublicId")).isEqualTo(fx.enrollments().get(0));
+        assertThat(resolved.get("resolutionComment")).isEqualTo("inscription retrouvée");
+
+        // Le rattachement ne FABRIQUE pas une présence : elle se saisit
+        // ensuite par la voie manuelle, motivée et auditée.
+        Map<String, Object> roster = getMap("/api/v1/sessions/" + fx.sessionId() + "/attendance", admin);
+        assertThat(((Number) roster.get("presentCount")).intValue()).isZero();
+    }
+
+    @Test
+    void uneEntreeProvisoireEstEcarteeAvecMotifEtResteConsultable() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST"), admin);
+
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", false, "comment", "erreur de saisie"), admin, HttpStatus.OK);
+
+        List<Map<String, Object>> guests = listOfGuests(fx.sessionId(), admin);
+        assertThat(guests).hasSize(1);
+        assertThat(guests.get(0).get("status")).isEqualTo("DISMISSED");
+        assertThat(guests.get(0).get("resolutionComment")).isEqualTo("erreur de saisie");
+    }
+
+    @Test
+    void uneEntreeDejaRegulariseeNEstPasRejouable() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST"), admin);
+        post("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", false, "comment", "première décision"), admin, HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> again = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", false, "comment", "seconde tentative"), admin);
+
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void unRattachementAUneAutreClasseEstRefuse() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+        Fixture other = openSessionWithEnrolledStudents(admin, 1);
+        Map<String, Object> guest = created("/api/v1/sessions/" + fx.sessionId() + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "PENDING_REGISTRATION"), admin);
+
+        ResponseEntity<Map<String, Object>> refused = exchange(HttpMethod.POST,
+                "/api/v1/sessions/" + fx.sessionId() + "/attendance/guests/"
+                        + guest.get("publicId") + "/resolve",
+                Map.of("link", true, "enrollmentPublicId", other.enrollments().get(0),
+                        "comment", "mauvaise classe"), admin);
+
+        // Rattacher hors de la séance fabriquerait une présence dans une
+        // séance qui n'attendait pas cet apprenant.
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code")).isEqualTo("ATT_NOT_ENROLLED");
+    }
+
+    @Test
+    void unApprenantNeSignalePasDApprenantProvisoire() {
+        String admin = adminToken();
+        Fixture fx = openSessionWithEnrolledStudents(admin, 1);
+
+        assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + fx.sessionId()
+                        + "/attendance/guests",
+                Map.of("firstName", "Camille", "lastName", "Roux",
+                        "status", "UNREGISTERED_GUEST"), tokenFor(fx.students().get(0)))
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listOfGuests(String sessionId, String token) {
+        return (List<Map<String, Object>>) (List<?>) restTemplate.exchange(
+                RequestEntity.get(URI.create("/api/v1/sessions/" + sessionId + "/attendance/guests"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build(),
+                new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                }).getBody();
     }
 
     // ------------------------------------------------------------------
@@ -866,7 +1213,14 @@ class AttendanceIntegrationTests {
         String csv = getCsv("/api/v1/attendance/reports/sessions/export"
                 + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z", admin);
         assertThat(csv).startsWith("﻿"); // BOM UTF-8
-        assertThat(csv).contains("session_id;titre;debut"); // en-tête, séparateur ;
+        // Sprint 11 : les trois formats (CSV, Excel, PDF) partagent la
+        // MÊME description de rapport, donc les mêmes libellés de
+        // colonnes — des en-têtes techniques dans un PDF officiel
+        // seraient illisibles, et deux jeux d'en-têtes finiraient par
+        // diverger. La ligne 1 reste l'en-tête : aucun préambule.
+        assertThat(csv.split("\r\n", 2)[0])
+                .isEqualTo("﻿Identifiant de séance;Titre;Début;Fin;Classes;Formateur;"
+                        + "Points de contrôle;Attendu;Présent;Retard;Absent;Excusé;Taux de présence (%)");
         // La cellule commençant par '=' est neutralisée par une apostrophe en tête.
         assertThat(csv).contains("'=SUM(A1:A9)+cmd");
         assertThat(csv).doesNotContain(";=SUM(A1:A9)");
@@ -985,6 +1339,26 @@ class AttendanceIntegrationTests {
             enrollments.add(enrollment);
         }
         return new Fixture(sessionId, students, enrollments, chain.classA(), chain.program(), teacher);
+    }
+
+    /** Séance déclarée à distance pour toute la classe (docs/02 §15.2). */
+    private Fixture openRemoteSessionWithEnrolledStudent(String admin) {
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+        Map<String, Object> body = new java.util.HashMap<>(
+                sessionBody(teacher.publicId(), List.of(chain.classA())));
+        body.put("attendanceMode", "REMOTE");
+        body.put("remoteLink", "https://teams.example.test/meet/" + code());
+        String sessionId = (String) created("/api/v1/sessions", body, admin).get("publicId");
+        post("/api/v1/sessions/" + sessionId + "/open", null, admin, HttpStatus.NO_CONTENT);
+
+        Account student = accountWithRoles(RoleCode.STUDENT);
+        String profile = createProfile(admin, student.publicId());
+        String enrollment = (String) created("/api/v1/enrollments", Map.of(
+                "studentProfilePublicId", profile, "classGroupPublicId", chain.classA(),
+                "startDate", "2026-08-01"), admin).get("publicId");
+        return new Fixture(sessionId, List.of(student), List.of(enrollment), chain.classA(),
+                chain.program(), teacher);
     }
 
     private String createProfile(String admin, String userPublicId) {
@@ -1116,12 +1490,7 @@ class AttendanceIntegrationTests {
     }
 
     private String tokenFor(Account account) {
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, account.email(), PASSWORD);
     }
 
     private static String code() {

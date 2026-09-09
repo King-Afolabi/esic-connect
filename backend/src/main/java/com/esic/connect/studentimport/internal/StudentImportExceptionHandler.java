@@ -136,6 +136,31 @@ class StudentImportExceptionHandler {
                 code = "IMP_STUDENT_NUMBER_EXHAUSTED";
                 message = "La série de numéros étudiants est épuisée pour cette année scolaire.";
             }
+            case ROW_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "IMP_ROW_NOT_FOUND";
+                message = "Aucune ligne ne correspond à cet identifiant dans cet import.";
+            }
+            case JOB_NOT_SIMULATED -> {
+                status = HttpStatus.CONFLICT;
+                code = "IMP_JOB_NOT_SIMULATED";
+                message = "Cet import n'est plus modifiable : il a été confirmé ou annulé.";
+            }
+            case JOB_EXPIRED -> {
+                status = HttpStatus.CONFLICT;
+                code = "IMP_JOB_EXPIRED";
+                message = "Cette simulation a expiré. Relancez l'import.";
+            }
+            case CORRECTION_UNKNOWN_FIELD -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "IMP_CORRECTION_UNKNOWN_FIELD";
+                message = "Ce champ ne peut pas être corrigé.";
+            }
+            case CORRECTION_INVALID_VALUE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "IMP_CORRECTION_INVALID_VALUE";
+                message = "La valeur corrigée n'est pas exploitable.";
+            }
             default -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "IMP_INVALID_REQUEST";

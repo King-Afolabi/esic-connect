@@ -4,142 +4,162 @@
 
 | Élément | Valeur |
 |---|---|
-| Nom du projet | ESIC Connect |
-| Nature | Preuve de concept d’une plateforme web et mobile intelligente et hautement sécurisée |
+| Nom du produit | ESIC Connect |
+| Nature | Plateforme web et mobile de gestion pédagogique, d'émargement et d'assiduité |
 | Établissement concerné | ESIC |
-| Porteur du projet | Abubacar AFOLABI |
-| Certification préparée | RNCP 39394 — Expert en systèmes d’information et sécurité |
-| Version | 2.1 |
-| Date | 27 août 2026 |
-| Statut | À valider |
-| Durée de réalisation du prototype | Trois jours |
-| Environnement initial | Développement local conteneurisé |
+| Porteur du produit | Abubacar AFOLABI |
+| Version du document | **3.0** |
+| Date | 3 septembre 2026 |
+| Statut | Référence active |
+| Remplace | version 2.1 du 27 août 2026 (cadrage « preuve de concept trois jours ») |
+| Horizon de réalisation | Six mois — 13 sprints de deux semaines |
+| Environnement | Développement local conteneurisé, puis recette, puis production |
 
 ---
 
-## 1. Présentation du projet
+## 0. Ce que cette version change
 
-**ESIC Connect** est une plateforme centralisée, réactive et sécurisée
-de planification pédagogique, de gestion des promotions, d’émargement
-intelligent et de suivi de l’assiduité destinée à l’ESIC.
+La version 2.1 cadrait une **preuve de concept réalisée en trois jours**.
+Elle contenait, pour cette raison, un grand nombre de restrictions
+volontaires : périmètre « obligatoire / souhaité / expérimental / hors
+périmètre », fonctions déclarées simulées, addendums de réduction de
+périmètre.
 
-La plateforme doit couvrir le cycle allant de l’importation des
-apprenants et des plannings jusqu’à l’enregistrement des présences et
-à la production de rapports d’assiduité.
+**Ces restrictions sont levées.** La cible n'est plus un prototype de
+démonstration mais une **application complète**, destinée à être
+déployée et utilisée. En conséquence :
 
-Elle sera accessible depuis :
+| Ancienne notion | Devient |
+|---|---|
+| « Périmètre du prototype de trois jours » (§23 v2.1) | supprimé — remplacé par la trajectoire de six mois (§20) |
+| « Souhaité », « Expérimental ou simulé » | **exigences de la version 1.0** |
+| Addendum F2 du 31 août 2026 (planning hors périmètre) | supprimé — déjà caduc, le planning est livré |
+| Addendum G1 du 3 septembre 2026 | absorbé — le planning est une capacité normale du produit |
+| « Hors périmètre » | réduit aux seules **exclusions de conception** (§19) |
+| Statut `HORS_PÉRIMÈTRE_ASSUMÉ` | supprimé du vocabulaire projet |
 
-- les navigateurs web ;
-- les ordinateurs de l’établissement ;
-- les tablettes ;
-- les smartphones ;
-- une Progressive Web App ou PWA ;
-- une borne d’émargement connectée reposant sur une Raspberry Pi.
+Les fonctions qui étaient annoncées comme « à venir » — service
+d'intelligence artificielle, dispositif IoT, PWA installable et hors
+ligne, WebAuthn, MFA, protection anti-robot, réclamations, exports
+Excel et PDF, calendrier unifié, intégration Microsoft 365 — **font
+partie de la version 1.0**.
 
-Le système prendra en charge les cours :
+---
 
-- en présentiel ;
-- à distance pour toute une classe ;
-- à distance pour certains apprenants autorisés ;
-- en mode hybride.
+## 1. Présentation du produit
 
-La solution vise une expérience rapide et fluide. L’objectif cible est
-d’obtenir un temps de traitement inférieur à 100 ms pour les opérations
-simples servies depuis le cache, dans un environnement maîtrisé.
+**ESIC Connect** est la plateforme unique de l'ESIC pour :
 
-Cet objectif devra être vérifié par des tests. Il ne constitue pas une
-garantie pour toutes les routes ou toutes les conditions de charge.
+- structurer l'offre de formation et les cohortes d'apprenants ;
+- construire, contrôler et publier les plannings ;
+- créer et piloter les séances de cours ;
+- enregistrer les présences de façon fiable et traçable ;
+- traiter les absences, retards, justificatifs et réclamations ;
+- produire les rapports et attestations d'assiduité ;
+- superviser la sécurité et la conformité du système d'information.
 
-ESIC Connect assurera également :
+Elle est accessible depuis :
 
-- la centralisation des données pédagogiques ;
-- la création automatique des séances depuis les plannings ;
-- la communication entre les acteurs ;
-- la traçabilité des actions ;
-- la protection des données personnelles ;
-- la détection des anomalies ;
-- l’intégration d’un dispositif IoT ;
-- l’assistance par intelligence artificielle ;
-- l’authentification renforcée selon la sensibilité des comptes.
+- un navigateur web sur ordinateur ;
+- une tablette ;
+- un smartphone, via une **Progressive Web App installable**, capable de
+  fonctionner en mode dégradé sans réseau ;
+- une **borne d'émargement connectée** installée en salle.
+
+Le produit prend en charge les modalités d'enseignement suivantes :
+
+- présentiel ;
+- distanciel pour une classe entière ;
+- distanciel individuel pour un apprenant autorisé ;
+- hybride, mélangeant les deux au sein d'une même séance.
+
+### 1.1 Proposition de valeur
+
+| Pour | ESIC Connect apporte |
+|---|---|
+| Direction | une vision consolidée et fiable de l'assiduité, sans ressaisie |
+| Administration scolaire | la fin des feuilles papier, des rapports produits en quelques secondes, des attestations générées |
+| Responsable pédagogique | la maîtrise de son périmètre, de l'import du planning à la publication, avec détection des conflits |
+| Formateur | une liste d'appel prête, un émargement en une action, aucune saisie administrative |
+| Apprenant | la visibilité sur son planning, son assiduité et ses démarches, avec un droit de réclamation traçable |
+| Responsable sécurité | une authentification forte, une piste d'audit complète et une conformité RGPD documentée |
 
 ---
 
 ## 2. Contexte
 
-ESIC est un établissement proposant des formations dans les domaines
-du commerce et de l’informatique, notamment :
+L'ESIC propose des formations en commerce et en informatique : BTS,
+Bachelors, Mastères, et d'autres parcours pouvant être ajoutés. Chaque
+ensemble de formations est placé sous la responsabilité d'un responsable
+pédagogique.
 
-- des BTS ;
-- des Bachelors ;
-- des Mastère ;
-- d’autres parcours pouvant être ajoutés à la plateforme.
+Les enseignements sont dispensés en présentiel, entièrement à distance,
+en mode hybride, ou à distance pour certains apprenants ne pouvant pas
+se déplacer.
 
-Chaque ensemble de formations peut être placé sous la responsabilité
-d’un responsable pédagogique.
+### 2.1 Situation avant ESIC Connect
 
-Les enseignements peuvent être dispensés :
+Le planning est construit par le responsable pédagogique dans un tableur
+puis partagé sur Microsoft Teams. Les listes d'appel sont produites à la
+main. Les présences sont relevées sur des feuilles papier ou dans des
+fichiers Excel. Les contrôles d'absence supposent de solliciter
+successivement le formateur, le responsable pédagogique, les conseillers
+et l'administration.
 
-- en présentiel ;
-- entièrement à distance ;
-- en mode hybride ;
-- à distance pour certains apprenants ne pouvant pas se déplacer.
+Il en résulte :
 
-La gestion des plannings, des comptes, des présences et des rapports
-peut nécessiter l’utilisation de plusieurs fichiers ou outils. Cette
-organisation peut provoquer :
+- des ressaisies manuelles et des doublons ;
+- des erreurs de saisie et des pertes de documents ;
+- une consolidation lente et une visibilité tardive sur l'assiduité ;
+- une traçabilité insuffisante des corrections ;
+- une difficulté à démontrer la réalité d'une présence ;
+- des comptes non activés à cause d'adresses électroniques erronées ;
+- une gestion des remplacements difficile à communiquer ;
+- aucune détection des situations anormales.
 
-- des ressaisies manuelles ;
-- des doublons ;
-- des erreurs de saisie ;
-- des difficultés de consolidation ;
-- une création manuelle des listes d’appel ;
-- un manque de visibilité sur l’assiduité ;
-- des retards dans la production des rapports ;
-- une traçabilité insuffisante ;
-- des risques de fraude à l’émargement ;
-- des difficultés à gérer les remplacements ;
-- des erreurs de communication avec les apprenants ;
-- des comptes non activés à cause d’adresses électroniques erronées.
+### 2.2 Ce que le produit remplace
 
-Le projet vise à centraliser ces processus au sein d’un système
-d’information unique.
+ESIC Connect remplace, pour le suivi de l'assiduité : les feuilles
+d'émargement papier, les classeurs Excel de présence, les listes d'appel
+manuelles, et les échanges de fichiers de planning par messagerie.
+
+ESIC Connect **ne remplace pas** Microsoft Teams comme outil de
+visioconférence ni comme espace de discussion : il s'y **intègre**.
 
 ---
 
 ## 3. Problématique
 
-> Comment concevoir une plateforme centralisée, performante, accessible
-> et sécurisée permettant aux responsables pédagogiques d’importer les
-> apprenants et les plannings, aux formateurs d’utiliser les séances
-> programmées, aux apprenants d’émarger de manière fiable et à
-> l’administration de suivre l’assiduité, tout en garantissant la
-> traçabilité, la protection des données et la continuité des activités
-> pédagogiques ?
+> Comment doter l'ESIC d'un système d'information unique, performant,
+> accessible et hautement sécurisé, qui couvre sans rupture le cycle
+> allant de l'intégration d'un apprenant jusqu'à la production d'une
+> attestation d'assiduité, en garantissant la fiabilité de la présence
+> enregistrée, la traçabilité des décisions, la protection des données
+> personnelles et la continuité du service ?
 
 ---
 
-## 4. Finalité du projet
+## 4. Finalité
 
-La finalité d’ESIC Connect est de produire une preuve de concept
-démontrant la faisabilité d’un système d’information capable de :
+ESIC Connect doit permettre à l'établissement de :
 
-- centraliser les données pédagogiques ;
-- structurer les formations, promotions et classes ;
-- importer les apprenants ;
-- créer et inviter automatiquement les utilisateurs ;
-- suivre l’activation des comptes ;
-- importer les plannings ;
-- détecter les erreurs d’importation ;
-- créer automatiquement les séances ;
-- publier les plannings ;
-- faciliter l’émargement ;
-- gérer les présences, absences et retards ;
-- assurer une authentification renforcée ;
-- produire des rapports ;
-- permettre les réclamations ;
-- détecter les comportements inhabituels ;
-- intégrer un dispositif IoT ;
-- préparer une future intégration avec Microsoft 365 et Teams.
+1. centraliser l'ensemble des données pédagogiques ;
+2. structurer formations, niveaux, promotions, classes et matières ;
+3. importer et tenir à jour la population d'apprenants ;
+4. créer, inviter et activer les comptes utilisateurs ;
+5. importer, contrôler, corriger, versionner et publier les plannings ;
+6. créer automatiquement les séances depuis un planning publié ;
+7. gérer les salles, les conflits et les remplacements ;
+8. enregistrer les présences par plusieurs canaux fiables ;
+9. calculer l'assiduité en tenant compte des rythmes d'alternance ;
+10. traiter justificatifs, réclamations et départs anticipés ;
+11. produire rapports, exports et attestations ;
+12. notifier les acteurs sur les canaux qu'ils utilisent ;
+13. détecter les anomalies et assister l'humain par l'IA ;
+14. intégrer des dispositifs connectés en salle ;
+15. s'intégrer à Microsoft 365 et aux calendriers du marché ;
+16. garantir la sécurité, l'audit et la conformité RGPD ;
+17. être exploité, supervisé, sauvegardé et restauré.
 
 ---
 
@@ -147,1543 +167,539 @@ démontrant la faisabilité d’un système d’information capable de :
 
 ### 5.1 Objectif général
 
-Concevoir et développer un prototype web responsive permettant de gérer
-le cycle allant de l’importation des apprenants et des plannings jusqu’à
-l’émargement et à la production des rapports d’assiduité.
+Livrer une application web et mobile complète, sécurisée et exploitable,
+couvrant le cycle **apprenant → planning → séance → présence →
+assiduité → rapport**, et déployée sur un environnement accessible aux
+utilisateurs de l'ESIC.
 
 ### 5.2 Objectifs fonctionnels
 
-Le système devra permettre de :
+Le système doit permettre de :
 
-1. authentifier les utilisateurs ;
-2. gérer plusieurs rôles par utilisateur ;
-3. appliquer les autorisations selon les rôles et les périmètres ;
-4. gérer les formations, promotions, classes et matières ;
-5. affecter un responsable pédagogique à plusieurs formations ;
-6. gérer les formateurs internes et externes ;
-7. importer une liste d’apprenants depuis un fichier CSV ou Excel ;
-8. vérifier la présence des champs obligatoires ;
-9. détecter les doublons ;
-10. créer les comptes des apprenants ;
-11. envoyer les invitations d’activation ;
-12. suivre le statut des invitations ;
-13. permettre la réémission d’une invitation ;
-14. importer un planning CSV ou Excel ;
-15. prévisualiser et contrôler les données importées ;
-16. détecter les erreurs et conflits ;
-17. permettre une correction avant validation ;
-18. publier le planning ;
-19. créer automatiquement les séances ;
-20. afficher les séances aux formateurs concernés ;
-21. permettre la réaffectation d’une séance à un remplaçant ;
-22. ouvrir et clôturer une séance ;
-23. générer un QR code dynamique ;
-24. permettre l’émargement ;
-25. renforcer l’émargement par WebAuthn lorsque le terminal le permet ;
-26. enregistrer les présences, absences et retards ;
-27. suivre les présences en direct ;
-28. corriger une présence avec justification ;
-29. permettre à l’apprenant de consulter son assiduité ;
-30. permettre à l’apprenant de déposer une réclamation ;
-31. notifier les acteurs concernés ;
-32. rechercher une formation, une classe, un apprenant ou un formateur ;
-33. produire des tableaux de bord ;
-34. produire des rapports par date, mois, année scolaire, classe,
-    formation ou apprenant ;
-35. exporter les résultats ;
-36. recevoir les événements d’une Raspberry Pi ;
-37. détecter les événements inhabituels ;
-38. conserver une piste d’audit des opérations sensibles.
+**Identité et accès**
+
+1. authentifier par email et mot de passe ;
+2. authentifier sans mot de passe par passkey (WebAuthn) ;
+3. imposer un second facteur TOTP aux comptes privilégiés ;
+4. appliquer une authentification adaptative selon le risque ;
+5. protéger les formulaires publics contre les robots ;
+6. limiter les tentatives répétées ;
+7. gérer plusieurs rôles par utilisateur et un contexte d'usage ;
+8. réinitialiser un mot de passe de façon sécurisée ;
+9. gérer les appareils de confiance et les révoquer.
+
+**Référentiels et population**
+
+10. gérer formations, niveaux, années, promotions, classes, matières ;
+11. gérer sites, bâtiments, salles, équipements et plages réseau ;
+12. gérer les rythmes d'alternance et leurs exceptions ;
+13. importer les apprenants depuis CSV, Excel et classeur multifeuille ;
+14. détecter doublons, conflits et erreurs avant toute écriture ;
+15. créer, inviter, activer, suspendre, archiver et restaurer les comptes ;
+16. suivre la délivrabilité des invitations et les réémettre ;
+17. gérer les formateurs internes, externes et remplaçants.
+
+**Planning et séances**
+
+18. importer un planning CSV, Excel ou PDF texte ;
+19. faire assister la reconnaissance des colonnes par l'IA ;
+20. prévisualiser, corriger ligne à ligne et valider avant publication ;
+21. détecter les conflits de formateur, de classe, de salle et d'horaire ;
+22. construire un planning directement dans un calendrier interactif ;
+23. versionner un planning et revenir à une version antérieure ;
+24. publier et créer ou mettre à jour les séances ;
+25. annuler, reporter et remplacer une séance ;
+26. synchroniser le planning avec Outlook, Teams, Google et iCalendar.
+
+**Émargement et assiduité**
+
+27. ouvrir et clôturer une séance ;
+28. générer un QR code dynamique et un code court de secours ;
+29. exposer un QR fixe de salle contrôlé par plage réseau ;
+30. confirmer localement l'émargement par WebAuthn ;
+31. recevoir un émargement depuis une borne connectée ;
+32. gérer quatre points de contrôle journaliers ;
+33. calculer demi-journées, journées, retards et présences partielles ;
+34. enregistrer une présence manuelle motivée ;
+35. accueillir provisoirement un apprenant non encore inscrit ;
+36. traiter les départs anticipés ;
+37. corriger une présence avec motif, historique et audit.
+
+**Suivi, communication et pilotage**
+
+38. déposer, examiner et décider sur un justificatif avec pièce jointe ;
+39. ouvrir, échanger, transférer, résoudre et rouvrir une réclamation ;
+40. notifier dans l'application, par email et par notification push ;
+41. laisser l'utilisateur régler ses préférences de notification ;
+42. produire des tableaux de bord par rôle ;
+43. produire les rapports journaliers, mensuels, annuels et individuels ;
+44. exporter en CSV, Excel et PDF ;
+45. générer une attestation d'assiduité identifiable et vérifiable ;
+46. rechercher globalement un apprenant, une classe, une séance ;
+47. détecter les anomalies d'émargement et les soumettre à un humain ;
+48. anticiper les décrochages d'assiduité ;
+49. consulter la piste d'audit ;
+50. exercer les droits RGPD des personnes.
 
 ### 5.3 Objectifs techniques
 
-Le prototype devra :
-
-- utiliser Java 21 et Spring Boot pour le back-end ;
-- utiliser Angular et Angular Material pour le front-end ;
-- être utilisable comme application web responsive ;
-- préparer un fonctionnement PWA ;
-- utiliser MySQL comme source principale de données ;
-- utiliser Redis pour le cache et les données temporaires ;
-- utiliser Python pour les fonctions d’intelligence artificielle ;
-- utiliser MQTT pour l’intégration de la Raspberry Pi ;
-- fonctionner localement avec Docker Compose ;
-- exposer une API REST documentée ;
-- intégrer des migrations de base de données ;
-- intégrer des tests automatisés prioritaires ;
-- permettre un futur déploiement cloud ;
-- préparer une future intégration à Microsoft Graph.
+- back-end Java 21 / Spring Boot, structuré en monolithe modulaire
+  vérifié par Spring Modulith ;
+- front-end Angular standalone, zoneless, signaux, Angular Material ;
+- Progressive Web App installable, avec cache applicatif et file
+  d'actions différées ;
+- MySQL 8 comme source de vérité, migrations Flyway ;
+- Redis 7 pour les jetons, le cache, les compteurs et la limitation ;
+- service d'intelligence artificielle Python / FastAPI isolé ;
+- communication IoT MQTT authentifiée et chiffrée ;
+- API REST versionnée et documentée par OpenAPI ;
+- messagerie asynchrone avec file, reprise et file d'échec ;
+- observabilité : santé, métriques, journaux structurés, corrélation ;
+- conteneurisation Docker Compose en local, image de production ;
+- intégration et déploiement continus ;
+- sauvegarde et restauration testées.
 
 ### 5.4 Objectifs de performance
 
-Les objectifs de performance sont les suivants :
+| Indicateur | Cible |
+|---|---|
+| Lecture d'un planning en cache | < 100 ms |
+| Génération d'un jeton d'émargement | < 100 ms |
+| Validation d'un émargement | < 300 ms |
+| Chargement initial de l'application | < 2,5 s en 4G |
+| Simulation d'un import de 500 apprenants | < 10 s |
+| Rapport mensuel d'une classe | < 2 s |
+| Émargements simultanés soutenus | 200 par minute |
 
-- affichage rapide des plannings fréquemment consultés ;
-- génération rapide des jetons d’émargement ;
-- mise à jour rapide des listes de présence ;
-- réduction des accès inutiles à MySQL ;
-- traitement asynchrone des courriels et notifications ;
-- mesure des temps de réponse des routes principales ;
-- mise en cache uniquement des données compatibles avec les exigences
-  de confidentialité.
+Ces cibles sont **mesurées** et publiées ; toute cible non atteinte est
+documentée avec sa mesure réelle.
 
 ### 5.5 Objectifs de sécurité
 
-Le prototype devra :
-
-- protéger les mots de passe avec un hachage robuste ;
-- mettre en place une authentification sécurisée ;
-- appliquer un contrôle d’accès par rôle ;
-- accepter le cumul de plusieurs rôles ;
-- limiter le responsable pédagogique à son périmètre ;
-- imposer une authentification renforcée aux comptes sensibles ;
-- protéger les formulaires exposés contre les robots ;
-- limiter les tentatives de connexion ;
-- sécuriser la récupération des mots de passe ;
-- ne pas intégrer de données personnelles dans les QR codes ;
-- générer des jetons temporaires et non prédictibles ;
-- empêcher les utilisations multiples du même jeton ;
-- journaliser les opérations sensibles ;
-- protéger les secrets techniques ;
-- utiliser uniquement des données fictives pour la démonstration ;
-- soumettre les alertes produites par l’IA à une validation humaine.
+- hachage des mots de passe par BCrypt, migration Argon2id prévue ;
+- authentification forte adaptée à la sensibilité du compte ;
+- contrôle d'accès par rôle, par périmètre et par ressource ;
+- refus par défaut, contrôle systématique côté serveur ;
+- jetons courts, rotatifs, révocables, jamais dans `localStorage` ;
+- aucune donnée personnelle dans un QR code ;
+- aucune donnée biométrique reçue ni stockée ;
+- limitation des tentatives sur toutes les routes sensibles ;
+- protection anti-robot sur les formulaires exposés ;
+- journalisation de toutes les opérations sensibles, sans donnée
+  personnelle ni adresse IP dans l'audit métier ;
+- secrets hors du dépôt, gérés par variables d'environnement puis par un
+  gestionnaire de secrets ;
+- validation humaine obligatoire de toute alerte produite par l'IA ;
+- données de démonstration exclusivement fictives.
 
 ---
 
 ## 6. Périmètre organisationnel
 
-Le projet concerne les acteurs suivants :
-
-- administration technique ;
-- administration scolaire ;
-- responsables pédagogiques ;
-- formateurs internes ;
-- formateurs externes ;
-- formateurs remplaçants ;
-- apprenants.
-
-L’organisation fonctionnelle de référence est la suivante :
-
 ```text
 ESIC
 └── Formation
-    └── Promotion ou année scolaire
-        └── Classe ou groupe
-            └── Apprenants
+    └── Promotion (année scolaire)
+        └── Classe ou groupe
+            └── Apprenants
 ```
 
-Un responsable pédagogique peut gérer plusieurs formations.
+Acteurs : administration technique, administration scolaire,
+responsables pédagogiques, formateurs internes, formateurs externes,
+formateurs remplaçants, apprenants.
 
-Une formation peut être attribuée à un responsable principal et, si
-nécessaire, à des responsables délégués.
-
----
-
-## 7. Rôles et privilèges
-
-### 7.1 SUPER_ADMIN
-
-Le super administrateur dispose du contrôle technique global.
-
-Il peut :
-
-- gérer les paramètres critiques ;
-- gérer les comptes administrateurs ;
-- consulter les journaux de sécurité ;
-- consulter les événements techniques ;
-- gérer les équipements connectés ;
-- intervenir lors d’un incident majeur ;
-- configurer les politiques de sécurité ;
-- suspendre un compte ou un dispositif compromis ;
-- superviser les intégrations externes.
-
-Son utilisation doit être exceptionnelle et fortement auditée.
-
-### 7.2 ADMIN
-
-L’administrateur assure l’administration fonctionnelle globale.
-
-Il peut :
-
-- gérer les utilisateurs ;
-- attribuer les rôles autorisés ;
-- administrer les référentiels ;
-- gérer les paramètres fonctionnels ;
-- suivre les imports ;
-- consulter les erreurs d’envoi de courriels ;
-- réémettre une invitation ;
-- consulter les journaux fonctionnels ;
-- assister les responsables pédagogiques.
-
-### 7.3 SCHOOL_ADMINISTRATION
-
-L’administration scolaire peut :
-
-- rechercher un apprenant ;
-- rechercher une classe ;
-- consulter les données d’assiduité ;
-- gérer les justificatifs ;
-- consulter les réclamations administratives ;
-- produire des rapports ;
-- exporter les données autorisées ;
-- analyser les taux d’absentéisme.
-
-### 7.4 PEDAGOGICAL_MANAGER
-
-Le responsable pédagogique gère une ou plusieurs formations.
-
-Il peut :
-
-- gérer les promotions et classes de son périmètre ;
-- importer les apprenants ;
-- suivre l’activation de leurs comptes ;
-- créer les comptes des formateurs externes ;
-- importer les plannings ;
-- prévisualiser les imports ;
-- corriger les erreurs ;
-- publier les plannings ;
-- affecter les formateurs ;
-- nommer un remplaçant ;
-- consulter les statistiques ;
-- traiter les réclamations pédagogiques ;
-- produire les rapports de son périmètre.
-
-Le rôle `PEDAGOGICAL_MANAGER` peut être cumulé avec `TEACHER`.
-
-### 7.5 TEACHER
-
-Le formateur peut :
-
-- consulter son emploi du temps ;
-- consulter les classes qui lui sont affectées ;
-- consulter les séances qui lui ont été déléguées ;
-- ouvrir une séance ;
-- afficher le QR code ;
-- suivre les présences ;
-- déclarer un retard ;
-- corriger un statut avec un motif ;
-- clôturer la séance ;
-- répondre aux réclamations liées à ses séances.
-
-Le formateur ne crée pas librement les séances du planning.
-
-### 7.6 STUDENT
-
-L’apprenant peut :
-
-- activer son compte ;
-- consulter son planning ;
-- recevoir une notification ;
-- ouvrir directement la séance concernée ;
-- scanner le QR code ;
-- effectuer une vérification locale lorsque WebAuthn est disponible ;
-- consulter son historique ;
-- consulter son taux d’assiduité ;
-- signaler une erreur ;
-- déposer un justificatif ;
-- envoyer une réclamation.
+Un responsable pédagogique peut gérer plusieurs formations. Une
+formation possède un responsable principal et, si nécessaire, des
+responsables délégués.
 
 ---
 
-## 8. Gestion des utilisateurs et des promotions
+## 7. Rôles
 
-### 8.1 Importation des apprenants
+Le détail des droits figure au cahier des charges (`docs/02`, §6). En
+synthèse :
 
-Le responsable pédagogique pourra importer les apprenants avec un
-fichier :
+| Rôle | Vocation | Second facteur |
+|---|---|---|
+| `SUPER_ADMIN` | contrôle technique global, incidents, dispositifs, politiques de sécurité | **obligatoire** |
+| `ADMIN` | administration fonctionnelle, utilisateurs, référentiels, invitations | **obligatoire** |
+| `SCHOOL_ADMINISTRATION` | assiduité, justificatifs, réclamations, rapports, attestations | recommandé |
+| `PEDAGOGICAL_MANAGER` | propriétaire fonctionnel de son périmètre : classes, imports, plannings, séances | obligatoire sur opérations sensibles |
+| `TEACHER` | séances, émargement, présences, réclamations de ses séances | facultatif |
+| `STUDENT` | planning, émargement, assiduité, justificatifs, réclamations | adaptatif |
 
-- CSV ;
-- Excel au format `.xlsx`.
+Le cumul de rôles est natif. Il n'élargit jamais un périmètre : un
+responsable pédagogique également formateur ne voit pas les formations
+d'un autre responsable.
 
-Le modèle minimal contiendra :
+---
+
+## 8. Chaîne de valeur couverte
 
 ```text
-last_name
-first_name
-email
-phone
-formation_code
-class_code
-academic_year
+Référentiels
+    ↓
+Import des apprenants  →  Invitation  →  Activation
+    ↓
+Import ou création du planning  →  Contrôle  →  Correction  →  Publication
+    ↓
+Création des séances  →  Affectation  →  Remplacement  →  Notification
+    ↓
+Ouverture de séance  →  Émargement (QR dynamique, QR salle, code, borne, manuel)
+    ↓
+Points de contrôle  →  Calcul demi-journées  →  Retards  →  Anomalies
+    ↓
+Justificatifs  →  Réclamations  →  Corrections auditées
+    ↓
+Tableaux de bord  →  Rapports  →  Exports  →  Attestations
 ```
 
-Les champs obligatoires seront :
-
-- nom ;
-- prénom ;
-- adresse électronique ;
-- code de formation ;
-- code de classe ;
-- année scolaire.
-
-Le téléphone sera facultatif.
-
-### 8.2 Contrôles à l’importation
-
-Le système vérifiera :
-
-- la présence des colonnes obligatoires ;
-- la présence des valeurs obligatoires ;
-- la syntaxe des adresses électroniques ;
-- l’existence de la formation ;
-- l’existence de la classe ;
-- l’appartenance de la classe à la formation ;
-- les doublons dans le fichier ;
-- les doublons avec les comptes existants ;
-- les lignes en conflit ;
-- le périmètre du responsable pédagogique.
-
-### 8.3 Cycle d’activation du compte
-
-Les statuts d’un compte seront :
-
-- `PENDING_ACTIVATION` ;
-- `ACTIVE` ;
-- `SUSPENDED` ;
-- `LOCKED` ;
-- `ARCHIVED`.
-
-Le parcours sera :
-
-1. importation de l’apprenant ;
-2. validation des informations ;
-3. création du compte en attente ;
-4. génération d’un jeton d’activation ;
-5. envoi d’une invitation ;
-6. définition du mot de passe ;
-7. activation du compte ;
-8. journalisation du résultat.
-
-### 8.4 Suivi des courriels
-
-Les statuts de traitement internes seront :
-
-- `QUEUED` ;
-- `SENT_TO_PROVIDER` ;
-- `PROCESSING_FAILED`.
-
-Lorsque le prestataire le permet, les statuts de délivrabilité seront :
-
-- `DELIVERED` ;
-- `BOUNCED` ;
-- `REJECTED` ;
-- `COMPLAINED` ;
-- `UNKNOWN`.
-
-L’interface devra permettre :
-
-- de consulter le statut ;
-- de consulter la date de la dernière tentative ;
-- de consulter un motif d’erreur non sensible ;
-- de corriger l’adresse ;
-- de réémettre l’invitation ;
-- d’auditer les actions.
-
-Un message ne sera pas considéré comme livré uniquement parce qu’il a
-été transmis au serveur de messagerie.
+Chaque flèche de cette chaîne est une exigence de la version 1.0.
 
 ---
 
-## 9. Gestion des formateurs externes et remplaçants
+## 9. Émargement — principes directeurs
 
-### 9.1 Formateurs externes
+Le produit propose **cinq canaux** d'enregistrement de présence, tous
+soumis aux mêmes contrôles serveur :
 
-Un formateur externe peut être créé sans adresse institutionnelle ESIC.
+| Canal | Usage | Contrainte propre |
+|---|---|---|
+| QR dynamique du formateur | cas nominal, présentiel et distanciel | jeton rotatif, expiration courte, anti-rejeu |
+| Code court | caméra indisponible, apprenant sur un seul appareil | même durée de vie que le jeton |
+| QR fixe de salle | avant le début de la séance | plage réseau de l'établissement obligatoire |
+| Borne connectée | salle équipée, badge ou interface locale | identité de dispositif, séquence, anti-rejeu |
+| Saisie manuelle | incident, régularisation, autorisation exceptionnelle | motif obligatoire, audité |
 
-Les informations prévues sont :
+Le QR ne contient **jamais** de donnée personnelle : uniquement un jeton
+aléatoire, temporaire, non prédictible, associé à une séance et à un
+point de contrôle, révocable et protégé contre le rejeu.
 
-- nom ;
-- prénom ;
-- adresse électronique ;
-- téléphone facultatif ;
-- organisme facultatif ;
-- matières concernées ;
-- date éventuelle de début d’intervention ;
-- date éventuelle de fin d’intervention.
-
-Le compte sera activé avec une invitation sécurisée.
-
-Le domaine de l’adresse électronique ne sera pas utilisé comme seul
-critère de confiance.
-
-### 9.2 Remplacements
-
-Une séance pourra être réaffectée à un formateur remplaçant.
-
-La réaffectation contiendra :
-
-- la séance ;
-- le formateur initial ;
-- le remplaçant ;
-- l’auteur de la modification ;
-- le motif ;
-- la date de la modification ;
-- la période de validité ;
-- le statut de notification.
-
-Le remplaçant recevra uniquement les autorisations nécessaires aux
-séances concernées.
+WebAuthn ajoute une **confirmation locale** de l'émargement : le
+terminal produit une preuve cryptographique. ESIC Connect ne reçoit ni
+empreinte, ni modèle facial. Cette confirmation est présentée pour ce
+qu'elle est — un renforcement, non une preuve absolue de la présence
+physique d'une personne. Un parcours de secours est toujours disponible.
 
 ---
 
-## 10. Gestion des plannings
+## 10. Intelligence artificielle
 
-### 10.1 Responsabilité
+L'IA est un **service d'assistance**, jamais un décideur.
 
-Le responsable pédagogique est le propriétaire fonctionnel du planning
-de son périmètre.
+| Fonction | Apport | Garde-fou |
+|---|---|---|
+| Assistance à l'importation | reconnaissance des colonnes, synonymes d'en-tête, normalisation des dates et horaires, séparation cours/formateur dans une cellule, rapprochement d'un formateur existant | score de confiance, proposition modifiable, confirmation humaine obligatoire |
+| Détection d'anomalies d'émargement | score 0–1, niveau `LOW`/`MEDIUM`/`HIGH`, raisons explicites | aucune sanction automatique, revue humaine |
+| Prévention du décrochage | repérage des absences répétées et des ruptures d'habitude | information au responsable, jamais de décision |
+| Synthèse d'erreurs d'import | résumé lisible des anomalies | ne modifie aucune donnée |
 
-Il peut :
-
-- importer un planning ;
-- enregistrer un brouillon ;
-- consulter les anomalies ;
-- corriger les lignes ;
-- valider le contenu ;
-- publier le planning ;
-- créer les séances ;
-- republier une version corrigée.
-
-### 10.2 Formats
-
-Les formats sont priorisés ainsi :
-
-1. CSV obligatoire ;
-2. Excel `.xlsx` souhaité ;
-3. PDF texte expérimental ;
-4. PDF scanné hors périmètre.
-
-### 10.3 Modèle minimal
-
-```text
-formation_code
-class_code
-course_code
-course_name
-teacher_email
-session_date
-start_time
-end_time
-room
-attendance_mode
-remote_link
-```
-
-### 10.4 Cycle d’importation
-
-```text
-Téléversement
-    ↓
-Contrôle du type de fichier
-    ↓
-Analyse des colonnes
-    ↓
-Normalisation
-    ↓
-Validation métier
-    ↓
-Détection des conflits
-    ↓
-Prévisualisation
-    ↓
-Correction
-    ↓
-Confirmation humaine
-    ↓
-Création ou mise à jour des séances
-    ↓
-Publication
-```
-
-### 10.5 Assistance par intelligence artificielle
-
-L’intelligence artificielle pourra :
-
-- suggérer la correspondance entre les colonnes ;
-- reconnaître différents noms d’en-tête ;
-- normaliser les formats de date ;
-- rapprocher un nom de formateur d’un compte existant ;
-- détecter des valeurs inhabituelles ;
-- identifier des doublons probables ;
-- signaler des chevauchements ;
-- proposer le mode de participation ;
-- produire une synthèse des erreurs.
-
-L’IA ne publiera jamais directement un planning. Une confirmation
-humaine restera obligatoire.
+L'IA ne publie jamais un planning, ne supprime jamais une présence, ne
+refuse jamais un justificatif, ne prononce jamais de sanction et ne
+reçoit jamais de données réelles non pseudonymisées.
 
 ---
 
-## 11. Gestion des séances
+## 11. Objets connectés
 
-### 11.1 Création
+Une borne d'émargement repose sur une Raspberry Pi 4 et dialogue en
+MQTT. Elle possède une identité unique, s'authentifie, chiffre ses
+communications, publie un signal de vie et de la télémétrie, met ses
+événements en file locale en cas de coupure et rejoue à la reconnexion.
+Chaque événement porte un identifiant unique et un numéro de séquence :
+un événement déjà traité est ignoré.
 
-Les séances seront créées à partir d’un planning validé et publié.
+Le back-end tient un registre des dispositifs autorisés, avec
+révocation. Un événement provenant d'un dispositif inconnu est rejeté et
+journalisé comme incident de sécurité.
 
-Une séance contiendra :
-
-- une formation ;
-- une classe ;
-- une matière ;
-- un formateur principal ;
-- éventuellement un remplaçant ;
-- une date ;
-- une heure de début ;
-- une heure de fin ;
-- une salle ;
-- un mode de participation ;
-- éventuellement un lien distant ;
-- un statut.
-
-### 11.2 Statuts
-
-- `DRAFT` ;
-- `PLANNED` ;
-- `OPEN` ;
-- `CLOSED` ;
-- `CANCELLED`.
-
-### 11.3 Modes de participation
-
-- `PRESENTIAL` ;
-- `REMOTE` ;
-- `HYBRID`.
-
-Pour une séance hybride, certains apprenants pourront être autorisés
-individuellement à participer à distance.
+Un **simulateur logiciel** reproduit fidèlement le protocole de la
+borne : il permet de développer, tester et démontrer la chaîne complète
+sans matériel.
 
 ---
 
-## 12. Émargement intelligent
+## 12. Intégrations externes
 
-### 12.1 Parcours principal
+| Intégration | Rôle | Mise en œuvre |
+|---|---|---|
+| Microsoft Graph | lecture de l'annuaire, création de réunions Teams depuis les séances distancielles, écriture dans les calendriers | adaptateur dédié, activable par configuration |
+| Flux iCalendar | abonnement au planning depuis n'importe quel agenda | flux signé, par utilisateur, révocable |
+| Google Calendar | synchronisation optionnelle | même adaptateur de calendrier |
+| Fournisseur SMTP | envoi réel des courriels et retours de délivrabilité | Mailpit en local, fournisseur réel en production |
+| Cloudflare Turnstile | protection anti-robot | validation serveur obligatoire |
 
-1. Le formateur consulte ses séances.
-2. Il ouvre la séance concernée.
-3. Le serveur génère un jeton temporaire.
-4. Le jeton est enregistré dans Redis avec une expiration.
-5. Il est affiché sous forme de QR code.
-6. L’apprenant ouvre ESIC Connect.
-7. Il scanne le QR code.
-8. Le système contrôle l’authentification et l’inscription.
-9. Le terminal réalise, si disponible, une vérification WebAuthn.
-10. Le serveur contrôle le jeton, la séance et les doublons.
-11. La présence est enregistrée dans MySQL.
-12. Le formateur voit la liste actualisée.
-13. Les événements sensibles sont audités.
-
-### 12.2 QR code dynamique
-
-Le QR code ne contiendra aucune donnée personnelle directement
-exploitable.
-
-Il contiendra un jeton :
-
-- aléatoire ;
-- temporaire ;
-- non prédictible ;
-- associé à une séance ;
-- signé ou vérifiable ;
-- révocable ;
-- protégé contre le rejeu ;
-- soumis à une durée de validité limitée.
-
-### 12.3 Vérification locale avec WebAuthn
-
-La plateforme pourra utiliser WebAuthn ou les passkeys pour demander
-une vérification locale par :
-
-- empreinte digitale ;
-- reconnaissance faciale du terminal ;
-- code PIN ;
-- mécanisme de déverrouillage de l’appareil.
-
-ESIC Connect ne recevra et ne stockera ni empreinte digitale ni modèle
-facial. La plateforme recevra une preuve cryptographique produite par
-l’authentificateur du terminal.
-
-Cette fonction sera présentée comme une confirmation locale renforcée,
-et non comme une preuve absolue de l’identité physique de la personne
-tenant le téléphone.
-
-Une solution de secours sera prévue pour :
-
-- les appareils incompatibles ;
-- les utilisateurs sans biométrie ;
-- les besoins d’accessibilité ;
-- la perte ou le changement de terminal.
-
-### 12.4 Solutions de secours
-
-- saisie d’un code temporaire ;
-- validation manuelle par le formateur ;
-- borne Raspberry Pi ;
-- badge NFC en évolution.
+Toute intégration externe est **encapsulée derrière un port** : le
+produit fonctionne intégralement sans elle, avec un adaptateur local.
 
 ---
 
-## 13. Gestion de l’assiduité
+## 13. Architecture — orientations
 
-### 13.1 Statuts
+- **Monolithe modulaire** Spring Boot, modules isolés et vérifiés
+  automatiquement (aucune dépendance vers l'interne d'un autre module,
+  aucun cycle). Ce choix est assumé : il donne la cohésion
+  transactionnelle nécessaire à l'émargement et à la publication, sans
+  le coût opérationnel d'une constellation de services.
+- **Deux services séparés seulement** : l'application Spring Boot et le
+  service d'IA Python, parce que ce dernier a un écosystème et un cycle
+  de vie distincts.
+- **Communication entre modules par événements** et par ports publics ;
+  aucune entité JPA partagée entre modules.
+- **Outbox transactionnelle** pour tout effet de bord externe : courriel,
+  notification, audit, publication MQTT. Un effet de bord n'est jamais
+  perdu par une panne du consommateur, ni produit si la transaction
+  métier est annulée.
+- **Front-end** en composants standalone, détection de changement sans
+  zone, état par signaux, jeton en mémoire uniquement.
+- **PWA** : coquille applicative en cache, consultation hors ligne du
+  planning et de l'assiduité récents, file d'actions différées avec
+  résolution de conflit au retour du réseau. Une présence enregistrée
+  hors ligne n'est **jamais** définitive avant validation serveur.
 
-- `PRESENT` ;
-- `ABSENT` ;
-- `LATE` ;
-- `PARTIAL` ;
-- `EXCUSED` ;
-- `TO_CONFIRM`.
-
-### 13.2 Correction
-
-Toute correction contiendra :
-
-- l’ancienne valeur ;
-- la nouvelle valeur ;
-- le motif ;
-- l’auteur ;
-- la date et l’heure ;
-- l’origine de la modification.
-
-### 13.3 Prévention des fraudes
-
-Le système pourra vérifier :
-
-- l’expiration du jeton ;
-- les doublons ;
-- le nombre de tentatives ;
-- les utilisations simultanées ;
-- l’utilisation du même appareil par plusieurs comptes ;
-- les événements provenant d’une borne non reconnue ;
-- l’ouverture effective de la séance ;
-- l’appartenance de l’apprenant à la classe ;
-- la présence d’un remplacement autorisé.
-
-Les anomalies ne déclencheront pas automatiquement une sanction.
+Le détail figure dans `docs/03-architecture.md`.
 
 ---
 
-## 14. Communication, notifications et réclamations
+## 14. Données et conformité
 
-### 14.1 Notifications
+- source de vérité MySQL, identifiants exposés sous forme d'UUID ;
+- Redis réservé aux données temporaires — jamais source de vérité ;
+- minimisation : seules les données nécessaires sont collectées ;
+- durées de conservation définies par catégorie, avec archivage
+  intermédiaire puis purge ou anonymisation ;
+- droits des personnes outillés : accès, rectification, limitation,
+  export, effacement lorsque applicable ;
+- registre des traitements et analyse d'impact préparés ;
+- pseudonymisation systématique avant tout traitement par l'IA ;
+- aucune donnée biométrique, aucune géolocalisation permanente.
 
-Le système pourra produire des notifications :
-
-- dans l’application ;
-- sous forme de notifications push PWA ;
-- par courrier électronique.
-
-Événements concernés :
-
-- invitation ;
-- publication du planning ;
-- modification d’une séance ;
-- remplacement d’un formateur ;
-- ouverture prochaine d’une séance ;
-- disponibilité de l’émargement ;
-- confirmation de présence ;
-- mise à jour d’une réclamation ;
-- traitement d’un justificatif.
-
-### 14.2 Centre de notifications
-
-Chaque notification comportera :
-
-- un titre ;
-- un message ;
-- un type ;
-- une date ;
-- un état lu ou non lu ;
-- un lien vers l’élément concerné.
-
-### 14.3 Réclamations
-
-L’apprenant pourra adresser une réclamation :
-
-1. au formateur d’une séance ;
-2. au responsable pédagogique ;
-3. à l’administration scolaire.
-
-Une réclamation comprendra :
-
-- une catégorie ;
-- un destinataire fonctionnel ;
-- un objet ;
-- un message ;
-- une pièce jointe facultative ;
-- un statut ;
-- une priorité ;
-- un historique.
-
-### 14.4 Statuts des réclamations
-
-- `OPEN` ;
-- `IN_PROGRESS` ;
-- `WAITING_FOR_STUDENT` ;
-- `RESOLVED` ;
-- `CLOSED` ;
-- `REJECTED`.
+Le détail figure dans `docs/08-securite-rgpd.md`.
 
 ---
 
-## 15. Rapports et tableaux de bord
+## 15. Exploitation
 
-### 15.1 Filtres
+Le produit est **exploitable** : cela fait partie de la définition de
+terminé.
 
-- formation ;
-- promotion ;
-- classe ;
-- apprenant ;
-- formateur ;
-- matière ;
-- date ;
-- semaine ;
-- mois ;
-- année scolaire ;
-- statut d’assiduité ;
-- mode de participation.
-
-### 15.2 Rapports
-
-- rapport journalier d’une classe ;
-- rapport hebdomadaire d’une classe ;
-- rapport mensuel d’une classe ;
-- rapport annuel d’une classe ;
-- rapport individuel d’un apprenant ;
-- rapport par formation ;
-- rapport par matière ;
-- rapport par formateur ;
-- rapport des anomalies ;
-- rapport des réclamations ;
-- rapport des invitations non activées.
-
-### 15.3 Formats
-
-Le prototype priorisera :
-
-1. l’affichage dans l’interface ;
-2. l’export CSV ;
-3. l’impression depuis le navigateur ;
-4. le PDF si le délai le permet.
-
-### 15.4 Indicateurs
-
-- taux de présence ;
-- taux d’absence ;
-- nombre de retards ;
-- heures de cours prévues ;
-- heures suivies ;
-- évolution mensuelle ;
-- classes les plus touchées ;
-- apprenants pouvant nécessiter un accompagnement ;
-- taux d’activation des comptes ;
-- taux d’échec des invitations ;
-- temps moyen de traitement des réclamations ;
-- nombre d’anomalies détectées.
+- démarrage complet en une commande en local ;
+- images de production reproductibles ;
+- migrations de base automatiques et vérifiées ;
+- sondes de santé et de disponibilité ;
+- métriques applicatives et journaux structurés corrélés ;
+- sauvegarde planifiée et **restauration testée** ;
+- procédure d'incident documentée ;
+- intégration continue exécutant l'ensemble des contrôles ;
+- déploiement continu vers un environnement de recette.
 
 ---
 
-## 16. Sécurité par conception
+## 16. Qualité — exigences transverses
 
-### 16.1 Mots de passe
-
-Les mots de passe devront être :
-
-- hachés avec Argon2id ou BCrypt ;
-- soumis à une longueur minimale ;
-- protégés contre les tentatives répétées ;
-- réinitialisables avec un jeton temporaire ;
-- absents des journaux.
-
-### 16.2 Réinitialisation
-
-Le parcours sera :
-
-1. saisie de l’adresse électronique ;
-2. réponse neutre ;
-3. génération d’un jeton limité dans le temps ;
-4. envoi du lien ;
-5. vérification ;
-6. définition du nouveau mot de passe ;
-7. invalidation du jeton ;
-8. révocation éventuelle des sessions ;
-9. journalisation.
-
-### 16.3 Authentification multifacteur
-
-Le MFA TOTP pourra être :
-
-- obligatoire pour `SUPER_ADMIN` ;
-- obligatoire ou fortement recommandé pour `ADMIN` ;
-- obligatoire ou recommandé pour `PEDAGOGICAL_MANAGER` ;
-- facultatif pour les autres rôles.
-
-Le système prévoira :
-
-- l’enrôlement ;
-- la confirmation ;
-- les codes de récupération ;
-- la révocation ;
-- l’audit des changements.
-
-### 16.4 Protection contre les robots
-
-La solution privilégiée est Cloudflare Turnstile.
-
-Elle pourra protéger :
-
-- la connexion après comportement suspect ;
-- la demande de réinitialisation ;
-- l’activation du compte ;
-- les formulaires publics.
-
-La validation du jeton anti-bot sera effectuée côté serveur.
-
-### 16.5 Limitation des tentatives
-
-Redis pourra limiter :
-
-- les connexions répétées ;
-- les demandes de réinitialisation ;
-- les validations de QR code ;
-- les réémissions de courriels ;
-- les créations automatisées de réclamations ;
-- les appels sensibles de l’API.
-
-### 16.6 Sessions et jetons
-
-Le système prévoira :
-
-- des jetons d’accès de courte durée ;
-- un renouvellement sécurisé ;
-- la rotation et la révocation ;
-- l’invalidation après changement de mot de passe ;
-- un stockage limitant les risques XSS ;
-- une politique CORS restrictive ;
-- une protection CSRF adaptée à l’architecture.
+| Domaine | Exigence |
+|---|---|
+| Tests | tests unitaires, d'intégration, de sécurité, de concurrence, de performance et de bout en bout navigateur ; toute exigence `MUST` est couverte |
+| Accessibilité | conformité WCAG 2.1 niveau AA visée, vérifiée par outil et par navigation clavier ; alternative à la caméra et à la biométrie systématique |
+| Internationalisation | interface française, textes externalisés, seconde langue possible sans refonte |
+| Compatibilité | navigateurs modernes, Android, iOS via navigateur, ordinateurs, tablettes, smartphones |
+| Documentation | à jour à chaque livraison ; une fonction non documentée n'est pas terminée |
+| Traçabilité | exigence → story → code → test → preuve |
 
 ---
 
-## 17. Cache et performance
+## 17. Vocabulaire de statut
 
-### 17.1 Utilisation de Redis
+Vocabulaire **unique** du dépôt :
 
-Redis pourra contenir :
+| Statut | Signification |
+|---|---|
+| `IMPLEMENTED_AND_TESTED` | code livré **et** couvert par des tests automatisés passants |
+| `PARTIAL` | une partie seulement de l'exigence est livrée — jamais présentée comme complète |
+| `NOT_IMPLEMENTED` | aucun code ; limite explicitement assumée |
+| `NOT_PERFORMED` | action jamais exécutée (démonstration manuelle, déploiement) |
+| `À_DÉFINIR` | décision non prise |
 
-- les jetons d’émargement ;
-- les jetons d’activation ;
-- les données de limitation des requêtes ;
-- les informations temporaires de session ;
-- les plannings fréquemment consultés ;
-- certains droits calculés ;
-- les compteurs ;
-- les événements temporaires ;
-- les résultats de tableaux de bord coûteux.
+Ne jamais confondre **implémenté**, **testé automatiquement**, **vérifié
+manuellement** et **démontré**. Un navigateur piloté par un script n'est
+pas une démonstration manuelle.
 
-### 17.2 Principes
-
-Les données mises en cache respecteront :
-
-- une durée de vie définie ;
-- des clés tenant compte du périmètre d’autorisation ;
-- une invalidation après modification ;
-- la minimisation des données sensibles ;
-- l’interdiction de contourner les autorisations ;
-- une mesure du bénéfice réel.
-
-### 17.3 Indicateurs de performance
-
-Le prototype mesurera si possible :
-
-- le temps de réponse sans cache ;
-- le temps de réponse avec cache ;
-- le taux de succès du cache ;
-- le temps de génération d’un jeton ;
-- le temps de validation d’un émargement ;
-- le temps de chargement d’un planning.
-
-L’objectif inférieur à 100 ms sera évalué sur des routes simples dans
-l’environnement local de démonstration.
+Le statut `HORS_PÉRIMÈTRE_ASSUMÉ` est **supprimé** : il n'y a plus de
+domaine fonctionnel exclu, seulement des exclusions de conception (§19).
 
 ---
 
-## 18. Messagerie électronique asynchrone
+## 18. Trajectoire sur six mois
 
-### 18.1 Flux cible
+Le produit est construit en **13 sprints de deux semaines**. Chaque
+sprint produit un incrément utilisable, testé et documenté.
 
-```text
-Action métier
-    ↓
-Création d’un événement
-    ↓
-File de messages
-    ↓
-Service d’envoi
-    ↓
-Prestataire de messagerie
-    ↓
-Retour de statut
-    ↓
-Mise à jour de la traçabilité
-```
+| Phase | Sprints | Aboutissement |
+|---|---|---|
+| Socle | 1–2 | identité complète, sécurité forte, référentiels administrables |
+| Population | 3–4 | imports multiformats, cycle de vie des comptes, alternance |
+| Planification | 5–6 | planning importé, construit, versionné, publié, synchronisé |
+| Présence | 7–8 | cinq canaux d'émargement, points de contrôle, calculs d'assiduité |
+| Accompagnement | 9–10 | justificatifs, réclamations, notifications multicanal, PWA |
+| Pilotage | 11 | tableaux de bord, rapports, exports, attestations |
+| Intelligence et objets | 12 | service IA, borne connectée, détection d'anomalies |
+| Mise en service | 13 | durcissement, observabilité, sauvegarde, déploiement |
 
-### 18.2 Gestion des échecs
-
-Après plusieurs tentatives infructueuses, le message pourra être placé
-dans une Dead Letter Queue.
-
-Les données de suivi seront :
-
-- destinataire ;
-- type de message ;
-- nombre de tentatives ;
-- dernière erreur ;
-- prochaine tentative ;
-- statut ;
-- dates de création et de traitement.
-
-### 18.3 Prototype local
-
-Le prototype pourra utiliser :
-
-- un serveur SMTP de développement ;
-- une boîte de réception locale de test ;
-- une table de messages en attente ;
-- un traitement planifié ;
-- une simulation contrôlée des statuts.
-
-La file dédiée et la DLQ complète pourront rester dans l’architecture
-cible si elles ne sont pas implémentées.
+Le détail — objectifs de sprint, contenu, jalons, dépendances — figure
+dans `docs/06-roadmap-six-mois.md` et `docs/05-product-backlog.md`.
 
 ---
 
-## 19. Intelligence artificielle
+## 19. Exclusions de conception
 
-### 19.1 Assistance à l’importation
+Ces exclusions ne sont pas des reports : ce sont des **choix
+définitifs**, motivés.
 
-L’IA pourra assister :
-
-- la reconnaissance des colonnes ;
-- la normalisation ;
-- la détection des incohérences ;
-- la proposition de correspondances ;
-- la synthèse des erreurs.
-
-### 19.2 Détection d’anomalies
-
-Le service Python pourra produire :
-
-- un score de 0 à 1 ;
-- un niveau `LOW`, `MEDIUM` ou `HIGH` ;
-- une liste de raisons ;
-- une recommandation de vérification humaine.
-
-Les facteurs pourront inclure :
-
-- QR code expiré ;
-- tentatives répétées ;
-- utilisation simultanée ;
-- comportement inhabituel d’un dispositif ;
-- appareil associé à plusieurs comptes ;
-- horaire anormal ;
-- durée de présence incohérente.
-
-### 19.3 Prévention de l’absentéisme
-
-En perspective, la plateforme pourra identifier :
-
-- les absences répétées ;
-- l’évolution du taux d’assiduité ;
-- les retards fréquents ;
-- la participation partielle ;
-- une rupture soudaine par rapport aux habitudes.
-
-### 19.4 Limites
-
-L’intelligence artificielle ne devra pas :
-
-- prononcer une sanction ;
-- supprimer une présence ;
-- refuser automatiquement un justificatif ;
-- publier seule un planning ;
-- transmettre une donnée à un acteur non autorisé ;
-- utiliser des données réelles dans un service non approuvé.
+| Exclusion | Motif |
+|---|---|
+| Reconnaissance faciale centralisée | disproportionnée, risque RGPD majeur ; WebAuthn couvre le besoin sans donnée biométrique |
+| Stockage de données biométriques brutes | jamais nécessaire : la vérification reste sur le terminal |
+| Géolocalisation permanente | disproportionnée ; le contrôle réseau et le QR de salle suffisent |
+| Reconnaissance universelle de PDF scanné | fiabilité insuffisante ; l'import PDF est limité au PDF texte |
+| Décision disciplinaire automatisée | une décision affectant une personne relève d'un humain |
+| Suppression automatique d'un apprenant | l'archivage préserve l'historique ; la suppression est exceptionnelle et contrôlée |
+| Remplacement de Microsoft Teams | Teams reste l'outil de visioconférence ; ESIC Connect s'y intègre |
+| Application iOS native publiée | la PWA couvre le besoin mobile |
+| Kubernetes | inadapté à la volumétrie ; conteneurs et service managé suffisent |
+| Architecture en microservices | complexité opérationnelle sans bénéfice à cette échelle |
 
 ---
 
-## 20. Intégration IoT
-
-### 20.1 Raspberry Pi
-
-La Raspberry Pi pourra :
-
-- posséder un identifiant unique ;
-- publier un signal de vie ;
-- simuler ou lire un badge ;
-- envoyer un événement d’émargement ;
-- recevoir un accusé de réception ;
-- transmettre de la télémétrie ;
-- stocker temporairement les événements en cas de coupure.
-
-### 20.2 Communication
-
-La communication reposera sur MQTT.
-
-Les événements pourront contenir :
-
-- l’identifiant du dispositif ;
-- l’identifiant de la séance ;
-- l’identifiant pseudonymisé du badge ;
-- l’horodatage ;
-- un identifiant unique d’événement ;
-- un numéro de séquence ;
-- le type d’événement ;
-- une preuve d’authenticité.
-
-### 20.3 Sécurité
-
-La borne intégrera :
-
-- une identité unique ;
-- une authentification ;
-- un chiffrement des communications ;
-- une liste de dispositifs autorisés ;
-- une protection contre le rejeu ;
-- une journalisation ;
-- un stockage local minimal ;
-- une file locale en cas de perte réseau ;
-- une reprise contrôlée après reconnexion.
-
----
-
-## 21. Fonctionnalités différenciantes et perspectives
-
-### 21.1 Carte de séance intelligente
-
-Une carte unique pourra regrouper :
-
-- la séance ;
-- la salle ;
-- le lien distant ;
-- le formateur ;
-- l’état de l’émargement ;
-- les messages ;
-- les documents ;
-- les changements récents.
-
-### 21.2 Mode hors ligne
-
-L’application pourra permettre :
-
-- la consultation du planning récent hors ligne ;
-- la mise en file d’une action ;
-- la synchronisation après reconnexion ;
-- la gestion des conflits.
-
-Une présence hors ligne ne sera pas définitivement validée sans contrôle
-serveur.
-
-### 21.3 Connexion sans mot de passe
-
-Les passkeys pourront devenir le moyen principal de connexion afin de
-réduire :
-
-- le risque d’hameçonnage ;
-- les mots de passe oubliés ;
-- la dépendance aux codes SMS.
-
-### 21.4 Calendrier unifié
-
-Le planning pourra être synchronisé avec :
-
-- Microsoft Outlook ;
-- Microsoft Teams ;
-- Google Calendar ;
-- un flux iCalendar.
-
-### 21.5 Détection des conflits
-
-Le système pourra signaler :
-
-- un formateur affecté à deux séances ;
-- une salle utilisée simultanément ;
-- une classe affectée à plusieurs cours ;
-- une séance hors des horaires autorisés ;
-- une durée inhabituelle.
-
-### 21.6 Tableau de bord de qualité pédagogique
-
-Le système pourra corréler :
-
-- assiduité ;
-- modalités de cours ;
-- changements de planning ;
-- taux de réclamation ;
-- incidents techniques ;
-- activation des comptes.
-
-### 21.7 Parcours de secours accessible
-
-Un apprenant ne pouvant utiliser la caméra ou WebAuthn disposera d’une
-alternative contrôlée.
-
-### 21.8 Journal de transparence étudiant
-
-L’apprenant pourra consulter :
-
-- la date d’enregistrement de sa présence ;
-- le canal utilisé ;
-- les modifications effectuées ;
-- l’auteur d’une correction ;
-- la justification ;
-- les réclamations associées.
-
----
-
-## 22. Architecture technique
-
-### 22.1 Composants
-
-- Back-end : Java 21, Spring Boot 3.5.x et Maven ;
-- Sécurité : Spring Security, JWT, TOTP et WebAuthn ;
-- Accès aux données : Spring Data JPA ;
-- Migrations : Flyway ;
-- Base principale : MySQL 8 ;
-- Cache et données temporaires : Redis 7 ;
-- Interface : Angular et Angular Material ;
-- Mobile : PWA en priorité ;
-- Service IA : Python, FastAPI et scikit-learn ;
-- Communication IoT : MQTT ;
-- Équipement : Raspberry Pi ;
-- Messagerie locale : serveur SMTP de développement ;
-- Conteneurisation : Docker Compose ;
-- Documentation API : OpenAPI/Swagger ;
-- Supervision : Spring Boot Actuator et journaux structurés.
-
-### 22.2 Architecture logique
-
-```text
-Angular / PWA
-      |
-      | HTTPS
-      v
-Spring Boot API
-   |      |       |          |
-   v      v       v          v
- MySQL  Redis  Service IA  Service mail
-                    ^
-                    |
-              Événements métier
-
-Raspberry Pi
-      |
-     MQTT
-      |
-      v
-Broker MQTT
-      |
-      v
-Spring Boot API
-```
-
----
-
-## 23. Périmètre du prototype de trois jours
-
-### 23.1 Obligatoire
-
-- dépôt Git structuré ;
-- documentation de cadrage ;
-- cahier des charges ;
-- authentification ;
-- gestion des rôles ;
-- cumul des rôles ;
-- utilisateurs fictifs ;
-- formations et classes ;
-- import CSV des apprenants ;
-- statut d’activation ;
-- import CSV du planning ;
-- validation de l’import ;
-- création des séances ;
-- consultation du planning ;
-- ouverture d’une séance ;
-- QR code temporaire ;
-- enregistrement d’une présence ;
-- tableau des présences ;
-- rapport simple ;
-- export CSV ;
-- piste d’audit ;
-- utilisation de Redis ;
-- tests prioritaires ;
-- démonstration locale.
-
-### 23.2 Souhaité
-
-- import Excel ;
-- envoi local d’invitations ;
-- suivi simulé de la délivrabilité ;
-- mot de passe oublié ;
-- gestion d’un remplacement ;
-- PWA installable ;
-- notifications internes ;
-- réclamations simples ;
-- connexion de la Raspberry Pi ;
-- score d’anomalie.
-
-### 23.3 Expérimental ou simulé
-
-- WebAuthn ;
-- MFA TOTP ;
-- Cloudflare Turnstile ;
-- notifications push réelles ;
-- reconnaissance intelligente des colonnes ;
-- modèle Isolation Forest ;
-- import PDF structuré ;
-- file de messages et DLQ complète ;
-- synchronisation Microsoft Graph.
-
-### 23.4 Hors périmètre
-
-- reconnaissance faciale centralisée ;
-- stockage de données biométriques ;
-- géolocalisation permanente ;
-- reconnaissance universelle de fichiers PDF ;
-- application iOS publiée ;
-- déploiement général à l’ESIC ;
-- haute disponibilité réelle ;
-- Kubernetes ;
-- intégration complète à Teams ;
-- décision disciplinaire automatisée.
-
-### 23.5 Addendum de finalisation F2 (31 août 2026) — réduction de périmètre — **CADUC**
-
-> **Statut : caduc depuis le 3 septembre 2026.** Section conservée pour la
-> traçabilité de la décision, jamais comme description de l'état courant.
-> Elle est remplacée par le § 23.6.
-
-Décision prise le 31 août 2026 au checkpoint de finalisation F2
-(commit `d7d2bfe`) : l'import du planning, sa prévisualisation, sa
-publication, son versionnement et la création automatique des séances
-depuis un planning étaient déclarés **non implémentés**, et les exigences
-`EF-PLAN-001` à `EF-PLAN-007`, `EF-SES-001`, `RG-016`, `AC-007` et
-`AC-008` classées `HORS_PÉRIMÈTRE_ASSUMÉ`.
-
-### 23.6 Addendum de reprise de périmètre G1 (3 septembre 2026) — le planning est dans le périmètre livré
-
-**Fait constaté.** Le lot produit G1, fusionné sur `main` le
-1er septembre 2026 par la PR #40 (commit `d3450e6`), donc **après**
-l'addendum F2 ci-dessus, a livré un module `planning` complet :
-migrations Flyway `V12` / `V13`, `PlanningImportController`
-(`POST /api/v1/planning-imports`, `POST /{id}/publish`),
-`PlanningVersionController`, port `coursesession.PlanningSessionWriter`,
-écrans Angular `/planning/import`, `/planning/import/:jobId` et
-`/planning/versions`.
-
-**Vérification indépendante.** L'audit QA du 3 septembre 2026 a piloté un
-navigateur réel contre l'application démarrée et a exécuté le parcours
-import CSV → simulation → publication atomique → nouvelle version visible
-(`tests/05-planning.spec.ts`). Source : `audit-report.md`, § 2 et
-finding F-DOC-1.
-
-**Décision du porteur de projet (3 septembre 2026).** Le domaine planning
-est **repris dans le périmètre livré** ; l'addendum F2 est annulé sur ce
-point. En conséquence :
-
-- `EF-PLAN-001` à `EF-PLAN-005`, `EF-PLAN-007`, `EF-SES-001`, `RG-016`,
-  `AC-007` et `AC-008` sont `IMPLEMENTED_AND_TESTED` ;
-- `EF-PLAN-006` (création manuelle d'un planning plein calendrier) reste
-  `HORS_PÉRIMÈTRE_ASSUMÉ` ;
-- `EF-PLAN-003` (correction ligne à ligne dans l'écran de revue) reste
-  `PARTIAL` : le repli livré est l'annulation du job puis le réimport
-  (`DEC-G1-003`) ;
-- le versionnement reste `PARTIAL` : le conflit **salle** contre les
-  séances déjà publiées n'est pas détecté et il n'existe pas de retour à
-  une version antérieure.
-
-Le parcours prioritaire de `CLAUDE.md` (« Import planning → Publication →
-Création des séances ») est donc **complet** dans ce prototype, au niveau
-de détail précisé ci-dessus. État par capacité : `docs/CURRENT-STATE.md`.
-Traçabilité de la contradiction et de sa résolution : `audit-report.md`,
-finding F-DOC-1.
-
----
-
-## 24. Règles de gestion principales
-
-- **RG-01** : un utilisateur peut posséder plusieurs rôles.
-- **RG-02** : les autorisations effectives correspondent à l’union
-  contrôlée de ses rôles.
-- **RG-03** : le super administrateur est réservé aux opérations
-  techniques sensibles.
-- **RG-04** : un responsable pédagogique ne consulte que son périmètre.
-- **RG-05** : une classe appartient à une formation et à une année.
-- **RG-06** : le responsable peut importer les apprenants de son
-  périmètre.
-- **RG-07** : l’adresse électronique d’un compte actif est unique.
-- **RG-08** : une invitation expire après une durée définie.
-- **RG-09** : un formateur externe suit un parcours d’activation sécurisé.
-- **RG-10** : une séance provient d’un planning publié.
-- **RG-11** : un formateur ne crée pas librement une séance.
-- **RG-12** : un remplacement est autorisé et audité.
-- **RG-13** : seul le formateur affecté ou son remplaçant ouvre la séance.
-- **RG-14** : un apprenant émarge uniquement pour une séance autorisée.
-- **RG-15** : une présence est unique par séance et par apprenant.
-- **RG-16** : le jeton possède une durée de validité limitée.
-- **RG-17** : un jeton expiré ou révoqué est refusé.
-- **RG-18** : une correction manuelle exige un motif.
-- **RG-19** : toute correction est auditée.
-- **RG-20** : un fichier invalide ne crée aucune donnée avant confirmation.
-- **RG-21** : les conflits de planning sont signalés.
-- **RG-22** : les résultats IA sont soumis à validation humaine.
-- **RG-23** : les rapports respectent le périmètre de l’utilisateur.
-- **RG-24** : aucune donnée biométrique brute n’est stockée.
-- **RG-25** : WebAuthn dispose d’un parcours alternatif.
-- **RG-26** : la délivrabilité dépend du retour du prestataire.
-- **RG-27** : les opérations externes sont traitées de façon asynchrone.
-- **RG-28** : le cache ne contourne jamais les autorisations.
-- **RG-29** : une réclamation conserve son historique.
-- **RG-30** : la démonstration utilise uniquement des données fictives.
-
----
-
-## 25. Contraintes
-
-### 25.1 Temps
-
-Le prototype doit être produit en trois jours.
-
-Le parcours prioritaire est :
-
-```text
-Import des apprenants
-→ Import du planning
-→ Publication
-→ Création des séances
-→ Ouverture par le formateur
-→ Émargement
-→ Rapport
-```
-
-### 25.2 Technique
-
-- développement local ;
-- environnement conteneurisé ;
-- VS Code ;
-- Claude Code ;
-- Spring Boot ;
-- Angular ;
-- MySQL ;
-- Redis ;
-- Python ;
-- Raspberry Pi ;
-- déploiement cloud différé.
-
-### 25.3 Confidentialité
-
-- données fictives ;
-- minimisation des informations ;
-- limitation des droits ;
-- aucun secret dans Git ;
-- protection des pièces jointes ;
-- pseudonymisation pour l’IA ;
-- aucune donnée biométrique du terminal stockée.
-
-### 25.4 Accessibilité
-
-Les fonctions essentielles disposeront d’alternatives :
-
-- code au lieu du scan ;
-- mécanisme sécurisé lorsque WebAuthn est indisponible ;
-- validation par le formateur ;
-- navigation au clavier ;
-- contrastes adaptés ;
-- erreurs compréhensibles ;
-- compatibilité avec les technologies d’assistance.
-
----
-
-## 26. Risques
+## 20. Risques
 
 | Risque | Probabilité | Impact | Atténuation |
 |---|---:|---:|---|
-| Périmètre trop large | Élevée | Élevé | Prioriser le parcours principal |
-| Erreur d’importation | Moyenne | Élevé | Prévisualisation et confirmation |
-| Adresses électroniques invalides | Élevée | Moyen | Validation, suivi et réémission |
-| Mauvaise interprétation du statut mail | Moyenne | Moyen | Séparer envoi et délivrabilité |
-| Import PDF trop complexe | Élevée | Moyen | Prioriser CSV et Excel |
-| Attaques automatisées | Élevée | Élevé | Turnstile et limitation |
-| Attaque par force brute | Élevée | Élevé | Limitation, verrouillage et MFA |
-| Prêt du téléphone | Moyenne | Élevé | WebAuthn, audit et alertes |
-| WebAuthn indisponible | Moyenne | Moyen | Parcours de secours |
-| Erreur sur les rôles cumulés | Moyenne | Élevé | Tests d’autorisation |
-| Fuite par le cache | Faible | Élevé | Clés contextualisées |
-| Cache obsolète | Moyenne | Moyen | TTL et invalidation |
-| Démonstration instable | Moyenne | Élevé | Vidéo et environnement local |
-| Erreur produite par l’IA | Moyenne | Élevé | Contrôle humain |
-| Défaillance Raspberry Pi | Moyenne | Moyen | Simulateur MQTT |
-| Formateur externe non activé | Moyenne | Moyen | Relance et réaffectation |
-| Remplacement non communiqué | Moyenne | Élevé | Notification et audit |
-| Messagerie indisponible | Moyenne | Moyen | File d’attente et nouvelle tentative |
-| Utilisation accidentelle de données réelles | Faible | Élevé | Données synthétiques |
-| Objectif de 100 ms non atteint | Moyenne | Faible | Mesure et optimisation ciblée |
+| Ampleur du périmètre | Élevée | Élevé | trajectoire en 13 sprints, incrément utilisable à chaque fin de sprint |
+| Fraude à l'émargement | Élevée | Élevé | jeton rotatif, anti-rejeu, WebAuthn, détection d'anomalies, audit |
+| Attaque automatisée | Élevée | Élevé | anti-robot, limitation, verrouillage progressif, MFA |
+| Hétérogénéité des plannings sources | Élevée | Moyen | modèle imposé, assistant IA, correction ligne à ligne |
+| Adresses électroniques invalides | Élevée | Moyen | validation, suivi de délivrabilité, réémission |
+| Confusion envoi / délivrabilité | Moyenne | Moyen | statuts internes et externes séparés |
+| Indisponibilité de WebAuthn | Moyenne | Moyen | parcours de secours systématique |
+| Erreur sur les rôles cumulés | Moyenne | Élevé | matrices de tests d'autorisation par module |
+| Fuite par le cache | Faible | Élevé | clés contextualisées par périmètre, jamais de contournement d'autorisation |
+| Perte d'un effet de bord | Moyenne | Moyen | outbox transactionnelle avec reprise |
+| Défaillance de la borne | Moyenne | Moyen | file locale, reprise, simulateur |
+| Erreur produite par l'IA | Moyenne | Élevé | score de confiance, validation humaine obligatoire |
+| Dépendance à un service externe | Moyenne | Moyen | ports et adaptateurs, fonctionnement complet en local |
+| Dérive documentaire | Moyenne | Élevé | `docs/CURRENT-STATE.md` mis à jour à chaque livraison |
+| Objectif de performance non atteint | Moyenne | Faible | mesure, publication du réel, optimisation ciblée |
 
 ---
 
-## 27. Indicateurs de réussite
+## 21. Indicateurs de réussite
 
-Le prototype sera considéré comme réussi si :
+La version 1.0 est atteinte lorsque :
 
-1. un utilisateur peut se connecter selon ses rôles ;
-2. un utilisateur peut cumuler deux rôles ;
-3. les droits respectent le périmètre ;
-4. un responsable peut importer une liste d’apprenants ;
-5. les erreurs sont affichées avant confirmation ;
-6. les comptes sont créés en attente d’activation ;
-7. les invitations sont tracées ;
-8. un planning CSV peut être importé ;
-9. les séances sont créées depuis le planning ;
-10. le formateur consulte ses séances ;
-11. un remplaçant peut être affecté ;
-12. une séance peut être ouverte ;
-13. un QR code temporaire peut être généré ;
-14. un apprenant peut émarger ;
-15. la présence est immédiatement visible ;
-16. une correction est auditée ;
-17. un rapport de classe ou d’apprenant est produit ;
-18. un export CSV est disponible ;
-19. les principales routes sont testées ;
-20. le parcours principal est démontrable localement.
-
----
-
-## 28. Livrables
-
-- note de cadrage ;
-- cahier des charges ;
-- backlog priorisé ;
-- architecture fonctionnelle ;
-- architecture technique ;
-- modèle de données ;
-- registre des risques ;
-- analyse de sécurité ;
-- analyse RGPD ;
-- matrice de traçabilité RNCP ;
-- prototype fonctionnel ;
-- code source ;
-- migrations ;
-- données fictives ;
-- tests ;
-- documentation API ;
-- scripts Docker Compose ;
-- guide d’installation ;
-- guide d’utilisation ;
-- guide de démonstration ;
-- rapport de soutenance ;
-- présentation ;
-- journal d’utilisation de l’intelligence artificielle ;
-- vidéo de démonstration de secours.
+1. un utilisateur se connecte par mot de passe **ou** par passkey ;
+2. un compte privilégié est protégé par un second facteur ;
+3. le cumul de rôles fonctionne sans élargir un périmètre ;
+4. un responsable importe 500 apprenants sans doublon ni perte ;
+5. les invitations partent, sont suivies et réémissibles ;
+6. un planning est importé, corrigé, versionné et publié ;
+7. un planning est construit directement dans le calendrier ;
+8. les séances sont créées, affectables et remplaçables ;
+9. le planning est synchronisé vers un agenda externe ;
+10. les cinq canaux d'émargement fonctionnent ;
+11. les quatre points de contrôle produisent le calcul journalier ;
+12. l'alternance n'est jamais comptée comme une absence ;
+13. un justificatif accepté transforme `ABSENT` en `EXCUSED` ;
+14. une réclamation vit son cycle complet avec historique ;
+15. les notifications arrivent dans l'application, par email et en push ;
+16. l'application est installable et consultable hors ligne ;
+17. les rapports et attestations sont produits en CSV, Excel et PDF ;
+18. l'IA propose un mapping et un score d'anomalie, validés par un humain ;
+19. une borne connectée émarge et résiste à une coupure réseau ;
+20. la piste d'audit couvre toutes les opérations sensibles ;
+21. l'application est déployée sur un environnement accessible ;
+22. une restauration de sauvegarde est démontrée ;
+23. l'ensemble des tests passe en intégration continue.
 
 ---
 
-## 29. Hypothèses
+## 22. Livrables
 
-- les informations internes inconnues sont signalées comme étant à valider ;
-- un modèle de fichier peut être imposé aux responsables ;
-- les utilisateurs disposent d’une adresse électronique ;
+**Produit** : application déployée, code source, migrations, jeu de
+données fictives, tests, documentation d'API.
+
+**Documentation** : cadrage, cahier des charges, architecture, modèle de
+données, backlog, roadmap, risques, sécurité et RGPD, stratégie de
+tests, guide utilisateur, guide de déploiement, prérequis externes,
+état courant.
+
+**Exploitation** : composition Docker, images de production, chaîne
+d'intégration continue, scripts d'administration, procédures de
+sauvegarde, de restauration et d'incident.
+
+---
+
+## 23. Hypothèses
+
+- l'établissement fournit les adresses électroniques des utilisateurs ;
+- un modèle de fichier peut être imposé aux responsables pédagogiques ;
 - certains formateurs utilisent une adresse externe ;
-- le prototype emploie des comptes fictifs ;
-- la Raspberry Pi accède au réseau local ;
-- les fonctions externes peuvent être simulées ;
-- l’architecture cible peut être documentée sans être déployée ;
-- la soutenance accepte une preuve de concept clairement identifiée.
+- les données de développement et de démonstration sont fictives ;
+- la borne connectée dispose d'un accès au réseau local ;
+- les intégrations externes peuvent être activées progressivement, le
+  produit restant complet sans elles ;
+- l'architecture cible peut être documentée avant d'être déployée.
 
 ---
 
-## 30. Traçabilité RNCP 39394
+## 24. Règles de gestion structurantes
 
-### Bloc 1 — Pilotage stratégique
+Les règles complètes sont au cahier des charges (`docs/02`, §43). Les
+règles structurantes du cadrage :
 
-- cadrage ;
-- analyse des besoins ;
-- périmètre ;
-- priorités ;
-- planning ;
-- risques ;
-- indicateurs ;
-- gouvernance ;
-- conduite du changement ;
-- stratégie d’évolution.
-
-### Bloc 2 — Développement et technologies avancées
-
-- application Angular ;
-- API Spring Boot ;
-- import CSV et Excel ;
-- MySQL ;
-- Redis ;
-- WebAuthn ;
-- tableaux de bord ;
-- rapports ;
-- service Python ;
-- tests ;
-- documentation API.
-
-### Bloc 3 — Infrastructure et cybersécurité
-
-- Docker Compose ;
-- authentification ;
-- autorisations ;
-- MFA ;
-- anti-bot ;
-- limitation des requêtes ;
-- cache sécurisé ;
-- audit ;
-- supervision ;
-- sécurisation des API ;
-- traitement des incidents ;
-- détection des anomalies.
-
-### Bloc 4 — IoT sécurisé et IA
-
-- Raspberry Pi ;
-- MQTT ;
-- identité du dispositif ;
-- télémétrie ;
-- mode dégradé ;
-- détection d’événements anormaux ;
-- intégration au système d’information.
+- un utilisateur peut posséder plusieurs rôles ; le cumul n'élargit
+  jamais un périmètre ;
+- un responsable pédagogique ne voit que son périmètre ;
+- une séance normale provient d'un planning publié ;
+- un formateur ne crée pas librement une séance de planning et ne valide
+  pas son propre remplacement ;
+- un apprenant émarge uniquement pour une séance à laquelle il est
+  attendu ;
+- une présence est unique par séance, par apprenant et par point de
+  contrôle ;
+- un jeton est limité dans le temps, à usage unique, révocable ;
+- toute correction exige un motif et est auditée ;
+- un fichier invalide ne crée aucune donnée avant confirmation ;
+- un conflit bloquant interdit la publication ;
+- une production de l'IA est toujours soumise à validation humaine ;
+- le cache ne contourne jamais une autorisation ;
+- une période en entreprise n'est jamais comptée comme une absence ;
+- aucune donnée biométrique brute n'est stockée ;
+- la démonstration utilise uniquement des données fictives.
 
 ---
 
-## 31. Décision de lancement
+## 25. Documents de référence
 
-Le projet peut être lancé sous réserve :
+| Document | Objet |
+|---|---|
+| `docs/02-cahier-des-charges.md` | exigences fonctionnelles et techniques, règles, critères d'acceptation |
+| `docs/03-architecture.md` | architecture logique, technique, décisions |
+| `docs/04-modele-donnees.md` | modèle conceptuel et physique |
+| `docs/05-product-backlog.md` | backlog produit complet, priorisé, estimé |
+| `docs/06-roadmap-six-mois.md` | trajectoire, sprints, jalons |
+| `docs/07-risques.md` | registre des risques |
+| `docs/08-securite-rgpd.md` | analyse de sécurité et conformité |
+| `docs/09-strategie-tests.md` | stratégie et plan de tests |
+| `docs/10-guide-utilisateur.md` | guide fonctionnel par rôle |
+| `docs/11-guide-deploiement.md` | installation, exploitation, déploiement |
+| `docs/12-prerequis-externes.md` | comptes, clés et matériel à préparer |
+| `docs/CURRENT-STATE.md` | état réel du dépôt, mis à jour à chaque livraison |
 
-- de conserver un périmètre strict pendant les trois jours ;
-- de réaliser d’abord le parcours principal ;
-- de retenir CSV comme format obligatoire ;
-- de considérer Excel comme un objectif secondaire ;
-- de considérer PDF comme expérimental ;
-- de traiter WebAuthn, MFA et anti-bot selon le temps disponible ;
-- de distinguer les fonctions réalisées, simulées, conçues et hors
-  périmètre ;
-- de vérifier humainement les productions des assistants IA.
-```
+---
 
-## Référence minimale à placer dans `CLAUDE.md`
+## 26. Décision
 
-Ne recopie pas tout le cadrage dans `CLAUDE.md`. Ajoute simplement :
-
-```markdown
-## Documents de référence
-
-Avant toute analyse fonctionnelle ou modification du périmètre, consulter :
-
-- `docs/01-cadrage.md` : vision, objectifs, acteurs, périmètre et contraintes ;
-- `docs/02-cahier-des-charges.md` : exigences fonctionnelles et techniques ;
-- `docs/CURRENT-STATE.md` : état réel de l’implémentation.
-
-Ne lire intégralement `docs/01-cadrage.md` que si la tâche concerne
-le métier, le périmètre, les rôles, l’architecture ou la documentation.
-
-Le code et les tests constituent la source de vérité concernant les
-fonctionnalités réellement réalisées.
+Le cadrage version 3.0 est adopté comme référence unique. La cible est
+une **application complète**, construite en six mois, déployée et
+exploitable. Les restrictions de la version 2.1, liées à un exercice de
+trois jours, sont sans objet et ne doivent plus être citées.

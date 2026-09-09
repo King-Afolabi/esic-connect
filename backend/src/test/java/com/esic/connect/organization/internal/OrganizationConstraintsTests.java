@@ -73,10 +73,10 @@ class OrganizationConstraintsTests {
     @Test
     void roomCodeMustBeUniquePerSite() {
         Site site = siteRepository.saveAndFlush(new Site(uniqueCode(), "A", "Europe/Paris"));
-        roomRepository.saveAndFlush(new Room(site, null, "R1", "Salle 1", 20, null, null));
+        roomRepository.saveAndFlush(new Room(site, null, "R1", "Salle 1", 20, null));
 
         assertThrows(DataIntegrityViolationException.class,
-                () -> roomRepository.saveAndFlush(new Room(site, null, "R1", "Salle 1 bis", 10, null, null)));
+                () -> roomRepository.saveAndFlush(new Room(site, null, "R1", "Salle 1 bis", 10, null)));
     }
 
     @Test
@@ -96,7 +96,7 @@ class OrganizationConstraintsTests {
     void deletingBuildingReferencedByRoomIsRejected() {
         Site site = siteRepository.saveAndFlush(new Site(uniqueCode(), "A", "Europe/Paris"));
         Building building = buildingRepository.saveAndFlush(new Building(site, "B1", "Bâtiment 1"));
-        roomRepository.saveAndFlush(new Room(site, building, "R1", "Salle 1", 20, null, null));
+        roomRepository.saveAndFlush(new Room(site, building, "R1", "Salle 1", 20, null));
         Long buildingId = building.getId();
         entityManager.clear();
 

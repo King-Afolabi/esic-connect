@@ -6,12 +6,19 @@ import { environment } from '../../../environments/environment';
 import { PageResponse } from '../sessions/sessions.models';
 import {
   AmendJustificationRequest,
+  DecideEarlyDepartureRequest,
+  DeclareEarlyDepartureRequest,
+  EarlyDeparture,
+  ForwardEarlyDepartureRequest,
   ClassReportRow,
   JustificationAttachmentMeta,
   JustificationResponse,
   MyAttendanceDetail,
   MyAttendanceQuery,
   MyAttendanceRow,
+  ReportDocumentCheck,
+  ReportDocumentSummary,
+  ReportExportFormat,
   ReportKind,
   ReportQuery,
   ReviewJustificationRequest,
@@ -19,6 +26,7 @@ import {
   StudentReportRow,
   SubmitJustificationRequest,
   SummaryResponse,
+  TransparencyEntry,
 } from './attendance.models';
 
 /**
@@ -54,6 +62,69 @@ export class AttendanceApiService {
   getMyAttendance(attendanceId: string): Observable<MyAttendanceDetail> {
     return this.http.get<MyAttendanceDetail>(
       `${this.base}/me/attendance/${encodeURIComponent(attendanceId)}`,
+    );
+  }
+
+  /**
+   * `GET /api/v1/me/attendance/transparency` (EF-ATT-014). Le serveur
+   * bâtit le journal depuis le seul JWT : aucun identifiant d'apprenant
+   * n'est transmis, et il n'en accepterait pas.
+   */
+  transparencyJournal(query: {
+    from?: string | null;
+    to?: string | null;
+    page?: number;
+    size?: number;
+  }): Observable<PageResponse<TransparencyEntry>> {
+    return this.http.get<PageResponse<TransparencyEntry>>(
+      `${this.base}/me/attendance/transparency`,
+      {
+        params: toParams({
+          from: query.from,
+          to: query.to,
+          page: query.page,
+          size: query.size,
+        }),
+      },
+    );
+  }
+
+  /** `GET /api/v1/me/attendance/early-departures` (EF-ATT-013). */
+  listMyEarlyDepartures(): Observable<EarlyDeparture[]> {
+    return this.http.get<EarlyDeparture[]>(`${this.base}/me/attendance/early-departures`);
+  }
+
+  /** `POST /api/v1/attendance/early-departure` → 201 (EF-ATT-013). */
+  declareEarlyDeparture(body: DeclareEarlyDepartureRequest): Observable<EarlyDeparture> {
+    return this.http.post<EarlyDeparture>(`${this.base}/attendance/early-departure`, body);
+  }
+
+  /** `GET /api/v1/sessions/{id}/attendance/early-departures` (gestion). */
+  listSessionEarlyDepartures(sessionPublicId: string): Observable<EarlyDeparture[]> {
+    return this.http.get<EarlyDeparture[]>(
+      `${this.base}/sessions/${encodeURIComponent(sessionPublicId)}/attendance/early-departures`,
+    );
+  }
+
+  /** `POST /api/v1/attendance/early-departures/{id}/forward`. */
+  forwardEarlyDeparture(
+    publicId: string,
+    body: ForwardEarlyDepartureRequest,
+  ): Observable<EarlyDeparture> {
+    return this.http.post<EarlyDeparture>(
+      `${this.base}/attendance/early-departures/${encodeURIComponent(publicId)}/forward`,
+      body,
+    );
+  }
+
+  /** `POST /api/v1/attendance/early-departures/{id}/decision`. */
+  decideEarlyDeparture(
+    publicId: string,
+    body: DecideEarlyDepartureRequest,
+  ): Observable<EarlyDeparture> {
+    return this.http.post<EarlyDeparture>(
+      `${this.base}/attendance/early-departures/${encodeURIComponent(publicId)}/decision`,
+      body,
     );
   }
 
@@ -197,12 +268,59 @@ export class AttendanceApiService {
    * `GET /api/v1/attendance/reports/{kind}/export` — CSV en `blob`.
    * Le composant appelant déclenche le téléchargement.
    */
-  exportReport(kind: ReportKind, query: ReportQuery): Observable<HttpResponseBlob> {
+  /**
+   * Export d'un rapport (EF-REP-003, EF-REP-004, EF-REP-005).
+   *
+   * Le `format` est transmis au serveur, qui le résout contre une liste
+   * fermée : un format inconnu produit un `400` explicite, jamais un
+   * repli silencieux sur le CSV.
+   */
+  exportReport(
+    kind: ReportKind,
+    query: ReportQuery,
+    format: ReportExportFormat = 'csv',
+  ): Observable<HttpResponseBlob> {
     return this.http.get(`${this.base}/attendance/reports/${kind}/export`, {
-      params: reportParams(query),
+      params: reportParams(query).set('format', format),
       responseType: 'blob',
       observe: 'response',
     });
+  }
+
+  /**
+   * Émet une attestation d'assiduité (EF-REP-006, AC-033) et renvoie le
+   * PDF. L'identifiant du document arrive dans l'en-tête `X-Document-Id`
+   * — le client l'affiche sans avoir à ouvrir le PDF.
+   */
+  issueAttestation(
+    studentProfilePublicId: string,
+    from: string | null,
+    to: string | null,
+  ): Observable<HttpResponseBlob> {
+    return this.http.post(
+      `${this.base}/attendance/reports/attestation`,
+      null,
+      {
+        params: toParams({ studentProfile: studentProfilePublicId, from, to }),
+        responseType: 'blob',
+        observe: 'response',
+      },
+    );
+  }
+
+  /** Registre des documents officiels émis. */
+  listAttestations(limit = 20): Observable<ReportDocumentSummary[]> {
+    return this.http.get<ReportDocumentSummary[]>(
+      `${this.base}/attendance/reports/attestation`,
+      { params: new HttpParams().set('limit', limit) },
+    );
+  }
+
+  /** Vérifie un identifiant de document présenté par un tiers (AC-033). */
+  verifyAttestation(documentId: string): Observable<ReportDocumentCheck> {
+    return this.http.get<ReportDocumentCheck>(
+      `${this.base}/attendance/reports/attestation/${encodeURIComponent(documentId)}`,
+    );
   }
 }
 

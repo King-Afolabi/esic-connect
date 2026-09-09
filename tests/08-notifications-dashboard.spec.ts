@@ -9,7 +9,7 @@ import { loginAsUi } from './support/auth';
  * formateurs uniquement (dette G1-D-AUDIENCE) ; pas d'email métier
  * (au-delà de l'activation), pas de push PWA, pas de préférences par
  * canal — ces sous-domaines de la demande initiale n'existent pas dans
- * l'UI et ne sont donc pas testés (voir audit-report.md §4.5).
+ * l'UI et ne sont donc pas testés (voir docs/09-strategie-tests.md).
  */
 
 test.describe('Tableau de bord', () => {

@@ -186,7 +186,80 @@
                   <dl class="dashboard__facts">
                     <div><dt>Classes</dt><dd>{{ m.classCount }}</dd></div>
                     <div><dt>Codes</dt><dd>{{ m.classCodes.join(', ') || '—' }}</dd></div>
+                    <div><dt>Taux d'assiduité</dt><dd>{{ percent(m.attendanceRate) }}</dd></div>
+                    <div><dt>Retards</dt><dd>{{ m.lateCount }}</dd></div>
+                    <div><dt>Absences non justifiées</dt>
+                      <dd>{{ m.unjustifiedAbsenceHalfDays }} demi-journée(s)</dd></div>
+                    <div><dt>Justificatifs en attente</dt><dd>{{ m.pendingJustifications }}</dd></div>
+                    <div><dt>Réclamations ouvertes</dt><dd>{{ m.openClaims }}</dd></div>
+                    <div><dt>Comptes non activés</dt><dd>{{ m.pendingActivations }}</dd></div>
                   </dl>
+                  <p class="dashboard__meta">
+                    Période mesurée : du {{ shortDate(m.periodFrom) }} au {{ shortDate(m.periodTo) }}.
+                  </p>
+                </mat-card-content>
+              </mat-card>
+
+              <!--
+                EF-REP-008 — « tout graphique dispose d'un titre, d'une
+                légende, de valeurs accessibles, d'un tableau équivalent,
+                d'une palette contrastée, et ne dépend jamais uniquement
+                de la couleur » (docs/02 §22.6). L'histogramme et le
+                tableau lisent la MÊME liste : ils ne peuvent pas diverger.
+                Chaque barre porte sa valeur en texte — la couleur n'est
+                jamais le seul porteur de l'information.
+              -->
+              <mat-card appearance="outlined" class="dashboard__card dashboard__card--wide">
+                <mat-card-header>
+                  <mat-card-title>Taux d'assiduité par classe</mat-card-title>
+                  <mat-card-subtitle>
+                    Demi-journées suivies rapportées aux demi-journées attendues
+                  </mat-card-subtitle>
+                </mat-card-header>
+                <mat-card-content>
+                  @if (m.classRates.length) {
+                    <ul class="dashboard__chart" role="presentation">
+                      @for (rate of m.classRates; track rate.label) {
+                        <li class="dashboard__bar-row">
+                          <span class="dashboard__bar-label">{{ rate.label }}</span>
+                          <span class="dashboard__bar-track">
+                            <span class="dashboard__bar-fill"
+                                  [style.width.%]="barWidth(rate.attendanceRate)"></span>
+                          </span>
+                          <span class="dashboard__bar-value">{{ percent(rate.attendanceRate) }}</span>
+                        </li>
+                      }
+                    </ul>
+                    <table class="dashboard__table">
+                      <caption>Tableau équivalent — assiduité par classe, en demi-journées</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Classe</th>
+                          <th scope="col">Attendues</th>
+                          <th scope="col">Suivies</th>
+                          <th scope="col">Absentes</th>
+                          <th scope="col">Excusées</th>
+                          <th scope="col">Retards</th>
+                          <th scope="col">Taux</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (rate of m.classRates; track rate.label) {
+                          <tr>
+                            <th scope="row">{{ rate.label }}</th>
+                            <td>{{ rate.expectedHalfDays }}</td>
+                            <td>{{ rate.presentHalfDays }}</td>
+                            <td>{{ rate.absentHalfDays }}</td>
+                            <td>{{ rate.excusedHalfDays }}</td>
+                            <td>{{ rate.lateCount }}</td>
+                            <td>{{ percent(rate.attendanceRate) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <p class="dashboard__empty">Aucune donnée d'assiduité sur la période.</p>
+                  }
                 </mat-card-content>
               </mat-card>
               <mat-card appearance="outlined" class="dashboard__card">
@@ -224,8 +297,86 @@
                     <div><dt>Suspendus</dt><dd>{{ a.suspendedAccounts }}</dd></div>
                     <div><dt>En attente d'activation</dt><dd>{{ a.pendingActivation }}</dd></div>
                     <div><dt>Archivés</dt><dd>{{ a.archivedAccounts }}</dd></div>
-                    <div><dt>Justificatifs en attente</dt><dd>{{ a.pendingJustifications }}</dd></div>
+                    <div><dt>Invitations expirées</dt><dd>{{ a.expiredInvitations }}</dd></div>
+                    <div><dt>Taux d'assiduité global</dt><dd>{{ percent(a.globalAttendanceRate) }}</dd></div>
                   </dl>
+                </mat-card-content>
+              </mat-card>
+
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Justificatifs</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  <dl class="dashboard__facts">
+                    <div><dt>En attente</dt><dd>{{ a.pendingJustifications }}</dd></div>
+                    <div><dt>Examinés sur la période</dt><dd>{{ a.decidedJustifications }}</dd></div>
+                    <div><dt>Délai médian de décision</dt>
+                      <dd>
+                        @if (a.medianDecisionDelayHours !== null) {
+                          {{ a.medianDecisionDelayHours }} h
+                        } @else {
+                          <!-- « 0 h » ferait croire à un traitement instantané. -->
+                          Aucun dossier traité sur la période
+                        }
+                      </dd>
+                    </div>
+                  </dl>
+                  <p class="dashboard__meta">
+                    Période mesurée : du {{ shortDate(a.periodFrom) }} au {{ shortDate(a.periodTo) }}.
+                  </p>
+                </mat-card-content>
+              </mat-card>
+
+              <mat-card appearance="outlined" class="dashboard__card dashboard__card--wide">
+                <mat-card-header>
+                  <mat-card-title>Comparaison des formations</mat-card-title>
+                  <mat-card-subtitle>
+                    Taux d'assiduité, demi-journées suivies sur demi-journées attendues
+                  </mat-card-subtitle>
+                </mat-card-header>
+                <mat-card-content>
+                  @if (a.programRates.length) {
+                    <ul class="dashboard__chart" role="presentation">
+                      @for (rate of a.programRates; track rate.label) {
+                        <li class="dashboard__bar-row">
+                          <span class="dashboard__bar-label">{{ rate.label }}</span>
+                          <span class="dashboard__bar-track">
+                            <span class="dashboard__bar-fill"
+                                  [style.width.%]="barWidth(rate.attendanceRate)"></span>
+                          </span>
+                          <span class="dashboard__bar-value">{{ percent(rate.attendanceRate) }}</span>
+                        </li>
+                      }
+                    </ul>
+                    <table class="dashboard__table">
+                      <caption>Tableau équivalent — assiduité par formation, en demi-journées</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Formation</th>
+                          <th scope="col">Attendues</th>
+                          <th scope="col">Suivies</th>
+                          <th scope="col">Absentes</th>
+                          <th scope="col">Excusées</th>
+                          <th scope="col">Retards</th>
+                          <th scope="col">Taux</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (rate of a.programRates; track rate.label) {
+                          <tr>
+                            <th scope="row">{{ rate.label }}</th>
+                            <td>{{ rate.expectedHalfDays }}</td>
+                            <td>{{ rate.presentHalfDays }}</td>
+                            <td>{{ rate.absentHalfDays }}</td>
+                            <td>{{ rate.excusedHalfDays }}</td>
+                            <td>{{ rate.lateCount }}</td>
+                            <td>{{ percent(rate.attendanceRate) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <p class="dashboard__empty">Aucune donnée d'assiduité sur la période.</p>
+                  }
                 </mat-card-content>
               </mat-card>
               <mat-card appearance="outlined" class="dashboard__card">
@@ -261,6 +412,44 @@
                     </ul>
                   } @else {
                     <p class="dashboard__empty">Aucune séance aujourd'hui.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+            </div>
+          }
+
+          @if (d.administration; as a) {
+            <div class="dashboard__grid">
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Exports récents</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (a.recentExports.length) {
+                    <ul class="dashboard__list">
+                      @for (line of a.recentExports; track line.occurredAt + line.action) {
+                        <li>{{ line.actor || 'Système' }} — {{ line.result }}
+                          <span class="dashboard__meta">{{ shortInstant(line.occurredAt) }}</span></li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="dashboard__empty">Aucun export récent.</p>
+                  }
+                </mat-card-content>
+              </mat-card>
+              <mat-card appearance="outlined" class="dashboard__card">
+                <mat-card-header><mat-card-title>Dernières opérations auditées</mat-card-title></mat-card-header>
+                <mat-card-content>
+                  @if (a.recentAuditOperations.length) {
+                    <ul class="dashboard__list">
+                      @for (line of a.recentAuditOperations; track line.occurredAt + line.action) {
+                        <li>{{ line.action }} — {{ line.result }}
+                          <span class="dashboard__meta">{{ shortInstant(line.occurredAt) }}</span></li>
+                      }
+                    </ul>
+                    <p class="dashboard__meta">
+                      Le détail complet est dans la piste d'audit, réservée à l'administration.
+                    </p>
+                  } @else {
+                    <p class="dashboard__empty">Aucune opération auditée récemment.</p>
                   }
                 </mat-card-content>
               </mat-card>

@@ -1,0 +1,98 @@
+<section class="subjects" aria-labelledby="subjects-title">
+  <h1 id="subjects-title">Matières</h1>
+  <p class="subjects__hint">
+    Une matière n'a pas de formateur attitré : l'affectation se fait au niveau de la séance, d'une
+    période ou d'une association classe–matière–période.
+  </p>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+  }
+
+  <p class="subjects__error" role="alert" aria-live="assertive">
+    @if (errorMessage()) {
+      <mat-icon aria-hidden="true">error</mat-icon>
+      <span>{{ errorMessage() }}</span>
+    }
+  </p>
+
+  <mat-card>
+    <mat-card-content>
+      <form class="subjects__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Code</mat-label>
+          <input matInput formControlName="code" maxlength="40" required />
+          @if (form.controls.code.touched && form.controls.code.invalid) {
+            <mat-error>Le code est obligatoire (40 caractères maximum).</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Intitulé</mat-label>
+          <input matInput formControlName="name" maxlength="200" required />
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <mat-error>L'intitulé est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Volume horaire (indicatif)</mat-label>
+          <input matInput type="number" formControlName="hourlyVolume" min="1" />
+        </mat-form-field>
+        <button mat-flat-button color="primary" type="submit" [disabled]="loading()">
+          Ajouter
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <button mat-stroked-button type="button" (click)="toggleArchived()">
+    {{ showArchived() ? 'Masquer les matières archivées' : 'Afficher les matières archivées' }}
+  </button>
+
+  <table mat-table [dataSource]="subjects()" class="subjects__table">
+    <ng-container matColumnDef="code">
+      <th mat-header-cell *matHeaderCellDef scope="col">Code</th>
+      <td mat-cell *matCellDef="let subject">{{ subject.code }}</td>
+    </ng-container>
+    <ng-container matColumnDef="name">
+      <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
+      <td mat-cell *matCellDef="let subject">{{ subject.name }}</td>
+    </ng-container>
+    <ng-container matColumnDef="hourlyVolume">
+      <th mat-header-cell *matHeaderCellDef scope="col">Volume</th>
+      <td mat-cell *matCellDef="let subject">{{ subject.hourlyVolume ?? '—' }}</td>
+    </ng-container>
+    <ng-container matColumnDef="programs">
+      <th mat-header-cell *matHeaderCellDef scope="col">Formations</th>
+      <td mat-cell *matCellDef="let subject">
+        {{ subject.programs.length ? programCodes(subject) : 'Transverse' }}
+      </td>
+    </ng-container>
+    <ng-container matColumnDef="status">
+      <th mat-header-cell *matHeaderCellDef scope="col">Statut</th>
+      <td mat-cell *matCellDef="let subject">{{ subject.status }}</td>
+    </ng-container>
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef scope="col">Actions</th>
+      <td mat-cell *matCellDef="let subject">
+        @if (subject.status === 'ARCHIVED') {
+          <button mat-stroked-button type="button" (click)="restore(subject)"
+                  [attr.aria-label]="'Restaurer la matière ' + subject.code">
+            Restaurer
+          </button>
+        } @else {
+          <button mat-stroked-button type="button" (click)="archive(subject)"
+                  [attr.aria-label]="'Archiver la matière ' + subject.code">
+            Archiver
+          </button>
+        }
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="columns"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns"></tr>
+  </table>
+
+  @if (subjects().length === 0 && !loading()) {
+    <p>Aucune matière enregistrée.</p>
+  }
+</section>

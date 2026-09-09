@@ -1,5 +1,7 @@
 package com.esic.connect.notification.internal;
 
+import com.esic.connect.identity.UserDirectory;
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -47,18 +49,26 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Bloc G1-D.1 — résilience de la livraison des notifications.
+ * Résilience de la livraison des notifications, après le passage à
+ * l'outbox transactionnelle (EF-NOTIF-003, EF-AUD-003 ; AC-028).
  *
- * <p>Un {@link NotificationRowWriter} <strong>volontairement défaillant</strong>
- * ({@code @Primary}, échoue sur les {@code failFirstN} premiers appels)
- * prouve :
+ * <p>Un {@link NotificationRecipientWriter} <strong>volontairement
+ * défaillant</strong> ({@code @Primary}, échoue sur les
+ * {@code failFirstN} premiers appels) prouve quatre choses :
+ *
  * <ul>
- *   <li>§6 — l'échec d'écriture d'<em>un</em> destinataire n'empêche pas
- *       les autres destinataires du même événement d'être notifiés ;</li>
- *   <li>§7 — un échec <em>complet</em> du writer après le commit métier
- *       ne renvoie <strong>pas</strong> d'erreur HTTP, ne rollbacke pas la
- *       mutation métier et ne laisse aucun état partiel (livraison « au
- *       mieux », DEC-G1-007 / G1-D-OUTBOX).</li>
+ *   <li>l'échec d'écriture d'<em>un</em> destinataire n'empêche pas les
+ *       autres destinataires du même événement d'être notifiés
+ *       (docs/02 §21.3) ;</li>
+ *   <li>une collision réellement attribuable à {@code uq_notification_dedup}
+ *       est un succès idempotent, jamais confondue avec une vraie
+ *       erreur ;</li>
+ *   <li>un échec <em>complet</em> de la livraison ne renvoie pas d'erreur
+ *       HTTP et ne rollbacke pas la mutation métier ;</li>
+ *   <li><strong>différence avec l'ancien comportement</strong> : cet
+ *       échec n'est plus « au mieux » et oublié. Le message d'outbox
+ *       passe en reprise, et la livraison aboutit à la tentative
+ *       suivante — c'est la garantie que la dette T-01 réclamait.</li>
  * </ul>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -85,16 +95,20 @@ class NotificationDeliveryResilienceIntegrationTests {
 
         @Bean
         @Primary
-        NotificationRowWriter flakyRowWriter(NotificationRepository repository) {
-            return new NotificationRowWriter(repository) {
+        NotificationRecipientWriter flakyRecipientWriter(NotificationRepository repository,
+                                                         NotificationPreferenceService preferences,
+                                                         PushSubscriptionRepository pushSubscriptions,
+                                                         com.esic.connect.outbox.OutboxPublisher publisher) {
+            return new NotificationRecipientWriter(repository, preferences, pushSubscriptions, publisher) {
                 @Override
-                void write(long recipientUserId, NotificationType type, String title, String body,
-                          String resourceType, UUID resourcePublicId, String dedupKey, Instant createdAt) {
+                public void deliver(NotificationRequest request, UserDirectory.UserRef recipient,
+                                    String dedupKey, Instant now) {
                     if (calls.incrementAndGet() <= failFirstN) {
                         throw failure.get();
                     }
-                    repository.saveAndFlush(new Notification(recipientUserId, type, title, body,
-                            resourceType, resourcePublicId, dedupKey, createdAt));
+                    repository.saveAndFlush(new Notification(recipient.internalId(), request.type(),
+                            request.title(), request.body(), request.resourceType(),
+                            request.resourcePublicId(), dedupKey, now));
                 }
             };
         }
@@ -110,7 +124,7 @@ class NotificationDeliveryResilienceIntegrationTests {
     @Autowired
     private TestRestTemplate rest;
     @Autowired
-    private NotificationWriter notificationWriter;
+    private NotificationOutboxHandler notificationHandler;
     @Autowired
     private UserAccountRepository userAccountRepository;
     @Autowired
@@ -130,7 +144,7 @@ class NotificationDeliveryResilienceIntegrationTests {
         rest.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
         FlakyRowWriterConfig.reset();
         LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-        writerLogger = context.getLogger(NotificationWriter.class);
+        writerLogger = context.getLogger(NotificationOutboxHandler.class);
         logs = new ListAppender<>();
         logs.start();
         writerLogger.addAppender(logs);
@@ -145,18 +159,33 @@ class NotificationDeliveryResilienceIntegrationTests {
         }
     }
 
-    private boolean loggedRealError() {
+    private boolean loggedRecipientFailure() {
         return logs.list.stream().anyMatch(e -> e.getLevel() == Level.WARN
-                && e.getFormattedMessage().contains("vraie erreur"));
+                && e.getFormattedMessage().contains("Echec de notification d'un destinataire"));
     }
 
-    private boolean loggedIdempotentDedup() {
-        return logs.list.stream().anyMatch(e -> e.getLevel() == Level.DEBUG
-                && e.getFormattedMessage().contains("uq_notification_dedup"));
+    /** Livraison directe, sans passer par un événement métier. */
+    private void deliver(NotificationType type, UUID resource, UUID eventKey, List<String> recipientIds) {
+        NotificationRequest request = NotificationRequest
+                .of(type, "COURSE_SESSION", resource, eventKey)
+                .label("Séance annulée", "corps neutre")
+                .recipients(recipientIds.stream().map(UUID::fromString).toList())
+                .build();
+        notificationHandler.handle("cle-de-test-" + eventKey, request.toPayload());
+    }
+
+    private void deliverIgnoringFailure(NotificationType type, UUID resource, UUID eventKey,
+                                        List<String> recipientIds) {
+        try {
+            deliver(type, resource, eventKey, recipientIds);
+        } catch (NotificationDeliveryIncompleteException expected) {
+            // La livraison partielle est signalée au diffuseur : ce test
+            // vérifie l'état laissé en base, pas la reprise elle-même.
+        }
     }
 
     // ------------------------------------------------------------------
-    // §6 — échec d'un destinataire n'empêche pas les autres
+    // L'échec d'un destinataire n'empêche pas les autres (§21.3)
     // ------------------------------------------------------------------
 
     @Test
@@ -169,16 +198,30 @@ class NotificationDeliveryResilienceIntegrationTests {
 
         FlakyRowWriterConfig.failFirstN = 1; // le tout premier destinataire échoue
 
-        // 3 destinataires ; 1 échoue, 2 réussissent — aucune exception ne remonte.
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                new java.util.LinkedHashSet<>(List.of(
-                        UUID.fromString(a.publicId()),
-                        UUID.fromString(b.publicId()),
-                        UUID.fromString(c.publicId()))),
-                "Séance annulée", "corps neutre");
+        deliverIgnoringFailure(NotificationType.SESSION_CANCELLED, resource, eventKey,
+                List.of(a.publicId(), b.publicId(), c.publicId()));
 
         assertThat(notificationRows(resource))
                 .as("2 des 3 destinataires notifiés malgré l'échec du premier").isEqualTo(2L);
+        assertThat(loggedRecipientFailure()).as("l'échec est journalisé, jamais tu").isTrue();
+    }
+
+    @Test
+    void aFailedRecipientIsServedByTheNextAttemptWithoutDuplicatingTheOthers() {
+        Account a = account(RoleCode.TEACHER);
+        Account b = account(RoleCode.TEACHER);
+        UUID resource = UUID.randomUUID();
+        UUID eventKey = UUID.randomUUID();
+        List<String> recipients = List.of(a.publicId(), b.publicId());
+
+        FlakyRowWriterConfig.failFirstN = 1;
+        deliverIgnoringFailure(NotificationType.SESSION_CANCELLED, resource, eventKey, recipients);
+        assertThat(notificationRows(resource)).as("un seul servi à la première tentative").isEqualTo(1L);
+
+        // Reprise : le destinataire manquant est servi, l'autre n'est pas
+        // redoublé — c'est exactement ce que l'outbox apporte (AC-028).
+        deliver(NotificationType.SESSION_CANCELLED, resource, eventKey, recipients);
+        assertThat(notificationRows(resource)).as("les deux servis, aucun doublon").isEqualTo(2L);
     }
 
     @Test
@@ -187,21 +230,17 @@ class NotificationDeliveryResilienceIntegrationTests {
         Account b = account(RoleCode.TEACHER);
         UUID resource = UUID.randomUUID();
         UUID eventKey = UUID.randomUUID();
-        Set<UUID> recipients = new java.util.LinkedHashSet<>(List.of(
-                UUID.fromString(a.publicId()), UUID.fromString(b.publicId())));
+        List<String> recipients = List.of(a.publicId(), b.publicId());
 
-        // Première livraison : a et b notifiés.
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                recipients, "t", "b");
-        // Deuxième livraison (rejeu) : a et b déjà notifiés — toujours exactement une ligne chacun.
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                recipients, "t", "b");
+        deliver(NotificationType.SESSION_CANCELLED, resource, eventKey, recipients);
+        // Rejeu du même message : toujours exactement une ligne chacun.
+        deliver(NotificationType.SESSION_CANCELLED, resource, eventKey, recipients);
 
         assertThat(notificationRows(resource)).isEqualTo(2L);
     }
 
     // ------------------------------------------------------------------
-    // Correctif G1-D.1 — classification précise des erreurs d'idempotence
+    // Classification précise des erreurs d'idempotence
     // ------------------------------------------------------------------
 
     @Test
@@ -218,14 +257,12 @@ class NotificationDeliveryResilienceIntegrationTests {
                 "could not execute statement [Duplicate entry 'abc' for key "
                         + "'notification.uq_notification_dedup']");
 
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                new java.util.LinkedHashSet<>(List.of(
-                        UUID.fromString(a.publicId()), UUID.fromString(b.publicId()))),
-                "t", "b");
+        // Aucune exception : une collision de dedup n'est pas un échec.
+        deliver(NotificationType.SESSION_CANCELLED, resource, eventKey,
+                List.of(a.publicId(), b.publicId()));
 
         assertThat(notificationRows(resource)).as("le second destinataire est notifié").isEqualTo(1L);
-        assertThat(loggedIdempotentDedup()).as("collision dedup = succès idempotent (DEBUG)").isTrue();
-        assertThat(loggedRealError()).as("aucune vraie erreur journalisée").isFalse();
+        assertThat(loggedRecipientFailure()).as("aucune vraie erreur journalisée").isFalse();
     }
 
     @Test
@@ -242,14 +279,11 @@ class NotificationDeliveryResilienceIntegrationTests {
                 "could not execute statement [Duplicate entry 'x' for key "
                         + "'notification.uq_notification_public_id']");
 
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                new java.util.LinkedHashSet<>(List.of(
-                        UUID.fromString(a.publicId()), UUID.fromString(b.publicId()))),
-                "t", "b");
+        deliverIgnoringFailure(NotificationType.SESSION_CANCELLED, resource, eventKey,
+                List.of(a.publicId(), b.publicId()));
 
         assertThat(notificationRows(resource)).as("le destinataire suivant est traité").isEqualTo(1L);
-        assertThat(loggedRealError()).as("classée comme vraie erreur (WARN)").isTrue();
-        assertThat(loggedIdempotentDedup()).as("jamais assimilée à un doublon dedup").isFalse();
+        assertThat(loggedRecipientFailure()).as("classée comme vraie erreur (WARN)").isTrue();
     }
 
     @Test
@@ -264,22 +298,19 @@ class NotificationDeliveryResilienceIntegrationTests {
         FlakyRowWriterConfig.failure = () -> new UnexpectedRollbackException(
                 "Transaction silently rolled back because it has been marked as rollback-only");
 
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                new java.util.LinkedHashSet<>(List.of(
-                        UUID.fromString(a.publicId()), UUID.fromString(b.publicId()))),
-                "t", "b");
+        deliverIgnoringFailure(NotificationType.SESSION_CANCELLED, resource, eventKey,
+                List.of(a.publicId(), b.publicId()));
 
         assertThat(notificationRows(resource)).as("le destinataire suivant est traité").isEqualTo(1L);
-        assertThat(loggedRealError()).as("rollback nu = vraie erreur (WARN)").isTrue();
-        assertThat(loggedIdempotentDedup()).as("jamais assimilé à un doublon dedup").isFalse();
+        assertThat(loggedRecipientFailure()).as("rollback nu = vraie erreur (WARN)").isTrue();
     }
 
     // ------------------------------------------------------------------
-    // §7 — échec complet du writer après commit métier
+    // Échec complet de la livraison après le commit métier
     // ------------------------------------------------------------------
 
     @Test
-    void aTotalWriterFailureAfterCommitDoesNotBreakTheBusinessOperation() {
+    void aTotalDeliveryFailureAfterCommitDoesNotBreakTheBusinessOperation() {
         String admin = adminToken();
         Chain chain = academicChain(admin);
         Account principal = account(RoleCode.TEACHER);
@@ -298,6 +329,33 @@ class NotificationDeliveryResilienceIntegrationTests {
 
         // Aucun état de notification partiel.
         assertThat(notificationRows(UUID.fromString(sessionId))).isZero();
+
+        // MAIS — différence essentielle avec l'ancien « au mieux » — la
+        // demande n'est pas perdue : elle attend en file, et la reprise
+        // la servira dès que l'écriture redeviendra possible (AC-028).
+        assertThat(pendingNotificationMessages()).as("la demande reste en file").isPositive();
+
+        FlakyRowWriterConfig.reset();
+        notificationHandler.handle("reprise-" + sessionId, requestPayloadFor(sessionId, principal));
+        assertThat(notificationRows(UUID.fromString(sessionId)))
+                .as("la reprise notifie enfin le formateur").isPositive();
+    }
+
+    private Map<String, Object> requestPayloadFor(String sessionId, Account teacher) {
+        return NotificationRequest
+                .of(NotificationType.SESSION_CANCELLED, "COURSE_SESSION",
+                        UUID.fromString(sessionId), UUID.randomUUID())
+                .label("Séance annulée", "corps neutre")
+                .recipients(Set.of(UUID.fromString(teacher.publicId())))
+                .build()
+                .toPayload();
+    }
+
+    private long pendingNotificationMessages() {
+        Long n = jdbc.queryForObject(
+                "select count(*) from outbox_message where message_type = 'NOTIFICATION' "
+                        + "and status in ('PENDING', 'FAILED', 'DEAD')", Long.class);
+        return n == null ? 0L : n;
     }
 
     // ------------------------------------------------------------------
@@ -384,12 +442,7 @@ class NotificationDeliveryResilienceIntegrationTests {
     }
 
     private String tokenFor(Account account) {
-        Map<String, Object> body = rest.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(rest, account.email(), PASSWORD);
     }
 
     private static String code() {

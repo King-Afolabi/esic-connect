@@ -1,5 +1,6 @@
 package com.esic.connect.recette;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -75,7 +76,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Aucune démonstration manuelle n'est consignée
  * ({@code IMPLEMENTED_NOT_MANUALLY_DEMONSTRATED}).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+/*
+ * `app.outbox.poll-interval` ramené à 500 ms pour CETTE recette.
+ *
+ * Le drain qui suit le commit est délibérément « best effort »
+ * (`DefaultOutboxPublisher.scheduleDrain` → `drainQuietly`) : sous la
+ * charge de la suite complète — six connexions partagées — il peut ne pas
+ * en obtenir une, et la ligne attend la reprise planifiée. C'est la
+ * garantie de l'outbox (dette T-01 levée) : l'effet n'est jamais perdu,
+ * il peut être différé. Attendre soixante secondes rendrait la recette
+ * interminable ; raccourcir l'intervalle la rend déterministe sans rien
+ * changer à ce qu'elle vérifie.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "app.outbox.poll-interval=500")
 @ActiveProfiles("test")
 class PriorityPathRecetteIntegrationTests {
 
@@ -178,9 +192,16 @@ class PriorityPathRecetteIntegrationTests {
         String studentToken = tokenFor(new Account(null, importedStudentEmail));
 
         // --- 3. Import du planning : simulation (AC-007) puis publication
+        // Salle unique au parcours : le conflit de salle s'exerce à
+        // l'échelle de l'établissement depuis la migration V21
+        // (EF-PLAN-009). Un code fixe entrerait en collision avec les
+        // séances laissées par les autres cas de la suite.
+        String room = "R" + suffix.toUpperCase(java.util.Locale.ROOT);
         String planningCsv = "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n"
-                + "S-" + suffix + "-1," + sessionDate + ",09:00,12:00,Europe/Paris,Algorithmique," + teacher.publicId() + ",A101\n"
-                + "S-" + suffix + "-2," + sessionDate + ",13:30,17:00,Europe/Paris,Bases de données," + teacher.publicId() + ",A101\n";
+                + "S-" + suffix + "-1," + sessionDate + ",09:00,12:00,Europe/Paris,Algorithmique,"
+                + teacher.publicId() + "," + room + "\n"
+                + "S-" + suffix + "-2," + sessionDate + ",13:30,17:00,Europe/Paris,Bases de données,"
+                + teacher.publicId() + "," + room + "\n";
         Map<String, Object> planJob = multipartCsvWithClass(admin, "apprenants-plan-" + suffix + ".csv",
                 planningCsv, classPublicId).getBody();
         String planId = planJob.get("publicId").toString();
@@ -236,7 +257,7 @@ class PriorityPathRecetteIntegrationTests {
         // --- 7a. Annulation d'une séance → notification du formateur --
         assertThat(exchange(HttpMethod.POST, "/api/v1/sessions/" + sessionId2 + "/cancel",
                 Map.of("reason", "Salle indisponible"), admin).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        assertThat(notificationCount(teacher.email(), "SESSION_CANCELLED")).isEqualTo(1L);
+        awaitNotificationCount(teacher.email(), "SESSION_CANCELLED", 1L);
 
         // --- 7b. Remplacement de formateur --------------------------
         // Période dérivée des instants réels de la séance (chevauchement +
@@ -275,7 +296,7 @@ class PriorityPathRecetteIntegrationTests {
                 .getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(exchange(HttpMethod.POST, "/api/v1/attendance/justifications/" + justifId + "/review",
                 Map.of("decision", "ACCEPTED"), admin).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(notificationCount(importedStudentEmail, "JUSTIFICATION_ACCEPTED")).isEqualTo(1L);
+        awaitNotificationCount(importedStudentEmail, "JUSTIFICATION_ACCEPTED", 1L);
         // L'examinateur télécharge la pièce.
         ResponseEntity<byte[]> dl = rest.exchange(RequestEntity.get(URI.create(
                         "/api/v1/attendance/justifications/" + justifId + "/attachment/download"))
@@ -339,6 +360,38 @@ class PriorityPathRecetteIntegrationTests {
                         + "and cs.superseded_by_scheduling = false and cs.status <> 'CANCELLED'",
                 Long.class, classPublicId);
         return n == null ? 0 : n;
+    }
+
+    /**
+     * Attend qu'une notification produite <strong>par l'outbox</strong>
+     * soit visible, dans une limite de temps.
+     *
+     * <p>Voir l'en-tête de la classe : le drain qui suit le commit est
+     * best effort, la reprise planifiée rattrape. Affirmer une livraison
+     * <em>synchrone</em> testerait une promesse que le produit n'a jamais
+     * faite, et rendait cette recette instable en suite complète alors
+     * qu'elle passait isolément.
+     */
+    private void awaitNotificationCount(String recipientEmail, String type, long expected) {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+        long observed = notificationCount(recipientEmail, type);
+        while (observed != expected && Instant.now().isBefore(deadline)) {
+            try {
+                // La reprise planifiée de l'outbox est ramenée à 500 ms
+                // pour cette classe (voir l'en-tête) : on la laisse agir
+                // plutôt que d'appeler le diffuseur, qui est interne à son
+                // module et doit le rester.
+                Thread.sleep(250L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            observed = notificationCount(recipientEmail, type);
+        }
+        assertThat(observed)
+                .as("notification %s pour %s (visible au plus tard après reprise de l'outbox)",
+                        type, recipientEmail)
+                .isEqualTo(expected);
     }
 
     private long notificationCount(String recipientEmail, String type) {
@@ -444,11 +497,6 @@ class PriorityPathRecetteIntegrationTests {
     }
 
     private String tokenFor(Account account) {
-        Map<String, Object> body = rest.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(rest, account.email(), PASSWORD);
     }
 }

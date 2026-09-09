@@ -131,6 +131,39 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['STUDENT'],
   },
   {
+    // Écran livré : journal de transparence (EF-ATT-014). Le serveur le
+    // bâtit depuis le seul JWT ; aucun autre rôle n'y a accès.
+    label: 'Journal de transparence',
+    path: '/my-attendance/transparency',
+    icon: 'history',
+    roles: ['STUDENT'],
+  },
+  {
+    // Écran livré : départ anticipé (EF-ATT-013). Signaler n'est pas
+    // être autorisé — l'écran le dit.
+    label: 'Départs anticipés',
+    path: '/my-attendance/early-departures',
+    icon: 'logout',
+    roles: ['STUDENT'],
+  },
+  {
+    // Écran livré : réclamations (EF-CLAIM-001..004). L'API n'exige que
+    // d'être authentifié, mais un compte SANS rôle actif n'a ni
+    // interlocuteur ni périmètre : lui proposer l'écran l'enverrait vers
+    // une liste vide. Les six rôles sont donc listés explicitement.
+    label: 'Réclamations',
+    path: '/claims',
+    icon: 'forum',
+    roles: [
+      'STUDENT',
+      'TEACHER',
+      'PEDAGOGICAL_MANAGER',
+      'SCHOOL_ADMINISTRATION',
+      'ADMIN',
+      'SUPER_ADMIN',
+    ],
+  },
+  {
     // Écran livré : suivi d'assiduité (V10) — synthèse, rapports par
     // séance / classe / apprenant, file des justificatifs. Périmètre
     // aligné sur `AttendanceManagementWeb.REPORT_ROLES` ; un
@@ -147,6 +180,89 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Notifications',
     path: '/notifications',
     icon: 'notifications',
+  },
+  {
+    // Écran livré (sprint 10) : préférences de notification par catégorie
+    // et par canal (EF-NOTIF-006). `@PreAuthorize("isAuthenticated()")` :
+    // chacun règle les siennes, le serveur dérive le propriétaire du JWT.
+    label: 'Préférences de notification',
+    path: '/notifications/preferences',
+    icon: 'tune',
+  },
+  {
+    // Écran livré (sprint 11) : recherche globale dans le périmètre de
+    // l'appelant (EF-USER-009). Périmètre aligné sur
+    // `GlobalSearchController` — un formateur et un apprenant en sont
+    // exclus : leur besoin est couvert par leurs propres écrans.
+    label: 'Recherche globale',
+    path: '/recherche',
+    icon: 'search',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 11) : attestations d'assiduité (EF-REP-006).
+    label: 'Attestations',
+    path: '/attestations',
+    icon: 'workspace_premium',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 11) : rapport des invitations non activées
+    // (EF-REP-010).
+    label: 'Invitations non activées',
+    path: '/invitations/non-activees',
+    icon: 'hourglass_top',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 11) : abonnement iCalendar au planning
+    // (EF-INT-001). Visible par tout rôle : chacun s'abonne au sien, et
+    // le serveur dérive le périmètre du sujet du jeton.
+    label: 'Abonnement calendrier',
+    path: '/mon-compte/calendrier',
+    icon: 'event_available',
+  },
+  {
+    // Écran livré (sprint 11) : consultation et export de la piste
+    // d'audit (EF-AUD-002). Réservé à l'administration.
+    label: "Piste d'audit",
+    path: '/exploitation/audit',
+    icon: 'fact_check',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
+  },
+  {
+    // Écran livré (sprint 10) : file d'échec des effets de bord et rejeu
+    // manuel (EF-OPS-005). Périmètre aligné sur `OutboxAdminController`
+    // (`ADMIN` / `SUPER_ADMIN`) : un rejeu peut envoyer un courriel.
+    label: 'Effets de bord',
+    path: '/exploitation/effets-de-bord',
+    icon: 'sync_problem',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
+  },
+  {
+    // Écran livré (sprint 3) : référentiel des matières (EF-ACA-006).
+    // Lecture ouverte aux formateurs — ils qualifient leurs séances.
+    label: 'Matières',
+    path: '/subjects',
+    icon: 'menu_book',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER', 'TEACHER'],
+  },
+  {
+    // Écran livré (sprint 3) : suivi des invitations et de la
+    // délivrabilité des courriels (EF-USER-007, EF-USER-008).
+    label: 'Invitations',
+    path: '/invitations',
+    icon: 'mark_email_read',
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+  },
+  {
+    // Écran livré (sprint 2) : sécurité du compte de l'appelant — second
+    // facteur, clés d'accès, appareils reconnus. Visible par tout rôle :
+    // chacun gère ses propres moyens d'authentification, et le serveur
+    // déduit le périmètre du sujet du jeton.
+    label: 'Sécurité de mon compte',
+    path: '/mon-compte/securite',
+    icon: 'security',
   },
 ];
 

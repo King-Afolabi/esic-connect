@@ -8,7 +8,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
  * n'enveloppe que les routes authentifiées, si bien que les pages
  * publiques (`/login`, `/activation`, `/forbidden`, `/not-found`)
  * portaient un repère `#main-content` sans aucun moyen de l'atteindre au
- * clavier — incohérence relevée par l'audit QA (audit-report.md, finding
+ * clavier — incohérence relevée par l'audit QA (revue de recette (finding
  * F-A11Y-1). Ce composant est le point unique de définition ; chaque page
  * qui déclare un `<main id="main-content">` doit le placer juste avant.
  *

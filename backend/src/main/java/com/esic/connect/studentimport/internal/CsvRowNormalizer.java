@@ -32,6 +32,7 @@ final class CsvRowNormalizer {
 
         return new NormalizedRow(
                 row.rowNumber(),
+                row.sheetName(),
                 row.columnCountMismatch(),
                 CsvValueNormalizer.collapseSpaces(raw.get(RecognizedColumn.LAST_NAME)),
                 CsvValueNormalizer.collapseSpaces(raw.get(RecognizedColumn.FIRST_NAME)),

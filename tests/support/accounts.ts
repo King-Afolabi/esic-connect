@@ -88,7 +88,7 @@ export const STUDENT_TWO: DemoAccount = {
 /**
  * Données de référence réellement présentes dans `esic_connect_demo`
  * (vérifiées par appel API direct avant l'écriture de la suite, jamais
- * inventées — cf. audit-report.md §1).
+ * inventées — cf. docs/09-strategie-tests.md).
  */
 export const DEMO_DATA = {
   siteCode: 'SITE-DEMO',

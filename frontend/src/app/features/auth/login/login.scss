@@ -64,3 +64,10 @@
   align-self: stretch;
   height: 2.75rem;
 }
+
+.login__link {
+  align-self: center;
+  margin-top: 0.75rem;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-primary);
+}

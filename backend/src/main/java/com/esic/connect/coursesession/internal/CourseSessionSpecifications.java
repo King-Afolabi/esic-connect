@@ -73,6 +73,15 @@ final class CourseSessionSpecifications {
     }
 
     /**
+     * Séances dont le titre contient {@code pattern} (motif {@code LIKE}
+     * déjà normalisé et échappé par {@code SearchPattern}) — recherche
+     * globale, EF-USER-009.
+     */
+    static Specification<CourseSession> titleLike(String pattern) {
+        return (root, query, cb) -> cb.like(cb.lower(root.get("title")), pattern);
+    }
+
+    /**
      * Séances possédant au moins une classe rattachée dont l'identifiant
      * interne figure dans {@code classGroupInternalIds}. {@code distinct}
      * évite les doublons dus au {@code join}.

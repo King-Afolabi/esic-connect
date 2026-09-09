@@ -1,7 +1,7 @@
 # Profil de test : pointe vers les mêmes conteneurs locaux (compose.yaml)
 # que le profil "local". La migration vers Testcontainers est
 # explicitement DIFFÉRÉE — motivation, contournement local et travail à
-# planifier dans docs/reports/TEST_ISOLATION_DECISION.md (FINAL-021).
+# planifier dans docs/09-strategie-tests.md.
 # En CI, l'isolation existe de fait : base éphémère `esic_connect_ci`
 # d'un service GitHub Actions jeté à chaque run.
 #
@@ -32,7 +32,18 @@ spring:
       # accumuler pendant toute la durée de la suite — c'est cette
       # accumulation (et non le pic d'un seul contexte) qui approchait la
       # limite serveur au fur et à mesure que la suite grandit.
-      maximum-pool-size: 4
+      #
+      # PORTÉ DE 4 À 6 AU SPRINT 10. L'outbox transactionnelle draine la
+      # file dans le `afterCompletion` de la transaction métier : à cet
+      # instant, la connexion de cette transaction n'est PAS encore
+      # relâchée (Spring ne la rend qu'après avoir déclenché les
+      # synchronisations), tandis que le diffuseur en ouvre une seconde.
+      # Un même fil de requête détient donc désormais deux connexions au
+      # lieu d'une. Avec quatre, une classe exerçant plusieurs requêtes
+      # simultanées pouvait épuiser le pool, faire échouer une écriture, et
+      # produire un échec intermittent sans rapport apparent avec ce
+      # qu'elle vérifiait.
+      maximum-pool-size: 6
       minimum-idle: 0
       idle-timeout: 15000
       keepalive-time: 30000
@@ -68,6 +79,28 @@ app:
       # Origines de test pour HttpSecurityHeadersIntegrationTests /
       # la vérification CORS. `http://evil.example` n'est PAS listé.
       allowed-origins: http://localhost:4200,https://app.esic.test
+    login:
+      # LIMITATION DE DÉBIT EN TEST — seuils volontairement très hauts.
+      #
+      # La suite complète effectue plusieurs centaines de connexions
+      # depuis la même origine (127.0.0.1) en quelques minutes : avec les
+      # seuils de production (60 par quart d'heure et par origine), la
+      # moitié des classes de test échoueraient en 429 pour une raison
+      # sans rapport avec ce qu'elles vérifient.
+      #
+      # Le mécanisme lui-même reste testé : RedisRateLimiterTests exerce
+      # le compteur directement, et AuthRateLimitIntegrationTests redéfinit
+      # des seuils bas via @SpringBootTest(properties = ...) pour vérifier
+      # le 429 de bout en bout sur la route de connexion.
+      identity-limit: 5000
+      origin-limit: 500000
+      window: PT15M
+    password-reset:
+      # Même raison : les tests de réinitialisation enchaînent les
+      # demandes sur des adresses distinctes, mais la borne par jeton est
+      # partagée quand un test rejoue volontairement un jeton.
+      request-limit: 500
+      consume-limit: 500
   attendance:
     # Pièces jointes de justificatifs (bloc G1-E) : répertoire jetable
     # sous le tmp de la JVM — jamais /data/uploads (non inscriptible en
@@ -75,5 +108,7 @@ app:
     justification-storage-path: ${java.io.tmpdir}/esic-connect-justification-attachments-test
   activation:
     base-url: http://localhost:4200/activation
+  password-reset:
+    base-url: http://localhost:4200/reinitialisation
   mail:
     from: no-reply@esic-connect.test

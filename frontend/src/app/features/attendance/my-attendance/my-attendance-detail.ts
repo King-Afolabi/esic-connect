@@ -11,6 +11,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { AntivirusStatusService } from '../antivirus-status.service';
 import { AttendanceApiService, triggerAttachmentDownload } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
@@ -52,6 +53,14 @@ type DetailState =
 })
 export class MyAttendanceDetail {
   private readonly api = inject(AttendanceApiService);
+  private readonly antivirus = inject(AntivirusStatusService);
+
+  /**
+   * État réel de l'analyse antivirus (dette T-04). L'écran l'annonce
+   * avant le dépôt : une pièce non analysée ne doit jamais passer pour
+   * une pièce saine.
+   */
+  protected readonly antivirusStatus = this.antivirus.status;
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   private readonly roleContext = inject(RoleContextService);
@@ -109,6 +118,7 @@ export class MyAttendanceDetail {
 
   constructor() {
     this.load();
+    this.antivirus.load();
     // §5 : à la perte du contexte STUDENT, fermer l'édition et effacer le
     // brouillon du justificatif.
     effect(() => {

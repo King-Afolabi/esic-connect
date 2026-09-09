@@ -1,5 +1,6 @@
 package com.esic.connect.planning.internal;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.coursesession.PlanningSessionWriter;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
@@ -75,6 +76,22 @@ class PlanningPublicationFailureIntegrationTests {
     private static final String HEADER =
             "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n";
 
+    /**
+     * Salle unique par cas de test.
+     *
+     * <p>Depuis la migration {@code V21}, le conflit de salle s'exerce à
+     * l'échelle de l'établissement (EF-PLAN-009) : deux cas de test
+     * réutilisant « A1 » entreraient en collision entre eux. Le code
+     * reste constant à l'intérieur d'un cas.
+     */
+    private String room;
+
+    @BeforeEach
+    void freshRoomPerTest() {
+        room = "R" + UUID.randomUUID().toString().substring(0, 8)
+                .toUpperCase(java.util.Locale.ROOT);
+    }
+
     /** Marqueur non sensible cherché dans les traces de fuite. */
     static final String FAULT_MARKER = "FAULT_INJECTED_BY_TEST";
 
@@ -143,7 +160,8 @@ class PlanningPublicationFailureIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique," + teacher + ",A101\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique," + teacher + ","
+                + room + "\n";
         String jobId = (String) upload(csv, admin, classId).getBody().get("publicId");
 
         long versionsBefore = versionRepository.count();
@@ -198,7 +216,8 @@ class PlanningPublicationFailureIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         // teacher_public_id inconnu → ligne ERROR (RG-034), publication bloquée.
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + UUID.randomUUID() + ",A1\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + UUID.randomUUID() + ","
+                + room + "\n";
         String jobId = (String) upload(csv, admin, classId).getBody().get("publicId");
 
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST,
@@ -321,12 +340,7 @@ class PlanningPublicationFailureIntegrationTests {
 
     private String tokenFor(RoleCode... roles) {
         Account a = account(roles);
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", a.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, a.email(), PASSWORD);
     }
 
     private static String code() {

@@ -61,12 +61,26 @@ class CourseSessionException extends RuntimeException {
         CHECKPOINT_NOT_FOUND,
         /** Transition impossible depuis l'état courant du point de contrôle. */
         CHECKPOINT_INVALID_STATE,
+        /**
+         * Un point de contrôle de ce type est déjà actif sur la séance
+         * (EF-ATT-003). Conflit d'état, pas requête malformée : la
+         * demande est bien formée, c'est la séance qui ne peut pas en
+         * porter un second — deux {@code MORNING_ARRIVAL} rendraient le
+         * résultat journalier indéterminé.
+         */
+        CHECKPOINT_TYPE_ALREADY_PRESENT,
         /** Type de point de contrôle hors liste ({@code START}/{@code END}/{@code CUSTOM}). */
         CHECKPOINT_INVALID_TYPE,
         /** Un ordre d'affichage identique existe déjà pour cette séance. */
         CHECKPOINT_ORDER_CONFLICT,
         /** Motif d'annulation manquant. */
         CHECKPOINT_REASON_REQUIRED,
+        /** Séance déjà reportée : un second report rendrait l'historique ambigu. */
+        ALREADY_POSTPONED,
+        /** Une demande d'annulation est déjà en attente sur cette séance. */
+        CANCELLATION_ALREADY_REQUESTED,
+        /** Aucune demande d'annulation pour cet identifiant. */
+        CANCELLATION_REQUEST_NOT_FOUND,
         /** Impossible d'ajouter / ouvrir un point de contrôle : la séance n'est pas ouverte. */
         CHECKPOINT_SESSION_NOT_OPEN
     }

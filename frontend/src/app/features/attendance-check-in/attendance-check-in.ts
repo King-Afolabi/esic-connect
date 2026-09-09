@@ -2,11 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } 
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../core/auth/role-context.service';
+import { ConnectivityService } from '../../core/pwa/connectivity.service';
+import { OfflineQueueService } from '../../core/pwa/offline-queue.service';
 import { SessionsApiService } from '../sessions/sessions-api.service';
 import { toSessionError } from '../sessions/session-errors';
 import { AttendanceRecordResponse, formatInstantUtc } from '../sessions/sessions.models';
@@ -14,10 +17,19 @@ import { AttendanceRecordResponse, formatInstantUtc } from '../sessions/sessions
 /** Longueur défensive du champ code court (le serveur revalide). */
 const SHORT_CODE_MAX_LENGTH = 32;
 
+/** Idem pour le jeton d'affiche de salle. */
+const ROOM_REFERENCE_MAX_LENGTH = 128;
+
 type CheckInState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
   | { kind: 'success'; record: AttendanceRecordResponse }
+  /**
+   * Action mise en file faute de réseau (EF-PWA-003 ; RG-063, AC-031).
+   * **Ce n'est pas un succès** : la présence n'existe pas tant que le
+   * serveur ne l'a pas validée, et l'écran doit le dire sans ambiguïté.
+   */
+  | { kind: 'queued' }
   | { kind: 'error'; message: string };
 
 /**
@@ -45,6 +57,7 @@ type CheckInState =
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatCheckboxModule,
     MatIconModule,
   ],
   templateUrl: './attendance-check-in.html',
@@ -54,14 +67,35 @@ export class AttendanceCheckIn {
   private readonly api = inject(SessionsApiService);
   private readonly roleContext = inject(RoleContextService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly queue = inject(OfflineQueueService);
+
+  protected readonly connectivity = inject(ConnectivityService);
 
   protected readonly shortCodeMaxLength = SHORT_CODE_MAX_LENGTH;
+  protected readonly roomReferenceMaxLength = ROOM_REFERENCE_MAX_LENGTH;
   protected readonly formatInstantUtc = formatInstantUtc;
 
   protected readonly form = this.formBuilder.group({
     shortCode: this.formBuilder.control('', [
       Validators.required,
       Validators.maxLength(SHORT_CODE_MAX_LENGTH),
+    ]),
+    /**
+     * Suivi à distance déclaré (EF-ENR-004 ; docs/02 §15.3). Sur une
+     * séance présentielle, le serveur exige une autorisation active.
+     */
+    remote: this.formBuilder.control(false),
+  });
+
+  /**
+   * QR fixe de salle (EF-ATT-010) — parcours distinct : le jeton vient de
+   * l'affiche, pas du formateur, et n'est accepté que depuis le réseau de
+   * l'établissement (EF-ATT-008).
+   */
+  protected readonly roomForm = this.formBuilder.group({
+    roomReference: this.formBuilder.control('', [
+      Validators.required,
+      Validators.maxLength(ROOM_REFERENCE_MAX_LENGTH),
     ]),
   });
 
@@ -79,13 +113,15 @@ export class AttendanceCheckIn {
     const current = this.state();
     return current.kind === 'error' ? current.message : null;
   });
+  protected readonly queued = computed(() => this.state().kind === 'queued');
 
   constructor() {
     // Sortie du contexte STUDENT : on efface code, récépissé et erreurs.
     effect(() => {
       if (!this.canCheckIn()) {
         this.state.set({ kind: 'idle' });
-        this.form.reset({ shortCode: '' });
+        this.form.reset({ shortCode: '', remote: false });
+        this.roomForm.reset({ roomReference: '' });
       }
     });
   }
@@ -105,15 +141,67 @@ export class AttendanceCheckIn {
       return;
     }
 
+    const remote = this.form.getRawValue().remote || null;
+
+    // Hors ligne : l'action est mise en file et rejouée au retour du
+    // réseau. L'écran annonce « en attente de confirmation », jamais un
+    // émargement réussi — une présence enregistrée hors ligne n'est
+    // jamais définitive avant validation serveur (RG-063, AC-031).
+    if (!this.connectivity.online()) {
+      this.queue.enqueue('Émargement par code court', '/v1/attendance/validate', {
+        shortCode,
+        remote,
+      });
+      this.state.set({ kind: 'queued' });
+      this.form.reset({ shortCode: '', remote: false });
+      return;
+    }
+
     this.state.set({ kind: 'submitting' });
-    this.api.validateAttendance({ shortCode }).subscribe({
+    this.api
+      .validateAttendance({ shortCode, remote })
+      .subscribe({
+        next: (record) => {
+          // Réponse tardive après une sortie du contexte STUDENT : ignorée.
+          if (!this.canCheckIn()) {
+            return;
+          }
+          this.state.set({ kind: 'success', record });
+          this.form.reset({ shortCode: '', remote: false });
+        },
+        error: (error: unknown) => {
+          if (!this.canCheckIn()) {
+            return;
+          }
+          this.state.set({ kind: 'error', message: toSessionError(error).message });
+        },
+      });
+  }
+
+  /** Émargement par le QR fixe affiché dans la salle (EF-ATT-010). */
+  protected submitRoomQr(): void {
+    if (!this.canCheckIn()) {
+      return;
+    }
+    if (this.roomForm.invalid || this.submitting()) {
+      this.roomForm.markAllAsTouched();
+      return;
+    }
+    const roomReference = this.roomForm.getRawValue().roomReference.trim();
+    if (!roomReference) {
+      this.roomForm.controls.roomReference.setErrors({ required: true });
+      this.roomForm.markAllAsTouched();
+      return;
+    }
+
+    this.state.set({ kind: 'submitting' });
+    this.api.validateRoomQr({ roomReference }).subscribe({
       next: (record) => {
-        // Réponse tardive après une sortie du contexte STUDENT : ignorée.
         if (!this.canCheckIn()) {
           return;
         }
         this.state.set({ kind: 'success', record });
-        this.form.reset({ shortCode: '' });
+        this.roomForm.reset({ roomReference: '' });
       },
       error: (error: unknown) => {
         if (!this.canCheckIn()) {
@@ -126,7 +214,8 @@ export class AttendanceCheckIn {
 
   protected reset(): void {
     this.state.set({ kind: 'idle' });
-    this.form.reset({ shortCode: '' });
+    this.form.reset({ shortCode: '', remote: false });
+    this.roomForm.reset({ roomReference: '' });
   }
 }
 

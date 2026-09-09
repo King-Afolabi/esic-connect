@@ -50,7 +50,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Se déconnecter');
   });
 
-  it('renders the dashboard and the delivered Administration / Apprenants / Import / Référentiels / Organisation / Planning / Alternance / Séances screens for an ADMIN', () => {
+  it('renders the dashboard and every delivered screen for an ADMIN', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/administration',
@@ -61,8 +61,27 @@ describe('AppShell', () => {
       '/planning',
       '/alternation',
       '/sessions',
+      // Réclamations livrées au sprint 9 (EF-CLAIM-001..004) : visibles
+      // de tous les rôles, chacun n'y voyant que son propre périmètre.
+      '/claims',
       '/attendance-management',
       '/notifications',
+      '/notifications/preferences',
+      // Recherche globale, attestations, invitations non activées,
+      // abonnement calendrier et piste d'audit : livrés au sprint 11
+      // (EF-USER-009, EF-REP-006, EF-REP-010, EF-INT-001, EF-AUD-002).
+      // Chaque entrée reprend le `@PreAuthorize` de son contrôleur.
+      '/recherche',
+      '/attestations',
+      '/invitations/non-activees',
+      '/mon-compte/calendrier',
+      '/exploitation/audit',
+      // File d'échec des effets de bord (sprint 10, EF-OPS-005) :
+      // réservée à `ADMIN` / `SUPER_ADMIN`, comme le contrôleur.
+      '/exploitation/effets-de-bord',
+      '/subjects',
+      '/invitations',
+      '/mon-compte/securite',
     ]);
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
@@ -91,7 +110,17 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
       '/sessions',
+      '/claims',
       '/notifications',
+      '/notifications/preferences',
+      // Abonnement iCalendar (sprint 11, EF-INT-001) : propre à chaque
+      // personne, donc visible quel que soit le rôle. Le formateur y
+      // trouve ses séances, l'apprenant les siennes.
+      '/mon-compte/calendrier',
+      // Le catalogue des matières est ouvert en lecture au formateur :
+      // il en a besoin pour qualifier une séance (EF-ACA-006).
+      '/subjects',
+      '/mon-compte/securite',
     ]);
   });
 
@@ -102,7 +131,16 @@ describe('AppShell', () => {
       '/dashboard',
       '/attendance',
       '/my-attendance',
+      // Livrés au sprint 9 : journal de transparence (EF-ATT-014) et
+      // départ anticipé (EF-ATT-013), réservés à l'apprenant.
+      '/my-attendance/transparency',
+      '/my-attendance/early-departures',
+      '/claims',
       '/notifications',
+      '/notifications/preferences',
+      // Abonnement iCalendar (sprint 11, EF-INT-001).
+      '/mon-compte/calendrier',
+      '/mon-compte/securite',
     ]);
   });
 

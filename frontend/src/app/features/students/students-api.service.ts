@@ -7,6 +7,8 @@ import {
   EnrollmentListQuery,
   EnrollmentResponse,
   PageResponse,
+  RemoteAttendanceAuthorizationResponse,
+  RemoteAttendanceAuthorizeRequest,
   StudentProfileListQuery,
   StudentProfileResponse,
   UserIdentitySummary,
@@ -75,6 +77,46 @@ export class StudentsApiService {
   getUserIdentity(publicId: string): Observable<UserIdentitySummary> {
     return this.http.get<UserIdentitySummary>(
       `${this.base}/users/${encodeURIComponent(publicId)}`,
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // Suivi à distance individuel (EF-ENR-004)
+  // -------------------------------------------------------------------
+
+  /** `GET /api/v1/remote-attendance-authorizations/students/{userPublicId}`. */
+  listRemoteAuthorizations(
+    studentUserPublicId: string,
+  ): Observable<RemoteAttendanceAuthorizationResponse[]> {
+    return this.http.get<RemoteAttendanceAuthorizationResponse[]>(
+      `${this.base}/remote-attendance-authorizations/students/${encodeURIComponent(
+        studentUserPublicId,
+      )}`,
+    );
+  }
+
+  /** `POST /api/v1/remote-attendance-authorizations` — `201`. */
+  authorizeRemoteAttendance(
+    request: RemoteAttendanceAuthorizeRequest,
+  ): Observable<RemoteAttendanceAuthorizationResponse> {
+    return this.http.post<RemoteAttendanceAuthorizationResponse>(
+      `${this.base}/remote-attendance-authorizations`,
+      request,
+    );
+  }
+
+  /**
+   * `POST /api/v1/remote-attendance-authorizations/{publicId}/revoke`.
+   * L'autorisation n'est pas supprimée : elle passe `REVOKED`, motif
+   * conservé.
+   */
+  revokeRemoteAttendance(
+    publicId: string,
+    reason: string,
+  ): Observable<RemoteAttendanceAuthorizationResponse> {
+    return this.http.post<RemoteAttendanceAuthorizationResponse>(
+      `${this.base}/remote-attendance-authorizations/${encodeURIComponent(publicId)}/revoke`,
+      { reason },
     );
   }
 }

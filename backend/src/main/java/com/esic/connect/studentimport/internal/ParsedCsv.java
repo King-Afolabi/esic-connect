@@ -54,8 +54,19 @@ record ParsedCsv(
      * @param rowNumber           n° de la ligne dans le fichier (en-tête = 1)
      * @param cells               cellules brutes (avant normalisation)
      * @param columnCountMismatch {@code true} si le nombre de cellules diffère de l'en-tête
+     * @param sheetName           feuille d'origine pour un classeur Excel,
+     *                            {@code null} pour un CSV. Le cahier exige de
+     *                            situer une anomalie « fichier, feuille,
+     *                            ligne, colonne » (docs/02 §10.7) : sans ce
+     *                            champ, une erreur dans un classeur de trois
+     *                            feuilles serait introuvable.
      */
-    record DataRow(int rowNumber, List<String> cells, boolean columnCountMismatch) {
+    record DataRow(int rowNumber, List<String> cells, boolean columnCountMismatch, String sheetName) {
+
+        /** Ligne de CSV : aucune feuille. */
+        DataRow(int rowNumber, List<String> cells, boolean columnCountMismatch) {
+            this(rowNumber, cells, columnCountMismatch, null);
+        }
 
         String cell(int index) {
             return index >= 0 && index < cells.size() ? cells.get(index) : null;

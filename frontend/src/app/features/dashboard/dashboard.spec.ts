@@ -22,9 +22,18 @@ const EMPTY_ADMIN_DASH = {
     suspendedAccounts: 1,
     pendingActivation: 3,
     archivedAccounts: 0,
+    expiredInvitations: 4,
     pendingJustifications: 2,
+    decidedJustifications: 0,
+    medianDecisionDelayHours: null,
+    periodFrom: '2026-08-11T09:00:00Z',
+    periodTo: '2026-09-10T09:00:00Z',
+    globalAttendanceRate: 0.8125,
+    programRates: [],
     recentImports: [],
     todaySessions: [],
+    recentExports: [],
+    recentAuditOperations: [],
   },
   notes: [],
 };
@@ -339,5 +348,100 @@ describe('Dashboard', () => {
     http.expectOne(DASH_URL).flush(null, { status: 500, statusText: 'Server Error' });
     fixture.detectChanges();
     expect(text()).toContain("Le tableau de bord n'a pas pu être chargé");
+  });
+
+  /**
+   * EF-REP-008 — « tout graphique dispose […] d'un tableau équivalent »
+   * (docs/02 §22.6). L'histogramme et la table lisent la MÊME liste :
+   * une personne qui ne distingue pas les couleurs, ou qui navigue au
+   * lecteur d'écran, lit exactement les mêmes chiffres.
+   */
+  it('renders an equivalent table beside the manager attendance chart', () => {
+    roles.set(['PEDAGOGICAL_MANAGER']);
+    reload({
+      role: 'PEDAGOGICAL_MANAGER',
+      generatedAt: '2026-09-10T09:00:00Z',
+      student: null,
+      teacher: null,
+      administration: null,
+      notes: [],
+      manager: {
+        classCount: 2,
+        upcomingSessions: [],
+        classCodes: ['BTS1-A', 'BTS1-B'],
+        periodFrom: '2026-08-11T09:00:00Z',
+        periodTo: '2026-09-10T09:00:00Z',
+        attendanceRate: 0.9125,
+        lateCount: 7,
+        unjustifiedAbsenceHalfDays: 5,
+        pendingJustifications: 3,
+        openClaims: 1,
+        pendingActivations: 2,
+        classRates: [
+          {
+            label: 'BTS1-A',
+            expectedHalfDays: 40,
+            presentHalfDays: 38,
+            absentHalfDays: 1,
+            excusedHalfDays: 1,
+            lateCount: 4,
+            attendanceRate: 0.95,
+          },
+        ],
+      },
+    });
+
+    const root = fixture.nativeElement as HTMLElement;
+    const table = root.querySelector('table.dashboard__table');
+    expect(table).not.toBeNull();
+    expect(table?.querySelector('caption')?.textContent).toContain('Tableau équivalent');
+    // Les valeurs du graphique figurent en toutes lettres dans la table.
+    expect(table?.textContent).toContain('BTS1-A');
+    expect(table?.textContent).toContain('40');
+    expect(table?.textContent).toContain('38');
+    expect(table?.textContent).toContain('95.00 %');
+    // La barre porte aussi sa valeur : la couleur n'est jamais seule.
+    expect(root.querySelector('.dashboard__bar-value')?.textContent).toContain('95.00 %');
+  });
+
+  it('renders the full manager indicators the specification asks for', () => {
+    roles.set(['PEDAGOGICAL_MANAGER']);
+    reload({
+      role: 'PEDAGOGICAL_MANAGER',
+      generatedAt: '2026-09-10T09:00:00Z',
+      student: null,
+      teacher: null,
+      administration: null,
+      notes: [],
+      manager: {
+        classCount: 2,
+        upcomingSessions: [],
+        classCodes: ['BTS1-A'],
+        periodFrom: '2026-08-11T09:00:00Z',
+        periodTo: '2026-09-10T09:00:00Z',
+        attendanceRate: 0.9125,
+        lateCount: 7,
+        unjustifiedAbsenceHalfDays: 5,
+        pendingJustifications: 3,
+        openClaims: 1,
+        pendingActivations: 2,
+        classRates: [],
+      },
+    });
+    const content = text();
+    expect(content).toContain("Taux d'assiduité");
+    expect(content).toContain('91.25 %');
+    expect(content).toContain('Absences non justifiées');
+    expect(content).toContain('Réclamations ouvertes');
+    expect(content).toContain('Comptes non activés');
+  });
+
+  /**
+   * « Aucun dossier traité » et « traité en zéro heure » ne doivent pas
+   * s'écrire de la même façon.
+   */
+  it('says no file was processed rather than showing a zero-hour delay', () => {
+    expect(text()).toContain('Aucun dossier traité sur la période');
+    expect(text()).not.toContain('0 h');
   });
 });

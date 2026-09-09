@@ -1,0 +1,132 @@
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+  }
+  @case ('error') {
+    <p class="ed__error" role="alert">{{ $any(state()).message }}</p>
+    <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+  }
+  @case ('ready') {
+    @if (rows().length === 0) {
+      <p class="ed__empty" role="status">Aucun départ anticipé signalé pour cette séance.</p>
+    } @else {
+      <ul class="ed__list">
+        @for (row of rows(); track row.publicId) {
+          <li class="ed__item">
+            <p>
+              <strong>{{ statusLabel(row.status) }}</strong>
+              — départ annoncé à {{ formatInstantUtc(row.departureAt) }}
+            </p>
+            <p class="ed__meta">
+              Motif : {{ row.reason }} · Effet : {{ effectLabel(row.effect) }}
+              @if (row.teacherOpinion) {
+                · {{ opinionLabel(row.teacherOpinion) }}
+              }
+            </p>
+            @if (row.decisionComment) {
+              <p class="ed__meta">Décision : {{ row.decisionComment }}</p>
+            }
+
+            @if (isOpen(row)) {
+              <div class="ed__actions">
+                @if (canForward(row)) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    (click)="toggle(row.publicId, 'forward')"
+                  >
+                    Transmettre au responsable
+                  </button>
+                }
+                @if (canDecide(row)) {
+                  <button mat-flat-button type="button" (click)="toggle(row.publicId, 'decide')">
+                    Décider
+                  </button>
+                }
+              </div>
+            }
+
+            @if (openForm(); as open) {
+              @if (open.id === row.publicId && open.mode === 'forward') {
+                <form
+                  class="ed__form"
+                  [formGroup]="forwardForm"
+                  (ngSubmit)="submitForward(row.publicId)"
+                  aria-label="Transmettre le départ anticipé"
+                >
+                  <p class="ed__meta">
+                    Transmettre confie la décision au responsable pédagogique : vous ne
+                    pourrez plus trancher ce dossier vous-même.
+                  </p>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Avis</mat-label>
+                    <mat-select formControlName="opinion">
+                      <mat-option value="">Sans avis</mat-option>
+                      <mat-option value="FAVOURABLE">Avis favorable</mat-option>
+                      <mat-option value="UNFAVOURABLE">Avis défavorable</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Commentaire</mat-label>
+                    <input matInput formControlName="comment" maxlength="500" />
+                  </mat-form-field>
+                  <div class="ed__actions">
+                    <button mat-flat-button type="submit" [disabled]="busy()">Transmettre</button>
+                    <button
+                      mat-button
+                      type="button"
+                      [disabled]="busy()"
+                      (click)="toggle(row.publicId, 'forward')"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </form>
+              }
+              @if (open.id === row.publicId && open.mode === 'decide') {
+                <form
+                  class="ed__form"
+                  [formGroup]="decideForm"
+                  (ngSubmit)="submitDecision(row.publicId)"
+                  aria-label="Décider du départ anticipé"
+                >
+                  <mat-form-field appearance="outline">
+                    <mat-label>Décision</mat-label>
+                    <mat-select formControlName="accepted">
+                      <mat-option [value]="true">Accepter</mat-option>
+                      <mat-option [value]="false">Refuser</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Motif de la décision</mat-label>
+                    <input matInput formControlName="comment" maxlength="500" required />
+                  </mat-form-field>
+                  <div class="ed__actions">
+                    <button
+                      mat-flat-button
+                      type="submit"
+                      [disabled]="busy() || decideForm.invalid"
+                    >
+                      Enregistrer la décision
+                    </button>
+                    <button
+                      mat-button
+                      type="button"
+                      [disabled]="busy()"
+                      (click)="toggle(row.publicId, 'decide')"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </form>
+              }
+            }
+          </li>
+        }
+      </ul>
+    }
+    @if (actionError(); as message) {
+      <p class="ed__error" role="alert">{{ message }}</p>
+    }
+  }
+}

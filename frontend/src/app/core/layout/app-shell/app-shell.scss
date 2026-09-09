@@ -76,3 +76,17 @@
     padding: 1rem;
   }
 }
+
+// Bandeaux d'état hors ligne et d'actions différées (EF-PWA-002/003).
+// Contraste et icône : l'information ne dépend jamais de la seule couleur
+// (docs/02 §32.5).
+.shell__offline,
+.shell__pending {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid rgb(0 0 0 / 20%);
+  background: rgb(0 0 0 / 6%);
+}

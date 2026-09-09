@@ -81,12 +81,15 @@ class AttendanceServiceSessionDateTests {
     @Mock
     private UserDirectory userDirectory;
     @Mock
+    private com.esic.connect.enrollment.RemoteAttendanceDirectory remoteAttendanceDirectory;
+    @Mock
     private AttendanceChangePublisher changePublisher;
 
     private AttendanceService serviceWithClock(Clock clock) {
         AttendanceService service = new AttendanceService(tokenService, recordRepository, recordPersister,
-                courseSessionDirectory, enrollmentDirectory, userDirectory, changePublisher, clock,
-                Duration.ofMinutes(10));
+                courseSessionDirectory, enrollmentDirectory, userDirectory,
+                remoteAttendanceDirectory, changePublisher, clock,
+                Duration.ofMinutes(15), Duration.ofMinutes(30));
 
         lenient().when(tokenService.resolve(eq("tok"), any()))
                 .thenReturn(Optional.of(new ResolvedAttendanceToken(SESSION_ID, CHECKPOINT_ID)));
@@ -107,7 +110,8 @@ class AttendanceServiceSessionDateTests {
         CheckpointRef cp = new CheckpointRef(42L, CHECKPOINT_ID, "Arrivée", AttendanceCheckpointType.START,
                 AttendanceCheckpointStatus.OPEN, true, 0, SESSION_START, null);
         return new SessionRef(1L, SESSION_ID, "Séance", SessionLifecycle.OPEN, 5L, List.of(cp),
-                Set.of(CLASS_ID), SESSION_ZONE, SESSION_START, SESSION_END);
+                Set.of(CLASS_ID), SESSION_ZONE, SESSION_START, SESSION_END,
+                com.esic.connect.coursesession.SessionAttendanceMode.ON_SITE, null);
     }
 
     private static EnrollmentDirectory.EnrollmentRef enrollment() {
@@ -116,7 +120,7 @@ class AttendanceServiceSessionDateTests {
     }
 
     private static AttendanceRequests.Validate validateRequest() {
-        return new AttendanceRequests.Validate("tok", null);
+        return new AttendanceRequests.Validate("tok", null, null);
     }
 
     // ------------------------------------------------------------------

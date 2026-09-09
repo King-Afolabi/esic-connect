@@ -41,4 +41,16 @@ final class PlanningIssueCodes {
 
     private PlanningIssueCodes() {
     }
+    /**
+     * Feuille de classeur présente mais non lue : un planning porte sur
+     * une seule classe (EF-PLAN-011).
+     */
+    static final String WORKBOOK_SHEET_IGNORED = "PLAN_WORKBOOK_SHEET_IGNORED";
+
+    /**
+     * Créneau tombant sur une période résolue en entreprise pour la
+     * classe (EF-PLAN-010). AVERTISSEMENT, jamais erreur : le cahier
+     * prévoit qu'une séance exceptionnelle prime sur le rythme.
+     */
+    static final String ALTERNATION_COMPANY_PERIOD = "PLAN_ALTERNATION_COMPANY_PERIOD";
 }

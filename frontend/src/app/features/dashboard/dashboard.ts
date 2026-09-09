@@ -13,7 +13,7 @@ import { RoleContextService } from '../../core/auth/role-context.service';
 import { roleLabel } from '../../core/models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../core/navigation/navigation';
 import { DashboardApiService } from './dashboard-api.service';
-import { DashboardResponse, shortInstant } from './dashboard.models';
+import { barWidth, DashboardResponse, percent, shortDate, shortInstant } from './dashboard.models';
 
 type DashboardState =
   | { kind: 'loading' }
@@ -42,6 +42,9 @@ export class Dashboard {
 
   protected readonly roleLabel = roleLabel;
   protected readonly shortInstant = shortInstant;
+  protected readonly shortDate = shortDate;
+  protected readonly percent = percent;
+  protected readonly barWidth = barWidth;
 
   protected readonly session = this.auth.session;
   protected readonly roles = this.auth.roles;
@@ -70,10 +73,18 @@ export class Dashboard {
 
   protected readonly quickLinks = computed(() =>
     visibleNavItems(NAV_ITEMS, this.roleContext.effectiveRoles()).filter(
-      // Le tableau de bord lui-même et les Notifications (toujours
-      // accessibles via la cloche de l'en-tête) ne sont pas des « accès
-      // rapides » de contenu métier.
-      (item) => item.path !== '/dashboard' && item.path !== '/notifications',
+      // Le tableau de bord lui-même, les Notifications (toujours
+      // accessibles via la cloche de l'en-tête), leurs préférences, la
+      // sécurité du compte et l'abonnement calendrier (tous accessibles
+      // quel que soit le rôle) ne sont pas des « accès rapides » de
+      // contenu métier : ce sont des réglages personnels, disponibles en
+      // permanence.
+      (item) =>
+        item.path !== '/dashboard' &&
+        item.path !== '/notifications' &&
+        item.path !== '/notifications/preferences' &&
+        item.path !== '/mon-compte/securite' &&
+        item.path !== '/mon-compte/calendrier',
     ),
   );
 

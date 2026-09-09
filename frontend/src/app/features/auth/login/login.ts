@@ -5,11 +5,14 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { SkipLink } from '../../../core/a11y/skip-link';
 import { AuthService } from '../../../core/auth/auth.service';
+import { isWebAuthnAvailable } from '../../../core/auth/webauthn';
 import { normalizeHttpError } from '../../../core/models/api-error';
+import { PendingChallengeStore } from '../mfa-challenge/pending-challenge.store';
+import { Turnstile } from '../turnstile/turnstile';
 
 const GENERIC_AUTH_FAILURE =
   'Adresse électronique ou mot de passe incorrect.';
@@ -24,7 +27,9 @@ const GENERIC_AUTH_FAILURE =
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    RouterLink,
     SkipLink,
+    Turnstile,
   ],
   templateUrl: './login.html',
   styleUrl: './login.scss',
@@ -33,6 +38,7 @@ export class Login {
   private readonly formBuilder = inject(NonNullableFormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly pendingChallenge = inject(PendingChallengeStore);
 
   /** Route d'origine à rejoindre après connexion (lié depuis `?redirect=`). */
   readonly redirect = input<string>();
@@ -41,6 +47,13 @@ export class Login {
 
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
+  /** Jeton anti-robot, quand un fournisseur est configuré (EF-AUTH-011). */
+  protected readonly captchaToken = signal<string | null>(null);
+  /**
+   * Les clés d'accès exigent un contexte sûr : HTTPS, ou `localhost` en
+   * développement. Ailleurs, le bouton est masqué plutôt que d'échouer.
+   */
+  protected readonly passkeysSupported = isWebAuthnAvailable();
 
   protected readonly form = this.formBuilder.group({
     email: this.formBuilder.control('', [Validators.required, Validators.email]),
@@ -58,11 +71,21 @@ export class Login {
     this.errorMessage.set(null);
     const { email, password } = this.form.getRawValue();
 
-    this.auth.login(email, password).subscribe({
-      next: () => {
+    this.auth.login(email, password, this.captchaToken()).subscribe({
+      next: (outcome) => {
         this.submitting.set(false);
-        const target = this.redirect() ?? '/dashboard';
-        void this.router.navigateByUrl(this.isSafeInternalPath(target) ? target : '/dashboard');
+        if (outcome.kind === 'challenge') {
+          // Le mot de passe est bon, la session n'est pas ouverte pour
+          // autant : un second facteur est exigé (RG-007, AC-021).
+          this.pendingChallenge.start({
+            challenge: outcome.challenge,
+            email: outcome.email,
+            redirect: this.safeTarget(),
+          });
+          void this.router.navigate(['/connexion/verification']);
+          return;
+        }
+        void this.router.navigateByUrl(this.safeTarget());
       },
       error: (error: unknown) => {
         this.submitting.set(false);
@@ -76,6 +99,38 @@ export class Login {
         );
       },
     });
+  }
+
+  /** Connexion sans mot de passe (EF-AUTH-007). */
+  protected loginWithPasskey(): void {
+    if (this.submitting()) {
+      return;
+    }
+    this.submitting.set(true);
+    this.errorMessage.set(null);
+    this.auth.loginWithPasskey().subscribe({
+      next: () => {
+        this.submitting.set(false);
+        void this.router.navigateByUrl(this.safeTarget());
+      },
+      error: () => {
+        this.submitting.set(false);
+        // Annulation par l'utilisateur, clé inconnue ou signature refusée :
+        // un seul message, qui n'apprend rien sur l'existence du compte.
+        this.errorMessage.set(
+          "La connexion par clé d'accès n'a pas abouti. Utilisez votre mot de passe.",
+        );
+      },
+    });
+  }
+
+  protected onCaptchaToken(token: string | null): void {
+    this.captchaToken.set(token);
+  }
+
+  private safeTarget(): string {
+    const target = this.redirect() ?? '/dashboard';
+    return this.isSafeInternalPath(target) ? target : '/dashboard';
   }
 
   private isSafeInternalPath(path: string): boolean {

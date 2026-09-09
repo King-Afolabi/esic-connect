@@ -64,6 +64,27 @@ public interface JustificationFileStorage {
     void delete(String storageKey);
 
     /**
+     * Énumère les clés effectivement présentes dans le stockage
+     * (EF-JUS-002 — balayage des fichiers orphelins, docs/02 §19.5 :
+     * « Un balayage périodique détecte et supprime les fichiers
+     * orphelins »).
+     *
+     * <p>Un orphelin est un contenu qu'aucune ligne ne référence plus :
+     * il survit à une suppression dont la partie fichier a échoué. Sans
+     * balayage, il resterait indéfiniment — une donnée personnelle
+     * conservée sans base légale ni moyen de la retrouver.
+     *
+     * <p>Le résultat est <strong>borné</strong> par {@code limit} : un
+     * stockage de production peut contenir des centaines de milliers
+     * d'objets, et une énumération intégrale en mémoire serait un défaut
+     * en soi. L'ordre n'est pas garanti.
+     *
+     * @param limit nombre maximal de clés renvoyées, strictement positif
+     * @return des clés existantes, au plus {@code limit}
+     */
+    java.util.List<String> listKeys(int limit);
+
+    /**
      * Fichier candidat au stockage — déjà validé par l'appelant.
      *
      * @param content      flux du contenu (consommé une seule fois)

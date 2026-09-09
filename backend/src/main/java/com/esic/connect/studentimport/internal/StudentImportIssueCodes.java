@@ -49,4 +49,13 @@ final class StudentImportIssueCodes {
 
     // --- Anomalies de ligne : compte existant ---
     static final String ACCOUNT_NOT_USABLE = "IMP_ACCOUNT_NOT_USABLE";
+    /** Feuilles effectivement lues dans un classeur multifeuille (EF-IMP-004). */
+    static final String WORKBOOK_SHEETS_READ = "WORKBOOK_SHEETS_READ";
+
+    /**
+     * Feuille écartée : son en-tête diffère de celui de la première.
+     * Signalé plutôt que deviné — lire une feuille avec le mauvais
+     * mapping produirait des données fausses et plausibles.
+     */
+    static final String WORKBOOK_SHEET_IGNORED = "WORKBOOK_SHEET_IGNORED";
 }

@@ -1,8 +1,11 @@
 package com.esic.connect.shared.web;
 
+import com.esic.connect.shared.ratelimit.RateLimitExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -12,12 +15,14 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -56,9 +61,29 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Seuil de limitation de débit atteint (EF-AUTH-012).
+     *
+     * <p>Le corps ne dit jamais <em>quelle</em> limite a été atteinte, ni
+     * pour quelle identité : sur les routes publiques, ce serait un
+     * oracle sur l'existence d'un compte. L'en-tête {@code Retry-After}
+     * est en revanche renseigné, car il est utile au client légitime et
+     * ne révèle rien de plus que le refus lui-même.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiError> handleRateLimited(RateLimitExceededException ex, HttpServletRequest request) {
+        long retryAfterSeconds = Math.max(1, ex.getRetryAfter().toSeconds());
+        ApiError body = new ApiError(Instant.now(), HttpStatus.TOO_MANY_REQUESTS.value(), "RATE_LIMITED",
+                "Trop de tentatives. Réessayez dans un instant.",
+                request.getRequestURI(), UUID.randomUUID().toString(), List.of());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))
+                .body(body);
+    }
+
+    /**
      * Refus d'autorisation ({@code @PreAuthorize}, contrôle de périmètre).
      * Sans ce handler, le catch-all générique renverrait un 500 : la
-     * réponse doit être un 403 neutre (docs/07-securite-rgpd.md §7,
+     * réponse doit être un 403 neutre (docs/08-securite-rgpd.md §7,
      * docs/02 §29.2).
      */
     @ExceptionHandler(AccessDeniedException.class)
@@ -82,9 +107,8 @@ public class GlobalExceptionHandler {
      * <p>Sans ce handler, le catch-all générique transformait une erreur
      * d'appel du client en {@code 500 INTERNAL_ERROR} : c'est le défaut
      * F-SEC-1 relevé sur {@code GET /api/v1/planning/versions} sans
-     * {@code classGroupPublicId} (docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md
-     * §2, reconfirmé par l'audit QA du 3 septembre 2026, audit-report.md
-     * §3). Un 500 signale à tort une panne serveur, fausse la supervision
+     * {@code classGroupPublicId}. Un 500 signale à tort une panne serveur,
+     * fausse la supervision
      * et est trompeur pour tout client de l'API documentée (OpenAPI).
      *
      * <p>Seul le <strong>nom</strong> du paramètre est renvoyé : il fait
@@ -124,6 +148,37 @@ public class GlobalExceptionHandler {
                                                          HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
                 "Le corps de la requête est absent ou mal formé.", request, List.of());
+    }
+
+    /**
+     * Méthode HTTP non prise en charge par la route
+     * ({@code POST} sur une ressource qui n'expose que {@code GET}).
+     *
+     * <p>Sans ce handler, le catch-all générique transformait une erreur
+     * d'appel du client en {@code 500 INTERNAL_ERROR} — défaut relevé au
+     * sprint 11 en vérifiant que la piste d'audit n'offre aucune route
+     * d'écriture : {@code POST /api/v1/audit-events} répondait 500 au
+     * lieu de 405. Un 500 signale à tort une panne serveur et fausse la
+     * supervision (docs/02 §30.1 : « une erreur d'appel du client produit
+     * un 400 explicite, jamais un 500 »).
+     *
+     * <p>L'en-tête {@code Allow} est renseigné parce que RFC 9110 §15.5.6
+     * l'exige sur un {@code 405}, et parce que la liste des méthodes
+     * autorisées d'une route fait partie de son contrat public — elle ne
+     * révèle rien de l'implémentation.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiError> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                             HttpServletRequest request) {
+        ResponseEntity<ApiError> body = build(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
+                "Cette méthode HTTP n'est pas prise en charge par cette ressource.", request, List.of());
+        Set<HttpMethod> allowed = ex.getSupportedHttpMethods();
+        if (allowed == null || allowed.isEmpty()) {
+            return body;
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .allow(allowed.toArray(HttpMethod[]::new))
+                .body(body.getBody());
     }
 
     @ExceptionHandler(Exception.class)

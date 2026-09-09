@@ -15,6 +15,8 @@ interface StudentImportRowRepository
 
     List<StudentImportRow> findByJobIdOrderByRowNumberAsc(Long jobId);
 
+    List<StudentImportRow> findByJobId(Long jobId);
+
     long countByJobId(Long jobId);
 
     /**

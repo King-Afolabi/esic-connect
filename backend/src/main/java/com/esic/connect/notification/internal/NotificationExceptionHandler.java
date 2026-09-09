@@ -19,7 +19,12 @@ import java.util.UUID;
  * module. Aucun message ne divulgue de donnée personnelle.
  */
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = NotificationController.class)
+@RestControllerAdvice(assignableTypes = {
+        NotificationController.class,
+        EmailDeliveryController.class,
+        NotificationPreferenceController.class,
+        PushSubscriptionController.class
+})
 class NotificationExceptionHandler {
 
     @ExceptionHandler(NotificationException.class)
@@ -32,6 +37,22 @@ class NotificationExceptionHandler {
                 status = HttpStatus.NOT_FOUND;
                 code = "NOTIF_NOT_FOUND";
                 message = "Aucune notification ne correspond à cet identifiant.";
+            }
+            case INVALID_PREFERENCE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "NOTIF_INVALID_PREFERENCE";
+                message = "Préférence invalide (catégorie, canal ou valeur inconnue).";
+            }
+            case PREFERENCE_LOCKED -> {
+                status = HttpStatus.CONFLICT;
+                code = "NOTIF_PREFERENCE_LOCKED";
+                message = "Ce réglage ne peut pas être désactivé : le centre de notifications "
+                        + "et les alertes de sécurité restent toujours actifs.";
+            }
+            case INVALID_SUBSCRIPTION -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "NOTIF_INVALID_SUBSCRIPTION";
+                message = "Abonnement de notification poussée invalide.";
             }
             case INVALID_STATUS -> {
                 status = HttpStatus.BAD_REQUEST;

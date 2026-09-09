@@ -21,7 +21,9 @@ import java.util.UUID;
  */
 @RestControllerAdvice(assignableTypes = {
         StudentProfileController.class,
-        EnrollmentController.class
+        EnrollmentController.class,
+        StudentGroupController.class,
+        RemoteAttendanceController.class
 })
 class EnrollmentExceptionHandler {
 
@@ -97,10 +99,65 @@ class EnrollmentExceptionHandler {
                 code = "ENR_INVALID_CLOSE_STATUS";
                 message = "Statut de clôture invalide (COMPLETED ou WITHDRAWN attendu).";
             }
+            case INVALID_REMOTE_PERIOD -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ENR_INVALID_REMOTE_PERIOD";
+                message = "La fin de l'autorisation précède son début.";
+            }
+            case AUTHORIZATION_NOT_ACTIVE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ENR_AUTHORIZATION_NOT_ACTIVE";
+                message = "Cette autorisation n'est plus active.";
+            }
             case INVALID_SORT -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "ENR_INVALID_SORT";
                 message = "Champ ou direction de tri non autorisé.";
+            }
+            case STUDENT_GROUP_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ENR_STUDENT_GROUP_NOT_FOUND";
+                message = "Aucun groupe ne correspond à cet identifiant.";
+            }
+            case PROGRAM_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ENR_PROGRAM_NOT_FOUND";
+                message = "Aucune formation ne correspond à cet identifiant.";
+            }
+            case ACADEMIC_YEAR_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ENR_ACADEMIC_YEAR_NOT_FOUND";
+                message = "Aucune année scolaire ne correspond à cet identifiant.";
+            }
+            case SUBJECT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ENR_SUBJECT_NOT_FOUND";
+                message = "Aucune matière ne correspond à cet identifiant.";
+            }
+            case DUPLICATE_GROUP_CODE -> {
+                status = HttpStatus.CONFLICT;
+                code = "ENR_DUPLICATE_GROUP_CODE";
+                message = "Ce code de groupe est déjà utilisé pour cette année scolaire.";
+            }
+            case GROUP_ARCHIVED -> {
+                status = HttpStatus.CONFLICT;
+                code = "ENR_GROUP_ARCHIVED";
+                message = "Ce groupe est archivé : il n'accepte plus de modification.";
+            }
+            case ALREADY_MEMBER -> {
+                status = HttpStatus.CONFLICT;
+                code = "ENR_ALREADY_MEMBER";
+                message = "Cet apprenant fait déjà partie du groupe.";
+            }
+            case INVALID_GROUP_PERIOD -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "ENR_INVALID_GROUP_PERIOD";
+                message = "La date de fin doit être postérieure ou égale à la date de début.";
+            }
+            case OUT_OF_SCOPE -> {
+                status = HttpStatus.FORBIDDEN;
+                code = "ENR_FORBIDDEN";
+                message = "Cette ressource ne relève pas de votre périmètre.";
             }
             default -> {
                 status = HttpStatus.BAD_REQUEST;

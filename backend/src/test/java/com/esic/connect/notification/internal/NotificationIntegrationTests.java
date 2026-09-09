@@ -1,5 +1,6 @@
 package com.esic.connect.notification.internal;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -80,7 +81,7 @@ class NotificationIntegrationTests {
     @Autowired
     private TransactionTemplate transactionTemplate;
     @Autowired
-    private NotificationWriter notificationWriter;
+    private NotificationOutboxHandler notificationHandler;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -309,7 +310,7 @@ class NotificationIntegrationTests {
     }
 
     // ------------------------------------------------------------------
-    // Idempotence & compte archivé (NotificationWriter direct)
+    // Idempotence & compte archivé (gestionnaire d'outbox appelé directement)
     // ------------------------------------------------------------------
 
     @Test
@@ -317,10 +318,9 @@ class NotificationIntegrationTests {
         Account teacher = account(RoleCode.TEACHER);
         UUID resource = UUID.randomUUID();
         UUID eventKey = UUID.randomUUID();
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                Set.of(UUID.fromString(teacher.publicId())), "Séance annulée", "corps neutre");
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", resource, eventKey,
-                Set.of(UUID.fromString(teacher.publicId())), "Séance annulée", "corps neutre");
+        deliver(resource, eventKey, teacher, "Séance annulée", "corps neutre");
+        // Rejeu du même message : le gestionnaire d'outbox est idempotent.
+        deliver(resource, eventKey, teacher, "Séance annulée", "corps neutre");
         long count = notifications(tokenFor(teacher)).stream()
                 .filter(n -> resource.toString().equals(n.get("resourcePublicId"))).count();
         assertThat(count).isEqualTo(1L);
@@ -333,8 +333,7 @@ class NotificationIntegrationTests {
         toArchive.archive(null, Instant.now());
         userAccountRepository.saveAndFlush(toArchive);
 
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", UUID.randomUUID(),
-                UUID.randomUUID(), Set.of(UUID.fromString(teacher.publicId())), "t", "b");
+        deliver(UUID.randomUUID(), UUID.randomUUID(), teacher, "t", "b");
         Long rows = jdbc.queryForObject(
                 "select count(*) from notification where recipient_user_id = "
                         + "(select id from user_account where email = ?)", Long.class, teacher.email());
@@ -351,12 +350,9 @@ class NotificationIntegrationTests {
         Account bob = account(RoleCode.TEACHER);
         UUID r1 = UUID.randomUUID();
         UUID r2 = UUID.randomUUID();
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", r1, UUID.randomUUID(),
-                Set.of(UUID.fromString(alice.publicId())), "A1", "b");
-        notificationWriter.write(NotificationType.SESSION_SUBSTITUTION_ADDED, "COURSE_SESSION", r2, UUID.randomUUID(),
-                Set.of(UUID.fromString(alice.publicId())), "A2", "b");
-        notificationWriter.write(NotificationType.SESSION_CANCELLED, "COURSE_SESSION", UUID.randomUUID(),
-                UUID.randomUUID(), Set.of(UUID.fromString(bob.publicId())), "B1", "b");
+        deliver(NotificationType.SESSION_CANCELLED, r1, UUID.randomUUID(), alice, "A1", "b");
+        deliver(NotificationType.SESSION_SUBSTITUTION_ADDED, r2, UUID.randomUUID(), alice, "A2", "b");
+        deliver(NotificationType.SESSION_CANCELLED, UUID.randomUUID(), UUID.randomUUID(), bob, "B1", "b");
 
         String aliceToken = tokenFor(alice);
         assertThat(unreadCount(aliceToken)).isEqualTo(2L);
@@ -511,15 +507,28 @@ class NotificationIntegrationTests {
     }
 
     private String tokenFor(Account account) {
-        Map<String, Object> body = rest.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", account.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(rest, account.email(), PASSWORD);
     }
 
     private static String code() {
         return UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /**
+     * Livraison directe par le gestionnaire d'outbox, sans passer par un
+     * événement métier — l'équivalent de l'ancien appel au writer.
+     */
+    private void deliver(UUID resource, UUID eventKey, Account recipient, String title, String body) {
+        deliver(NotificationType.SESSION_CANCELLED, resource, eventKey, recipient, title, body);
+    }
+
+    private void deliver(NotificationType type, UUID resource, UUID eventKey, Account recipient,
+                         String title, String body) {
+        notificationHandler.handle("cle-de-test-" + eventKey, NotificationRequest
+                .of(type, "COURSE_SESSION", resource, eventKey)
+                .label(title, body)
+                .recipients(Set.of(UUID.fromString(recipient.publicId())))
+                .build()
+                .toPayload());
     }
 }

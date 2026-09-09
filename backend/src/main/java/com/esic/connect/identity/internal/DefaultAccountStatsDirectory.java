@@ -13,9 +13,33 @@ import org.springframework.transaction.annotation.Transactional;
 class DefaultAccountStatsDirectory implements AccountStatsDirectory {
 
     private final UserAccountRepository userAccountRepository;
+    private final AccountInvitationRepository invitationRepository;
+    private final java.time.Clock clock;
 
-    DefaultAccountStatsDirectory(UserAccountRepository userAccountRepository) {
+    DefaultAccountStatsDirectory(UserAccountRepository userAccountRepository,
+                                 AccountInvitationRepository invitationRepository,
+                                 java.time.Clock clock) {
         this.userAccountRepository = userAccountRepository;
+        this.invitationRepository = invitationRepository;
+        this.clock = clock;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countPendingActivationAmong(java.util.Collection<java.util.UUID> userPublicIds) {
+        if (userPublicIds == null || userPublicIds.isEmpty()) {
+            return 0L;
+        }
+        return userAccountRepository.countByPublicIdInAndStatus(
+                userPublicIds.stream().filter(java.util.Objects::nonNull).distinct().toList(),
+                AccountStatus.PENDING_ACTIVATION);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countExpiredPendingInvitations() {
+        return invitationRepository.countByStatusAndExpiresAtBefore(
+                AccountInvitationStatus.PENDING, clock.instant());
     }
 
     @Override

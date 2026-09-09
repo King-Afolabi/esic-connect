@@ -1,5 +1,6 @@
 package com.esic.connect.planning;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.identity.internal.AccountStatus;
 import com.esic.connect.identity.internal.Role;
 import com.esic.connect.identity.internal.RoleCode;
@@ -58,6 +59,22 @@ class PlanningImportIntegrationTests {
     private static final String HEADER =
             "slot_key,session_date,start_time,end_time,time_zone_id,title,teacher_public_id,room_code\n";
 
+    /**
+     * Salle unique par cas de test.
+     *
+     * <p>Depuis la migration {@code V21}, le conflit de salle s'exerce à
+     * l'échelle de l'établissement (EF-PLAN-009) : deux cas de test
+     * réutilisant « A1 » entreraient en collision entre eux. Le code
+     * reste constant à l'intérieur d'un cas.
+     */
+    private String room;
+
+    @BeforeEach
+    void freshRoomPerTest() {
+        room = "R" + UUID.randomUUID().toString().substring(0, 8)
+                .toUpperCase(java.util.Locale.ROOT);
+    }
+
     @TestConfiguration
     static class NoopMailerConfig {
         @Bean
@@ -91,8 +108,10 @@ class PlanningImportIntegrationTests {
         String teacher = teacherPublicId();
 
         String csv = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique," + teacher + ",A101\n"
-                + "S2,2026-09-07,13:30,17:00,Europe/Paris,Bases de données," + teacher + ",A101\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Algorithmique," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-07,13:30,17:00,Europe/Paris,Bases de données," + teacher + ","
+                + room + "\n";
         ResponseEntity<Map<String, Object>> response = upload("planning.csv", csv, admin, classId);
         assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.CREATED);
         Map<String, Object> job = response.getBody();
@@ -124,8 +143,10 @@ class PlanningImportIntegrationTests {
         String teacher = teacherPublicId();
 
         String csv = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + UUID.randomUUID() + ",A1\n"
-                + "S1,2026-09-08,09:00,12:00,Europe/Paris,Cours," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + UUID.randomUUID() + ","
+                + room + "\n"
+                + "S1,2026-09-08,09:00,12:00,Europe/Paris,Cours," + teacher + ","
+                + room + "\n";
         Map<String, Object> job = upload("planning.csv", csv, admin, classId).getBody();
         assertThat(((Number) job.get("errorRows")).intValue()).isEqualTo(2);
         assertThat(job.get("confirmable")).isEqualTo(false);
@@ -144,8 +165,10 @@ class PlanningImportIntegrationTests {
         String teacher = teacherPublicId();
 
         String csv = HEADER
-                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ",A1\n"
-                + "S2,2026-09-07,10:00,13:00,Europe/Paris,Cours B," + teacher + ",A1\n";
+                + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours A," + teacher + ","
+                + room + "\n"
+                + "S2,2026-09-07,10:00,13:00,Europe/Paris,Cours B," + teacher + ","
+                + room + "\n";
         Map<String, Object> job = upload("planning.csv", csv, admin, classId).getBody();
         assertThat(((Number) job.get("errorRows")).intValue()).isEqualTo(2);
 
@@ -193,7 +216,8 @@ class PlanningImportIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ",A1\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ","
+                + room + "\n";
         String jobId = (String) upload("planning.csv", csv, admin, classId).getBody().get("publicId");
 
         assertThat(status(HttpMethod.POST, "/api/v1/planning-imports/" + jobId + "/cancel", admin))
@@ -209,7 +233,8 @@ class PlanningImportIntegrationTests {
         String admin = adminToken();
         String classId = classGroup(admin);
         String teacher = teacherPublicId();
-        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ",A1\n";
+        String csv = HEADER + "S1,2026-09-07,09:00,12:00,Europe/Paris,Cours," + teacher + ","
+                + room + "\n";
 
         // Pas de jeton -> 401.
         assertThat(upload("planning.csv", csv, null, classId).getStatusCode())
@@ -229,7 +254,7 @@ class PlanningImportIntegrationTests {
     /**
      * Régression F-SEC-1 : un paramètre obligatoire absent doit produire un
      * {@code 400 VALIDATION_ERROR}, jamais un {@code 500 INTERNAL_ERROR}
-     * (audit-report.md §3, finding F-SEC-1).
+     * (régression couverte).
      */
     @Test
     void aMissingRequiredQueryParameterIsA400NotA500() {
@@ -348,12 +373,7 @@ class PlanningImportIntegrationTests {
 
     private String tokenFor(RoleCode... roles) {
         Account a = account(roles);
-        Map<String, Object> body = restTemplate.exchange(
-                RequestEntity.post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("email", a.email(), "password", PASSWORD)),
-                new ParameterizedTypeReference<Map<String, Object>>() {
-                }).getBody();
-        return (String) body.get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, a.email(), PASSWORD);
     }
 
     private static String code() {

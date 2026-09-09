@@ -84,6 +84,13 @@ export interface RowIssueResponse {
 export interface RowResponse {
   publicId: string;
   rowNumber: number;
+  /**
+   * Feuille du classeur dont vient la ligne, `null` pour un CSV. Le
+   * cahier exige de situer une anomalie « fichier, feuille, ligne,
+   * colonne » (docs/02 §10.7) : sans elle, une erreur dans un classeur de
+   * trois feuilles serait introuvable.
+   */
+  sheetName: string | null;
   rowStatus: RowStatus;
   plannedAction: PlannedAction;
   lastName: string | null;
@@ -191,3 +198,27 @@ const SEVERITY_LABELS: Record<IssueSeverity, string> = {
 export function severityLabel(severity: IssueSeverity): string {
   return SEVERITY_LABELS[severity] ?? severity;
 }
+
+/**
+ * Correction d'une ligne avant confirmation (EF-IMP-006).
+ *
+ * <p>Un champ absent de l'objet reste inchangé ; une valeur vide efface
+ * le champ — corriger une colonne renseignée par erreur est légitime.
+ * La liste des champs corrigeables est fermée côté serveur.
+ */
+export type RowCorrection = Partial<
+  Record<
+    | 'last_name'
+    | 'first_name'
+    | 'email'
+    | 'phone'
+    | 'formation_code'
+    | 'class_code'
+    | 'academic_year'
+    | 'student_number'
+    | 'birth_date'
+    | 'work_study'
+    | 'company_name',
+    string
+  >
+>;

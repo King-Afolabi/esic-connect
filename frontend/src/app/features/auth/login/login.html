@@ -16,6 +16,13 @@
       </p>
     }
 
+    @if (reason() === 'password-changed') {
+      <p class="login__notice" role="status">
+        Votre mot de passe a été modifié et toutes vos sessions ont été fermées. Connectez-vous
+        avec votre nouveau mot de passe.
+      </p>
+    }
+
     <form class="login__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <mat-form-field appearance="outline">
         <mat-label>Adresse électronique</mat-label>
@@ -56,6 +63,8 @@
         }
       </p>
 
+      <app-turnstile (token)="onCaptchaToken($event)" />
+
       <button
         mat-flat-button
         color="primary"
@@ -66,6 +75,20 @@
       >
         {{ submitting() ? 'Connexion…' : 'Se connecter' }}
       </button>
+
+      @if (passkeysSupported) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="login__submit"
+          [disabled]="submitting()"
+          (click)="loginWithPasskey()"
+        >
+          Se connecter avec une clé d'accès
+        </button>
+      }
+
+      <a routerLink="/mot-de-passe-oublie" class="login__link">Mot de passe oublié ?</a>
     </form>
   </section>
 </main>

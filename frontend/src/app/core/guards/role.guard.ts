@@ -10,7 +10,7 @@ import { Role } from '../models/role';
  * Le périmètre de rôles est repris du `@PreAuthorize` de la route API
  * correspondante côté Spring Boot. Ce garde ne fait que masquer une
  * navigation : il n'élargit ni ne remplace le contrôle serveur
- * (docs/07-securite-rgpd.md §7 ; consigne « les gardes sont une couche
+ * (docs/08-securite-rgpd.md §7 ; consigne « les gardes sont une couche
  * d'ergonomie »).
  */
 export function roleGuard(required: readonly Role[]): CanActivateFn {

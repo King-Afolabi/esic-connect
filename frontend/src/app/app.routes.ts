@@ -109,6 +109,30 @@ const academicList = () =>
   import('./features/academic/academic-reference-list/academic-reference-list').then(
     (m) => m.AcademicReferenceList,
   );
+/**
+ * Lecture du catalogue des matières, repris de
+ * `SubjectController.SUBJECT_READ_ROLES` : un formateur doit pouvoir
+ * qualifier une séance. L'écriture reste fermée côté serveur.
+ */
+const SUBJECT_READ_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+  'TEACHER',
+] as const;
+
+/**
+ * Suivi des invitations et de la délivrabilité, repris de
+ * `AccountInvitationController` et `EmailDeliveryController`.
+ */
+const INVITATION_TRACKING_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN',
+  'SCHOOL_ADMINISTRATION',
+  'PEDAGOGICAL_MANAGER',
+] as const;
+
 const academicDetail = () =>
   import('./features/academic/academic-reference-detail/academic-reference-detail').then(
     (m) => m.AcademicReferenceDetail,
@@ -122,6 +146,39 @@ export const routes: Routes = [
     title: `Connexion — ${APP_NAME}`,
     loadComponent: () =>
       import('./features/auth/login/login').then((m) => m.Login),
+  },
+  {
+    // Deuxième étape de connexion (EF-AUTH-008, AC-021). Sous
+    // `guestGuard` : une session déjà ouverte n'a rien à vérifier. Le
+    // défi n'est pas dans l'URL — il vaut preuve de la première étape et
+    // ne doit pas entrer dans l'historique du navigateur ; il transite
+    // par `PendingChallengeStore`, en mémoire. Une arrivée directe sur
+    // cette route renvoie donc vers la connexion.
+    path: 'connexion/verification',
+    canActivate: [guestGuard],
+    title: `Vérification en deux étapes — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/auth/mfa-challenge/mfa-challenge').then((m) => m.MfaChallenge),
+  },
+  {
+    // Parcours PUBLIC : demander un lien de réinitialisation
+    // (EF-AUTH-005). Sous `guestGuard` — un utilisateur déjà connecté n'a
+    // rien à y faire, il change son mot de passe depuis son profil.
+    path: 'mot-de-passe-oublie',
+    canActivate: [guestGuard],
+    title: `Mot de passe oublié — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/auth/forgot-password/forgot-password').then((m) => m.ForgotPassword),
+  },
+  {
+    // Parcours PUBLIC atteint via le lien reçu par courriel
+    // (`/reinitialisation?token=…`). Aucune garde : comme pour
+    // l'activation, le jeton fait foi, indépendamment d'une éventuelle
+    // session en mémoire.
+    path: 'reinitialisation',
+    title: `Nouveau mot de passe — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/auth/reset-password/reset-password').then((m) => m.ResetPassword),
   },
   {
     // Parcours PUBLIC atteint via le lien d'invitation du back-end
@@ -146,6 +203,40 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
+        // Écran livré (sprint 3) : référentiel des matières (EF-ACA-006).
+        // Périmètre repris de `SubjectController` — lecture ouverte aux
+        // formateurs, écriture aux rôles de gestion, le serveur restant
+        // l'autorité (un `403` est rendu « accès refusé »).
+        path: 'subjects',
+        canActivate: [roleGuard],
+        data: { roles: SUBJECT_READ_ROLES },
+        title: `Matières — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/subjects/subject-list/subject-list').then((m) => m.SubjectList),
+      },
+      {
+        // Écran livré (sprint 3) : suivi des invitations et de leur
+        // délivrabilité (EF-USER-007, EF-USER-008).
+        path: 'invitations',
+        canActivate: [roleGuard],
+        data: { roles: INVITATION_TRACKING_ROLES },
+        title: `Invitations — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/invitations/invitation-list/invitation-list').then(
+            (m) => m.InvitationList,
+          ),
+      },
+      {
+        // Sécurité du compte de l'appelant : second facteur, clés d'accès,
+        // appareils reconnus (EF-AUTH-006, 008, 009, 013). Aucune garde de
+        // rôle — chacun gère ses propres moyens d'authentification, et le
+        // serveur déduit le périmètre du sujet du jeton.
+        path: 'mon-compte/securite',
+        title: `Sécurité de mon compte — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/account/security/account-security').then((m) => m.AccountSecurity),
+      },
+      {
         // Centre de notifications de l'appelant (G1-D). Aucune garde de
         // rôle : `NotificationController` porte `@PreAuthorize("isAuthenticated()")`
         // et l'isolation par destinataire est faite côté serveur.
@@ -155,6 +246,93 @@ export const routes: Routes = [
           import('./features/notifications/notification-list/notification-list').then(
             (m) => m.NotificationList,
           ),
+      },
+      {
+        // Préférences de notification de l'appelant (EF-NOTIF-006).
+        // Aucune garde de rôle : `NotificationPreferenceController` porte
+        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
+        // sujet du JWT, jamais un paramètre.
+        path: 'notifications/preferences',
+        title: `Préférences de notification — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/notifications/preferences/notification-preferences').then(
+            (m) => m.NotificationPreferences,
+          ),
+      },
+      {
+        // Recherche globale (EF-USER-009 ; docs/02 §22.7). Périmètre
+        // aligné **à l'identique** sur le `@PreAuthorize` de
+        // `GlobalSearchController` : seuls les rôles qui disposent d'un
+        // périmètre à parcourir. Le garde ne fait que masquer la
+        // navigation — le serveur applique le périmètre réel.
+        path: 'recherche',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Recherche globale — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/search/global-search').then((m) => m.GlobalSearch),
+      },
+      {
+        // Consultation et export de la piste d'audit (EF-AUD-002 ;
+        // docs/02 §23.4). Périmètre aligné sur `AuditController`
+        // (`ADMIN` / `SUPER_ADMIN`) : l'apprenant dispose de son journal
+        // de transparence, qui est la bonne granularité pour lui.
+        path: 'exploitation/audit',
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+        title: `Piste d'audit — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/audit/audit-trail').then((m) => m.AuditTrail),
+      },
+      {
+        // Attestations d'assiduité (EF-REP-006, AC-033). Périmètre aligné
+        // sur `AttendanceManagementWeb.REPORT_ROLES` — un `TEACHER` n'y a
+        // pas accès, il consulte les présences de ses séances.
+        path: 'attestations',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Attestations — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/attestations/attestations').then((m) => m.Attestations),
+      },
+      {
+        // Abonnement iCalendar de l'appelant (EF-INT-001, AC-034). Aucune
+        // garde de rôle : `CalendarSubscriptionController` porte
+        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
+        // sujet du JWT, jamais un paramètre.
+        path: 'mon-compte/calendrier',
+        title: `Abonnement calendrier — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/calendar-subscriptions/calendar-subscriptions').then(
+            (m) => m.CalendarSubscriptions,
+          ),
+      },
+      {
+        // Rapport des invitations non activées (EF-REP-010). Mêmes rôles
+        // que le suivi des invitations : c'est le même besoin.
+        path: 'invitations/non-activees',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Invitations non activées — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/invitations/pending-report/pending-invitation-report').then(
+            (m) => m.PendingInvitationReport,
+          ),
+      },
+      {
+        // File d'échec des effets de bord (EF-OPS-005 ; docs/02 §34.2,
+        // écrans du super administrateur). Périmètre aligné **à
+        // l'identique** sur le `@PreAuthorize` de `OutboxAdminController`
+        // (`ADMIN` / `SUPER_ADMIN`) : rejouer un effet de bord peut
+        // envoyer un courriel, ce n'est pas une lecture. Le garde ne fait
+        // que masquer la navigation — Spring Security reste l'autorité.
+        path: 'exploitation/effets-de-bord',
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+        title: `Effets de bord — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/operations/outbox/outbox-console').then((m) => m.OutboxConsole),
       },
       {
         // Administration des comptes utilisateurs et de leurs rôles, en
@@ -355,7 +533,8 @@ export const routes: Routes = [
         // planning de classe (`com.esic.connect.planning`, EF-PLAN-001..007,
         // EF-SES-001) : `/planning/import` (upload + choix de la classe),
         // `/planning/import/:jobId` (revue des lignes + anomalies +
-        // publication), `/planning/versions` (versions publiées + détail).
+        // publication), `/planning/calendar` (construction directe —
+        // EF-PLAN-006), `/planning/versions` (versions publiées + détail).
         // Périmètre aligné sur `PlanningWeb.MANAGE_ROLES` ; Spring Security
         // reste l'autorité (un `403` est rendu « accès refusé »).
         path: 'planning',
@@ -378,6 +557,14 @@ export const routes: Routes = [
               import(
                 './features/planning/planning-import-review/planning-import-review'
               ).then((m) => m.PlanningImportReview),
+          },
+          {
+            path: 'calendar',
+            title: `Calendrier de planning — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/planning/planning-calendar/planning-calendar').then(
+                (m) => m.PlanningCalendar,
+              ),
           },
           {
             path: 'versions',
@@ -532,12 +719,54 @@ export const routes: Routes = [
               ),
           },
           {
+            // Journal de transparence (EF-ATT-014). Déclaré AVANT `:id` :
+            // le chemin littéral l'emporte, mais l'ordre le rend évident
+            // à la lecture.
+            path: 'transparency',
+            title: `Journal de transparence — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/my-attendance/my-transparency').then(
+                (m) => m.MyTransparency,
+              ),
+          },
+          {
+            // Départ anticipé côté apprenant (EF-ATT-013).
+            path: 'early-departures',
+            title: `Départs anticipés — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/attendance/my-attendance/my-early-departures').then(
+                (m) => m.MyEarlyDepartures,
+              ),
+          },
+          {
             path: ':id',
             title: `Présence — ${APP_NAME}`,
             loadComponent: () =>
               import('./features/attendance/my-attendance/my-attendance-detail').then(
                 (m) => m.MyAttendanceDetail,
               ),
+          },
+        ],
+      },
+      {
+        // Réclamations (EF-CLAIM-001..004 ; docs/02 §20). Aucune garde de
+        // rôle : la route est ouverte à tout compte authentifié, comme
+        // `POST /api/v1/claims`. Le serveur décide seul de ce que chacun
+        // voit — un apprenant ses propres réclamations, un intervenant
+        // celles de son guichet et de son périmètre.
+        path: 'claims',
+        title: `Réclamations — ${APP_NAME}`,
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/claims/claim-list/claim-list').then((m) => m.ClaimList),
+          },
+          {
+            path: ':publicId',
+            title: `Réclamation — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/claims/claim-thread/claim-thread').then((m) => m.ClaimThread),
           },
         ],
       },

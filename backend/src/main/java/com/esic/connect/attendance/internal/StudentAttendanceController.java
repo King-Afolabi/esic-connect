@@ -37,11 +37,14 @@ class StudentAttendanceController {
 
     private final StudentAttendanceService attendanceService;
     private final AttendanceJustificationService justificationService;
+    private final TransparencyJournalService transparencyJournalService;
 
     StudentAttendanceController(StudentAttendanceService attendanceService,
-                                AttendanceJustificationService justificationService) {
+                                AttendanceJustificationService justificationService,
+                                TransparencyJournalService transparencyJournalService) {
         this.attendanceService = attendanceService;
         this.justificationService = justificationService;
+        this.transparencyJournalService = transparencyJournalService;
     }
 
     @GetMapping("/api/v1/me/attendance")
@@ -54,6 +57,23 @@ class StudentAttendanceController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt caller) {
         return attendanceService.listOwn(AttendanceManagementWeb.subject(caller), from, to, status, page, size);
+    }
+
+    /**
+     * Journal de transparence (EF-ATT-014). Déclaré avant
+     * {@code /{attendanceId}} pour la lisibilité ; le chemin littéral
+     * l'emporte de toute façon sur le motif à variable.
+     */
+    @GetMapping("/api/v1/me/attendance/transparency")
+    @PreAuthorize(AttendanceManagementWeb.STUDENT_ROLE)
+    PageResponse<TransparencyEntry> transparencyJournal(
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt caller) {
+        return transparencyJournalService.journal(
+                AttendanceManagementWeb.subject(caller), from, to, page, size);
     }
 
     @GetMapping("/api/v1/me/attendance/{attendanceId}")

@@ -49,4 +49,41 @@ final class NotificationResponses {
     /** Compteur de non-lus (cloche + badge). */
     record UnreadCount(long unread) {
     }
+
+    /**
+     * Réglage d'un canal pour une catégorie (EF-NOTIF-006).
+     *
+     * @param locked {@code true} si le réglage ne peut pas être changé —
+     *               canal {@code IN_APP} ou catégorie {@code SECURITY}.
+     *               L'écran affiche alors la case cochée et désactivée,
+     *               plutôt que de laisser croire à un choix qui serait
+     *               refusé au clic.
+     */
+    record PreferenceView(String category, String channel, boolean enabled, boolean locked) {
+    }
+
+    record PreferenceList(java.util.List<PreferenceView> preferences) {
+    }
+
+    /**
+     * Abonnement d'un appareil à la poussée. <strong>Ni la terminaison, ni
+     * les clés</strong> : la terminaison est un secret d'appareil, et les
+     * clés n'ont aucune utilité côté client.
+     */
+    record PushSubscriptionView(java.util.UUID publicId, boolean active,
+                                       java.time.Instant createdAt, java.time.Instant lastUsedAt,
+                                       java.time.Instant revokedAt) {
+    }
+
+    /**
+     * État de la poussée pour l'appelant.
+     *
+     * @param providerActive {@code false} lorsqu'aucune clé VAPID n'est
+     *                       configurée : <strong>aucune poussée n'a lieu</strong>,
+     *                       et l'interface doit le dire au lieu de laisser
+     *                       croire à un service en marche.
+     */
+    record PushStatus(boolean providerActive,
+                             java.util.List<PushSubscriptionView> subscriptions) {
+    }
 }

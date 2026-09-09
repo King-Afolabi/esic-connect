@@ -165,3 +165,10 @@ table {
   background: #e8eaed;
   text-decoration: line-through;
 }
+
+/* Champ de formulaire pleine largeur — départ anticipé, réclamations. */
+.att__field {
+  display: block;
+  max-width: 40rem;
+  width: 100%;
+}

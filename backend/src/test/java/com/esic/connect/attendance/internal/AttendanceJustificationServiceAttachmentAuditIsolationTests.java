@@ -89,7 +89,8 @@ class AttendanceJustificationServiceAttachmentAuditIsolationTests {
         when(currentUserResolver.resolveInternalId(STUDENT_SUBJECT)).thenReturn(Optional.of(STUDENT_ID));
         when(justificationRepository.findByPublicId(JUSTIFICATION_PUBLIC_ID)).thenReturn(Optional.of(justification));
 
-        Meta stored = new Meta(UUID.randomUUID(), "c.pdf", "application/pdf", 42L, "deadbeef", clock.instant());
+        Meta stored = new Meta(UUID.randomUUID(), "c.pdf", "application/pdf", 42L, "deadbeef",
+                clock.instant(), "NOT_SCANNED", null);
         when(attachmentStore.store(anyLong(), eq(STUDENT_ID), eq("c.pdf"), eq("application/pdf"),
                 org.mockito.ArgumentMatchers.any())).thenReturn(stored);
 

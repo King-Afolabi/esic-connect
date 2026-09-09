@@ -1,5 +1,6 @@
 package com.esic.connect.identity;
 
+import com.esic.connect.support.AuthTestSupport;
 import com.esic.connect.audit.internal.AuditEvent;
 import com.esic.connect.audit.internal.AuditEventRepository;
 import com.esic.connect.identity.internal.AccountStatus;
@@ -278,7 +279,7 @@ class UserManagementIntegrationTests {
 
     private String adminToken() {
         UserAccount admin = persistUser(uniqueEmail(), "Admin", "Ops", AccountStatus.ACTIVE, RoleCode.ADMIN);
-        return (String) login(admin.getEmail(), PASSWORD).getBody().get("accessToken");
+        return AuthTestSupport.accessToken(restTemplate, admin.getEmail(), PASSWORD);
     }
 
     @SuppressWarnings("unchecked")

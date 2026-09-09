@@ -2,7 +2,7 @@ package com.esic.connect.planning.internal;
 
 /**
  * Périmètres d'autorisation des routes du module {@code planning}
- * (docs/reports/G1_IMPLEMENTATION_PLAN.md §4.6). Expressions SpEL
+ * (docs/03-architecture.md). Expressions SpEL
  * réutilisées par {@code @PreAuthorize}.
  *
  * <ul>
@@ -30,6 +30,21 @@ final class PlanningWeb {
             "hasAnyRole('ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION','PEDAGOGICAL_MANAGER','TEACHER','STUDENT')";
 
     private PlanningWeb() {
+    }
+
+    /**
+     * Convertit un identifiant public reçu en {@link java.util.UUID}.
+     *
+     * <p>Un identifiant mal formé ne désigne aucune ressource : il produit
+     * le même refus qu'un identifiant inconnu, plutôt qu'une erreur de
+     * format qui distinguerait les deux cas.
+     */
+    static java.util.UUID parseUuid(String value, PlanningException.Kind notFound) {
+        try {
+            return java.util.UUID.fromString(value);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new PlanningException(notFound);
+        }
     }
 
     /** Sujet ({@code sub}) du JWT de l'appelant, ou {@code null}. */

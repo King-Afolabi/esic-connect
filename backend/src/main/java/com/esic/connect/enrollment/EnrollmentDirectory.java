@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -149,6 +150,24 @@ public interface EnrollmentDirectory {
     Optional<AttendeeRef> describeAttendee(long enrollmentInternalId);
 
     /**
+     * Identifiants de <strong>compte</strong> ({@code user_account.public_id})
+     * des apprenants dont l'inscription est {@code ACTIVE} dans l'une des
+     * classes indiquées, et valable le jour {@code date}.
+     *
+     * <p>Distinct de {@link #findActiveRosterForClasses} : un
+     * {@link RosterEntry} porte l'identifiant du <em>profil</em> apprenant,
+     * qui ne permet pas de désigner un destinataire. Notifier une classe
+     * exige l'identifiant du compte, et rien d'autre — ni nom, ni adresse,
+     * ni numéro étudiant (EF-NOTIF-003).
+     *
+     * @param classGroupPublicIds identifiants publics des classes
+     * @param date                jour civil de référence ; {@code null}
+     *                            pour ne pas filtrer sur la période
+     * @return les identifiants publics de compte, sans doublon ; vide si aucun
+     */
+    Set<UUID> findActiveStudentUserPublicIds(Collection<UUID> classGroupPublicIds, LocalDate date);
+
+    /**
      * Nombre d'inscriptions {@code ACTIVE} rattachées à l'une des classes
      * indiquées — « effectif attendu » d'une séance couvrant ces classes.
      *
@@ -156,6 +175,21 @@ public interface EnrollmentDirectory {
      * @return le nombre d'inscriptions actives ; {@code 0} si aucune
      */
     long countActiveEnrollmentsInClasses(Collection<UUID> classGroupPublicIds);
+
+    /**
+     * Apprenants dont le nom, le prénom ou le numéro étudiant contient
+     * {@code query} (EF-USER-009 ; docs/02 §22.7), parmi les inscriptions
+     * <strong>actives</strong>.
+     *
+     * <p>L'adresse électronique n'est <strong>pas</strong> un critère de
+     * recherche : elle permettrait de vérifier l'existence d'un compte à
+     * partir d'une adresse devinée, ce qui est une énumération et non une
+     * recherche.
+     *
+     * @param visibleClassGroupPublicIds restriction de périmètre ;
+     *        {@code null} pour un appelant à périmètre global
+     */
+    List<RosterEntry> searchStudents(String query, Collection<UUID> visibleClassGroupPublicIds, int limit);
 
     /**
      * Identité minimale d'un apprenant pour l'affichage d'une ligne de

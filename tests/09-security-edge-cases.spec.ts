@@ -6,7 +6,7 @@ import { loginAsUi, loginAndCaptureBearerToken } from './support/auth';
  * DOMAINE 8 — Cas limites et sécurité.
  *
  * Hors périmètre car sans surface réelle dans l'application (aucun test
- * inventé pour ces sous-domaines, voir audit-report.md §4.5) : CSRF (JWT
+ * inventé pour ces sous-domaines, voir docs/09-strategie-tests.md) : CSRF (JWT
  * porté par l'en-tête `Authorization`, pas par cookie de session —
  * `allowCredentials=false`, documenté dans `application.yml`, donc la
  * classe d'attaque ne s'applique pas telle quelle), upload de justificatif
@@ -133,7 +133,7 @@ test.describe('IDOR / contrôle serveur direct (pas seulement côté client)', (
 });
 
 test.describe('Défaut d\'API déjà tracé — reconfirmation en direct (pas une découverte)', () => {
-  test('GET /api/v1/planning/versions sans classGroupPublicId renvoie 500 au lieu de 400 (docs/reports/DEMO_CRITICAL_PATH_DIAGNOSTIC.md §2)', async ({
+  test('GET /api/v1/planning/versions sans classGroupPublicId renvoie 500 au lieu de 400 (docs/09-strategie-tests.md)', async ({
     page,
   }) => {
     // Non atteignable depuis l'écran réel (le sélecteur de classe est

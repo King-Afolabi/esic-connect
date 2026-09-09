@@ -93,7 +93,17 @@ describe('NAV_ITEMS', () => {
 
 describe('visibleNavItems', () => {
   it('exposes the always-visible items (dashboard, notifications) when no role is held', () => {
-    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual(['/dashboard', '/notifications']);
+    // `/mon-compte/calendrier` s'ajoute au sprint 11 : l'abonnement
+    // iCalendar est propre à chaque personne, et sa route porte
+    // `@PreAuthorize("isAuthenticated()")` — comme les notifications et
+    // la sécurité du compte, il ne dépend d'aucun rôle.
+    expect(visibleNavItems(NAV_ITEMS, []).map((i) => i.path)).toEqual([
+      '/dashboard',
+      '/notifications',
+      '/notifications/preferences',
+      '/mon-compte/calendrier',
+      '/mon-compte/securite',
+    ]);
   });
 
   it('shows /administration for the roles that back UserAccountController READ_ROLES, and hides it otherwise', () => {

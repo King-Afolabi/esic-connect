@@ -5,7 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
  * Retours utilisateur transitoires (bandeaux Material).
  *
  * Ne jamais y faire transiter de secret, de jeton ni de donnée
- * personnelle superflue (docs/07-securite-rgpd.md §14).
+ * personnelle superflue (docs/08-securite-rgpd.md §14).
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {

@@ -14,6 +14,22 @@ class EnrollmentException extends RuntimeException {
         ENROLLMENT_NOT_FOUND,
         /** Aucune classe/groupe pour ce {@code public_id}. */
         CLASS_GROUP_NOT_FOUND,
+        /** Aucun groupe temporaire pour ce {@code public_id} (EF-ACA-007). */
+        STUDENT_GROUP_NOT_FOUND,
+        /** Aucune formation pour ce {@code public_id}. */
+        PROGRAM_NOT_FOUND,
+        /** Aucune année scolaire pour ce {@code public_id}. */
+        ACADEMIC_YEAR_NOT_FOUND,
+        /** Aucune matière pour ce {@code public_id} (EF-ACA-006). */
+        SUBJECT_NOT_FOUND,
+        /** Code de groupe déjà utilisé pour cette année scolaire. */
+        DUPLICATE_GROUP_CODE,
+        /** Groupe archivé : il n'accepte plus de modification ni de membre. */
+        GROUP_ARCHIVED,
+        /** L'inscription visée est déjà membre actif de ce groupe. */
+        ALREADY_MEMBER,
+        /** Période incohérente : la fin précède le début. */
+        INVALID_GROUP_PERIOD,
         /**
          * Compte cible inéligible : inexistant, archivé ou sans rôle actif
          * {@code STUDENT} ({@code ENR_USER_NOT_ELIGIBLE}).
@@ -51,7 +67,21 @@ class EnrollmentException extends RuntimeException {
         /** Champ ou direction de tri hors liste blanche. */
         INVALID_SORT,
         /** Valeur de filtre invalide (statut...). */
-        INVALID_FILTER
+        INVALID_FILTER,
+        /**
+         * Ressource hors du périmètre pédagogique de l'appelant
+         * ({@code ENR_FORBIDDEN}, 403). Distinct d'un « introuvable » :
+         * la ressource existe, mais ne relève pas de l'appelant.
+         */
+        OUT_OF_SCOPE,
+        /**
+         * Autorisation de suivi à distance déjà révoquée (EF-ENR-004).
+         * Conflit d'état, pas requête malformée : la seconde révocation
+         * écraserait le motif de la première sans rien changer.
+         */
+        AUTHORIZATION_NOT_ACTIVE,
+        /** Période d'autorisation incohérente : la fin précède le début. */
+        INVALID_REMOTE_PERIOD
     }
 
     private final Kind kind;

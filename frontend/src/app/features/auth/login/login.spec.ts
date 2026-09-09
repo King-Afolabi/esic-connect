@@ -1,30 +1,43 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Router, provideRouter } from '@angular/router';
+import { Subject, of } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
-import { Session } from '../../../core/models/session';
+import { LoginOutcome } from '../../../core/models/session';
 import { Login } from './login';
 
 describe('Login', () => {
   let fixture: ComponentFixture<Login>;
-  let loginResult: Subject<Session>;
-  const auth = { login: vi.fn() };
-  const router = { navigateByUrl: vi.fn() };
+  let loginResult: Subject<LoginOutcome>;
+  // Le composant embarque le widget anti-robot, qui interroge
+  // `GET /auth/captcha` dès sa construction : le double doit répondre,
+  // sinon aucun écran de connexion ne se rend (EF-AUTH-011).
+  const auth = {
+    login: vi.fn(),
+    captchaConfig: vi.fn(),
+    loginWithPasskey: vi.fn(),
+  };
+  // L'écran contient désormais un `routerLink` vers « mot de passe
+  // oublié » : la directive exige un Router et une ActivatedRoute réels.
+  // On fournit donc un vrai routeur de test, dont on espionne la
+  // navigation, plutôt qu'un objet factice incomplet.
+  let router: { navigateByUrl: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
-    loginResult = new Subject<Session>();
+    loginResult = new Subject<LoginOutcome>();
     auth.login.mockReset().mockReturnValue(loginResult.asObservable());
-    router.navigateByUrl.mockReset();
+    auth.captchaConfig.mockReset().mockReturnValue(of({ enforced: false, siteKey: '' }));
+    auth.loginWithPasskey.mockReset();
 
     await TestBed.configureTestingModule({
       imports: [Login],
-      providers: [
-        { provide: AuthService, useValue: auth },
-        { provide: Router, useValue: router },
-      ],
+      providers: [{ provide: AuthService, useValue: auth }, provideRouter([])],
     }).compileComponents();
+
+    const realRouter = TestBed.inject(Router);
+    vi.spyOn(realRouter, 'navigateByUrl').mockResolvedValue(true);
+    router = realRouter as unknown as typeof router;
 
     fixture = TestBed.createComponent(Login);
     fixture.detectChanges();
@@ -57,7 +70,7 @@ describe('Login', () => {
     el<HTMLFormElement>('form').dispatchEvent(new Event('submit'));
     fixture.detectChanges();
 
-    expect(auth.login).toHaveBeenCalledWith('manager@esic.test', 'secret');
+    expect(auth.login).toHaveBeenCalledWith('manager@esic.test', 'secret', null);
     expect(el<HTMLButtonElement>('button[type="submit"]').disabled).toBe(true);
     expect(el('mat-progress-bar')).not.toBeNull();
   });
@@ -65,7 +78,16 @@ describe('Login', () => {
   it('navigates to the dashboard on success', () => {
     fillForm('manager@esic.test', 'secret');
     el<HTMLFormElement>('form').dispatchEvent(new Event('submit'));
-    loginResult.next({ accessToken: 't', subject: 's', roles: [], email: 'manager@esic.test', expiresAt: 0 });
+    loginResult.next({
+      kind: 'session',
+      session: {
+        accessToken: 't',
+        subject: 's',
+        roles: [],
+        email: 'manager@esic.test',
+        expiresAt: 0,
+      },
+    });
     fixture.detectChanges();
 
     expect(router.navigateByUrl).toHaveBeenCalledWith('/dashboard');

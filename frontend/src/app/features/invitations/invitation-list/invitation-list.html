@@ -1,0 +1,109 @@
+<section class="invitations" aria-labelledby="invitations-title">
+  <h1 id="invitations-title">Invitations et délivrabilité</h1>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+  }
+
+  <p class="invitations__error" role="alert" aria-live="assertive">
+    @if (errorMessage()) {
+      <mat-icon aria-hidden="true">error</mat-icon>
+      <span>{{ errorMessage() }}</span>
+    }
+  </p>
+  <p role="status" aria-live="polite">
+    @if (infoMessage()) {
+      <span>{{ infoMessage() }}</span>
+    }
+  </p>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Invitations en attente d'activation</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <table mat-table [dataSource]="invitations()" class="invitations__table">
+        <ng-container matColumnDef="recipient">
+          <th mat-header-cell *matHeaderCellDef scope="col">Destinataire</th>
+          <td mat-cell *matCellDef="let invitation">
+            {{ invitation.firstName }} {{ invitation.lastName }}
+            <span class="invitations__hint">{{ invitation.email }}</span>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef scope="col">État</th>
+          <td mat-cell *matCellDef="let invitation">
+            {{ invitation.expired ? 'Expirée' : 'En attente' }}
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="expiresAt">
+          <th mat-header-cell *matHeaderCellDef scope="col">Expire le</th>
+          <td mat-cell *matCellDef="let invitation">
+            {{ invitation.expiresAt | date: 'longDate' }}
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef scope="col">Actions</th>
+          <td mat-cell *matCellDef="let invitation">
+            <button mat-stroked-button type="button" (click)="resend(invitation)"
+                    [disabled]="loading()"
+                    [attr.aria-label]="'Réémettre l\'invitation de ' + invitation.email">
+              Réémettre
+            </button>
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="invitationColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: invitationColumns"></tr>
+      </table>
+      @if (invitations().length === 0 && !loading()) {
+        <p>Aucune invitation en attente.</p>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Journal d'envoi</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p class="invitations__hint">
+        « Remis au serveur de messagerie » ne signifie pas « délivré ». Tant que le fournisseur ne
+        remonte rien — c'est le cas en développement avec Mailpit — le statut de délivrabilité reste
+        non renseigné.
+      </p>
+      <table mat-table [dataSource]="deliveries()" class="invitations__table">
+        <ng-container matColumnDef="recipientMasked">
+          <th mat-header-cell *matHeaderCellDef scope="col">Destinataire</th>
+          <td mat-cell *matCellDef="let delivery">{{ delivery.recipientMasked }}</td>
+        </ng-container>
+        <ng-container matColumnDef="messageType">
+          <th mat-header-cell *matHeaderCellDef scope="col">Type</th>
+          <td mat-cell *matCellDef="let delivery">{{ delivery.messageType }}</td>
+        </ng-container>
+        <ng-container matColumnDef="internalStatus">
+          <th mat-header-cell *matHeaderCellDef scope="col">Envoi</th>
+          <td mat-cell *matCellDef="let delivery">{{ internalLabel(delivery.internalStatus) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="providerStatus">
+          <th mat-header-cell *matHeaderCellDef scope="col">Délivrabilité</th>
+          <td mat-cell *matCellDef="let delivery">{{ providerLabel(delivery.providerStatus) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="attempts">
+          <th mat-header-cell *matHeaderCellDef scope="col">Tentatives</th>
+          <td mat-cell *matCellDef="let delivery">{{ delivery.attempts }}</td>
+        </ng-container>
+        <ng-container matColumnDef="lastAttemptAt">
+          <th mat-header-cell *matHeaderCellDef scope="col">Dernière tentative</th>
+          <td mat-cell *matCellDef="let delivery">
+            {{ delivery.lastAttemptAt ? (delivery.lastAttemptAt | date: 'short') : '—' }}
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="deliveryColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: deliveryColumns"></tr>
+      </table>
+      @if (deliveries().length === 0) {
+        <p>Aucun envoi enregistré.</p>
+      }
+    </mat-card-content>
+  </mat-card>
+</section>

@@ -22,10 +22,14 @@ class DefaultAcademicScopeDirectory implements AcademicScopeDirectory {
 
     private final AcademicScopeGuard scopeGuard;
     private final ClassGroupRepository classGroupRepository;
+    private final ProgramRepository programRepository;
 
-    DefaultAcademicScopeDirectory(AcademicScopeGuard scopeGuard, ClassGroupRepository classGroupRepository) {
+    DefaultAcademicScopeDirectory(AcademicScopeGuard scopeGuard,
+                                  ClassGroupRepository classGroupRepository,
+                                  ProgramRepository programRepository) {
         this.scopeGuard = scopeGuard;
         this.classGroupRepository = classGroupRepository;
+        this.programRepository = programRepository;
     }
 
     @Override
@@ -65,5 +69,33 @@ class DefaultAcademicScopeDirectory implements AcademicScopeDirectory {
             return Optional.of(Set.of());
         }
         return Optional.of(new HashSet<>(classGroupRepository.findIdsByProgramIdIn(visiblePrograms)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isProgramInScope(UUID programPublicId) {
+        if (scopeGuard.hasGlobalScope()) {
+            return true;
+        }
+        if (programPublicId == null) {
+            return false;
+        }
+        return programRepository.findByPublicId(programPublicId)
+                .map(program -> {
+                    try {
+                        scopeGuard.requireProgramInScope(program);
+                        return true;
+                    } catch (AcademicException outOfScope) {
+                        return false;
+                    }
+                })
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Set<Long>> visibleProgramIds() {
+        Set<Long> visible = scopeGuard.visibleProgramIds();
+        return visible == null ? Optional.empty() : Optional.of(new HashSet<>(visible));
     }
 }

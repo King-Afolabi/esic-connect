@@ -2,7 +2,7 @@
  * Module « planning » — import CSV, versionnement et publication d'un
  * planning de classe (docs/02-cahier-des-charges.md §13 ;
  * docs/04-modele-donnees.md §17-18 ;
- * docs/reports/G1_ARCHITECTURE_DECISIONS.md DEC-G1-001..006, 012 ;
+ * docs/03-architecture.md §ADRDEC-G1-001..006, 012 ;
  * EF-PLAN-001..007, EF-SES-001 ; RG-016, RG-030..RG-035 ; AC-007, AC-008 ;
  * branche feature/master-level-product-expansion, bloc G1-B).
  *

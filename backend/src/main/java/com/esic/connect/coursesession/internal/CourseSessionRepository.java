@@ -47,4 +47,23 @@ interface CourseSessionRepository
             + "and s.status = :status and s.supersededByScheduling = false")
     List<CourseSession> findPlanningSessionsForClass(@Param("classGroupId") Long classGroupId,
                                                     @Param("status") SessionLifecycle status);
+
+    /**
+     * Charge les rattachements de classes de <strong>plusieurs</strong>
+     * séances en une requête (dette T-03).
+     *
+     * <p>{@code CourseSession.classes} est une collection {@code LAZY} :
+     * la parcourir séance par séance produit une requête par séance —
+     * exactement le coût proportionnel au nombre d'éléments affichés que
+     * NFR-PERF-08 interdit. Le {@code join fetch} initialise la
+     * collection pour tout le lot ; {@code distinct} évite les doublons
+     * de racine dus au produit cartésien.
+     *
+     * <p>Une séance sans classe rattachée ne remonte pas ici : sa
+     * collection reste non initialisée, ce qui est sans conséquence —
+     * l'appelant lit alors une collection vide sans requête
+     * supplémentaire (aucun rattachement à charger).
+     */
+    @Query("select distinct s from CourseSession s left join fetch s.classes where s.id in :ids")
+    List<CourseSession> findAllWithClassesByIdIn(@Param("ids") java.util.Collection<Long> ids);
 }

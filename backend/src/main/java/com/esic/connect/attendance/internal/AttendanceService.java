@@ -4,7 +4,9 @@ import com.esic.connect.attendance.AttendanceStatus;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
 import com.esic.connect.coursesession.CourseSessionDirectory.CheckpointRef;
+import com.esic.connect.coursesession.SessionAttendanceMode;
 import com.esic.connect.enrollment.EnrollmentDirectory;
+import com.esic.connect.enrollment.RemoteAttendanceDirectory;
 import com.esic.connect.identity.UserDirectory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -48,9 +50,11 @@ class AttendanceService {
     private final CourseSessionDirectory courseSessionDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
     private final UserDirectory userDirectory;
+    private final RemoteAttendanceDirectory remoteAttendanceDirectory;
     private final AttendanceChangePublisher changePublisher;
     private final Clock clock;
     private final Duration lateThreshold;
+    private final Duration lateManualThreshold;
 
     AttendanceService(AttendanceTokenService tokenService,
                       AttendanceRecordRepository recordRepository,
@@ -58,12 +62,26 @@ class AttendanceService {
                       CourseSessionDirectory courseSessionDirectory,
                       EnrollmentDirectory enrollmentDirectory,
                       UserDirectory userDirectory,
+                      RemoteAttendanceDirectory remoteAttendanceDirectory,
                       AttendanceChangePublisher changePublisher,
                       Clock clock,
-                      @Value("${app.attendance.late-threshold:PT10M}") Duration lateThreshold) {
+                      @Value("${app.attendance.late-threshold:PT15M}") Duration lateThreshold,
+                      @Value("${app.attendance.late-manual-threshold:PT30M}")
+                      Duration lateManualThreshold) {
         if (lateThreshold == null || lateThreshold.isNegative()) {
             throw new IllegalStateException(
                     "app.attendance.late-threshold doit être une durée non négative.");
+        }
+        if (lateManualThreshold == null || lateManualThreshold.isNegative()) {
+            throw new IllegalStateException(
+                    "app.attendance.late-manual-threshold doit être une durée non négative.");
+        }
+        if (lateManualThreshold.compareTo(lateThreshold) < 0) {
+            // Un second palier inférieur au premier rendrait le classement
+            // incohérent sans jamais lever d'erreur à l'exécution : mieux
+            // vaut refuser de démarrer.
+            throw new IllegalStateException(
+                    "app.attendance.late-manual-threshold doit être >= app.attendance.late-threshold.");
         }
         this.tokenService = tokenService;
         this.recordRepository = recordRepository;
@@ -71,9 +89,11 @@ class AttendanceService {
         this.courseSessionDirectory = courseSessionDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.userDirectory = userDirectory;
+        this.remoteAttendanceDirectory = remoteAttendanceDirectory;
         this.changePublisher = changePublisher;
         this.clock = clock;
         this.lateThreshold = lateThreshold;
+        this.lateManualThreshold = lateManualThreshold;
     }
 
     // ------------------------------------------------------------------
@@ -149,17 +169,41 @@ class AttendanceService {
         }
         EnrollmentDirectory.EnrollmentRef enrollment = matching.get(0);
 
-        AttendanceRecordSource source = token != null
-                ? AttendanceRecordSource.DYNAMIC_QR
-                : AttendanceRecordSource.SHORT_CODE;
+        // Suivi à distance (docs/02 §15.3) : sur une séance PRÉSENTIELLE,
+        // le canal distant exige une autorisation individuelle active.
+        // Sur une séance REMOTE ou HYBRID, il est normal — la classe
+        // entière, ou une partie d'elle, est attendue à distance.
+        boolean remote = Boolean.TRUE.equals(request.remote());
+        if (remote && session.attendanceMode() == SessionAttendanceMode.ON_SITE) {
+            boolean authorized = remoteAttendanceDirectory.isRemoteAttendanceAuthorized(
+                    callerPublicId, enrollment.classGroupPublicId(), sessionDate);
+            if (!authorized) {
+                throw new AttendanceException(AttendanceException.Kind.REMOTE_NOT_AUTHORIZED);
+            }
+        }
+
+        AttendanceRecordSource source;
+        if (token != null) {
+            source = remote ? AttendanceRecordSource.REMOTE_QR : AttendanceRecordSource.DYNAMIC_QR;
+        } else {
+            source = remote ? AttendanceRecordSource.REMOTE_CODE : AttendanceRecordSource.SHORT_CODE;
+        }
 
         Instant now = clock.instant();
         Duration delay = Duration.between(session.startsAt(), now);
+        // Paliers de retard (docs/02 §16.4 ; RG-070 à RG-072) : jusqu'au
+        // premier seuil PRESENT, au-delà LATE, et au-delà du second seuil
+        // LATE avec validation manuelle requise. Le troisième palier ne
+        // REFUSE pas l'émargement : le cahier demande une validation
+        // humaine, pas une porte fermée — refuser produirait une absence
+        // là où il y a un retard constaté.
         AttendanceStatus status = AttendanceStatus.PRESENT;
         Integer lateMinutes = null;
+        boolean manualValidationRequired = false;
         if (delay.compareTo(lateThreshold) > 0) {
             status = AttendanceStatus.LATE;
             lateMinutes = (int) Math.min(Integer.MAX_VALUE, Math.max(0, (delay.toSeconds() + 59) / 60));
+            manualValidationRequired = delay.compareTo(lateManualThreshold) > 0;
         }
 
         if (recordRepository.existsByAttendanceCheckpointIdAndEnrollmentId(
@@ -184,7 +228,8 @@ class AttendanceService {
                 "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
                         + ";source=" + source.name() + ";status=" + status.name());
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
-                session.title(), status, lateMinutes, saved.getRecordedAt(), source);
+                session.title(), status, lateMinutes, manualValidationRequired,
+                saved.getRecordedAt(), source);
     }
 
     // ------------------------------------------------------------------

@@ -88,6 +88,29 @@ class LocalFilesystemJustificationFileStorage implements JustificationFileStorag
         }
     }
 
+    /**
+     * Parcourt l'arborescence de stockage et renvoie au plus
+     * {@code limit} clés. Le répertoire {@code tmp} est exclu : il
+     * contient les fichiers partiels en cours d'écriture, qui ne sont pas
+     * des orphelins et dont la suppression casserait un dépôt en vol.
+     */
+    @Override
+    public java.util.List<String> listKeys(int limit) {
+        if (limit <= 0) {
+            return java.util.List.of();
+        }
+        try (java.util.stream.Stream<Path> walk = Files.walk(base)) {
+            return walk.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(path -> !path.startsWith(tmp))
+                    .map(path -> base.relativize(path).toString().replace(java.io.File.separatorChar, '/'))
+                    .limit(limit)
+                    .toList();
+        } catch (IOException e) {
+            throw new JustificationFileStorageException(Kind.IO_ERROR,
+                    "Énumération du stockage des justificatifs impossible.", e);
+        }
+    }
+
     @Override
     public String newStorageKey() {
         String raw = UUID.randomUUID().toString().replace("-", "");

@@ -6,7 +6,7 @@
 #   2. quels sont les volumes réels des tables métier ?
 #   3. la base est-elle POLLUÉE par des données de fixtures de test ?
 #
-# Motif (finding F-ENV-1, audit-report.md §3) : la base `esic_connect`
+# Motif (diagnostic de base polluée) : la base `esic_connect`
 # contenait 27 105 lignes `user_account` portant les motifs de nommage des
 # fixtures de la suite back-end (`att-*`, `alt-*`, `assign-*`, `acad-*`,
 # `sec-*`, `auth-*`, `aud-*`, `applied.*`), signe qu'un `./mvnw test` a

@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -45,17 +46,20 @@ class PlanningImportController {
     private final PlanningPublicationOrchestrator publicationOrchestrator;
     private final CurrentUserResolver currentUserResolver;
     private final AcademicScopeDirectory academicScopeDirectory;
+    private final PlanningRowCorrectionService rowCorrectionService;
 
     PlanningImportController(PlanningSimulationService simulationService,
                             PlanningQueryService queryService,
                             PlanningPublicationOrchestrator publicationOrchestrator,
                             CurrentUserResolver currentUserResolver,
-                            AcademicScopeDirectory academicScopeDirectory) {
+                            AcademicScopeDirectory academicScopeDirectory,
+                            PlanningRowCorrectionService rowCorrectionService) {
         this.simulationService = simulationService;
         this.queryService = queryService;
         this.publicationOrchestrator = publicationOrchestrator;
         this.currentUserResolver = currentUserResolver;
         this.academicScopeDirectory = academicScopeDirectory;
+        this.rowCorrectionService = rowCorrectionService;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -105,6 +109,30 @@ class PlanningImportController {
      * (ligne bloquante, périmètre, état) → {@code 409} contrôlé, jamais
      * {@code 500}.
      */
+    /**
+     * Corrige une ligne en anomalie avant publication (EF-PLAN-003 ;
+     * docs/02 §13.6 et §30.2 :
+     * {@code POST /planning-imports/{id}/rows/{rowId}}).
+     *
+     * <p>La correction rejoue l'analyse de <strong>tout</strong> le
+     * travail : les conflits de planning sont croisés, corriger une ligne
+     * peut lever ou créer un conflit ailleurs. La réponse est donc le
+     * travail réanalysé, pas seulement la ligne.
+     */
+    @PostMapping("/{publicId}/rows/{rowId}")
+    @PreAuthorize(PlanningWeb.MANAGE_ROLES)
+    JobResponse correctRow(@PathVariable String publicId,
+                           @PathVariable String rowId,
+                           @RequestBody java.util.Map<String, String> corrections,
+                           @AuthenticationPrincipal Jwt caller) {
+        PlanningImportJob job = rowCorrectionService.correct(
+                PlanningWeb.parseUuid(publicId, PlanningException.Kind.JOB_NOT_FOUND),
+                PlanningWeb.parseUuid(rowId, PlanningException.Kind.ROW_NOT_FOUND),
+                corrections);
+        return queryService.get(job.getPublicId().toString(), requesterInternalId(caller),
+                academicScopeDirectory.hasGlobalScope());
+    }
+
     @PostMapping("/{publicId}/publish")
     @PreAuthorize(PlanningWeb.MANAGE_ROLES)
     PlanningResponses.PublicationResponse publish(@PathVariable String publicId,
