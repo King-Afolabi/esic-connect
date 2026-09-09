@@ -56,7 +56,7 @@ une `MailException` : l'effet de bord part en file d'échec de l'outbox
 (`FAILED` puis `DEAD`), visible dans **Exploitation → Effets de bord**
 (`/exploitation/effets-de-bord`, `ADMIN` / `SUPER_ADMIN`).
 
-> **`abubacar@etudiant-esci.fr`** : le domaine `etudiant-esci.fr`
+> **`<expediteur-valide@votre-domaine>`** : le domaine `<votre-domaine>`
 > appartient à l'école — poser des enregistrements DNS SPF/DKIM y est
 > hors de portée. Il faut donc passer par l'**option 1 : expéditeur
 > unique validé**.
@@ -67,7 +67,7 @@ une `MailException` : l'effet de bord part en file d'échec de l'outbox
 2. *Senders, Domains & Dedicated IPs* → onglet **Senders** → **Add a
    sender** ;
 3. renseigner un nom (« ESIC Connect ») et l'adresse
-   `abubacar@etudiant-esci.fr` ;
+   `<expediteur-valide@votre-domaine>` ;
 4. ouvrir le courriel de confirmation reçu sur cette adresse et cliquer
    le lien de validation ;
 5. vérifier que le sender apparaît **Verified** dans Brevo.
@@ -79,12 +79,12 @@ courriels.
 
 ## 3. Mettre à jour l'adresse d'expédition sur la Pi
 
-> Nécessite un shell sur la Pi (`ssh king_a@192.168.1.83`, **réseau local
+> Nécessite un shell sur la Pi (`ssh <utilisateur>@<hote-pi>`, **réseau local
 > uniquement** — le tunnel Cloudflare n'expose que l'application, pas
 > SSH). À faire lors du prochain accès au même réseau que la Pi.
 
 ```bash
-ssh king_a@192.168.1.83
+ssh <utilisateur>@<hote-pi>
 cd ~/esic-connect
 
 # 0. Sauvegarde préalable (règle de production) : ROLLBACK.md § Sauvegarde.
@@ -100,7 +100,7 @@ cp .env ".env.bak.$(date +%s)"
 #      MAIL_PASSWORD=<clé SMTP Brevo — PAS le mot de passe du compte>
 #      MAIL_SMTP_AUTH=true
 #      MAIL_SMTP_STARTTLS=true
-#      APP_MAIL_FROM=abubacar@etudiant-esci.fr
+#      APP_MAIL_FROM=<expediteur-valide@votre-domaine>
 nano .env
 
 # 3. Vérifier (sans révéler les secrets) que les 7 clés sont cohérentes
@@ -126,7 +126,7 @@ nécessaire.
 #    l'URL publique du tunnel.
 curl -s -o /dev/null -w '%{http_code}\n' -X POST '<URL>/api/v1/auth/forgot-password' \
   -H 'Content-Type: application/json' \
-  -d '{"email":"abubacar@etudiant-esci.fr"}'      # 200 attendu
+  -d '{"email":"<expediteur-valide@votre-domaine>"}'      # 200 attendu
 
 # b) Journaux du back-end : aucune trace SMTP en erreur
 docker compose -f compose.prod.yaml logs --since 3m backend | grep -iE 'mail|smtp|55[0-9]|MailException' || echo "aucune erreur mail"
@@ -141,7 +141,7 @@ docker compose -f compose.prod.yaml exec -T mysql sh -c \
 ```
 
 Si le message part mais **atterrit en indésirable** : c'est SPF/DKIM
-absents pour `etudiant-esci.fr` (non corrigeable sans accès DNS au
+absents pour `<votre-domaine>` (non corrigeable sans accès DNS au
 domaine de l'école). Ce n'est pas un défaut du produit — cf.
 `docs/12-prerequis-externes.md` §5.
 
