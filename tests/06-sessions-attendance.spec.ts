@@ -164,7 +164,8 @@ test.describe('Parcours prioritaire réel : création → ouverture → émargem
     await loginAsUi(page, ACCOUNTS.STUDENT, '/attendance');
     await page.getByLabel('Code court').fill('ZZZZZZ');
     await page.getByRole('button', { name: 'Valider ma présence' }).click();
-    await expect(page.locator('.checkin__inline-error')).toBeVisible();
+    // Classe renommée `.checkin__inline-error` -> `.esic-form__error`.
+    await expect(page.locator('.esic-form__error')).toBeVisible({ timeout: 10_000 });
   });
 
   test('8. Le formateur voit les deux présences en direct (EF-ATT visibilité immédiate)', async ({

@@ -23,17 +23,34 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
  * `ESIC_DEMO_TOTP_SECRET` exportés — cf. `docs/11-guide-deploiement.md` §5.
  */
 
-async function openFirstSiteRooms(page: Page): Promise<void> {
+/**
+ * Ouvre la fiche du premier site **qui possède au moins une salle** (donc
+ * un bouton « Afficher le QR fixe »). La ligne de site n'est plus
+ * cliquable : la fiche s'ouvre via le lien « Consulter » de la colonne
+ * d'actions (routing interne Angular, la session est conservée). Les
+ * données de démonstration comportent des sites sans salle.
+ */
+async function openSiteWithRooms(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Sites', exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  // La ligne de site n'est plus cliquable : la fiche s'ouvre via le lien
-  // « Consulter » de la colonne d'actions (routing interne Angular, la
-  // session est conservée).
-  await page.getByRole('link', { name: /^Consulter le site / }).first().click();
-  await expect(page.getByRole('heading', { name: 'Salles', exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
+  const links = page.getByRole('link', { name: /^Consulter le site / });
+  const count = await links.count();
+  for (let i = 0; i < count; i++) {
+    await links.nth(i).click();
+    await expect(page.getByRole('heading', { name: 'Salles', exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    const show = page.getByRole('button', { name: /^Afficher le QR fixe de la salle/ }).first();
+    if (await show.isVisible().catch(() => false)) {
+      return;
+    }
+    await page.getByRole('link', { name: 'Retour aux sites' }).click().catch(() => page.goBack());
+    await expect(page.getByRole('heading', { name: 'Sites', exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+  throw new Error("Aucun site de démonstration ne possède de salle avec un QR fixe.");
 }
 
 async function openRoomQrPanel(page: Page): Promise<void> {
@@ -48,7 +65,7 @@ async function openRoomQrPanel(page: Page): Promise<void> {
 test.describe('EF-ORG-003 — QR fixe permanent de salle', () => {
   test('ADMIN : consulter, émettre, imprimer et renouveler (avec confirmation)', async ({ page }) => {
     await loginAsUi(page, ACCOUNTS.ADMIN, '/organization/sites');
-    await openFirstSiteRooms(page);
+    await openSiteWithRooms(page);
     await openRoomQrPanel(page);
 
     // Émettre le QR s'il n'existe pas encore pour cette salle.
@@ -93,7 +110,7 @@ test.describe('EF-ORG-003 — QR fixe permanent de salle', () => {
 
   test('SUPER_ADMIN : consultation et impression, mais aucun renouvellement', async ({ page }) => {
     await loginAsUi(page, ACCOUNTS.SUPER_ADMIN, '/organization/sites');
-    await openFirstSiteRooms(page);
+    await openSiteWithRooms(page);
     await openRoomQrPanel(page);
 
     // Jamais d'action de renouvellement / d'émission pour ce rôle.

@@ -201,7 +201,28 @@ export async function logoutAsUi(page: Page): Promise<void> {
  * API direct avec un jeton réel (ex. reproduire un défaut d'API connu).
  */
 export async function loginAndCaptureBearerToken(page: Page, account: DemoAccount): Promise<string> {
-  await loginAsUi(page, account);
+  // Peut être appelé alors qu'une session est DÉJÀ ouverte (l'appelant
+  // vient d'enchaîner un parcours authentifié). Depuis la continuité de
+  // session par cookie de renouvellement (6 sept.), un `page.goto('/login')`
+  // silencieusement ré-authentifié rebondit vers `/dashboard` : on ne
+  // relance donc la connexion QUE si l'écran de connexion est réellement
+  // affiché. Sinon, la session courante suffit à produire une requête
+  // authentifiée observable.
+  await page.goto('/login').catch(() => undefined);
+  const emailField = page.getByLabel('Adresse électronique');
+  if (await emailField.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await emailField.fill(account.email);
+    await page.getByLabel('Mot de passe').fill(account.password);
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 10_000 });
+    await resolveMfaChallengeIfPresent(page, account);
+  } else {
+    // Déjà authentifié : rejoindre le tableau de bord par un clic interne.
+    await page
+      .getByRole('link', { name: 'Tableau de bord', exact: true })
+      .click()
+      .catch(() => undefined);
+  }
   const requestPromise = page.waitForRequest(
     (req) => !!req.headers()['authorization']?.startsWith('Bearer '),
   );
