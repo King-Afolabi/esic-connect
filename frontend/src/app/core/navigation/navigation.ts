@@ -56,10 +56,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   {
     // Écran livré : liste des profils apprenants + fiche + historique
-    // d'inscriptions. Périmètre aligné sur `EnrollmentWeb.MANAGE_ROLES`.
+    // d'inscriptions. Consultation alignée sur `EnrollmentWeb.READ_ROLES` :
+    // l'administration (ADMIN / SUPER_ADMIN / SCHOOL_ADMINISTRATION) a
+    // l'accès global ; le PEDAGOGICAL_MANAGER et le TEACHER n'y voient
+    // que les apprenants de leur périmètre (classes de leurs formations /
+    // de leurs séances), restreint côté serveur par `RosterScopeResolver`
+    // — jamais de fuite inter-formations. La création manuelle et l'import
+    // restent réservés aux rôles d'administration (boutons masqués pour
+    // les deux autres).
     //
     // Regroupement (ANO-NAV-001) : l'import CSV (`/students/import`) et la
-    // création manuelle (`/students/nouveau`) ne sont plus des entrées
+    // création manuelle (`/students/nouveau`) ne sont pas des entrées
     // racines distinctes — ce sont des sous-écrans de « Apprenants », avec
     // un `.esic-back` vers `/students` et un accès depuis l'en-tête de la
     // liste. `matchPaths` garde donc « Apprenants » actif sur ces routes.
@@ -67,21 +74,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Apprenants',
     path: '/students',
     icon: 'groups',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER', 'TEACHER'],
     matchPaths: ['/students/import', '/students/nouveau'],
-  },
-  {
-    // Import CSV contrôlé des apprenants (simulation puis confirmation).
-    // Périmètre serveur : `StudentImportWeb.MANAGE_ROLES`. Cette entrée
-    // racine ne subsiste QUE pour `PEDAGOGICAL_MANAGER` — le seul rôle
-    // autorisé à importer qui n'a PAS l'entrée « Apprenants » ci-dessus et
-    // aurait donc, sans elle, aucun point d'entrée visible. Les rôles
-    // d'administration atteignent l'import depuis l'en-tête de la liste
-    // des apprenants (ANO-NAV-001).
-    label: 'Importer des apprenants',
-    path: '/students/import',
-    icon: 'upload_file',
-    roles: ['PEDAGOGICAL_MANAGER'],
   },
   {
     // Regroupement (Lot §4) : une seule entrée latérale pour les quatre

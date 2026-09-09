@@ -48,21 +48,27 @@ class StudentProfileService {
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
 
     private final StudentProfileRepository profileRepository;
+    private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentPersister persister;
     private final UserDirectory userDirectory;
     private final EnrollmentChangePublisher changePublisher;
     private final StudentNumberAllocator studentNumberAllocator;
+    private final RosterScopeResolver rosterScope;
 
     StudentProfileService(StudentProfileRepository profileRepository,
+                          EnrollmentRepository enrollmentRepository,
                           EnrollmentPersister persister,
                           UserDirectory userDirectory,
                           EnrollmentChangePublisher changePublisher,
-                          StudentNumberAllocator studentNumberAllocator) {
+                          StudentNumberAllocator studentNumberAllocator,
+                          RosterScopeResolver rosterScope) {
         this.profileRepository = profileRepository;
+        this.enrollmentRepository = enrollmentRepository;
         this.persister = persister;
         this.userDirectory = userDirectory;
         this.changePublisher = changePublisher;
         this.studentNumberAllocator = studentNumberAllocator;
+        this.rosterScope = rosterScope;
     }
 
     /**
@@ -121,8 +127,17 @@ class StudentProfileService {
     }
 
     @Transactional(readOnly = true)
-    StudentProfileResponse get(UUID publicId) {
+    StudentProfileResponse get(UUID publicId, String callerSubject) {
         StudentProfile profile = require(publicId);
+        // Périmètre de consultation : un PEDAGOGICAL_MANAGER / TEACHER ne
+        // voit que les apprenants de ses classes. Hors périmètre ⇒ 404
+        // (l'existence de la fiche est elle-même une information à
+        // protéger — cahier §18.2), pas 403.
+        rosterScope.visibleClassGroupInternalIds(callerSubject).ifPresent(visible -> {
+            if (!hasActiveEnrollmentIn(profile, visible)) {
+                throw new EnrollmentException(EnrollmentException.Kind.STUDENT_PROFILE_NOT_FOUND);
+            }
+        });
         UserDirectory.NamedUserRef ref = userDirectory.findNamedRefs(List.of(profile.getUserId()))
                 .get(profile.getUserId());
         if (ref == null) {
@@ -133,9 +148,26 @@ class StudentProfileService {
 
     @Transactional(readOnly = true)
     PageResponse<StudentProfileResponse> list(String q, String statusFilter, String userPublicId,
-                                              int page, int size, String sort) {
+                                              int page, int size, String sort, String callerSubject) {
         Pageable pageable = EnrollmentQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
         List<Specification<StudentProfile>> specs = new ArrayList<>();
+        // Périmètre de consultation : un PEDAGOGICAL_MANAGER / TEACHER ne
+        // voit que les apprenants ayant une inscription ACTIVE dans l'une
+        // de ses classes ; l'administration a l'accès global (aucun
+        // filtre). Périmètre vide ⇒ page vide, jamais tous.
+        Optional<java.util.Set<Long>> visibleClasses =
+                rosterScope.visibleClassGroupInternalIds(callerSubject);
+        if (visibleClasses.isPresent()) {
+            List<Long> scopedProfileIds = visibleClasses.get().isEmpty()
+                    ? List.of()
+                    : enrollmentRepository.findStudentProfileIdsByClassGroupIdInAndStatus(
+                            visibleClasses.get(), EnrollmentStatus.ACTIVE);
+            if (scopedProfileIds.isEmpty()) {
+                return PageResponse.of(Page.<StudentProfile>empty(pageable),
+                        profile -> StudentProfileResponse.from(profile, null));
+            }
+            specs.add(EnrollmentSpecifications.profileIdIn(scopedProfileIds));
+        }
         // Recherche : numéro étudiant OU nom / prénom. Le nom n'est pas
         // une colonne de `student_profile` — `identity` résout d'abord les
         // comptes STUDENT dont le nom correspond (borné à 200), puis le
@@ -188,6 +220,16 @@ class StudentProfileService {
             }
         }
         throw new EnrollmentException(EnrollmentException.Kind.STUDENT_NUMBER_EXHAUSTED);
+    }
+
+    private boolean hasActiveEnrollmentIn(StudentProfile profile, java.util.Set<Long> classGroupIds) {
+        if (classGroupIds.isEmpty()) {
+            return false;
+        }
+        return enrollmentRepository
+                .findByStudentProfile_UserIdAndStatus(profile.getUserId(), EnrollmentStatus.ACTIVE)
+                .stream()
+                .anyMatch(enrollment -> classGroupIds.contains(enrollment.getClassGroupId()));
     }
 
     private UUID resolveUserPublicId(Long userInternalId) {

@@ -89,15 +89,23 @@ export class StudentList {
   );
 
   /**
-   * « Importer des apprenants » : l'import CSV n'a plus d'entrée racine
-   * dans la navigation pour les rôles d'administration (ANO-NAV-001) — il
-   * est atteint d'ici. Périmètre aligné sur `StudentImportWeb.MANAGE_ROLES` ;
-   * le garde de route `/students/import` reste l'autorité.
+   * « Importer des apprenants » : l'import CSV n'a pas d'entrée racine
+   * dans la navigation (ANO-NAV-001) — il est atteint d'ici. Périmètre
+   * aligné sur `StudentImportWeb.MANAGE_ROLES` (les quatre rôles qui
+   * peuvent importer, `PEDAGOGICAL_MANAGER` compris — limité à son
+   * périmètre côté serveur) ; le garde de route `/students/import` reste
+   * l'autorité. Un `TEACHER` consulte la liste mais n'importe pas.
    */
   protected readonly canImportStudents = computed(() =>
     this.roleContext
       .effectiveRoles()
-      .some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN' || r === 'SCHOOL_ADMINISTRATION'),
+      .some(
+        (r) =>
+          r === 'ADMIN' ||
+          r === 'SUPER_ADMIN' ||
+          r === 'SCHOOL_ADMINISTRATION' ||
+          r === 'PEDAGOGICAL_MANAGER',
+      ),
   );
 
   protected readonly statuses = STUDENT_PROFILE_STATUSES;

@@ -30,6 +30,20 @@ interface EnrollmentRepository
 
     List<Enrollment> findByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);
 
+    /**
+     * Identifiants internes distincts des profils apprenants ayant une
+     * inscription au statut donné dans l'une des classes indiquées —
+     * filtre de périmètre pédagogique pour la liste des profils
+     * (un {@code PEDAGOGICAL_MANAGER} ne voit que ses apprenants).
+     */
+    @Query("""
+            SELECT DISTINCT e.studentProfile.id FROM Enrollment e
+            WHERE e.status = :status AND e.classGroupId IN :classGroupIds
+            """)
+    List<Long> findStudentProfileIdsByClassGroupIdInAndStatus(
+            @Param("classGroupIds") Collection<Long> classGroupIds,
+            @Param("status") EnrollmentStatus status);
+
     boolean existsByStudentProfileIdAndAcademicYearIdAndStatus(Long studentProfileId, Long academicYearId,
                                                               EnrollmentStatus status);
 

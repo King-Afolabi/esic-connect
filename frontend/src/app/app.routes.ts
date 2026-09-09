@@ -444,13 +444,32 @@ export const routes: Routes = [
         ],
       },
       {
-        // Périmètre de rôles aligné sur `EnrollmentWeb.MANAGE_ROLES`
-        // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`).
-        // Le garde ne fait que masquer la navigation : Spring Security
-        // reste l'autorité (un 403 API est rendu comme « accès refusé »).
+        // Périmètre de rôles aligné sur `EnrollmentWeb.READ_ROLES`
+        // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`) : les
+        // trois rôles d'administration + `PEDAGOGICAL_MANAGER` + `TEACHER`,
+        // ces deux derniers restreints à leur périmètre côté serveur
+        // (`RosterScopeResolver`). Le garde ne fait que masquer la
+        // navigation : Spring Security reste l'autorité (un 403 API est
+        // rendu comme « accès refusé »).
         path: 'students',
-        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
-        canActivateChild: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+        canActivate: [
+          roleGuard([
+            'ADMIN',
+            'SUPER_ADMIN',
+            'SCHOOL_ADMINISTRATION',
+            'PEDAGOGICAL_MANAGER',
+            'TEACHER',
+          ]),
+        ],
+        canActivateChild: [
+          roleGuard([
+            'ADMIN',
+            'SUPER_ADMIN',
+            'SCHOOL_ADMINISTRATION',
+            'PEDAGOGICAL_MANAGER',
+            'TEACHER',
+          ]),
+        ],
         title: `Apprenants — ${APP_NAME}`,
         children: [
           {

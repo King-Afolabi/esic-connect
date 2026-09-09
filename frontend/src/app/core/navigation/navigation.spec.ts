@@ -8,28 +8,34 @@ describe('NAV_ITEMS', () => {
     expect(admin?.roles).toEqual(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION']);
   });
 
-  it('exposes /students as a real screen gated on EnrollmentWeb.MANAGE_ROLES', () => {
+  it('exposes /students as a real screen gated on EnrollmentWeb.READ_ROLES (PEDAGOGICAL_MANAGER + TEACHER included, scoped server-side)', () => {
     const students = NAV_ITEMS.find((i) => i.path === '/students');
     expect(students).toBeDefined();
     expect(students?.placeholder).toBeUndefined();
-    expect(students?.roles).toEqual(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION']);
+    expect(students?.roles).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+      'TEACHER',
+    ]);
     // Regroupement ANO-NAV-001 : l'import et la création manuelle sont des
     // sous-écrans de « Apprenants », pas des entrées racines.
     expect(students?.matchPaths).toEqual(['/students/import', '/students/nouveau']);
   });
 
-  it("ANO-NAV-001 — l'import n'a plus qu'une entrée racine, réservée au PEDAGOGICAL_MANAGER", () => {
-    const imp = NAV_ITEMS.find((i) => i.path === '/students/import');
-    expect(imp).toBeDefined();
-    // Seul rôle autorisé à importer qui n'a PAS l'entrée « Apprenants ».
-    expect(imp?.roles).toEqual(['PEDAGOGICAL_MANAGER']);
-    // Les rôles d'administration ne voient plus d'entrée racine « Import ».
-    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/students/import');
+  it("ANO-NAV-001 — l'import n'a aucune entrée racine : il est atteint depuis l'en-tête de « Apprenants »", () => {
+    expect(NAV_ITEMS.find((i) => i.path === '/students/import')).toBeUndefined();
+    for (const role of [
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+      'TEACHER',
+    ] as const) {
+      const paths = visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path);
+      expect(paths).not.toContain('/students/import');
     }
-    expect(visibleNavItems(NAV_ITEMS, ['PEDAGOGICAL_MANAGER']).map((i) => i.path)).toContain(
-      '/students/import',
-    );
   });
 
   it('ANO-NAV-001 — « Invitations non activées » est une vue de « Invitations », plus une entrée racine', () => {
@@ -124,13 +130,17 @@ describe('visibleNavItems', () => {
     expect(visibleNavItems(items, []).map((i) => i.path)).toEqual(['/real']);
   });
 
-  it('shows /students for the roles that back EnrollmentWeb.MANAGE_ROLES, and hides it otherwise', () => {
-    for (const role of ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const) {
+  it('shows /students for the roles that back EnrollmentWeb.READ_ROLES (admins + PEDAGOGICAL_MANAGER + TEACHER), and hides it from a STUDENT', () => {
+    for (const role of [
+      'ADMIN',
+      'SUPER_ADMIN',
+      'SCHOOL_ADMINISTRATION',
+      'PEDAGOGICAL_MANAGER',
+      'TEACHER',
+    ] as const) {
       expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).toContain('/students');
     }
-    for (const role of ['PEDAGOGICAL_MANAGER', 'TEACHER', 'STUDENT'] as const) {
-      expect(visibleNavItems(NAV_ITEMS, [role]).map((i) => i.path)).not.toContain('/students');
-    }
+    expect(visibleNavItems(NAV_ITEMS, ['STUDENT']).map((i) => i.path)).not.toContain('/students');
   });
 
   it('shows /organisation-planning for the read roles of its four sub-sections, and hides it otherwise', () => {
@@ -231,10 +241,17 @@ describe('activeNavPath (Lot C — un seul élément actif)', () => {
     expect(activeNavPath('/students/nouveau', adminItems)).toBe('/students');
     expect(activeNavPath('/invitations/non-activees', adminItems)).toBe('/invitations');
 
-    // Vu par un PEDAGOGICAL_MANAGER : pas d'entrée « Apprenants », mais une
-    // entrée « Importer des apprenants » → c'est elle qui reste active.
+    // Vu par un PEDAGOGICAL_MANAGER : il a désormais l'entrée « Apprenants »
+    // (périmètre restreint côté serveur) — l'import reste un de ses
+    // sous-écrans, donc le parent reste actif.
     const managerItems = visibleNavItems(NAV_ITEMS, ['PEDAGOGICAL_MANAGER']);
-    expect(activeNavPath('/students/import', managerItems)).toBe('/students/import');
+    expect(activeNavPath('/students/import', managerItems)).toBe('/students');
+    expect(activeNavPath('/students/42', managerItems)).toBe('/students');
+
+    // Vu par un TEACHER : même entrée « Apprenants » (ses classes), pas
+    // d'accès à l'import.
+    const teacherItems = visibleNavItems(NAV_ITEMS, ['TEACHER']);
+    expect(activeNavPath('/students', teacherItems)).toBe('/students');
   });
 
   it('sur une fiche de détail hors menu, le parent reste actif', () => {

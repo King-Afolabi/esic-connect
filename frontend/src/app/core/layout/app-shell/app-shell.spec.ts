@@ -116,11 +116,14 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/administration');
   });
 
-  it('shows a TEACHER the dashboard, Séances (their own sessions server-side) and Notifications', () => {
+  it('shows a TEACHER the dashboard, their scoped Apprenants, Séances (their own sessions server-side) and Notifications', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
+      // Consultation des apprenants de ses classes (EnrollmentWeb.READ_ROLES,
+      // périmètre restreint côté serveur par RosterScopeResolver).
+      '/students',
       '/sessions',
       '/claims',
       '/notifications',
@@ -154,17 +157,16 @@ describe('AppShell', () => {
     ]);
   });
 
-  it('hides Apprenants but keeps the import root entry and Organisation & planning for a PEDAGOGICAL_MANAGER', () => {
+  it('shows a PEDAGOGICAL_MANAGER a scoped Apprenants entry (no import root entry) and Organisation & planning', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
-    expect(hrefs).not.toContain('/students');
-    // ANO-NAV-001 : le PEDAGOGICAL_MANAGER est le seul rôle autorisé à
-    // importer sans l'entrée « Apprenants » — il garde donc une entrée
-    // racine « Importer des apprenants » (les rôles d'administration, eux,
-    // y accèdent depuis la page Apprenants).
-    expect(hrefs).toContain('/students/import');
-    expect(text()).toContain('Importer des apprenants');
+    // Il voit « Apprenants » — restreint à ses formations côté serveur
+    // (RosterScopeResolver). L'import n'a plus d'entrée racine : il est
+    // atteint depuis l'en-tête de la liste.
+    expect(hrefs).toContain('/students');
+    expect(hrefs).not.toContain('/students/import');
+    expect(text()).toContain('Apprenants');
     expect(hrefs).toContain('/organisation-planning');
   });
 

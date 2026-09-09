@@ -160,21 +160,25 @@ describe('Dashboard', () => {
     }
   });
 
-  it('offers Apprenants as a quick link only for the roles behind EnrollmentWeb.MANAGE_ROLES', () => {
-    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION']] as Role[][]) {
+  it('offers Apprenants as a quick link for the roles behind EnrollmentWeb.READ_ROLES (PEDAGOGICAL_MANAGER + TEACHER included, scoped server-side), and hides it from a STUDENT', () => {
+    for (const held of [
+      ['ADMIN'],
+      ['SUPER_ADMIN'],
+      ['SCHOOL_ADMINISTRATION'],
+      ['PEDAGOGICAL_MANAGER'],
+      ['TEACHER'],
+    ] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
       expect(
         (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
       ).not.toBeNull();
     }
-    for (const held of [['TEACHER'], ['PEDAGOGICAL_MANAGER'], ['STUDENT']] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
-      ).toBeNull();
-    }
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
+    ).toBeNull();
   });
 
   it('offers Organisation & planning as a quick link only for its sub-section read roles', () => {

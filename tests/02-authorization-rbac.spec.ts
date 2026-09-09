@@ -30,7 +30,13 @@ interface RouteExpectation {
 
 const ROUTES: RouteExpectation[] = [
   { path: '/administration', allowed: ['ADMIN', 'SUPER_ADMIN'] },
-  { path: '/students', allowed: ['ADMIN', 'SUPER_ADMIN'] },
+  {
+    // Consultation ouverte au PEDAGOGICAL_MANAGER et au TEACHER, périmètre
+    // restreint côté serveur (RosterScopeResolver — voir
+    // backend RosterScopeIntegrationTests). `EnrollmentWeb.READ_ROLES`.
+    path: '/students',
+    allowed: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER_TEACHER', 'TEACHER'],
+  },
   {
     path: '/students/import',
     allowed: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER_TEACHER'],
@@ -141,7 +147,8 @@ test.describe('Cas ciblés du cahier des charges', () => {
       'Tableau de bord',
       'Administration',
       'Apprenants',
-      'Import apprenants',
+      // ANO-NAV-001 : « Import apprenants » n'est plus une entrée racine —
+      // il est atteint depuis l'en-tête de la liste des apprenants.
       // Regroupement (Lot §4) : une entrée pour référentiels, organisation,
       // planning et alternance. Les routes restent adressables directement.
       'Organisation & planning',
@@ -151,6 +158,10 @@ test.describe('Cas ciblés du cahier des charges', () => {
     ]) {
       await expect(sidebar(page).getByRole('link', { name: label, exact: true })).toBeVisible();
     }
+    // ANO-NAV-001 : plus d'entrée latérale « Importer des apprenants ».
+    await expect(
+      sidebar(page).getByRole('link', { name: 'Importer des apprenants' }),
+    ).toHaveCount(0);
     // Écrans réservés à STUDENT : jamais montrés à un ADMIN.
     await expect(sidebar(page).getByRole('link', { name: 'Émargement' })).toHaveCount(0);
     await expect(sidebar(page).getByRole('link', { name: 'Mes présences' })).toHaveCount(0);

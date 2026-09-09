@@ -50,10 +50,12 @@ class EnrollmentServiceTests {
     private ClassGroupDirectory classGroupDirectory;
     @Mock
     private EnrollmentChangePublisher changePublisher;
+    @Mock
+    private RosterScopeResolver rosterScope;
 
     private EnrollmentService service() {
         return new EnrollmentService(enrollmentRepository, profileRepository, persister, classGroupDirectory,
-                changePublisher, FIXED_CLOCK);
+                changePublisher, rosterScope, FIXED_CLOCK);
     }
 
     // ------------------------------------------------------------------
@@ -398,7 +400,7 @@ class EnrollmentServiceTests {
 
     @Test
     void listRejectsSortOutsideWhitelist() {
-        assertThatThrownBy(() -> service().list(null, null, null, 0, 20, "classGroupId,asc"))
+        assertThatThrownBy(() -> service().list(null, null, null, 0, 20, "classGroupId,asc", null))
                 .extracting(ex -> ((EnrollmentException) ex).kind())
                 .isEqualTo(EnrollmentException.Kind.INVALID_SORT);
     }

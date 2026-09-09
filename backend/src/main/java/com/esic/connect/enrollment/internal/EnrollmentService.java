@@ -70,6 +70,7 @@ class EnrollmentService {
     private final EnrollmentPersister persister;
     private final ClassGroupDirectory classGroupDirectory;
     private final EnrollmentChangePublisher changePublisher;
+    private final RosterScopeResolver rosterScope;
     private final Clock clock;
 
     EnrollmentService(EnrollmentRepository enrollmentRepository,
@@ -77,12 +78,14 @@ class EnrollmentService {
                       EnrollmentPersister persister,
                       ClassGroupDirectory classGroupDirectory,
                       EnrollmentChangePublisher changePublisher,
+                      RosterScopeResolver rosterScope,
                       Clock clock) {
         this.enrollmentRepository = enrollmentRepository;
         this.profileRepository = profileRepository;
         this.persister = persister;
         this.classGroupDirectory = classGroupDirectory;
         this.changePublisher = changePublisher;
+        this.rosterScope = rosterScope;
         this.clock = clock;
     }
 
@@ -192,17 +195,39 @@ class EnrollmentService {
     }
 
     @Transactional(readOnly = true)
-    EnrollmentResponse get(UUID publicId) {
+    EnrollmentResponse get(UUID publicId, String callerSubject) {
         Enrollment enrollment = require(publicId);
+        // Périmètre de consultation : un PEDAGOGICAL_MANAGER / TEACHER ne
+        // voit que les inscriptions rattachées à l'une de ses classes.
+        // Hors périmètre ⇒ 404 (cahier §18.2), pas 403.
+        rosterScope.visibleClassGroupInternalIds(callerSubject).ifPresent(visible -> {
+            if (!visible.contains(enrollment.getClassGroupId())) {
+                throw new EnrollmentException(EnrollmentException.Kind.ENROLLMENT_NOT_FOUND);
+            }
+        });
         return EnrollmentResponse.from(enrollment, classRefOf(enrollment.getClassGroupId()),
                 resolvePreviousPublicId(enrollment));
     }
 
     @Transactional(readOnly = true)
     PageResponse<EnrollmentResponse> list(String studentProfilePublicId, String classGroupPublicId,
-                                          String statusFilter, int page, int size, String sort) {
+                                          String statusFilter, int page, int size, String sort,
+                                          String callerSubject) {
         Pageable pageable = EnrollmentQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
         List<Specification<Enrollment>> specs = new ArrayList<>();
+
+        // Périmètre de consultation : restreint la liste aux inscriptions
+        // des classes visibles par l'appelant (PEDAGOGICAL_MANAGER /
+        // TEACHER). Accès global ⇒ aucun filtre ; périmètre vide ⇒ page
+        // vide.
+        Optional<java.util.Set<Long>> visibleClasses =
+                rosterScope.visibleClassGroupInternalIds(callerSubject);
+        if (visibleClasses.isPresent()) {
+            if (visibleClasses.get().isEmpty()) {
+                return PageResponse.of(Page.<Enrollment>empty(pageable), e -> null);
+            }
+            specs.add(EnrollmentSpecifications.enrollmentClassGroupIn(visibleClasses.get()));
+        }
 
         if (studentProfilePublicId != null && !studentProfilePublicId.isBlank()) {
             Optional<StudentProfile> profile = profileRepository.findByPublicId(parseUuid(studentProfilePublicId,

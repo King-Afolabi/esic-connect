@@ -49,12 +49,35 @@ final class EnrollmentSpecifications {
         };
     }
 
+    /**
+     * Restreint la liste des profils apprenants à ceux dont l'identifiant
+     * interne figure dans {@code ids} — filtre de périmètre pédagogique
+     * (docs/02 §5.5, §18.2). {@code ids} vide ⇒ prédicat toujours faux
+     * (aucune fuite), l'appelant devant plutôt court-circuiter par une
+     * page vide.
+     */
+    static Specification<StudentProfile> profileIdIn(java.util.Collection<Long> ids) {
+        return (root, query, cb) ->
+                (ids == null || ids.isEmpty()) ? cb.disjunction() : root.get("id").in(ids);
+    }
+
     static Specification<Enrollment> enrollmentHasStudentProfile(long studentProfileId) {
         return (root, query, cb) -> cb.equal(root.get("studentProfile").get("id"), studentProfileId);
     }
 
     static Specification<Enrollment> enrollmentHasClassGroup(long classGroupId) {
         return (root, query, cb) -> cb.equal(root.get("classGroupId"), classGroupId);
+    }
+
+    /**
+     * Restreint la liste des inscriptions à celles rattachées à une classe
+     * de {@code classGroupIds} — filtre de périmètre pédagogique. Ensemble
+     * vide ⇒ prédicat toujours faux.
+     */
+    static Specification<Enrollment> enrollmentClassGroupIn(java.util.Collection<Long> classGroupIds) {
+        return (root, query, cb) -> (classGroupIds == null || classGroupIds.isEmpty())
+                ? cb.disjunction()
+                : root.get("classGroupId").in(classGroupIds);
     }
 
     static Specification<Enrollment> enrollmentHasAcademicYear(long academicYearId) {

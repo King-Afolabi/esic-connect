@@ -34,21 +34,23 @@ class EnrollmentController {
     }
 
     @GetMapping
-    @PreAuthorize(EnrollmentWeb.MANAGE_ROLES)
+    @PreAuthorize(EnrollmentWeb.READ_ROLES)
     PageResponse<EnrollmentResponse> list(
             @RequestParam(required = false) String student,
             @RequestParam(required = false) String classGroup,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return service.list(student, classGroup, status, page, size, sort);
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt caller) {
+        return service.list(student, classGroup, status, page, size, sort, EnrollmentWeb.subject(caller));
     }
 
     @GetMapping("/{publicId}")
-    @PreAuthorize(EnrollmentWeb.MANAGE_ROLES)
-    EnrollmentResponse get(@PathVariable String publicId) {
-        return service.get(EnrollmentWeb.parseUuid(publicId, EnrollmentException.Kind.ENROLLMENT_NOT_FOUND));
+    @PreAuthorize(EnrollmentWeb.READ_ROLES)
+    EnrollmentResponse get(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
+        return service.get(EnrollmentWeb.parseUuid(publicId, EnrollmentException.Kind.ENROLLMENT_NOT_FOUND),
+                EnrollmentWeb.subject(caller));
     }
 
     @PostMapping

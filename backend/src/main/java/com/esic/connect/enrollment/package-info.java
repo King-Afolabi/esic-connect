@@ -21,9 +21,15 @@
  * <p>Dépendances inter-modules limitées aux ports publics :
  * {@link com.esic.connect.identity.CurrentUserResolver} (auteur des
  * écritures), {@link com.esic.connect.identity.UserDirectory} (compte
- * cible d'un profil apprenant) et
+ * cible d'un profil apprenant),
  * {@link com.esic.connect.academic.ClassGroupDirectory} (résolution de la
- * classe et de son année scolaire, sans partage d'entité JPA).
+ * classe et de son année scolaire, sans partage d'entité JPA),
+ * {@link com.esic.connect.academic.AcademicScopeDirectory} et
+ * {@link com.esic.connect.coursesession.CourseSessionDirectory}
+ * (périmètre de <em>consultation</em> des apprenants : un
+ * {@code PEDAGOGICAL_MANAGER} ne voit que les classes de ses formations,
+ * un {@code TEACHER} que les classes de ses séances — voir
+ * {@code RosterScopeResolver}).
  * {@code student_profile.user_id}, {@code enrollment.class_group_id} et
  * {@code enrollment.academic_year_id} sont de simples valeurs techniques
  * (clés étrangères SQL). Publie
