@@ -10,6 +10,147 @@
 
 ## Dernière mise à jour
 
+### 9 septembre 2026 (passe de stabilisation) — audit global, durcissement en-têtes Nginx, validation complète, déploiement frontend
+
+Branche `feat/demo-readiness-e2e-ui`. SHA audité `c51474b` → SHA livré
+**`f126182`**. **Aucune migration** (schéma V34 inchangé), **aucune règle
+de gestion modifiée, aucun changement d'architecture, aucun `.java`
+touché.** Audit détaillé (non versionné, convention du dépôt) :
+`docs/audit/STABLE-RELEASE-AUDIT-2026-09-08.md` ; dossier de soutenance
+versionné : `docs/SOUTENANCE-VERSION-STABLE.md`.
+
+#### Corrections appliquées (4 commits)
+
+| Commit | Objet |
+|---|---|
+| `8c38806` | supprime `--full-page` (PNG 112 kio suivi par erreur depuis `a4083b4`) ; worktree Git obsolète `agent-a51da90b…` + sa branche retirés |
+| `63bba12` | **en-têtes de sécurité Nginx** : `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` n'étaient **pas hérités** par `index.html` ni les fichiers versionnés (gotcha `add_header` : un `location` avec son propre `add_header` remplace les hérités). Répétés dans les deux `location` concernés + ajout `Permissions-Policy: geolocation=(), microphone=(), browsing-topics=()`. Aucun changement de routage/proxy/cache. **Vérifié en production** : les 4 en-têtes sont désormais servis sur `/` et sur un asset `.js` (cache `immutable` conservé). |
+| `e9c2531` | sélecteurs e2e (`tests/01`, `tests/08`) alignés sur la refonte « profil en icône seule » (`6bdec29`) : `[aria-label="Utilisateur connecté"]` / `.shell__role-chip` → `button.profile-menu__trigger` (`aria-label="Profil — <email>"`) / `.profile-menu__roles .esic-badge`. Test cassé par un refactor UI livré sans mise à jour e2e (e2e non exécuté par PR). |
+| `f126182` | ajouts **datés et ciblés** au cahier (§16.1 scanner QR intégré + fondations NFC ; §16.6 QR fixe = jeton permanent serveur vs rotatif + API admin + matrice de rôles), pointant vers `DEC-S13-001/002` ; dossier de soutenance. |
+
+#### Tests exécutés (9 septembre 2026, ce dépôt, SHA `c51474b`)
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw -o clean test` | **145 classes / 1260 tests / 0 échec / 0 erreur** — `BUILD SUCCESS`, `Total time 13:23 min`. `ModularityTests` vert (19 modules, 0 cycle). Schéma V34, « Successfully validated 34 migrations ». (+29 vs les 1231 de §6.5 : nouveaux tests `enrollment` / `student-profile` des commits `efbdb3a`/`6bdec29`.) |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **107 fichiers / 929 tests / 0 échec** |
+| `cd frontend && npx ng build --configuration production` | OK, **aucune alerte de budget** (`main` 15 kio, `styles` 94 kio, initial ≈ 590 kio). Avertissements non bloquants : dépréciation Sass `@import` (`_bootstrap-bridge.scss`, Dart Sass 3.0). |
+| `tsc -p tsconfig.json --noEmit` (suite Playwright) | 0 erreur |
+| `npm audit` (frontend) | **0 vulnérabilité** |
+| Scan de secrets versionnés (`git grep`) | **aucun** ; `.env` / `.env.prod` non suivis ; `.gitignore` couvre `.env.*`, `*.pem/key/p12/jks` |
+
+#### Recette navigateur Playwright (pile démo profil `demo`, base `esic_connect_demo`)
+
+**En cours de ré-exécution** à l'heure de cette écriture (suite lente :
+la cérémonie de second facteur est rejouée à chaque test `ADMIN` /
+`SUPER_ADMIN`). Faits établis :
+
+- sélecteurs corrigés **vérifiés verts** : `tests/01` 8/8 (hors admin) +
+  2/2 (ADMIN/SUPER_ADMIN) ; RBAC `tests/02` vert jusqu'au point de
+  bascule ci-dessous ;
+- `ADMIN` / `SUPER_ADMIN` franchissent le **vrai** second facteur via un
+  `ESIC_DEMO_TOTP_SECRET` déterministe (variable de **session
+  uniquement**, jamais commitée ; `DemoMfaProvisioner` révoque le facteur
+  hérité et en pose un aligné) ;
+- **couplage d'environnement connu** (déjà documenté §6.1) : la matrice
+  RBAC ouvre des dizaines de connexions depuis `127.0.0.1` ; au-delà du
+  seau `LOGIN_ORIGIN_LIMIT` (défaut 60/15 min) la connexion est refusée
+  et des tests échouent **pour une raison sans rapport avec ce qu'ils
+  vérifient**. Ré-exécution relancée avec `LOGIN_ORIGIN_LIMIT` relevé
+  (variable de session) et les clés Redis `esic:rate-limit:*` purgées.
+
+Décompte final : à consigner lorsque la suite se termine. Dernier
+passage **complet vert connu** : **167 / 167** (5 septembre 2026, §6.4).
+`NOT_PERFORMED` cette passe si la ré-exécution n'aboutit pas :
+démonstration **manuelle** de bout en bout par un humain.
+
+#### Sécurité — audit interne (grille OWASP ASVS v5.0.0, PAS une certification)
+
+Contrôles fondamentaux **en place et testés** : authentification forte
+(MFA TOTP, passkeys sans donnée biométrique, réponse uniforme,
+limitation de débit), autorisation à 4 niveaux **côté serveur**,
+anti-rejeu d'émargement, audit **inviolable** via outbox transactionnelle
+(sans IP ni secret), en-têtes durcis (CSP stricte back-end : `script-src`
+= `self` + Turnstile), secrets **hors dépôt**, isolation réseau (aucun
+port entrant, back-end sur `127.0.0.1`, Adminer par tunnel SSH). Détail
+et tableau ASVS : `docs/audit/STABLE-RELEASE-AUDIT-2026-09-08.md` §3.
+
+**Recommandations — NON appliquées, validation humaine requise** :
+
+1. **CSP sur le SPA** (Nginx) — exige une validation navigateur écran par
+   écran (Turnstile, Material inline styles, service worker `blob:`,
+   caméra, `data:`).
+2. **`springdoc.*.enabled=false`** en profil `demo`/prod — Swagger est
+   exposé (WARN au démarrage) ; routes protégées, aucune donnée sensible,
+   utile en recette.
+3. **ANO-UX-007** — le *rollup* d'assiduité du tableau de bord
+   (`DashboardCardsService`) gonfle le dénominateur (demi-journées
+   « attendues » sur les jours `SCHOOL` sans séance publiée) → taux bas /
+   `0 %`. Le **rapport journalier canonique** (`GET /attendance/reports/daily`,
+   `EF-ATT-004`) reste **correct**. Correction = borne de fenêtre +
+   `GROUP BY` SQL + dénominateur restreint aux séances réellement
+   attendues → touche une règle de calcul d'assiduité, hors « corrections
+   mineures sûres ». Spéc :
+   `docs/anomalies/2026-09-07-diagnostic-performance.md`.
+4. **`MFA_ENCRYPTION_KEY`** explicite en production (aujourd'hui dérivée
+   du secret JWT, WARN au log).
+5. **Test de restauration de sauvegarde** (`EF-OPS-002`) — procédure
+   prête (`ROLLBACK.md`), jamais exécutée (`NOT_PERFORMED`).
+6. **Lot Dependabot** (8 PR : Angular 21→22, `angularx-qrcode` 22, etc.)
+   — montées majeures à traiter en lot testé séparé.
+
+#### Performance
+
+Aucune cible NFR présentée comme atteinte sans mesure. Rappel des mesures
+Pi du 8 septembre : rapport mensuel de classe **1,9 s à chaud** (cible
+< 2 s), dashboard responsable 2,2–2,7 s à chaud. **`NFR-PERF-07`**
+(200 émargements/min soutenus) : **`NOT_PERFORMED`** — aucun test de
+charge reproductible, reste une dette (sprint 13).
+
+#### Déploiement — Raspberry Pi `king_a@king-a.local`
+
+**`PERFORMED` (9 septembre 2026)** — SHA `f126182`, **frontend
+uniquement**.
+
+- Delta depuis le dernier déploiement (`6bdec29`/`efbdb3a`) : un seul
+  fichier de contenu impacte le runtime — `frontend/nginx.conf`. Aucun
+  `.java`, aucune migration, `compose.prod.yaml` inchangé.
+- **Sauvegarde préalable** : `backups/20260908T234015Z/` sur la Pi —
+  `mysql.sql.gz` (40 kio, `gzip -t` OK, 65 `CREATE TABLE`, marqueur
+  « Dump completed »), `justifications.tar.gz` (volume vide),
+  `image-ids.txt`. Images de rollback taguées
+  `esic-connect-frontend:pre-stable-20260909` et
+  `esic-connect-backend:pre-stable-20260909`.
+- Transfert : `git archive f126182` → `scp` → staging `/tmp/esic-staging`
+  → `rsync -a -c` **sans `--delete`** (5 fichiers de contenu réellement
+  transférés : les 4 modifiés + le nouveau dossier de soutenance).
+- `docker compose -f compose.prod.yaml build frontend` (natif ARM64,
+  1 min 21) puis `up -d --no-deps frontend` : **seul `frontend` recréé**.
+  `backend` / `mysql` / `redis` / **`cloudflared` non touchés** — **URL
+  Quick Tunnel conservée** :
+  `https://drivers-revenues-alloy-guarantee.trycloudflare.com`.
+- **Contrôles post-déploiement** : 5/5 conteneurs `healthy` ;
+  `/actuator/health` (interne) → `{"status":"UP"}` ; smoke tests via
+  l'URL publique — `/`, `/login`, `/dashboard`, `/students`,
+  `/attendance`, `/planning/import`, `/organization/sites`,
+  `/administration`, `/my-attendance/early-departures` → **200** ;
+  `/api/v1/programs` (sans session) → **401**. **En-têtes de sécurité
+  vérifiés en production** : `/` et un asset `.js` portent bien
+  `nosniff` + `X-Frame-Options: DENY` + `Referrer-Policy` +
+  `Permissions-Policy` (le `Cache-Control: immutable` de l'asset est
+  conservé).
+- **Rollback** (si besoin) : `docs/deployment/ROLLBACK.md` § « Rollback
+  du code seul » — aucune restauration MySQL, aucune migration appliquée.
+  `docker tag esic-connect-frontend:pre-stable-20260909
+  esic-connect-frontend:latest && up -d --no-deps frontend`.
+
+**`NOT_PERFORMED`** : démonstration **manuelle** de bout en bout par un
+humain sur l'instance déployée ; audit accessibilité outillé (axe)
+ré-exécuté cette passe ; recommandations sécurité/perf ci-dessus.
+**Recommandation : validation humaine du dépôt et de l'instance déployée
+le matin avant présentation.**
+
 ### 9 septembre 2026 — liste des apprenants (nom + recherche), numéro étudiant auto, profil en icône seule
 
 Branche `feat/demo-readiness-e2e-ui`. **Back-end + front-end. Aucune
