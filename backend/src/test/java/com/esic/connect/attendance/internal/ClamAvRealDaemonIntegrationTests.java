@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * optionnel de {@code compose.yaml}. Sans lui, il est
  * <strong>ignoré</strong>, et un test ignoré n'est pas un test réussi :
  * tant qu'il n'a pas tourné, l'analyse antivirus n'est pas démontrée, et
- * {@code docs/CURRENT-STATE.md} doit le dire.
+ * {@code docs/STATUS.md} doit le dire.
  *
  * <p>Le contraire — un test qui passerait en l'absence d'analyseur —
  * serait pire que pas de test du tout : il ferait croire à une protection

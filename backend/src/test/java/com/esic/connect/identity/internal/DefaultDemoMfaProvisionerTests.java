@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * {@link DefaultDemoMfaProvisioner} — active un facteur TOTP
  * <strong>déterministe</strong> pour un compte de démonstration déjà
- * provisionné (dette T-19/T-20, {@code docs/CURRENT-STATE.md}) : le code
+ * provisionné (dette T-19/T-20, {@code docs/STATUS.md}) : le code
  * qu'il calcule à partir de {@code base32Secret} doit être accepté par le
  * vrai vérificateur ({@link TotpGenerator}), exactement comme le ferait une
  * application d'authentification après un enrôlement normal. L'opération

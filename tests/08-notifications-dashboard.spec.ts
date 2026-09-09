@@ -5,7 +5,7 @@ import { loginAsUi } from './support/auth';
 /**
  * DOMAINE 7 — Notifications et tableau de bord.
  *
- * `docs/CURRENT-STATE.md` : audience réelle des notifications métier =
+ * `docs/STATUS.md` : audience réelle des notifications métier =
  * formateurs uniquement (dette G1-D-AUDIENCE) ; pas d'email métier
  * (au-delà de l'activation), pas de push PWA, pas de préférences par
  * canal — ces sous-domaines de la demande initiale n'existent pas dans
@@ -21,8 +21,7 @@ test.describe('Tableau de bord', () => {
       await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible();
       // L'identité connectée est portée par le déclencheur du panneau
       // Profil (`profile-menu.html`, `aria-label="Profil — <email>"`)
-      // depuis la refonte « profil en icône seule » (CURRENT-STATE,
-      // 9 sept. 2026).
+      // depuis la refonte « profil en icône seule ».
       await expect(page.locator('button.profile-menu__trigger')).toHaveAttribute(
         'aria-label',
         `Profil — ${account.email}`,

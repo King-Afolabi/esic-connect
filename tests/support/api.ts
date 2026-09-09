@@ -60,7 +60,7 @@ async function resolveApiMfaChallenge(
     if (!account.totpSecret) {
       throw new Error(
         `Second facteur requis pour ${account.email} (appel API direct) mais aucun secret TOTP ` +
-          'disponible : définissez ESIC_DEMO_TOTP_SECRET. Voir docs/CURRENT-STATE.md, dette T-19/T-20.',
+          'disponible : définissez ESIC_DEMO_TOTP_SECRET. Voir docs/STATUS.md, dette T-19/T-20.',
       );
     }
     for (let attempt = 1; attempt <= 2; attempt += 1) {

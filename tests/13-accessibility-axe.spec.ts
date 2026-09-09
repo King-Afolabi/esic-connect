@@ -9,7 +9,7 @@ import { mkdirSync } from 'node:fs';
  *
  * Les écrans authentifiés relèvent de la pile de démonstration (profil
  * Spring `demo`, base `esic_connect_demo`, second facteur déterministe) :
- * voir `docs/CURRENT-STATE.md` (§6.1) pour l'état de cette exécution.
+ * voir `docs/STATUS.md` (§6) pour l'état de cette exécution.
  *
  * Règle : aucune violation `critical` ni `serious` non justifiée. Les
  * limites d'un audit automatisé (il ne couvre pas tout) sont

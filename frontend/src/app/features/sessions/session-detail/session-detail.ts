@@ -307,7 +307,7 @@ export class SessionDetail {
   );
   /**
    * Plusieurs points de contrôle peuvent être `OPEN` en même temps (règle
-   * du dépôt — voir DECISIONS_NEEDED.md, Lot I), mais **un seul** détient
+   * du dépôt — voir `docs/03-architecture.md`, décision DEC-D01), mais **un seul** détient
    * la fenêtre d'émargement active : le back-end n'a qu'un pointeur de
    * jeton par séance (`AttendanceTokenService`), et émettre un code pour
    * un autre point de contrôle ferme immédiatement le précédent. Ce

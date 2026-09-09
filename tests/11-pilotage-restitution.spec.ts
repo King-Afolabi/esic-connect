@@ -143,7 +143,7 @@ test.describe("Piste d'audit (EF-AUD-002)", () => {
    * contournerait donnerait une fausse preuve. Elle est couverte côté
    * serveur par `AuditQueryIntegrationTests` et côté écran par
    * `audit-trail.spec.ts` ; la limite est notée dans
-   * `docs/CURRENT-STATE.md` §6.1.
+   * `docs/STATUS.md` §6.
    *
    * Ce qui est vérifiable sans second facteur — et qui compte autant —
    * c'est le refus opposé aux autres rôles.

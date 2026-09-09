@@ -39,7 +39,7 @@ import java.util.Set;
  * <p>Si {@code ESIC_DEMO_TOTP_SECRET} (propriété {@code app.demo.totp-secret})
  * est renseignée, un facteur TOTP <strong>déterministe</strong> est en plus
  * activé pour {@code superadmin@example.test} et {@code admin@example.test}
- * (dette T-19/T-20, {@code docs/CURRENT-STATE.md}) : ces deux rôles exigent
+ * (dette T-19/T-20, {@code docs/STATUS.md}) : ces deux rôles exigent
  * un second facteur (RG-007) et, sans secret connu à l'avance, aucun script
  * ni aucune suite de bout en bout ne peut le franchir. Strictement
  * optionnel — absent, le comportement est inchangé : ces comptes restent
