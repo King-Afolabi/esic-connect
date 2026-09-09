@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -148,14 +149,13 @@ class AttendanceReportService {
         List<AttendanceReports.ClassRow> rows = new ArrayList<>();
         for (UUID classPublicId : classes) {
             List<RosterEntry> roster = rosterByClass.getOrDefault(classPublicId, List.of());
+            List<SessionRef> classSessions = sessions.stream()
+                    .filter(s -> s.classGroupPublicIds().contains(classPublicId))
+                    .toList();
             Accrual acc = new Accrual();
             for (RosterEntry entry : roster) {
-                for (SessionRef session : sessions) {
-                    if (session.classGroupPublicIds().contains(classPublicId)) {
-                        accrueHalfDays(acc, session, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
-                                recordIndex, alternationMemo);
-                    }
-                }
+                accrueEnrollment(acc, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
+                        classSessions, recordIndex, alternationMemo);
             }
             String code = roster.isEmpty() ? classCode(classPublicId) : roster.get(0).classGroupCode();
             rows.add(new AttendanceReports.ClassRow(classPublicId, code, roster.size(), acc.toTotals()));
@@ -178,17 +178,16 @@ class AttendanceReportService {
                 resolveAlternation(rosterByClass, sessions);
         List<AttendanceReports.StudentRow> rows = new ArrayList<>();
         for (UUID classPublicId : classes) {
+            List<SessionRef> classSessions = sessions.stream()
+                    .filter(s -> s.classGroupPublicIds().contains(classPublicId))
+                    .toList();
             for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
                 if (studentFilter != null && !studentFilter.equals(entry.studentProfilePublicId())) {
                     continue;
                 }
                 Accrual acc = new Accrual();
-                for (SessionRef session : sessions) {
-                    if (session.classGroupPublicIds().contains(classPublicId)) {
-                        accrueHalfDays(acc, session, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
-                                recordIndex, alternationMemo);
-                    }
-                }
+                accrueEnrollment(acc, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
+                        classSessions, recordIndex, alternationMemo);
                 rows.add(new AttendanceReports.StudentRow(entry.studentProfilePublicId(),
                         entry.enrollmentPublicId(), entry.studentNumber(), entry.firstName(), entry.lastName(),
                         entry.classGroupCode(), acc.toTotals()));
@@ -210,13 +209,12 @@ class AttendanceReportService {
                 resolveAlternation(rosterByClass, sessions);
         Accrual acc = new Accrual();
         for (UUID classPublicId : classes) {
+            List<SessionRef> classSessions = sessions.stream()
+                    .filter(s -> s.classGroupPublicIds().contains(classPublicId))
+                    .toList();
             for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
-                for (SessionRef session : sessions) {
-                    if (session.classGroupPublicIds().contains(classPublicId)) {
-                        accrueHalfDays(acc, session, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
-                                recordIndex, alternationMemo);
-                    }
-                }
+                accrueEnrollment(acc, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
+                        classSessions, recordIndex, alternationMemo);
             }
         }
         long pending = countPendingJustifications(sessions);
@@ -325,83 +323,123 @@ class AttendanceReportService {
     // Cœur du calcul
     // ------------------------------------------------------------------
 
-    private void accrueHalfDays(Accrual acc, SessionRef session, long enrollmentInternalId,
-                                UUID enrollmentPublicId, Map<String, AttendanceRecord> recordIndex,
-                                Map<AlternationKey, AlternationDirectory.Axis> alternationMemo) {
-        ZoneId zone = persistedZone(session.timeZoneId());
-        LocalDate day = LocalDate.ofInstant(session.startsAt(), zone);
-        // Le contexte d'alternance dépend de l'inscription et du JOUR,
-        // jamais de la séance : deux cours du même après-midi pour le même
-        // apprenant donnent forcément la même réponse. Sans mémorisation,
-        // le coût suivait le nombre de séances affichées (dette T-03,
-        // NFR-PERF-08) alors que la donnée demandée, elle, ne change pas.
-        AlternationDirectory.Axis axis = alternationMemo.computeIfAbsent(
-                new AlternationKey(enrollmentPublicId, day),
-                key -> alternationDirectory.resolveEnrollmentContext(key.enrollmentPublicId(), key.day())
-                        .effective());
-
-        List<CheckpointRef> morning = new ArrayList<>();
-        List<CheckpointRef> afternoon = new ArrayList<>();
-        for (CheckpointRef cp : session.checkpoints()) {
-            if (cp.status() == AttendanceCheckpointStatus.CANCELLED || !cp.required()) {
-                continue;
-            }
-            Instant ref = cp.type() == AttendanceCheckpointType.END
-                    ? session.endsAt()
-                    : (cp.openedAt() != null ? cp.openedAt() : session.startsAt());
-            int hour = ref.atZone(zone).getHour();
-            (hour < 13 ? morning : afternoon).add(cp);
+    /**
+     * Accrue l'assiduité d'une inscription sur la fenêtre, séances
+     * <strong>regroupées par jour</strong> (fuseau de saisie de la
+     * séance).
+     *
+     * <p>ANO-UX-007 — <em>correction du calcul</em>. Auparavant le
+     * décompte se faisait <em>par séance</em> : deux séances le même matin
+     * comptaient <em>deux</em> demi-journées attendues au lieu d'une, et
+     * chaque séance publiée sans émargement (jour d'alternance
+     * {@code SCHOOL}) ajoutait une demi-journée « absente » au
+     * dénominateur du tableau de bord — le taux affiché tombait à
+     * {@code 0 %} alors que le rapport journalier
+     * ({@link DailyAttendanceService}, EF-ATT-004), lui, restait juste.
+     * Désormais une demi-journée (matin / après-midi) n'entre qu'<strong>une
+     * fois par jour</strong>, les points de contrôle étant dédupliqués par
+     * <strong>type</strong> sur l'ensemble des séances du jour — même
+     * principe que le rapport journalier canonique.
+     */
+    private void accrueEnrollment(Accrual acc, long enrollmentInternalId, UUID enrollmentPublicId,
+                                  List<SessionRef> enrollmentSessions,
+                                  Map<String, AttendanceRecord> recordIndex,
+                                  Map<AlternationKey, AlternationDirectory.Axis> alternationMemo) {
+        Map<LocalDate, List<SessionRef>> byDay = new HashMap<>();
+        for (SessionRef session : enrollmentSessions) {
+            LocalDate day = LocalDate.ofInstant(session.startsAt(), persistedZone(session.timeZoneId()));
+            byDay.computeIfAbsent(day, d -> new ArrayList<>()).add(session);
         }
-
-        accrueOneHalfDay(acc, axis, morning, enrollmentInternalId, recordIndex);
-        accrueOneHalfDay(acc, axis, afternoon, enrollmentInternalId, recordIndex);
+        for (Map.Entry<LocalDate, List<SessionRef>> dayEntry : byDay.entrySet()) {
+            LocalDate day = dayEntry.getKey();
+            // Le contexte d'alternance dépend de l'inscription et du JOUR,
+            // jamais de la séance (dette T-03, NFR-PERF-08) : mémorisé par
+            // (inscription, jour), pré-rempli en lot par resolveAlternation.
+            AlternationDirectory.Axis axis = alternationMemo.computeIfAbsent(
+                    new AlternationKey(enrollmentPublicId, day),
+                    key -> alternationDirectory.resolveEnrollmentContext(
+                            key.enrollmentPublicId(), key.day()).effective());
+            accrueDayHalf(acc, axis, dayEntry.getValue(), enrollmentInternalId, recordIndex, true);
+            accrueDayHalf(acc, axis, dayEntry.getValue(), enrollmentInternalId, recordIndex, false);
+        }
     }
 
     /** Clé de mémorisation du contexte d'alternance : inscription + jour. */
     private record AlternationKey(UUID enrollmentPublicId, LocalDate day) {
     }
 
-    private void accrueOneHalfDay(Accrual acc, AlternationDirectory.Axis axis, List<CheckpointRef> checkpoints,
-                                  long enrollmentInternalId, Map<String, AttendanceRecord> recordIndex) {
-        if (checkpoints.isEmpty()) {
-            return;
+    /**
+     * Une demi-journée (matin si {@code morning}, sinon après-midi) d'un
+     * jour, sur <strong>l'ensemble des séances de ce jour</strong>. Les
+     * points de contrôle sont dédupliqués par <strong>type</strong> : un
+     * type validé sur n'importe quelle séance de la demi-journée suffit à
+     * le valider (un matin avec trois séances reste un seul matin).
+     *
+     * <p>Seuls les points de contrôle <strong>journaliers nommés</strong>
+     * ({@code MORNING_ARRIVAL}, {@code MORNING_BREAK_RETURN},
+     * {@code AFTERNOON_ARRIVAL}, {@code AFTERNOON_BREAK_RETURN}) entrent
+     * dans le calcul d'assiduité — {@code START} / {@code END} /
+     * {@code CUSTOM} sont ignorés, exactement comme le rapport journalier
+     * canonique ({@link DailyAttendanceService}, qui filtre sur
+     * {@code type().isDaily()}). C'est ce qui garantit que les deux vues
+     * ne divergent pas.
+     */
+    private void accrueDayHalf(Accrual acc, AlternationDirectory.Axis axis, List<SessionRef> daySessions,
+                               long enrollmentInternalId, Map<String, AttendanceRecord> recordIndex,
+                               boolean morning) {
+        EnumSet<AttendanceCheckpointType> expected = EnumSet.noneOf(AttendanceCheckpointType.class);
+        EnumSet<AttendanceCheckpointType> validated = EnumSet.noneOf(AttendanceCheckpointType.class);
+        EnumSet<AttendanceCheckpointType> excused = EnumSet.noneOf(AttendanceCheckpointType.class);
+        int late = 0;
+        for (SessionRef session : daySessions) {
+            for (CheckpointRef cp : session.checkpoints()) {
+                if (cp.status() == AttendanceCheckpointStatus.CANCELLED || !cp.required()) {
+                    continue;
+                }
+                AttendanceCheckpointType type = cp.type();
+                // Points journaliers nommés uniquement (EF-ATT-004).
+                if (!type.isMorning() && !type.isAfternoon()) {
+                    continue;
+                }
+                if (type.isMorning() != morning) {
+                    continue;
+                }
+                expected.add(type);
+                AttendanceRecord r = recordIndex.get(key(cp.internalId(), enrollmentInternalId));
+                AttendanceStatus status = r != null ? r.getStatus() : null;
+                if (status == AttendanceStatus.LATE) {
+                    late++;
+                }
+                if (status == AttendanceStatus.PRESENT || status == AttendanceStatus.LATE) {
+                    validated.add(type);
+                } else if (status == AttendanceStatus.EXCUSED_ABSENCE) {
+                    excused.add(type);
+                }
+            }
+        }
+        if (expected.isEmpty()) {
+            return; // demi-journée non attendue (aucun point de contrôle nommé publié)
         }
         // Contexte d'alternance ENTREPRISE : demi-journée hors dénominateur scolaire.
         if (axis == AlternationDirectory.Axis.COMPANY) {
             acc.company++;
             return;
         }
-
-        boolean allPresentOrExcused = true;
-        boolean anyExcused = false;
-        boolean allPresent = true;
-        for (CheckpointRef cp : checkpoints) {
-            AttendanceRecord r = recordIndex.get(key(cp.internalId(), enrollmentInternalId));
-            AttendanceStatus status = r != null ? r.getStatus() : null;
-            if (status == AttendanceStatus.LATE) {
-                acc.late++;
-            }
-            boolean present = status == AttendanceStatus.PRESENT || status == AttendanceStatus.LATE;
-            boolean excused = status == AttendanceStatus.EXCUSED_ABSENCE;
-            if (excused) {
-                anyExcused = true;
-            }
-            if (!present) {
-                allPresent = false;
-            }
-            if (!present && !excused) {
-                allPresentOrExcused = false;
-            }
-        }
+        acc.late += late;
 
         boolean unknownContext = axis == AlternationDirectory.Axis.UNKNOWN;
-        if (allPresent) {
+        boolean allValidated = validated.containsAll(expected);
+        EnumSet<AttendanceCheckpointType> validatedOrExcused = EnumSet.copyOf(validated);
+        validatedOrExcused.addAll(excused);
+        boolean allSatisfiedWithExcuse = !excused.isEmpty() && validatedOrExcused.containsAll(expected);
+
+        if (allValidated) {
             acc.expected++;
             acc.present++;
             if (unknownContext) {
                 acc.unknown++;
             }
-        } else if (allPresentOrExcused && anyExcused) {
+        } else if (allSatisfiedWithExcuse) {
             acc.expected++;
             acc.excused++;
             if (unknownContext) {

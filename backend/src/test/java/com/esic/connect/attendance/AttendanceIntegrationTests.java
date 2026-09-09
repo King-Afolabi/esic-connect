@@ -1120,8 +1120,17 @@ class AttendanceIntegrationTests {
     void reportsAggregateHalfDaysFromRealAttendance() {
         String admin = adminToken();
         Fixture fx = openSessionWithEnrolledStudents(admin, 2);
+        // Point de contrôle JOURNALIER NOMMÉ : seuls ces points entrent
+        // dans le calcul d'assiduité des rapports et du tableau de bord
+        // (EF-ATT-004, alignement sur le rapport journalier — ANO-UX-007).
+        String cp = (String) post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints",
+                Map.of("label", "Arrivée du matin", "type", "MORNING_ARRIVAL"), admin, HttpStatus.CREATED)
+                .get("publicId");
+        post("/api/v1/sessions/" + fx.sessionId() + "/checkpoints/" + cp + "/open", null, admin,
+                HttpStatus.NO_CONTENT);
         // Un apprenant émarge (PRESENT), l'autre pas.
-        Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
+        Map<String, Object> issued = post(
+                "/api/v1/sessions/" + fx.sessionId() + "/checkpoints/" + cp + "/attendance-token",
                 null, admin, HttpStatus.OK);
         post("/api/v1/attendance/validate", Map.of("shortCode", issued.get("shortCode")),
                 tokenFor(fx.students().get(0)), HttpStatus.OK);
