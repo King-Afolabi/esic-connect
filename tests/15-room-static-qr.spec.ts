@@ -27,8 +27,10 @@ async function openFirstSiteRooms(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Sites', exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  // Ligne de site → fiche (routing interne Angular, la session est conservée).
-  await page.locator('table.org__table tbody tr, table tbody tr').first().click();
+  // La ligne de site n'est plus cliquable : la fiche s'ouvre via le lien
+  // « Consulter » de la colonne d'actions (routing interne Angular, la
+  // session est conservée).
+  await page.getByRole('link', { name: /^Consulter le site / }).first().click();
   await expect(page.getByRole('heading', { name: 'Salles', exact: true })).toBeVisible({
     timeout: 15_000,
   });

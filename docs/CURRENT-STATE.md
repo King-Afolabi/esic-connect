@@ -10,6 +10,142 @@
 
 ## Dernière mise à jour
 
+### 9 septembre 2026 (passe de correction) — apprenants visibles pour responsable pédagogique & formateur (périmètre serveur), changement de mot de passe, correction ANO-UX-007
+
+Branche `feat/demo-readiness-e2e-ui`. **Aucune migration** (schéma V34
+inchangé). Back-end + front-end + tests. **Non déployée** (le porteur
+déploie lui-même). Trois corrections ciblées.
+
+#### A — Consultation des apprenants ouverte au `PEDAGOGICAL_MANAGER` et au `TEACHER`, restreinte à leur périmètre côté serveur
+
+**Constat** : dans une session `PEDAGOGICAL_MANAGER` (ou `TEACHER`),
+aucun accès à la liste des apprenants. Cause racine : `/students` (nav +
+route front) et `GET /api/v1/student-profiles` / `GET /api/v1/enrollments`
+(back-end) étaient réservés à `ADMIN` / `SUPER_ADMIN` /
+`SCHOOL_ADMINISTRATION` (`EnrollmentWeb.MANAGE_ROLES`) — le
+`PEDAGOGICAL_MANAGER` était explicitement exclu « faute de port de
+périmètre pédagogique public » (commentaire d'origine). Ce port
+(`AcademicScopeDirectory`) **existe depuis le sprint 10-11**.
+
+Corrigé :
+
+- **`EnrollmentWeb.READ_ROLES`** (nouveau) = les trois rôles
+  d'administration + `PEDAGOGICAL_MANAGER` + `TEACHER`, appliqué aux
+  **lectures** seulement (`GET` liste + fiche des profils apprenants et
+  des inscriptions). Les **écritures** (création de profil, inscription,
+  transfert, clôture) restent `MANAGE_ROLES` — pas d'administration
+  globale des comptes pour ces deux rôles.
+- **`RosterScopeResolver`** (`enrollment.internal`, nouveau) : résout le
+  périmètre de consultation depuis le **contexte de sécurité**, jamais
+  d'un paramètre client. `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+  → accès global (aucun filtre). `PEDAGOGICAL_MANAGER` → classes des
+  formations dont il répond au jour courant (`AcademicScopeDirectory
+  .visibleClassGroupIds`). `TEACHER` → classes rattachées à ses séances
+  (formateur principal ou remplaçant `ACTIVE`) via un nouveau port
+  `CourseSessionDirectory.findTaughtClassGroupPublicIds`. Cumul de rôles
+  = **union** des deux ensembles, jamais au-delà. Périmètre vide → page
+  vide (jamais tous).
+- `StudentProfileService.list` filtre la page aux profils ayant une
+  inscription `ACTIVE` dans une classe visible ; `.get` renvoie **404**
+  (jamais 403 — cahier §18.2) sur une fiche hors périmètre.
+  `EnrollmentService.list` / `.get` : idem sur les inscriptions.
+- **Front** : `/students` visible et adressable pour `PEDAGOGICAL_MANAGER`
+  et `TEACHER` (`navigation.ts`, `app.routes.ts`). Les boutons
+  « Ajouter un apprenant » (ADMIN/SUPER_ADMIN) et « Importer des
+  apprenants » (les 4 rôles de `StudentImportWeb.MANAGE_ROLES`) restent
+  masqués selon le rôle ; l'entrée racine « Importer des apprenants »
+  (qui n'existait que pour le `PEDAGOGICAL_MANAGER`) est **supprimée** —
+  l'import est atteint depuis l'en-tête de la liste (ANO-NAV-001).
+- **Nouveau dépôt inter-module** : `enrollment` → `coursesession`
+  (port public `CourseSessionDirectory`). Aucun cycle
+  (`coursesession` ne dépend pas d'`enrollment`), `ModularityTests`
+  vert — 19 modules.
+- **Autres rôles non régressés** : `STUDENT` toujours `403` sur ces
+  routes ; l'administration garde l'accès global.
+
+**Limite connue** : l'historique d'inscriptions d'un apprenant transféré
+**depuis une autre formation** n'est visible du `PEDAGOGICAL_MANAGER`
+que pour les inscriptions rattachées à ses classes — une inscription
+antérieure dans une classe d'un autre responsable est masquée (isolation
+volontaire, cahier §18.3). La « Scolarité actuelle » (inscription
+`ACTIVE`) reste toujours visible.
+
+#### A.2 — Changement de mot de passe depuis « Sécurité de mon compte »
+
+**Constat** : aucun endpoint de changement volontaire de mot de passe —
+seuls « mot de passe oublié » (public, jeton) et `logout-all` existaient.
+
+- **`POST /api/v1/auth/change-password`** (authentifié, **tout rôle**) :
+  le compte visé est le **sujet du JWT** — un utilisateur ne peut jamais
+  changer le mot de passe d'un autre. `PasswordChangeService` vérifie le
+  mot de passe actuel (BCrypt), applique `PasswordPolicy`, refuse un
+  nouveau mot de passe identique à l'actuel, limite le débit par compte
+  (empreinte, jamais l'adresse en clair). En cas de succès :
+  `credentials_invalidated_at` avancé (toutes les sessions du compte
+  invalidées, RG-010), événements `PasswordChangedEvent`
+  (`ORIGIN_SELF_SERVICE`) + `SessionsRevokedEvent`
+  (`REASON_PASSWORD_CHANGE`) audités, jeton présenté révoqué, cookie de
+  renouvellement vidé. Choix : **re-connexion** — la forme de
+  renouvellement de session la plus sûre compatible avec l'arrondi à la
+  seconde de `credentials_invalidated_at` (même contrat que
+  `/reset-password`).
+- Codes d'erreur : `401 AUTH_CURRENT_PASSWORD_INVALID`,
+  `400 AUTH_PASSWORD_TOO_WEAK` (+ détails de politique),
+  `400 AUTH_PASSWORD_UNCHANGED`, `429 RATE_LIMITED`.
+- **Front** : carte « Mot de passe » sur `/mon-compte/securite`
+  (`account-security`) — trois champs (actuel / nouveau / confirmation),
+  confirmation vérifiée côté client, politique et mot de passe actuel
+  côté serveur. Au succès : renvoi vers `/login?reason=password-changed`
+  (bandeau déjà présent dans `login.html`). `mot de passe oublié`, MFA et
+  passkeys inchangés.
+
+#### B — ANO-UX-007 : `FIXED_LOCAL`
+
+Le calcul d'assiduité des **rapports** et du **tableau de bord**
+(`AttendanceReportService`) accumulait **par séance** : deux séances le
+même matin comptaient deux demi-journées « attendues », et chaque séance
+publiée sans émargement (contexte `SCHOOL`) ajoutait une demi-journée
+« absente » — le dénominateur suivait le **nombre de séances**, d'où le
+taux `0 %`. Le rapport journalier canonique (`EF-ATT-004`,
+`DailyAttendanceService`) restait juste.
+
+Réécrit pour **regrouper par (inscription, jour)** : une demi-journée
+n'entre qu'une fois par jour, les points de contrôle sont dédupliqués
+par **type** sur l'ensemble des séances du jour, et seuls les points
+**journaliers nommés** (`MORNING_ARRIVAL`…) entrent dans le calcul —
+exactement comme `DailyAttendanceService`. `accrueHalfDays` /
+`accrueSession` / `accrueOneHalfDay` → `accrueEnrollment` /
+`accrueDayHalf` (source unique). **Aucune règle de gestion changée**
+(mêmes statuts de demi-journée, même traitement `COMPANY` / `UNKNOWN`,
+même priorité des excuses). Détail :
+`docs/anomalies/2026-09-08-ux-passe-2.md` (ANO-UX-007).
+
+#### Tests exécutés (Mac, `set -a && source .env`)
+
+| Commande | Résultat |
+|---|---|
+| `cd backend && ./mvnw -o clean test` | **1275 tests / 0 échec / 0 erreur — `BUILD SUCCESS`** (14 min 59 s). `ModularityTests` vert (19 modules, 0 cycle). +15 vs les 1260 du 9 sept. : `RosterScopeIntegrationTests` (4), `PasswordChangeIntegrationTests` (7), `AttendanceRollupHalfDayIntegrationTests` (3), `EnrollmentSecurityTests` (+1 — scission STUDENT / TEACHER+MANAGER). |
+| `cd frontend && npm run lint` | « All files pass linting » |
+| `cd frontend && npx ng test --watch=false` | **107 fichiers / 935 tests / 0 échec** (+6 : formulaire de changement de mot de passe ; specs nav/route/dashboard ajustées au nouveau périmètre `/students`) |
+| `tsc -p tsconfig.json --noEmit` | 0 erreur |
+| `cd frontend && npx ng build --configuration production` | **590 kio** initial, aucune alerte de budget |
+| `npm audit` (frontend) | **0 vulnérabilité** |
+
+Specs Playwright ajustées (sélecteurs / périmètre) : `tests/02`
+(`/students` ouvert PM+TEACHER, plus d'entrée racine « Importer »),
+`tests/11` (« Non activées » = sous-nav `.esic-subnav`, titre
+« Invitations »), `tests/15` (fiche de site ouverte via le lien
+« Consulter », la ligne n'est plus cliquable), `tests/16` (focus rendu au
+champ « Code court » après fermeture du scanner — **vrai correctif a11y** :
+`afterNextRender` au lieu de `queueMicrotask`, le champ n'étant réinséré
+qu'au rendu suivant en zoneless).
+
+**`NOT_PERFORMED`** : suite Playwright **complète** relancée après ces
+corrections (pile de démonstration requise) ; recette navigateur
+authentifiée du changement de mot de passe et de la liste des apprenants
+pour un `PEDAGOGICAL_MANAGER` / `TEACHER` ; déploiement (le porteur
+déploie).
+
 ### 9 septembre 2026 (passe de stabilisation) — audit global, durcissement en-têtes Nginx, validation complète, déploiement frontend
 
 Branche `feat/demo-readiness-e2e-ui`. SHA audité `c51474b` → SHA livré

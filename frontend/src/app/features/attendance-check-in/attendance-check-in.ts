@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  Injector,
+  signal,
+} from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -87,6 +96,7 @@ export class AttendanceCheckIn {
   private readonly formBuilder = inject(NonNullableFormBuilder);
   private readonly queue = inject(OfflineQueueService);
   private readonly route = inject(ActivatedRoute);
+  private readonly injector = inject(Injector);
 
   protected readonly connectivity = inject(ConnectivityService);
 
@@ -180,12 +190,20 @@ export class AttendanceCheckIn {
     this.scannerOpen.set(false);
   }
 
-  /** L'utilisateur choisit la saisie manuelle depuis le scanner. */
+  /**
+   * L'utilisateur choisit la saisie manuelle depuis le scanner. Le
+   * scanner se referme et le focus revient sur le champ « Code court »
+   * (accessibilité : après la fermeture d'un composant plein écran, le
+   * focus doit atterrir sur l'élément d'action suivant, jamais rester
+   * « nulle part »). `afterNextRender` — et non `queueMicrotask` — parce
+   * que le champ n'est réinséré dans le DOM qu'au prochain rendu (zoneless).
+   */
   protected scannerFallback(): void {
     this.scannerOpen.set(false);
-    queueMicrotask(() => {
-      document.getElementById('checkin-short-code')?.focus();
-    });
+    afterNextRender(
+      () => document.getElementById('checkin-short-code')?.focus(),
+      { injector: this.injector },
+    );
   }
 
   /** Un QR a été décodé : analyse locale puis appel de l'API existante. */
