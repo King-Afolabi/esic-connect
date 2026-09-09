@@ -43,6 +43,16 @@ class AuthExceptionHandler {
                 code = "AUTH_ACCOUNT_NOT_ELIGIBLE";
                 message = "Ce compte ne permet pas cette opération.";
             }
+            case CURRENT_PASSWORD_MISMATCH -> {
+                status = HttpStatus.UNAUTHORIZED;
+                code = "AUTH_CURRENT_PASSWORD_INVALID";
+                message = "Le mot de passe actuel est incorrect.";
+            }
+            case PASSWORD_UNCHANGED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "AUTH_PASSWORD_UNCHANGED";
+                message = "Le nouveau mot de passe doit être différent de l'actuel.";
+            }
             case REVOCATION_BACKEND_UNAVAILABLE -> {
                 status = HttpStatus.SERVICE_UNAVAILABLE;
                 code = "AUTH_REVOCATION_BACKEND_UNAVAILABLE";

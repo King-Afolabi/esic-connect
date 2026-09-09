@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../../core/auth/auth.service';
 import { AccountSecurity } from './account-security';
 
@@ -16,6 +17,8 @@ describe('AccountSecurity', () => {
     registerPasskey: vi.fn(),
     revokePasskey: vi.fn(),
     revokeTrustedDevice: vi.fn(),
+    changePassword: vi.fn(),
+    completePasswordChange: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -46,6 +49,8 @@ describe('AccountSecurity', () => {
     auth.registerPasskey.mockReset();
     auth.revokePasskey.mockReset();
     auth.revokeTrustedDevice.mockReset().mockReturnValue(of(undefined));
+    auth.changePassword.mockReset().mockReturnValue(of(undefined));
+    auth.completePasswordChange.mockReset();
 
     await TestBed.configureTestingModule({
       imports: [AccountSecurity],
@@ -90,5 +95,81 @@ describe('AccountSecurity', () => {
 
   it("n'expose jamais l'empreinte d'appareil", () => {
     expect(fixture.nativeElement.textContent).not.toContain('deviceHash');
+  });
+
+  // -- Changement de mot de passe (EF-AUTH, docs/02 §17.1) --------------
+
+  function setPasswordForm(current: string, next: string, confirm: string): void {
+    const component = fixture.componentInstance as unknown as {
+      passwordForm: {
+        setValue(v: { currentPassword: string; newPassword: string; confirmPassword: string }): void;
+      };
+    };
+    component.passwordForm.setValue({
+      currentPassword: current,
+      newPassword: next,
+      confirmPassword: confirm,
+    });
+    fixture.detectChanges();
+  }
+
+  function submitPassword(): void {
+    const form = fixture.nativeElement.querySelector(
+      'form.security__password-form',
+    ) as HTMLFormElement;
+    form.dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+  }
+
+  it('propose un formulaire de changement de mot de passe à trois champs', () => {
+    const form = fixture.nativeElement.querySelector('form.security__password-form');
+    expect(form).toBeTruthy();
+    expect(form.querySelector('input[formcontrolname="currentPassword"]')).toBeTruthy();
+    expect(form.querySelector('input[formcontrolname="newPassword"]')).toBeTruthy();
+    expect(form.querySelector('input[formcontrolname="confirmPassword"]')).toBeTruthy();
+  });
+
+  it('bloque la soumission quand la confirmation diffère, sans appeler le serveur', () => {
+    setPasswordForm('ancien mot de passe', 'nouveau mot de passe long', 'pas-le-meme');
+    submitPassword();
+    expect(auth.changePassword).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain('ne correspondent pas');
+  });
+
+  it('bloque un nouveau mot de passe trop court, sans appeler le serveur', () => {
+    setPasswordForm('ancien mot de passe', 'court', 'court');
+    submitPassword();
+    expect(auth.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('envoie le changement puis délègue la fin de session à AuthService', () => {
+    setPasswordForm('ancien mot de passe', 'nouveau mot de passe long', 'nouveau mot de passe long');
+    submitPassword();
+    expect(auth.changePassword).toHaveBeenCalledWith(
+      'ancien mot de passe',
+      'nouveau mot de passe long',
+    );
+    expect(auth.completePasswordChange).toHaveBeenCalledOnce();
+  });
+
+  it('affiche le message du serveur si le mot de passe actuel est refusé', () => {
+    auth.changePassword.mockReturnValueOnce(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 401,
+            error: {
+              status: 401,
+              code: 'AUTH_CURRENT_PASSWORD_INVALID',
+              message: 'Le mot de passe actuel est incorrect.',
+              details: [],
+            },
+          }),
+      ),
+    );
+    setPasswordForm('mauvais', 'nouveau mot de passe long', 'nouveau mot de passe long');
+    submitPassword();
+    expect(auth.completePasswordChange).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain('Le mot de passe actuel est incorrect.');
   });
 });

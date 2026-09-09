@@ -1,5 +1,11 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -10,7 +16,23 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import { isWebAuthnAvailable } from '../../../core/auth/webauthn';
+import { normalizeHttpError } from '../../../core/models/api-error';
 import { MfaEnrollment, MfaStatus, PasskeyCredential, TrustedDevice } from '../../../core/models/mfa';
+
+/**
+ * Longueur minimale du mot de passe, alignée sur `PasswordPolicy`
+ * côté serveur (`app.security.password.min-length`, défaut 12). Le
+ * serveur reste l'autorité : ce contrôle ne fait qu'éviter un aller-retour
+ * évident.
+ */
+const PASSWORD_MIN_LENGTH = 12;
+
+/** Le nouveau mot de passe et sa confirmation doivent coïncider. */
+function passwordsMatch(group: AbstractControl): ValidationErrors | null {
+  const next = group.get('newPassword')?.value;
+  const confirm = group.get('confirmPassword')?.value;
+  return next && confirm && next !== confirm ? { passwordMismatch: true } : null;
+}
 
 /**
  * Sécurité du compte : second facteur, clés d'accès, appareils reconnus
@@ -65,8 +87,57 @@ export class AccountSecurity {
     label: this.formBuilder.control('', [Validators.maxLength(120)]),
   });
 
+  /**
+   * Changement de mot de passe (EF-AUTH, docs/02 §17.1). Disponible pour
+   * **tout** rôle : le serveur agit sur le seul sujet du jeton. Trois
+   * champs (actuel / nouveau / confirmation), confirmation vérifiée ici,
+   * politique et mot de passe actuel vérifiés côté serveur.
+   */
+  protected readonly passwordForm = this.formBuilder.group(
+    {
+      currentPassword: this.formBuilder.control('', [Validators.required]),
+      newPassword: this.formBuilder.control('', [
+        Validators.required,
+        Validators.minLength(PASSWORD_MIN_LENGTH),
+      ]),
+      confirmPassword: this.formBuilder.control('', [Validators.required]),
+    },
+    { validators: passwordsMatch },
+  );
+
+  protected readonly passwordBusy = signal(false);
+  protected readonly passwordError = signal<string | null>(null);
+  protected readonly passwordMinLength = PASSWORD_MIN_LENGTH;
+
   constructor() {
     this.refresh();
+  }
+
+  protected changePassword(): void {
+    if (this.passwordForm.invalid || this.passwordBusy()) {
+      this.passwordForm.markAllAsTouched();
+      return;
+    }
+    const { currentPassword, newPassword } = this.passwordForm.getRawValue();
+    this.passwordBusy.set(true);
+    this.passwordError.set(null);
+    this.auth.changePassword(currentPassword, newPassword).subscribe({
+      next: () => {
+        // Le serveur a fermé toutes les sessions : on renvoie vers la
+        // connexion avec le bandeau « mot de passe modifié ».
+        this.auth.completePasswordChange();
+      },
+      error: (error: unknown) => {
+        this.passwordBusy.set(false);
+        const normalized = normalizeHttpError(error);
+        const detail = normalized.details.length > 0 ? ` ${normalized.details.join(' ')}` : '';
+        this.passwordError.set(
+          normalized.status === 0
+            ? 'Le service est momentanément indisponible. Réessayez.'
+            : `${normalized.message}${detail}`,
+        );
+      },
+    });
   }
 
   protected refresh(): void {

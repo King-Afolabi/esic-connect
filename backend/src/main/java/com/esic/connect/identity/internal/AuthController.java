@@ -46,6 +46,7 @@ public class AuthController {
 
     private final AuthenticationService authenticationService;
     private final PasswordResetService passwordResetService;
+    private final PasswordChangeService passwordChangeService;
     private final AccessTokenRevocationService accessTokenRevocationService;
     private final SessionRevocationService sessionRevocationService;
     private final RefreshService refreshService;
@@ -56,6 +57,7 @@ public class AuthController {
 
     public AuthController(AuthenticationService authenticationService,
                           PasswordResetService passwordResetService,
+                          PasswordChangeService passwordChangeService,
                           AccessTokenRevocationService accessTokenRevocationService,
                           SessionRevocationService sessionRevocationService,
                           RefreshService refreshService,
@@ -66,6 +68,7 @@ public class AuthController {
                           Clock clock) {
         this.authenticationService = authenticationService;
         this.passwordResetService = passwordResetService;
+        this.passwordChangeService = passwordChangeService;
         this.accessTokenRevocationService = accessTokenRevocationService;
         this.sessionRevocationService = sessionRevocationService;
         this.refreshService = refreshService;
@@ -166,6 +169,32 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         passwordResetService.resetPassword(request.token(), request.newPassword());
+    }
+
+    /**
+     * Change le mot de passe de l'utilisateur <strong>connecté</strong>
+     * (EF-AUTH, docs/02 §17.1, §34.2). Le compte visé est celui du sujet
+     * du jeton : un utilisateur ne peut jamais changer le mot de passe
+     * d'un autre. Ouvert à tous les rôles.
+     *
+     * <p>Le mot de passe actuel est revérifié, la politique appliquée, le
+     * nouveau doit différer de l'actuel. En cas de succès, toutes les
+     * sessions du compte sont invalidées (comme
+     * {@code /reset-password}) : on révoque le jeton présenté, on vide le
+     * cookie de renouvellement, et l'interface renvoie vers la connexion
+     * avec un message de confirmation.
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            @CookieValue(value = RefreshCookies.COOKIE_NAME, required = false) String refreshCookie) {
+        passwordChangeService.change(UUID.fromString(jwt.getSubject()),
+                request.currentPassword(), request.newPassword());
+        accessTokenRevocationService.revoke(jwt.getId(), jwt.getExpiresAt(), clock.instant());
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, refreshService.revoke(refreshCookie).toString())
+                .build();
     }
 
     /**

@@ -19,6 +19,97 @@
 
   <mat-card class="security__card">
     <mat-card-header>
+      <mat-card-title>Mot de passe</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>
+        Changer votre mot de passe fermera toutes vos sessions ouvertes, sur tous vos appareils :
+        vous devrez vous reconnecter avec le nouveau.
+      </p>
+
+      @if (passwordError()) {
+        <p class="security__message security__message--error" role="alert" aria-live="assertive">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <span>{{ passwordError() }}</span>
+        </p>
+      }
+
+      <form
+        class="security__password-form"
+        [formGroup]="passwordForm"
+        (ngSubmit)="changePassword()"
+        novalidate
+      >
+        <mat-form-field appearance="outline">
+          <mat-label>Mot de passe actuel</mat-label>
+          <input
+            matInput
+            type="password"
+            formControlName="currentPassword"
+            autocomplete="current-password"
+            required
+          />
+          @if (passwordForm.get('currentPassword')?.hasError('required') &&
+            passwordForm.get('currentPassword')?.touched) {
+            <mat-error>Saisissez votre mot de passe actuel.</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Nouveau mot de passe</mat-label>
+          <input
+            matInput
+            type="password"
+            formControlName="newPassword"
+            autocomplete="new-password"
+            required
+          />
+          <mat-hint>Au moins {{ passwordMinLength }} caractères.</mat-hint>
+          @if (passwordForm.get('newPassword')?.hasError('required') &&
+            passwordForm.get('newPassword')?.touched) {
+            <mat-error>Choisissez un nouveau mot de passe.</mat-error>
+          }
+          @if (passwordForm.get('newPassword')?.hasError('minlength')) {
+            <mat-error>Au moins {{ passwordMinLength }} caractères.</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Confirmer le nouveau mot de passe</mat-label>
+          <input
+            matInput
+            type="password"
+            formControlName="confirmPassword"
+            autocomplete="new-password"
+            required
+          />
+          @if (passwordForm.get('confirmPassword')?.hasError('required') &&
+            passwordForm.get('confirmPassword')?.touched) {
+            <mat-error>Confirmez le nouveau mot de passe.</mat-error>
+          }
+        </mat-form-field>
+
+        @if (passwordForm.get('confirmPassword')?.touched &&
+          passwordForm.hasError('passwordMismatch')) {
+          <p class="security__field-error" role="alert">
+            Les deux mots de passe ne correspondent pas.
+          </p>
+        }
+
+        <button
+          mat-flat-button
+          color="primary"
+          type="submit"
+          [disabled]="passwordBusy() || passwordForm.invalid"
+        >
+          Changer le mot de passe
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="security__card">
+    <mat-card-header>
       <mat-card-title>Second facteur (application d'authentification)</mat-card-title>
     </mat-card-header>
     <mat-card-content>

@@ -360,6 +360,33 @@ export class AuthService {
   }
 
   /**
+   * Change le mot de passe de l'utilisateur connecté (EF-AUTH,
+   * docs/02 §17.1). Le serveur vérifie le mot de passe actuel, applique
+   * la politique, puis ferme **toutes** les sessions du compte et vide le
+   * cookie de renouvellement — `withCredentials` est donc indispensable.
+   * Le compte visé est le sujet du jeton : aucun identifiant n'est
+   * transmis, on ne peut pas viser un autre compte.
+   */
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(
+      `${environment.apiBaseUrl}/v1/auth/change-password`,
+      { currentPassword, newPassword },
+      { withCredentials: true },
+    );
+  }
+
+  /**
+   * Termine la session locale après un changement de mot de passe réussi
+   * et renvoie vers la connexion avec le bandeau dédié. Le serveur a
+   * déjà invalidé toutes les sessions et vidé le cookie ; il ne reste
+   * qu'à oublier le jeton en mémoire.
+   */
+  completePasswordChange(): void {
+    this._session.set(null);
+    void this.router.navigate(['/login'], { queryParams: { reason: 'password-changed' } });
+  }
+
+  /**
    * Traitement d'une réponse 401 sur un appel authentifié : la session
    * locale est considérée comme expirée ou invalide.
    */

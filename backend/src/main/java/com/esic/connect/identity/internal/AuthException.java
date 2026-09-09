@@ -21,6 +21,10 @@ class AuthException extends RuntimeException {
         WEAK_PASSWORD,
         /** Le compte n'est pas dans un état permettant cette opération. */
         ACCOUNT_NOT_ELIGIBLE,
+        /** Changement de mot de passe : le mot de passe actuel fourni est faux. */
+        CURRENT_PASSWORD_MISMATCH,
+        /** Changement de mot de passe : le nouveau est identique à l'actuel. */
+        PASSWORD_UNCHANGED,
         /** Redis indisponible : la révocation demandée n'a pas pu être appliquée. */
         REVOCATION_BACKEND_UNAVAILABLE
     }
@@ -56,6 +60,14 @@ class AuthException extends RuntimeException {
 
     static AuthException accountNotEligible() {
         return new AuthException(Kind.ACCOUNT_NOT_ELIGIBLE);
+    }
+
+    static AuthException currentPasswordMismatch() {
+        return new AuthException(Kind.CURRENT_PASSWORD_MISMATCH);
+    }
+
+    static AuthException passwordUnchanged() {
+        return new AuthException(Kind.PASSWORD_UNCHANGED);
     }
 
     static AuthException revocationBackendUnavailable() {
