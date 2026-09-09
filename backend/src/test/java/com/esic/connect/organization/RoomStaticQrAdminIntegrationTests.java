@@ -31,6 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -173,7 +174,14 @@ class RoomStaticQrAdminIntegrationTests {
         Map<String, Object> reprint = getMap("/api/v1/rooms/" + roomId + "/static-qr", admin, HttpStatus.OK);
 
         assertThat(reprint.get("staticQrReference")).isEqualTo(first.get("staticQrReference"));
-        assertThat(reprint.get("staticQrIssuedAt")).isEqualTo(first.get("staticQrIssuedAt"));
+        // La réponse de `rotate` porte l'`Instant` en mémoire (précision
+        // nanoseconde sur horloge Linux) ; la réponse de `GET` porte la
+        // même valeur relue de MySQL, où `DATETIME(6)` la tronque à la
+        // microseconde. La réimpression est idempotente : on compare donc
+        // à la précision réellement persistée (RG QR fixe, EF-ORG-003).
+        Instant firstIssuedAt = Instant.parse((String) first.get("staticQrIssuedAt"));
+        Instant reprintIssuedAt = Instant.parse((String) reprint.get("staticQrIssuedAt"));
+        assertThat(reprintIssuedAt).isEqualTo(firstIssuedAt.truncatedTo(ChronoUnit.MICROS));
     }
 
     @Test
