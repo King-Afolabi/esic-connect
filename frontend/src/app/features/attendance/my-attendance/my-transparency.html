@@ -1,15 +1,20 @@
-<nav class="att__crumbs" aria-label="Fil d'Ariane">
-  <a routerLink="/my-attendance">← Retour à mes présences</a>
-</nav>
+<a class="esic-back" routerLink="/my-attendance">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour à mes présences</span>
+</a>
 
-<h1 class="att__title">Journal de transparence</h1>
-<p class="att__intro">
-  Tout ce qui a touché vos présences : votre émargement, les saisies et
-  corrections effectuées, les décisions sur vos justificatifs et vos départs
-  anticipés. Les intervenants y sont désignés par leur fonction.
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Journal de transparence</h1>
+    <p class="esic-page-header__description">
+      Tout ce qui a touché vos présences : votre émargement, les saisies et
+      corrections effectuées, les décisions sur vos justificatifs et vos départs
+      anticipés. Les intervenants y sont désignés par leur fonction.
+    </p>
+  </div>
+</header>
 
-<form class="att__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="att__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline">
     <mat-label>Depuis</mat-label>
     <input matInput type="date" formControlName="from" />

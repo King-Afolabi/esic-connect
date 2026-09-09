@@ -12,6 +12,8 @@ import java.util.UUID;
 record StudentProfileResponse(
         UUID publicId,
         UUID userPublicId,
+        String firstName,
+        String lastName,
         String studentNumber,
         LocalDate birthDate,
         boolean workStudy,
@@ -21,9 +23,16 @@ record StudentProfileResponse(
         Instant updatedAt) {
 
     static StudentProfileResponse from(StudentProfile profile, UUID userPublicId) {
+        return from(profile, userPublicId, null, null);
+    }
+
+    static StudentProfileResponse from(StudentProfile profile, UUID userPublicId,
+                                       String firstName, String lastName) {
         return new StudentProfileResponse(
                 profile.getPublicId(),
                 userPublicId,
+                firstName,
+                lastName,
                 profile.getStudentNumber(),
                 profile.getBirthDate(),
                 profile.isWorkStudy(),

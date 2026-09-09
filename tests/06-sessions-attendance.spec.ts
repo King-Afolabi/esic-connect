@@ -9,12 +9,11 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
  * DOMAINE 3 — Séances exceptionnelles et émargement intelligent.
  *
  * C'est le cœur du « parcours prioritaire » de CLAUDE.md
- * (Ouverture par le formateur → Émargement → Rapport), dans les limites
- * réellement livrées : pas de scan caméra (le champ "Code court" est le
- * seul canal, cf. le texte d'aide affiché sur `/attendance` lui-même :
- * « Le scan caméra sera ajouté dans une tranche ultérieure »), pas de QR
- * fixe de salle, pas de 4 points de contrôle nommés (un seul point START
- * auto-ouvert avec la séance).
+ * (Ouverture par le formateur → Émargement → Rapport). Ce fichier exerce
+ * le canal **code court** ; le **scan caméra** (livré depuis le
+ * 8 septembre 2026) a son propre fichier `tests/16-qr-scanner.spec.ts`
+ * (caméra simulée). Pas de 4 points de contrôle nommés ici (un seul
+ * point START auto-ouvert avec la séance).
  *
  * Les tests sont **sérialisés** : ils font progresser une séance créée
  * pour l'occasion (PLANNED → OPEN → CLOSED), un état non réversible.
@@ -31,6 +30,29 @@ let shortCode = '';
 let studentOneDetailPath = '';
 const SESSION_TITLE = `Séance audit Playwright ${Date.now()}`;
 
+/**
+ * Heure locale (fuseau du contexte navigateur, `playwright.config.ts`
+ * `timezoneId: 'Europe/Paris'`) au format `HH:MM` exigé par le champ de
+ * l'écran de création. Calculée par rapport à l'instant réel de
+ * l'exécution — un horaire figé (ex. « 08:00 ») rendait ce test
+ * dépendant de l'heure du jour : au-delà d'une tolérance de 30 minutes
+ * après l'ouverture (docs/02 §16.4), l'émargement plus loin dans ce même
+ * parcours calcule à bon droit un retard, parfois de plusieurs centaines
+ * de minutes si la suite tourne l'après-midi ou le soir — pas un bug du
+ * produit, un défaut de ce test.
+ */
+function parisTimeHHMM(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '00';
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
 test.describe('Parcours prioritaire réel : création → ouverture → émargement → clôture', () => {
   test('1. PEDAGOGICAL_MANAGER crée une séance exceptionnelle', async ({ page }) => {
     await loginAsUi(page, ACCOUNTS.PEDAGOGICAL_MANAGER_TEACHER, '/sessions/new');
@@ -41,10 +63,14 @@ test.describe('Parcours prioritaire réel : création → ouverture → émargem
     await page.getByRole('option', { name: new RegExp(DEMO_DATA.classCode) }).click();
     await page.keyboard.press('Escape');
 
+    const now = new Date();
     const today = new Date().toISOString().slice(0, 10);
     await page.getByLabel('Date').fill(today);
-    await page.getByLabel('Début (heure locale)').fill('08:00');
-    await page.getByLabel('Fin (heure locale)').fill('09:00');
+    // Démarre 2 min avant maintenant : l'émargement qui suit dans ce même
+    // parcours reste dans la tolérance « présent » (0–15 min, docs/02
+    // §16.4) quelle que soit l'heure du jour à laquelle la suite tourne.
+    await page.getByLabel('Début (heure locale)').fill(parisTimeHHMM(new Date(now.getTime() - 2 * 60_000)));
+    await page.getByLabel('Fin (heure locale)').fill(parisTimeHHMM(new Date(now.getTime() + 60 * 60_000)));
     await page
       .getByLabel('Motif de la séance exceptionnelle')
       .fill('Séance créée par la suite Playwright d\'audit (parcours prioritaire).');
@@ -117,7 +143,7 @@ test.describe('Parcours prioritaire réel : création → ouverture → émargem
     await loginAsUi(page, ACCOUNTS.STUDENT, '/attendance');
     await page.getByLabel('Code court').fill(shortCode);
     await page.getByRole('button', { name: 'Valider ma présence' }).click();
-    await expect(page.locator('.checkin__inline-error')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.esic-form__error')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Présence enregistrée.')).not.toBeVisible();
     await page.screenshot({
       path: path.join(CAPTURES, 'errors', '05-double-emargement-refuse.png'),
@@ -138,7 +164,8 @@ test.describe('Parcours prioritaire réel : création → ouverture → émargem
     await loginAsUi(page, ACCOUNTS.STUDENT, '/attendance');
     await page.getByLabel('Code court').fill('ZZZZZZ');
     await page.getByRole('button', { name: 'Valider ma présence' }).click();
-    await expect(page.locator('.checkin__inline-error')).toBeVisible();
+    // Classe renommée `.checkin__inline-error` -> `.esic-form__error`.
+    await expect(page.locator('.esic-form__error')).toBeVisible({ timeout: 10_000 });
   });
 
   test('8. Le formateur voit les deux présences en direct (EF-ATT visibilité immédiate)', async ({

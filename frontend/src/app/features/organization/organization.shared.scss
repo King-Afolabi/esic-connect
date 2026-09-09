@@ -1,98 +1,111 @@
-// Styles communs au référentiel organisationnel (`org__*`). Importé par
-// chaque composant via `@use`.
-
-.org__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-}
+// Styles communs au référentiel organisationnel (`org__*`).
+// Alignés sur le système de design ESIC (jetons `--esic-*`, primitives).
 
 .org__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--esic-space-2);
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .org__section-title {
-  font: var(--mat-sys-title-large);
-  margin: 2rem 0 1rem;
+  margin: var(--esic-space-7) 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
 }
 
 .org__intro,
 .org__status {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0.5rem 0 1rem;
+  margin: var(--esic-space-3) 0 var(--esic-space-4);
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
 }
 
-.org__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.org__filter {
-  min-width: 14rem;
-}
-
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`),
+// posée à côté de `.org__filters`.
 .org__filter-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
+  gap: var(--esic-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
 }
 
 .org__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
 .org__facts {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  gap: 0.75rem 1.5rem;
+  gap: var(--esic-space-3) var(--esic-space-5);
 }
 
 .org__facts dt {
-  font: var(--mat-sys-label-medium);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--esic-ink-faint);
 }
 
 .org__facts dd {
   margin: 0;
-  font: var(--mat-sys-body-medium);
+  color: var(--esic-ink);
   word-break: break-word;
 }
 
+// Formulaires embarqués de la fiche site (bâtiment, salle, plage réseau).
+// Le formulaire *dédié* de création/édition d'un site, lui, s'appuie sur la
+// primitive `.esic-form` (`_primitives.scss`).
 .org__form {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--esic-space-3) var(--esic-space-4);
   max-width: 48rem;
-}
 
-.org__form mat-form-field {
-  flex: 1 1 16rem;
+  .mat-mdc-form-field {
+    width: auto;
+    flex: 1 1 16rem;
+    min-width: 12rem;
+  }
 }
 
 .org__form-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
   flex-basis: 100%;
+  padding-top: 0.25rem;
 }
 
 .org__table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 .org__table-wrapper table[mat-table],
@@ -103,8 +116,8 @@ table[mat-table].org__table {
 .org__actions-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0;
+  gap: var(--esic-space-2);
+  margin: var(--esic-space-4) 0;
 }
 
 .org__sr-only {

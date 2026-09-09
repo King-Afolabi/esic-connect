@@ -7,22 +7,8 @@
   margin-bottom: 1rem;
 }
 
-.attest__form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.attest__field {
-  flex: 1 1 24rem;
-}
-
-.attest__actions {
-  align-items: flex-start;
-  display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-}
+// Les deux formulaires (émettre / vérifier) s'appuient sur la primitive
+// `.esic-form` / `.esic-form__grid` / `.esic-form__actions`.
 
 .attest__panel {
   align-items: center;
@@ -33,11 +19,11 @@
 .attest__note,
 .attest__ok,
 .attest__ko {
-  font: var(--mat-sys-body-medium);
+  font-size: 0.9375rem;
 }
 
 .attest__note {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--esic-ink-soft);
 }
 
 .attest__facts {
@@ -65,7 +51,7 @@
 
   th,
   td {
-    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    border-bottom: 1px solid var(--esic-line);
     padding: 0.35rem 0.5rem;
     text-align: left;
   }

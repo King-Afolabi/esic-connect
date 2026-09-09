@@ -5,6 +5,56 @@ téléphone réel). À utiliser uniquement avec le profil `demo` et après
 `scripts/seed-demo.sh` (qui crée la formation `PRG-DEMO`, la classe
 `C-DEMO` et l'année `AY-DEMO` référencées ci-dessous).
 
+## Amorçage complet — `scripts/seed-demo-full.py`
+
+Depuis le 7 septembre 2026, `scripts/seed-demo-full.py` construit un jeu
+**complet** par-dessus `seed-demo.sh`, entièrement par les API REST
+réelles (second facteur ADMIN franchi via TOTP, jamais contourné) :
+
+- **année** `AY-2026` (2026-2027), **5 formations** (BTS SIO, BTS CIEL,
+  Bachelor CDA, Mastère ESIS, Mastère CPDIA), leurs niveaux, promotions
+  et **9 classes** (initiaux + alternants dans la même classe) ;
+- **sites** Malakoff (étages 1, 2, 5) et Paris (rez-de-chaussée),
+  bâtiments, **16 salles** ; plages réseau si un compte `SUPER_ADMIN`
+  est utilisé ;
+- **4 familles de rythmes d'alternance** + affectation aux 9 classes
+  (BTS 1 : 3 j école / 2 j entreprise, lun.–mer. ; BTS 2 : 2 sem. école
+  sur 4, lun.–jeu. ; Mastères : 1 sem. école sur 4 ; Bachelor CDA :
+  1 sem. école sur 4 — **hypothèse provisoire documentée**, cursus 1 an) ;
+- **18 formateurs** fictifs **actifs** (invitation + activation via
+  Mailpit — parcours réel `EF-AUTH-004`), 2 par classe ;
+- **~190 apprenants** importés par le **CSV réel** (simulation +
+  confirmation), répartis dans les 9 classes ; ils restent
+  `PENDING_ACTIVATION` — ce qui alimente aussi `EF-REP-010` (invitations
+  non activées) ;
+- **~3 mois de planning par classe** (24 août → 30 novembre 2026)
+  publiés par l'**import CSV de planning réel** : déterministe et
+  **sans conflit** (salle et binôme de formateurs dédiés par classe,
+  une séance par demi-journée, rythmes respectés), soit ~490 séances ;
+- **scénarios d'assiduité** : ouverture de séances, points de contrôle
+  nommés, émargement manuel (présent ≈ 80 %, retard ≈ 12 %,
+  absent ≈ 8 %), clôture ;
+- **jeux de fichiers d'import** valide / avertissement / bloquant /
+  multi-anomalies / doublons, pour l'import apprenants **et** l'import
+  planning, écrits ici et **réellement simulés** — verdicts consignés
+  dans `IMPORT-FIXTURES-REPORT.md` et `PLANNING-FIXTURES-REPORT.md`.
+
+```bash
+# base demo remise à zéro (ESIC_ALLOW_DEMO_RESET=true attendu par le porteur)
+ESIC_ALLOW_DEMO_RESET=true \
+  bash scripts/db-reset.sh esic_connect_demo --profile demo --yes --keep-running
+# puis, back-end demo joignable sur :8080, Mailpit sur :8025 :
+API_BASE=http://localhost:8080 \
+  ESIC_DEMO_PASSWORD=... ESIC_DEMO_TOTP_SECRET=... \
+  python3 scripts/seed-demo-full.py            # toutes les phases
+python3 scripts/seed-demo-full.py check        # contrôle de l'état
+```
+
+Le script est **idempotent** : relancé, il retrouve les ressources par
+leur `code` (409 toléré) et n'écrit pas de doublon. Tous les `publicId`
+sont régénérés à chaque recréation de base : le script les résout à
+l'exécution, aucun fichier ne les fige.
+
 > **Après toute recréation de base** (`./scripts/db-reset.sh`), tous les
 > `publicId` sont régénérés : `public_id` est un `UUID.randomUUID()`
 > attribué au `@PrePersist`. Il faut donc **relancer**

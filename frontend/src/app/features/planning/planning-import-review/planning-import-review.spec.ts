@@ -63,6 +63,9 @@ interface Internals {
   confirmPublish: () => void;
   cancelJob: () => void;
   actionError: () => string | null;
+  startCorrection: (row: PlanningRowResponse) => void;
+  cancelCorrection: () => void;
+  editingRow: () => string | null;
 }
 
 function setup() {
@@ -179,5 +182,33 @@ describe('PlanningImportReview', () => {
     );
     s.fixture.detectChanges();
     expect(s.text()).toContain('Aucun import de planning ne correspond');
+  });
+
+  it('shows the row-correction editor as a full-width panel below the table, not inside a cell (Lot K)', () => {
+    const s = setup();
+    s.flushJob(SIMULATED_JOB, [{ ...ROW, rowStatus: 'ERROR', issues: [] }]);
+
+    const host = s.fixture.nativeElement as HTMLElement;
+    // Au repos : aucune grille de champs, seule la cellule porte un bouton.
+    expect(host.querySelector('.plan__correction-grid')).toBeNull();
+    // Aucun champ de saisie à l'intérieur d'une cellule de tableau.
+    expect(host.querySelector('td .plan__correction-grid')).toBeNull();
+
+    s.internals.startCorrection({ ...ROW });
+    s.fixture.detectChanges();
+
+    const panel = host.querySelector('.plan__correction[role="group"]');
+    expect(panel).not.toBeNull();
+    // Le panneau est un frère du conteneur de tableau, pas un descendant du <table>.
+    expect(host.querySelector('table .plan__correction')).toBeNull();
+    expect(panel?.getAttribute('aria-label')).toContain('ligne 2');
+    expect(panel?.querySelectorAll('.plan__correction-grid input').length).toBeGreaterThan(1);
+    expect(panel?.querySelector('.plan__correction-actions')).not.toBeNull();
+    // La ligne éditée est mise en évidence.
+    expect(host.querySelector('tr.plan__row--editing')).not.toBeNull();
+
+    s.internals.cancelCorrection();
+    s.fixture.detectChanges();
+    expect(host.querySelector('.plan__correction[role="group"]')).toBeNull();
   });
 });

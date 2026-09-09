@@ -40,6 +40,8 @@ const REMOTE_AUTHORIZATION: RemoteAttendanceAuthorizationResponse = {
 const PROFILE: StudentProfileResponse = {
   publicId: ID,
   userPublicId: 'u-1',
+  firstName: 'Alice',
+  lastName: 'Durand',
   studentNumber: 'ESIC-2026-0007',
   birthDate: null,
   workStudy: false,
@@ -162,6 +164,61 @@ describe('StudentProfile', () => {
     expect(text()).toContain('2026-2027');
     expect(text()).toContain("Issue d'un changement de classe");
     expect(text()).toContain('Réorientation');
+    http.verify();
+  });
+
+  it('derives a "Scolarité actuelle" block from the active enrollment (no extra call)', async () => {
+    const { harness, http, text, profileReq, enrollmentsReq, remoteReq } = await setup();
+    profileReq().flush(PROFILE);
+    harness.detectChanges();
+    http.expectOne(IDENTITY_URL).flush({ publicId: 'u-1', email: 'x@y.z', firstName: 'A', lastName: 'B' });
+    enrollmentsReq().flush({
+      content: [
+        { ...ENROLLMENT, publicId: 'e-old', status: 'ARCHIVED', startDate: '2024-09-02' },
+        { ...ENROLLMENT, status: 'ACTIVE' },
+      ],
+      page: 0,
+      size: 100,
+      totalElements: 2,
+      totalPages: 1,
+    });
+    remoteReq().flush([]);
+    harness.detectChanges();
+
+    const el = harness.routeNativeElement as HTMLElement;
+    expect(text()).toContain('Scolarité actuelle');
+    // Les valeurs viennent de l'inscription ACTIVE, en libellés humains.
+    expect(text()).toContain('BTS-SIO');
+    expect(text()).toContain('BTS-SIO-1-A');
+    expect(text()).toContain('2026-2027');
+    expect(text()).toContain('Active');
+    // Aucun UUID exposé.
+    expect(text()).not.toContain('pr-1');
+    // Le tableau d'historique est borné + entête figée (primitive compacte).
+    expect(el.querySelector('.profile__table-wrapper.esic-table-wrap--compact')).not.toBeNull();
+    // Aucun appel supplémentaire : le bloc est dérivé de l'historique déjà chargé.
+    http.expectNone(() => true);
+    http.verify();
+  });
+
+  it('says there is no active enrollment rather than inventing one', async () => {
+    const { harness, http, text, profileReq, enrollmentsReq, remoteReq } = await setup();
+    profileReq().flush(PROFILE);
+    harness.detectChanges();
+    http.expectOne(IDENTITY_URL).flush({ publicId: 'u-1', email: 'x@y.z', firstName: 'A', lastName: 'B' });
+    enrollmentsReq().flush({
+      content: [{ ...ENROLLMENT, status: 'WITHDRAWN' }],
+      page: 0,
+      size: 100,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    remoteReq().flush([]);
+    harness.detectChanges();
+
+    // Pas d'inscription ACTIVE → on retient la plus récente, statut affiché tel quel.
+    expect(text()).toContain('Scolarité actuelle');
+    expect(text()).toContain('Abandon');
     http.verify();
   });
 

@@ -15,6 +15,7 @@ import {
   PageResponse,
   RoomListQuery,
   RoomResponse,
+  RoomStaticQrView,
   SiteNetworkRangeResponse,
   SiteResponse,
   UpdateBuildingRequest,
@@ -184,6 +185,42 @@ export class OrganizationApiService {
     return this.http.post<void>(
       `${this.base}/rooms/${encodeURIComponent(publicId)}/restore`,
       {},
+    );
+  }
+
+  // --- Static room QR (EF-ORG-003) ------------------------------------
+
+  /**
+   * `GET /api/v1/rooms/{publicId}/static-qr` — **réimpression** : lit le
+   * QR fixe sans rien modifier (même jeton, même date d'émission). Ouvert
+   * à `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` côté serveur.
+   */
+  getRoomStaticQr(publicId: string): Observable<RoomStaticQrView> {
+    return this.http.get<RoomStaticQrView>(
+      `${this.base}/rooms/${encodeURIComponent(publicId)}/static-qr`,
+    );
+  }
+
+  /**
+   * `POST /api/v1/rooms/{publicId}/static-qr/rotate` — **renouvellement** :
+   * émet un nouveau jeton et invalide immédiatement toutes les affiches
+   * posées. Réservé à `ADMIN` côté serveur (un `403` reste rendu « accès
+   * refusé »).
+   */
+  rotateRoomStaticQr(publicId: string): Observable<RoomStaticQrView> {
+    return this.http.post<RoomStaticQrView>(
+      `${this.base}/rooms/${encodeURIComponent(publicId)}/static-qr/rotate`,
+      {},
+    );
+  }
+
+  /**
+   * `DELETE /api/v1/rooms/{publicId}/static-qr` — **révocation** : la
+   * salle n'accepte plus d'émargement par affiche. Réservé à `ADMIN`.
+   */
+  revokeRoomStaticQr(publicId: string): Observable<RoomStaticQrView> {
+    return this.http.delete<RoomStaticQrView>(
+      `${this.base}/rooms/${encodeURIComponent(publicId)}/static-qr`,
     );
   }
 

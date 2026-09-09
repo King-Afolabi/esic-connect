@@ -1,0 +1,7 @@
+// Création manuelle d'un apprenant (Lot H). S'appuie sur la primitive
+// `.esic-form` du système de design ; seul l'indice d'erreur de
+// chargement des classes est spécifique.
+
+.student-create__hint-error {
+  color: var(--esic-danger);
+}

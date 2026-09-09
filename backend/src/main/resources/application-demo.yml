@@ -33,3 +33,12 @@ app:
     # (voir DemoDataInitializer). À définir dans votre shell, jamais dans
     # Git : `export ESIC_DEMO_PASSWORD=...` (≥ 12 caractères).
     password: ${ESIC_DEMO_PASSWORD}
+    # Secret TOTP déterministe (base32), STRICTEMENT OPTIONNEL — vide par
+    # défaut, aucun changement de comportement si absent. Permet à
+    # `scripts/seed-demo.sh` et à la recette Playwright de franchir le
+    # second facteur des comptes ADMIN/SUPER_ADMIN de démonstration sans
+    # dépendre d'un secret généré aléatoirement à l'enrôlement (dette
+    # T-19/T-20). Double garde : n'a d'effet que sous le profil `demo`
+    # (comme ci-dessus) ET seulement si la variable est renseignée. Ne
+    # doit JAMAIS être une valeur de production.
+    totp-secret: ${ESIC_DEMO_TOTP_SECRET:}

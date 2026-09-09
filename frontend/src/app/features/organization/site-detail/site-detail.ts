@@ -12,13 +12,18 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
+import { ClipboardService } from '../../../core/clipboard/clipboard.service';
 import { Role } from '../../../core/models/role';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { QrDisplay } from '../../sessions/shared/qr-display/qr-display';
+import { buildRoomCheckInUrl } from '../../attendance/check-in-reference';
+import { publicOrigin } from '../../attendance/public-origin';
 import { OrganizationApiService } from '../organization-api.service';
 import { toOrganizationError } from '../organization-errors';
 import {
   BuildingResponse,
   RoomResponse,
+  RoomStaticQrView,
   SiteNetworkRangeResponse,
   SiteResponse,
   formatIsoDate,
@@ -40,11 +45,21 @@ type ChildState<T> =
 /** Action de mutation du site en cours de confirmation. */
 type PendingSiteAction = { kind: 'archive' } | { kind: 'restore' };
 
+/** Panneau « QR fixe » d'une salle ouvert dans le flux de la page. */
+interface QrPanel {
+  room: RoomResponse;
+  view: RoomStaticQrView;
+}
+
 const ARCHIVE_REASON_MAX = 500;
 /** `SiteController.WRITE_ROLES` — visibilité des actions d'écriture (site / bâtiment / salle). */
 const WRITE_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN'];
 /** `SiteNetworkRangeController` — tout est réservé à `SUPER_ADMIN`, lecture comprise. */
 const NETWORK_ROLES: readonly Role[] = ['SUPER_ADMIN'];
+/** `RoomController.STATIC_QR_VIEW_ROLES` — consulter / imprimer le QR fixe (EF-ORG-003). */
+const QR_VIEW_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'];
+/** `RoomController.STATIC_QR_ROTATE_ROLES` — renouveler / révoquer : `ADMIN` seul. */
+const QR_ROTATE_ROLES: readonly Role[] = ['ADMIN'];
 const CHILD_PAGE_SIZE = 100;
 
 /**
@@ -78,6 +93,7 @@ const CHILD_PAGE_SIZE = 100;
     MatInputModule,
     MatSelectModule,
     MatProgressBarModule,
+    QrDisplay,
   ],
   templateUrl: './site-detail.html',
   styleUrl: './site-detail.scss',
@@ -89,7 +105,7 @@ export class SiteDetail {
   private readonly notifications = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  private readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
+  protected readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
 
   protected readonly statusLabel = organizationStatusLabel;
   protected readonly formatDate = formatIsoDate;
@@ -105,7 +121,15 @@ export class SiteDetail {
   protected readonly actionError = signal<string | null>(null);
 
   protected readonly buildingColumns = ['code', 'name', 'status', 'actions'];
-  protected readonly roomColumns = ['code', 'name', 'building', 'capacity', 'status', 'actions'];
+  protected readonly roomColumns = [
+    'code',
+    'name',
+    'building',
+    'capacity',
+    'staticQr',
+    'status',
+    'actions',
+  ];
   protected readonly rangeColumns = ['cidr', 'label', 'active', 'actions'];
 
   private readonly effectiveRoles = this.roleContext.effectiveRoles;
@@ -115,6 +139,41 @@ export class SiteDetail {
   protected readonly canManageNetwork = computed(() =>
     this.effectiveRoles().some((r) => NETWORK_ROLES.includes(r)),
   );
+  /** Consulter / imprimer le QR fixe d'une salle (EF-ORG-003). */
+  protected readonly canViewQr = computed(() =>
+    this.effectiveRoles().some((r) => QR_VIEW_ROLES.includes(r)),
+  );
+  /** Renouveler / révoquer le QR fixe — `ADMIN` seul. */
+  protected readonly canRotateQr = computed(() =>
+    this.effectiveRoles().some((r) => QR_ROTATE_ROLES.includes(r)),
+  );
+
+  // --- QR fixe de salle (EF-ORG-003) ---------------------------------
+  protected readonly qrPanel = signal<QrPanel | null>(null);
+  protected readonly qrLoading = signal(false);
+  protected readonly qrError = signal<string | null>(null);
+  protected readonly pendingQrRotate = signal(false);
+  protected readonly qrRotating = signal(false);
+
+  // --- URL pour tag NFC (même URL que le QR fixe) -------------------
+  private readonly clipboard = inject(ClipboardService);
+  /** Section « URL pour tag NFC » dépliée. */
+  protected readonly nfcUrlOpen = signal(false);
+  protected readonly nfcCopyState = signal<'idle' | 'copied' | 'failed'>('idle');
+  /**
+   * URL absolue à écrire dans un tag NFC NDEF : exactement celle du QR
+   * fixe (`<origine publique>/attendance?ref=<opaque>`), bâtie depuis le
+   * `checkInPath` du back-end et l'origine publique de confiance. `null`
+   * tant qu'aucun QR n'est émis. Réservée aux rôles `canViewQr` — elle
+   * n'est jamais dans la liste générale des salles, ni loggée, ni auditée.
+   */
+  protected readonly nfcUrl = computed(() => {
+    const panel = this.qrPanel();
+    if (!panel?.view.issued) {
+      return null;
+    }
+    return buildRoomCheckInUrl(panel.view.checkInPath, publicOrigin());
+  });
 
   protected readonly site = computed(() => {
     const current = this.state();
@@ -155,6 +214,71 @@ export class SiteDetail {
     const current = this.buildings();
     return current.kind === 'ready' ? current.items.filter((b) => b.status === 'ACTIVE') : [];
   });
+
+  // --- Filtres de recherche par sous-liste (côté client) -------------
+  // Objectif « gestion efficace de nombreuses salles » : un simple filtre
+  // texte sur code / nom. Les sous-listes tiennent déjà en mémoire
+  // (`size=100`, aucune pagination serveur) — le filtre reste local et
+  // n'ajoute aucun appel.
+  protected readonly buildingFilter = signal('');
+  protected readonly roomFilter = signal('');
+  protected readonly rangeFilter = signal('');
+
+  private static contains(haystack: string | null | undefined, needle: string): boolean {
+    return (haystack ?? '').toLowerCase().includes(needle);
+  }
+
+  protected readonly filteredBuildings = computed<BuildingResponse[]>(() => {
+    const current = this.buildings();
+    if (current.kind !== 'ready') {
+      return [];
+    }
+    const q = this.buildingFilter().trim().toLowerCase();
+    if (!q) {
+      return current.items;
+    }
+    return current.items.filter(
+      (b) => SiteDetail.contains(b.code, q) || SiteDetail.contains(b.name, q),
+    );
+  });
+
+  protected readonly filteredRooms = computed<RoomResponse[]>(() => {
+    const current = this.rooms();
+    if (current.kind !== 'ready') {
+      return [];
+    }
+    const q = this.roomFilter().trim().toLowerCase();
+    if (!q) {
+      return current.items;
+    }
+    return current.items.filter(
+      (r) =>
+        SiteDetail.contains(r.code, q) ||
+        SiteDetail.contains(r.name, q) ||
+        SiteDetail.contains(r.floorLabel, q) ||
+        SiteDetail.contains(this.buildingName(r.buildingPublicId), q),
+    );
+  });
+
+  protected readonly filteredRanges = computed<SiteNetworkRangeResponse[]>(() => {
+    const current = this.ranges();
+    if (current.kind !== 'ready') {
+      return [];
+    }
+    const q = this.rangeFilter().trim().toLowerCase();
+    if (!q) {
+      return current.items;
+    }
+    return current.items.filter(
+      (n) => SiteDetail.contains(n.cidr, q) || SiteDetail.contains(n.label, q),
+    );
+  });
+
+  protected setFilter(which: 'building' | 'room' | 'range', value: string): void {
+    ({ building: this.buildingFilter, room: this.roomFilter, range: this.rangeFilter })[which].set(
+      value,
+    );
+  }
 
   protected readonly siteReasonForm = this.formBuilder.group({
     reason: this.formBuilder.control('', [
@@ -387,6 +511,103 @@ export class SiteDetail {
     const match =
       current.kind === 'ready' ? current.items.find((b) => b.publicId === publicId) : undefined;
     return match ? match.code : '—';
+  }
+
+  // --- QR fixe de salle (EF-ORG-003) -------------------------------
+
+  /**
+   * Ouvre le panneau du QR fixe d'une salle — **réimpression** : lecture
+   * seule, ne modifie rien côté serveur (même jeton, même date). Un `403`
+   * réel (rôle insuffisant) est rendu « accès refusé ».
+   */
+  protected openQr(room: RoomResponse): void {
+    this.qrPanel.set(null);
+    this.pendingQrRotate.set(false);
+    this.qrError.set(null);
+    this.qrLoading.set(true);
+    this.api.getRoomStaticQr(room.publicId).subscribe({
+      next: (view) => {
+        this.qrLoading.set(false);
+        this.qrPanel.set({ room, view });
+      },
+      error: (error: unknown) => {
+        this.qrLoading.set(false);
+        this.notifications.error(toOrganizationError(error).message);
+      },
+    });
+  }
+
+  protected closeQr(): void {
+    this.qrPanel.set(null);
+    this.pendingQrRotate.set(false);
+    this.qrError.set(null);
+    this.nfcUrlOpen.set(false);
+    this.nfcCopyState.set('idle');
+  }
+
+  protected toggleNfcUrl(): void {
+    this.nfcUrlOpen.update((open) => !open);
+    this.nfcCopyState.set('idle');
+  }
+
+  /**
+   * Copie l'URL du tag NFC dans le presse-papiers, sur clic explicite.
+   * Aucun renouvellement n'est déclenché ; le contenu copié n'apparaît
+   * jamais dans un bandeau — seul l'état « copiée » / « à copier
+   * manuellement » est montré. En cas d'échec, le champ `readonly` reste
+   * sélectionnable à la main.
+   */
+  protected async copyNfcUrl(): Promise<void> {
+    const url = this.nfcUrl();
+    if (!url) {
+      return;
+    }
+    const ok = await this.clipboard.copy(url);
+    this.nfcCopyState.set(ok ? 'copied' : 'failed');
+  }
+
+  protected startRotateQr(): void {
+    this.qrError.set(null);
+    this.pendingQrRotate.set(true);
+  }
+
+  protected cancelRotateQr(): void {
+    this.pendingQrRotate.set(false);
+  }
+
+  /**
+   * Émet ou **renouvelle** le QR fixe. Le renouvellement invalide
+   * immédiatement toutes les affiches posées : la confirmation le dit
+   * explicitement (RG-034 pour l'esprit — action irréversible confirmée).
+   * Recharge la liste des salles au succès pour rafraîchir la date
+   * d'émission affichée en colonne.
+   */
+  protected confirmRotateQr(): void {
+    const panel = this.qrPanel();
+    if (!panel || !this.canRotateQr() || this.qrRotating()) {
+      return;
+    }
+    this.qrRotating.set(true);
+    this.qrError.set(null);
+    this.api.rotateRoomStaticQr(panel.room.publicId).subscribe({
+      next: (view) => {
+        this.qrRotating.set(false);
+        this.pendingQrRotate.set(false);
+        this.qrPanel.set({ room: panel.room, view });
+        // L'URL du tag NFC a changé : forcer une nouvelle copie.
+        this.nfcCopyState.set('idle');
+        this.notifications.info(
+          view.issued
+            ? 'QR fixe renouvelé. Réimprimez et remplacez les affiches en salle.'
+            : 'QR fixe émis.',
+        );
+        this.loadRooms();
+      },
+      error: (error: unknown) => {
+        this.qrRotating.set(false);
+        this.qrError.set(toOrganizationError(error).message);
+      },
+    });
   }
 
   // --- Network ranges ------------------------------------------------

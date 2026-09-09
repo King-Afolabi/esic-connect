@@ -1,0 +1,207 @@
+name: esic-connect
+
+# Composition de PRODUCTION (Raspberry Pi). Différences avec compose.yaml
+# (développement) :
+#   - backend et frontend sont construits et exécutés en conteneur (pas
+#     de ./mvnw ni de ng serve sur l'hôte) ;
+#   - aucun port de données (MySQL, Redis) n'est publié sur l'hôte —
+#     seul Nginx (frontend) est joignable, et seulement depuis le réseau
+#     Docker interne (cloudflared s'y connecte, jamais depuis Internet
+#     directement : aucun port n'est ouvert sur la box) ;
+#   - pas de Mailpit : un vrai fournisseur SMTP (MAIL_* dans .env) ;
+#   - pas de Mosquitto/ClamAV : hors périmètre de cette mise en service
+#     de test (à ajouter séparément si besoin un jour).
+#
+# Démarrage :
+#   docker compose -f compose.prod.yaml up -d --build
+#
+# Amorçage (une fois "backend" en bonne santé) :
+#   docker compose -f compose.prod.yaml exec backend true   # (aucune action, juste pour vérifier)
+#   API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD=... ESIC_DEMO_TOTP_SECRET=... \
+#     bash scripts/seed-demo.sh
+#
+# Exploitation (installation, mise à jour, rollback, sauvegarde,
+# restauration) : docs/deployment/RASPBERRY-PI.md.
+
+# Rotation des journaux : indispensable sur la carte SD d'une Raspberry
+# Pi — sans quoi le pilote json-file de Docker grossit sans limite. 3
+# fichiers de 10 Mo par conteneur au maximum.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: esic-connect-mysql
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h localhost -uroot -p"$${MYSQL_ROOT_PASSWORD}" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - data-network
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: esic-connect-redis
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+    environment:
+      # Fourni au conteneur pour que la sonde ci-dessous résolve le mot de
+      # passe SANS que Compose ne l'interpole dans la définition du service
+      # (il resterait alors visible dans `docker compose config`). Le `$$`
+      # protège la variable de l'interpolation Compose : elle est étendue
+      # par le shell, dans le conteneur.
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - data-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: esic-connect-backend
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_TTL_SECONDS: ${JWT_ACCESS_TOKEN_TTL_SECONDS:-900}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
+      APP_MAIL_FROM: ${APP_MAIL_FROM}
+      APP_ACTIVATION_BASE_URL: ${APP_ACTIVATION_BASE_URL}
+      APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS}
+      ESIC_DEMO_PASSWORD: ${ESIC_DEMO_PASSWORD:-}
+      ESIC_DEMO_TOTP_SECRET: ${ESIC_DEMO_TOTP_SECRET:-}
+      LOGIN_ORIGIN_LIMIT: ${LOGIN_ORIGIN_LIMIT:-60}
+      JUSTIFICATION_STORAGE_PATH: /data/uploads/justifications
+    volumes:
+      - justification-data:/data/uploads/justifications
+    # Lié UNIQUEMENT à la boucle locale : joignable depuis un shell sur la
+    # Pi elle-même (administration, scripts/seed-demo.sh) mais jamais
+    # depuis le réseau local ni Internet — aucun port n'est ouvert sur la
+    # box par ce biais (cf. l'en-tête de ce fichier).
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://localhost:8080/actuator/health | grep -q '"status":"UP"'
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - data-network
+      - backend-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: esic-connect-frontend
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:80/ > /dev/null || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - backend-network
+
+  # Tunnel sortant vers Cloudflare : rend "frontend" joignable publiquement,
+  # SANS ouvrir aucun port entrant sur la box/le pare-feu.
+  #
+  # Mode "Quick Tunnel" (choisi ici : gratuit, aucun compte ni domaine
+  # requis) : Cloudflare attribue une URL aléatoire en *.trycloudflare.com
+  # à chaque démarrage du conteneur — elle CHANGE à chaque redémarrage.
+  # Après un `up`/redémarrage, récupérer la nouvelle adresse dans les
+  # journaux :
+  #   docker compose -f compose.prod.yaml logs cloudflared | grep trycloudflare.com
+  # puis mettre à jour APP_ACTIVATION_BASE_URL et APP_ALLOWED_ORIGINS dans
+  # .env avec cette URL et relancer "backend" pour qu'il en tienne compte.
+  #
+  # Passer à un tunnel nommé (URL stable sur un domaine possédé) reste
+  # possible plus tard : remplacer `command` par `tunnel run` et ajouter
+  # `environment: TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}`.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: esic-connect-cloudflared
+    restart: unless-stopped
+    logging: *default-logging
+    command: tunnel --no-autoupdate --url http://frontend:80
+    depends_on:
+      frontend:
+        condition: service_started
+    networks:
+      - backend-network
+
+volumes:
+  mysql-data:
+  redis-data:
+  justification-data:
+
+networks:
+  backend-network:
+  data-network:

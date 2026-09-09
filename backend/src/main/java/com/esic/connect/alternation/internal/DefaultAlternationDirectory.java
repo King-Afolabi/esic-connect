@@ -5,6 +5,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -51,6 +54,27 @@ class DefaultAlternationDirectory implements AlternationDirectory {
             case UNKNOWN -> Axis.UNKNOWN;
         };
     }
+    @Override
+    @Transactional(readOnly = true)
+    public Map<EnrollmentDay, Axis> resolveEnrollmentContexts(Collection<EnrollmentDescriptor> enrollments,
+                                                              LocalDate fromDay, LocalDate toDay) {
+        if (enrollments == null || enrollments.isEmpty()) {
+            return Map.of();
+        }
+        java.util.List<AlternationContextService.BatchEnrollmentRef> refs = enrollments.stream()
+                .filter(e -> e != null && e.enrollmentPublicId() != null)
+                .map(e -> new AlternationContextService.BatchEnrollmentRef(
+                        e.enrollmentPublicId(), e.enrollmentInternalId(), e.classGroupPublicId()))
+                .toList();
+        Map<AlternationContextService.EnrollmentDayKey, EnrollmentContextResponse> resolved =
+                contextService.resolveEnrollmentContextsUnchecked(refs, fromDay, toDay);
+        Map<EnrollmentDay, Axis> out = new HashMap<>(resolved.size() * 2);
+        resolved.forEach((key, value) -> out.put(
+                new EnrollmentDay(key.enrollmentPublicId(), key.day()),
+                map(value.effectiveContext())));
+        return out;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Axis resolveClassAxis(UUID classGroupPublicId, LocalDate date) {

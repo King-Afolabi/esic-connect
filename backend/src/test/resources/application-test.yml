@@ -71,6 +71,16 @@ app:
       # Secret exclusif aux tests automatisés (≥ 32 octets) — jamais dans
       # .env, jamais une valeur de production.
       secret: test-only-jwt-signing-secret-for-esic-connect-automated-tests-do-not-use-in-prod
+      # TTL du jeton de renouvellement laissés larges par défaut : les
+      # tests d'expiration redéfinissent des valeurs courtes via
+      # @SpringBootTest(properties = ...).
+      refresh-token-idle-ttl: PT30M
+      refresh-token-absolute-ttl: PT12H
+    cookies:
+      # Les tests lisent le Set-Cookie directement ; l'attribut Secure
+      # n'entre pas en jeu, on le désactive pour refléter un déploiement
+      # servi en clair.
+      secure: false
     invitation:
       # TTL court pour les tests ; un cas dédié vérifie le rejet d'un TTL
       # non positif via un contexte séparé.

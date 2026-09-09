@@ -18,6 +18,16 @@ export interface NavItem {
    * ({@link visibleNavItems} l'exclut).
    */
   placeholder?: boolean;
+  /**
+   * Chemins supplémentaires « possédés » par cette entrée : sur une URL
+   * qui en préfixe un, l'entrée est considérée active bien que son `path`
+   * diffère. Sert au regroupement « Organisation & planning », dont le
+   * hub porte `/organisation-planning` mais qui doit rester actif sur
+   * `/academic`, `/organization`, `/planning`, `/alternation` et leurs
+   * sous-routes. N'élargit **jamais** un droit : `visibleNavItems`
+   * n'utilise que `roles`.
+   */
+  matchPaths?: readonly string[];
 }
 
 /**
@@ -46,63 +56,41 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   {
     // Écran livré : liste des profils apprenants + fiche + historique
-    // d'inscriptions. Périmètre aligné sur `EnrollmentWeb.MANAGE_ROLES`.
+    // d'inscriptions. Consultation alignée sur `EnrollmentWeb.READ_ROLES` :
+    // l'administration (ADMIN / SUPER_ADMIN / SCHOOL_ADMINISTRATION) a
+    // l'accès global ; le PEDAGOGICAL_MANAGER et le TEACHER n'y voient
+    // que les apprenants de leur périmètre (classes de leurs formations /
+    // de leurs séances), restreint côté serveur par `RosterScopeResolver`
+    // — jamais de fuite inter-formations. La création manuelle et l'import
+    // restent réservés aux rôles d'administration (boutons masqués pour
+    // les deux autres).
+    //
+    // Regroupement (ANO-NAV-001) : l'import CSV (`/students/import`) et la
+    // création manuelle (`/students/nouveau`) ne sont pas des entrées
+    // racines distinctes — ce sont des sous-écrans de « Apprenants », avec
+    // un `.esic-back` vers `/students` et un accès depuis l'en-tête de la
+    // liste. `matchPaths` garde donc « Apprenants » actif sur ces routes.
+    // Les routes elles-mêmes sont inchangées (liens profonds préservés).
     label: 'Apprenants',
     path: '/students',
     icon: 'groups',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'],
+    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER', 'TEACHER'],
+    matchPaths: ['/students/import', '/students/nouveau'],
   },
   {
-    // Écran livré : import CSV contrôlé des apprenants (simulation puis
-    // confirmation). Périmètre aligné sur `StudentImportWeb.MANAGE_ROLES` ;
-    // un `PEDAGOGICAL_MANAGER` reste limité à son périmètre côté serveur.
-    label: 'Import apprenants',
-    path: '/students/import',
-    icon: 'upload_file',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : consultation en lecture seule du référentiel
-    // académique (années scolaires → formations → niveaux → promotions →
-    // classes). Périmètre aligné sur `AcademicWeb.READ_ROLES`.
-    label: 'Référentiels',
-    path: '/academic',
-    icon: 'school',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : référentiel organisationnel (sites → fiche →
-    // création / modification, puis bâtiments, salles et plages réseau
-    // depuis la fiche d'un site). Périmètre aligné sur
-    // `SiteController.READ_ROLES` ; l'écriture des sites est restreinte
-    // plus finement par la route, et les plages réseau restent
-    // `SUPER_ADMIN` côté serveur.
-    label: 'Organisation',
-    path: '/organization',
+    // Regroupement (Lot §4) : une seule entrée latérale pour les quatre
+    // sous-sections auparavant séparées — référentiels académiques,
+    // organisation physique, planning, alternance. Le hub
+    // `/organisation-planning` ne fait que lancer : les routes `/academic`,
+    // `/organization`, `/planning`, `/alternation` sont inchangées (favoris,
+    // liens directs). `matchPaths` garde cette entrée active sur toutes ces
+    // sous-routes. Périmètre : union des rôles de lecture des quatre (ils
+    // partagent le même), le serveur restant l'autorité.
+    label: 'Organisation & planning',
+    path: '/organisation-planning',
     icon: 'apartment',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : import CSV, simulation, revue et publication d'un
-    // planning de classe, puis consultation des versions publiées
-    // (`com.esic.connect.planning`). Périmètre aligné sur
-    // `PlanningWeb.MANAGE_ROLES` ; un `PEDAGOGICAL_MANAGER` reste limité à
-    // son périmètre côté serveur.
-    label: 'Planning',
-    path: '/planning',
-    icon: 'calendar_month',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré : gestion et consultation de l'alternance (modèles de
-    // rythme, affectations aux classes, exceptions individuelles,
-    // résolution de contexte). Périmètre aligné sur
-    // `AlternationWeb.PATTERN_READ_ROLES` / `SCOPED_ROLES` ; l'écriture
-    // des modèles est restreinte plus finement par la route.
-    label: 'Alternance',
-    path: '/alternation',
-    icon: 'sync_alt',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+    matchPaths: ['/academic', '/organization', '/planning', '/alternation'],
   },
   {
     // Écran livré : séances exceptionnelles et émargement (liste,
@@ -174,20 +162,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
-    // Écran livré (G1-D) : centre de notifications de l'appelant —
-    // liste paginée, filtre lu / non lu, marquage lu / tout lu.
-    // `@PreAuthorize("isAuthenticated()")` : visible par tout rôle.
+    // Écran livré (G1-D, sprint 10) : espace « Notifications » — une
+    // seule entrée latérale ouvrant deux vues internes en onglets (liste
+    // paginée avec filtre lu / non lu et marquage ; préférences par
+    // catégorie et par canal, EF-NOTIF-006). `activeNavPath` garde cette
+    // entrée — et elle seule — active sur `/notifications` comme sur
+    // `/notifications/preferences`. `@PreAuthorize("isAuthenticated()")` :
+    // visible par tout rôle.
     label: 'Notifications',
     path: '/notifications',
     icon: 'notifications',
-  },
-  {
-    // Écran livré (sprint 10) : préférences de notification par catégorie
-    // et par canal (EF-NOTIF-006). `@PreAuthorize("isAuthenticated()")` :
-    // chacun règle les siennes, le serveur dérive le propriétaire du JWT.
-    label: 'Préférences de notification',
-    path: '/notifications/preferences',
-    icon: 'tune',
   },
   {
     // Écran livré (sprint 11) : recherche globale dans le périmètre de
@@ -204,14 +188,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Attestations',
     path: '/attestations',
     icon: 'workspace_premium',
-    roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
-  },
-  {
-    // Écran livré (sprint 11) : rapport des invitations non activées
-    // (EF-REP-010).
-    label: 'Invitations non activées',
-    path: '/invitations/non-activees',
-    icon: 'hourglass_top',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
@@ -250,10 +226,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     // Écran livré (sprint 3) : suivi des invitations et de la
     // délivrabilité des courriels (EF-USER-007, EF-USER-008).
+    //
+    // Regroupement (ANO-NAV-001) : le rapport des invitations non activées
+    // (`/invitations/non-activees`, EF-REP-010) n'est plus une entrée
+    // racine distincte — c'est une vue de la page « Invitations », reliée
+    // par une sous-navigation `.esic-subnav` présente sur les deux écrans.
+    // `matchPaths` garde « Invitations » actif sur cette route ; la route
+    // est inchangée (lien profond préservé).
     label: 'Invitations',
     path: '/invitations',
     icon: 'mark_email_read',
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
+    matchPaths: ['/invitations/non-activees'],
   },
   {
     // Écran livré (sprint 2) : sécurité du compte de l'appelant — second
@@ -278,4 +262,51 @@ export function visibleNavItems(
     (item) =>
       !item.placeholder && (!item.roles || item.roles.some((r) => heldRoles.includes(r))),
   );
+}
+
+/** Segmente un chemin ou une URL, sans la chaîne de requête ni le fragment. */
+function toSegments(pathOrUrl: string): string[] {
+  const clean = pathOrUrl.split(/[?#]/)[0];
+  return clean.split('/').filter((segment) => segment.length > 0);
+}
+
+/**
+ * Résout l'**unique** entrée de navigation active pour une URL donnée : le
+ * `path` du menu le plus profond dont tous les segments préfixent ceux de
+ * l'URL courante.
+ *
+ * Corrige le double marquage des routes imbriquées (Lot C) : sur
+ * `/notifications/preferences`, seule « Préférences de notification » est
+ * active, pas « Notifications » ; sur `/students/42` (fiche hors menu),
+ * c'est « Apprenants » qui reste le parent actif ; sur `/students/import`,
+ * c'est « Import apprenants ». Une correspondance par simple préfixe de
+ * chaîne (`startsWith`) marquerait plusieurs entrées et confondrait
+ * `/attendance` avec `/attendance-management` — d'où la comparaison
+ * **segment par segment**.
+ *
+ * @returns le `path` actif, ou `null` si l'URL ne relève d'aucune entrée.
+ */
+export function activeNavPath(url: string, items: readonly NavItem[]): string | null {
+  const current = toSegments(url);
+  let best: string | null = null;
+  let bestDepth = 0;
+  for (const item of items) {
+    // Le `path` de l'entrée, plus les chemins qu'elle « possède »
+    // (`matchPaths`) : le regroupement « Organisation & planning » reste
+    // actif sur `/academic`, `/planning`, etc. La correspondance la plus
+    // profonde l'emporte toujours — une sous-route qui a sa propre entrée
+    // (rare ici) resterait prioritaire.
+    for (const candidate of [item.path, ...(item.matchPaths ?? [])]) {
+      const segments = toSegments(candidate);
+      if (segments.length === 0 || segments.length > current.length) {
+        continue;
+      }
+      const matches = segments.every((segment, index) => segment === current[index]);
+      if (matches && segments.length > bestDepth) {
+        best = item.path;
+        bestDepth = segments.length;
+      }
+    }
+  }
+  return best;
 }

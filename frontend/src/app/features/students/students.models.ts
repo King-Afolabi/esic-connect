@@ -36,6 +36,9 @@ export type EnrollmentSource = 'MANUAL' | 'CLASS_TRANSFER';
 export interface StudentProfileResponse {
   publicId: string;
   userPublicId: string;
+  /** Identité civile du compte lié — `null` si non résolue. */
+  firstName: string | null;
+  lastName: string | null;
   studentNumber: string;
   /** `LocalDate` (`yyyy-MM-dd`) ou `null`. */
   birthDate: string | null;
@@ -93,6 +96,46 @@ export interface UserIdentitySummary {
   email: string;
   firstName: string;
   lastName: string;
+}
+
+// -------------------------------------------------------------------
+// Création manuelle d'un apprenant (Lot H) — enchaîne trois routes
+// existantes, chacune contrôlée côté serveur :
+//   1. POST /api/v1/users            (ADMIN / SUPER_ADMIN)  — compte + invitation
+//   2. POST /api/v1/student-profiles (EnrollmentWeb.MANAGE_ROLES) — profil
+//   3. POST /api/v1/enrollments      (EnrollmentWeb.MANAGE_ROLES) — inscription
+// Aucun champ inventé : ils reprennent CreateUserRequest,
+// StudentProfileRequests.Create et EnrollmentRequests.Enroll.
+// -------------------------------------------------------------------
+
+/** Corps de `POST /api/v1/users` — `role` fixé à `STUDENT` par l'écran. */
+export interface CreateStudentAccountRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'STUDENT';
+}
+
+/** Réponse `UserDetailResponse` — seul `publicId` est consommé ici. */
+export interface CreatedUserResponse {
+  publicId: string;
+}
+
+/** Corps de `POST /api/v1/student-profiles`. */
+export interface CreateStudentProfileRequest {
+  userPublicId: string;
+  /** Vide / `null` : le serveur génère `ESIC-AAAA-NNNNN`. */
+  studentNumber: string | null;
+  birthDate?: string | null;
+  workStudy?: boolean;
+  companyName?: string | null;
+}
+
+/** Corps de `POST /api/v1/enrollments` (`EnrollmentRequests.Enroll`). */
+export interface EnrollStudentRequest {
+  studentProfilePublicId: string;
+  classGroupPublicId: string;
+  startDate?: string | null;
 }
 
 /**

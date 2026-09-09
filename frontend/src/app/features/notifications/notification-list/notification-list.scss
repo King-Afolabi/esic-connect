@@ -1,26 +1,9 @@
-.notif__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.notif__title {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.notif__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
+// L'en-tête et le titre de page sont portés par `app-notifications-shell`
+// (`.esic-page-header` + `.esic-subnav`). Cette vue ne rend que sa barre
+// d'actions, sur la primitive `.esic-actions-row`.
 
 .notif__status {
-  color: var(--mat-sys-on-surface-variant, #5f6368);
+  color: var(--esic-ink-soft);
 }
 
 .notif__panel {
@@ -30,8 +13,8 @@
   gap: 0.5rem;
   padding: 2rem 1rem;
   text-align: center;
-  border: 1px solid var(--mat-sys-outline-variant, #d0d0d0);
-  border-radius: 8px;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
 }
 
 .notif__list {
@@ -49,13 +32,13 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--mat-sys-outline-variant, #d0d0d0);
-  border-radius: 8px;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
 }
 
 .notif__item--unread {
-  border-left: 4px solid var(--mat-sys-primary, #1565c0);
-  background: var(--mat-sys-surface-container-low, #f5f7fb);
+  border-left: 4px solid var(--esic-primary);
+  background: var(--esic-surface);
 }
 
 .notif__item-main {
@@ -67,8 +50,8 @@
   padding: 0.1rem 0.5rem;
   margin-right: 0.5rem;
   font-size: 0.75rem;
-  border-radius: 999px;
-  background: var(--mat-sys-secondary-container, #e0e0e0);
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-secondary-tint);
 }
 
 .notif__item-title {
@@ -82,7 +65,7 @@
 .notif__meta {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
-  color: var(--mat-sys-on-surface-variant, #5f6368);
+  color: var(--esic-ink-soft);
 }
 
 .notif__pager {

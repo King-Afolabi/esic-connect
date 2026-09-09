@@ -128,8 +128,14 @@ Options :
 À faire :
 
 1. créer le compte ;
-2. vérifier le domaine d'envoi — enregistrements **SPF**, **DKIM** et
-   idéalement **DMARC** à poser chez le registrar ;
+2. **autoriser l'adresse d'expédition**, au choix :
+   - domaine que tu contrôles → poser **SPF**, **DKIM** et idéalement
+     **DMARC** chez le registrar (meilleure délivrabilité) ;
+   - adresse dont tu ne contrôles pas le DNS (ex. une adresse d'école
+     comme `…@etudiant-esci.fr`) → la déclarer en **expéditeur unique
+     validé** dans Brevo (*Senders → Add a sender*), puis cliquer le lien
+     de confirmation reçu sur cette adresse. Sans cette validation, Brevo
+     renvoie `550` et **aucun message ne part** ;
 3. créer une clé d'API ou des identifiants SMTP ;
 4. me transmettre **hôte, port, identifiant, adresse d'expédition**.
 
@@ -139,6 +145,9 @@ n'est pas versionné. Je te dirai le nom exact des variables.
 
 Sans SPF et DKIM, les invitations partiront dans les indésirables : ce
 n'est pas un défaut du produit.
+
+Configuration détaillée, changement d'adresse d'expédition et
+diagnostic pas à pas : `docs/deployment/BREVO-EMAIL.md`.
 
 ---
 

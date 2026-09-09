@@ -1,0 +1,23 @@
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Organisation &amp; planning</h1>
+    <p class="esic-page-header__description">
+      Référentiels académiques, organisation physique, planning et alternance.
+    </p>
+  </div>
+</header>
+
+<ul class="ophub__list">
+  @for (section of sections(); track section.path) {
+    <li class="ophub__item">
+      <a class="ophub__link" [routerLink]="section.path">
+        <mat-icon class="ophub__icon" aria-hidden="true">{{ section.icon }}</mat-icon>
+        <span class="ophub__text">
+          <span class="ophub__label">{{ section.label }}</span>
+          <span class="ophub__summary">{{ section.summary }}</span>
+        </span>
+        <mat-icon class="ophub__chevron" aria-hidden="true">chevron_right</mat-icon>
+      </a>
+    </li>
+  }
+</ul>

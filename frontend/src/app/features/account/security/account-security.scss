@@ -27,13 +27,32 @@
 }
 
 .security__message--error {
-  color: var(--mat-sys-error, #b3261e);
+  color: var(--esic-danger);
 }
 
 .security__hint {
   display: block;
   font-size: 0.875rem;
   opacity: 0.8;
+}
+
+.security__password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 26rem;
+  margin-top: 0.5rem;
+
+  button {
+    align-self: flex-start;
+    margin-top: 0.5rem;
+  }
+}
+
+.security__field-error {
+  margin: -0.25rem 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--esic-danger);
 }
 
 .security__secret code,

@@ -6,7 +6,12 @@ import { environment } from '../../../environments/environment';
 import {
   AccountActionRequest,
   AssignRoleRequest,
+  BulkRequest,
+  BulkResult,
   CreateUserRequest,
+  DuplicateCompareRequest,
+  DuplicateComparisonResponse,
+  DuplicateGroup,
   PageResponse,
   UserDetailResponse,
   UserListQuery,
@@ -114,6 +119,40 @@ export class AdministrationApiService {
     return this.http.post<void>(
       `${this.base}/users/${encodeURIComponent(publicId)}/roles/${encodeURIComponent(roleCode)}/revoke`,
       body,
+    );
+  }
+
+  /**
+   * `POST /api/v1/users/bulk` — aperçu (`confirm` absent/`false`) ou
+   * exécution (`confirm: true`) d'une opération de masse (EF-USER-004).
+   */
+  bulkUsers(request: BulkRequest): Observable<BulkResult> {
+    return this.http.post<BulkResult>(`${this.base}/users/bulk`, request);
+  }
+
+  /**
+   * `GET /api/v1/users/duplicates` — groupes de comptes probablement
+   * dupliqués (EF-USER-005). Réservé à `ADMIN` / `SUPER_ADMIN`.
+   */
+  listDuplicates(): Observable<DuplicateGroup[]> {
+    return this.http.get<DuplicateGroup[]>(`${this.base}/users/duplicates`);
+  }
+
+  /**
+   * `POST /api/v1/users/duplicates/compare` — comparaison contrôlée
+   * **en lecture seule** de deux comptes signalés comme doublons
+   * (ANO-USER-001). Ne fusionne rien, ne modifie rien : renvoie
+   * concordances, divergences, conflits, volume de données rattaché et un
+   * verdict informatif. `POST` (et non `GET`) pour tenir les deux
+   * identifiants hors des journaux d'accès. Réservé à
+   * `ADMIN` / `SUPER_ADMIN` côté serveur.
+   */
+  compareDuplicates(
+    request: DuplicateCompareRequest,
+  ): Observable<DuplicateComparisonResponse> {
+    return this.http.post<DuplicateComparisonResponse>(
+      `${this.base}/users/duplicates/compare`,
+      request,
     );
   }
 }

@@ -6,11 +6,13 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 
 import { Role } from '../../../core/models/role';
 import { RoleContextService } from '../../../core/auth/role-context.service';
+import { ClipboardService } from '../../../core/clipboard/clipboard.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import {
   BuildingResponse,
   PageResponse,
   RoomResponse,
+  RoomStaticQrView,
   SiteNetworkRangeResponse,
   SiteResponse,
 } from '../organization.models';
@@ -18,6 +20,7 @@ import { SiteDetail } from './site-detail';
 
 const ID = 's-1';
 const notifications = { info: vi.fn(), error: vi.fn() };
+const clipboard = { copy: vi.fn().mockResolvedValue(true) };
 
 const SITE: SiteResponse = {
   publicId: ID,
@@ -46,6 +49,36 @@ function npage(content: SiteNetworkRangeResponse[]): PageResponse<SiteNetworkRan
   return { content, page: 0, size: 100, totalElements: content.length, totalPages: 1 };
 }
 
+const ROOM: RoomResponse = {
+  publicId: 'r-1',
+  sitePublicId: ID,
+  buildingPublicId: null,
+  code: 'A101',
+  name: 'Salle 101',
+  capacity: 30,
+  floorLabel: '1er étage',
+  staticQrIssuedAt: '2026-09-01T08:00:00Z',
+  status: 'ACTIVE',
+  archivedAt: null,
+  archiveReason: null,
+  createdAt: '2026-08-01T10:00:00Z',
+  updatedAt: '2026-08-01T10:00:00Z',
+};
+
+const QR_VIEW: RoomStaticQrView = {
+  roomPublicId: 'r-1',
+  roomCode: 'A101',
+  roomName: 'Salle 101',
+  buildingName: null,
+  siteName: 'Campus Paris',
+  floorLabel: '1er étage',
+  issued: true,
+  staticQrReference: 'AbCd1234EfGh5678IjKl9012MnOp3456QrSt7890',
+  maskedReference: 'AbCd…7890',
+  checkInPath: '/attendance?ref=AbCd1234EfGh5678IjKl9012MnOp3456QrSt7890',
+  staticQrIssuedAt: '2026-09-01T08:00:00Z',
+};
+
 const BUILDING: BuildingResponse = {
   publicId: 'b-1',
   sitePublicId: ID,
@@ -64,6 +97,14 @@ interface Internals {
   startSiteAction: (k: 'archive' | 'restore') => void;
   confirmSiteAction: () => void;
   submitBuilding: () => void;
+  openQr: (room: RoomResponse) => void;
+  startRotateQr: () => void;
+  confirmRotateQr: () => void;
+  toggleNfcUrl: () => void;
+  copyNfcUrl: () => Promise<void>;
+  nfcUrl: () => string | null;
+  nfcCopyState: () => 'idle' | 'copied' | 'failed';
+  setFilter: (which: 'building' | 'room' | 'range', value: string) => void;
 }
 
 function setup(roles: Role[] = ['ADMIN']) {
@@ -71,6 +112,8 @@ function setup(roles: Role[] = ['ADMIN']) {
   sessionStorage.clear();
   notifications.info.mockReset();
   notifications.error.mockReset();
+  clipboard.copy.mockReset();
+  clipboard.copy.mockResolvedValue(true);
   TestBed.resetTestingModule();
   const effectiveRoles: WritableSignal<Role[]> = signal(roles);
   TestBed.configureTestingModule({
@@ -79,6 +122,7 @@ function setup(roles: Role[] = ['ADMIN']) {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: NotificationService, useValue: notifications },
+      { provide: ClipboardService, useValue: clipboard },
       { provide: RoleContextService, useValue: { effectiveRoles } },
       {
         provide: ActivatedRoute,
@@ -120,6 +164,39 @@ describe('SiteDetail', () => {
     expect(s.text()).toContain('Europe/Paris');
     expect(s.text()).toContain('Bâtiment A');
     expect(s.text()).toContain('Aucune salle pour ce site');
+  });
+
+  it('bounds the child tables and pins their headers (ANO-UX-002/003)', () => {
+    const s = setup();
+    s.flushSite();
+    s.flushChildren([BUILDING], [ROOM]);
+    const el = s.fixture.nativeElement as HTMLElement;
+    // Bâtiments + Salles : enveloppe à hauteur bornée, défilement interne.
+    expect(el.querySelectorAll('.org__table-wrapper.esic-table-wrap--tall').length).toBeGreaterThanOrEqual(2);
+    // L'entête figée est marquée par Angular Material (`sticky: true`).
+    expect(el.querySelector('.mat-mdc-table-sticky, tr.mat-mdc-header-row')).not.toBeNull();
+  });
+
+  it('filters the rooms sub-list by a free-text query (client-side, no request)', () => {
+    const s = setup();
+    s.flushSite();
+    s.flushChildren(
+      [],
+      [ROOM, { ...ROOM, publicId: 'r-2', code: 'B200', name: 'Amphi B' }],
+    );
+    expect(s.text()).toContain('Salle 101');
+    expect(s.text()).toContain('Amphi B');
+
+    s.internals.setFilter('room', 'amphi');
+    s.fixture.detectChanges();
+    // Aucun nouvel appel réseau : le filtre est local.
+    s.http.expectNone((r) => r.url === `/api/v1/sites/${ID}/rooms`);
+    expect(s.text()).toContain('Amphi B');
+    expect(s.text()).not.toContain('Salle 101');
+
+    s.internals.setFilter('room', 'zzz-introuvable');
+    s.fixture.detectChanges();
+    expect(s.text()).toContain('Aucune salle ne correspond à ce filtre');
   });
 
   it('shows a not-found panel on a 404 and never loads children', () => {
@@ -198,6 +275,208 @@ describe('SiteDetail', () => {
     expect(s.text()).not.toContain('Archiver le site');
     expect(s.text()).not.toContain('Plages réseau autorisées');
     s.http.expectNone((r) => r.url === `/api/v1/sites/${ID}/network-ranges`);
+  });
+
+  // --- QR fixe de salle (EF-ORG-003) -------------------------------
+
+  it('shows the static-QR column state and an "Afficher" action for an ADMIN', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM, { ...ROOM, publicId: 'r-2', code: 'A102', staticQrIssuedAt: null }]);
+    expect(s.text()).toContain('Disponible');
+    expect(s.text()).toContain('Non émis');
+    const el = s.fixture.nativeElement as HTMLElement;
+    expect(
+      el.querySelector('button[aria-label="Afficher le QR fixe de la salle A101"]'),
+    ).not.toBeNull();
+  });
+
+  it('opens the QR panel (reimpression: a plain GET, nothing mutated) and offers print + renew for an ADMIN', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    s.internals.openQr(ROOM);
+    const req = s.http.expectOne(`/api/v1/rooms/r-1/static-qr`);
+    expect(req.request.method).toBe('GET');
+    req.flush(QR_VIEW);
+    s.fixture.detectChanges();
+    expect(s.text()).toContain('AbCd…7890');
+    expect(s.text()).toContain("Imprimer l'affiche");
+    expect(s.text()).toContain('Renouveler le QR');
+    // The full token is never rendered as text.
+    expect(s.text()).not.toContain(QR_VIEW.staticQrReference);
+  });
+
+  it('never shows "Renouveler" to SCHOOL_ADMINISTRATION or SUPER_ADMIN, but still lets them view/print', () => {
+    for (const role of ['SCHOOL_ADMINISTRATION', 'SUPER_ADMIN'] as Role[]) {
+      const s = setup([role]);
+      s.flushSite();
+      const buildings = s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/buildings`);
+      buildings.flush(bpage([]));
+      s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+      if (role === 'SUPER_ADMIN') {
+        s.expectRanges().flush(npage([]));
+      }
+      s.fixture.detectChanges();
+      s.internals.openQr(ROOM);
+      s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+      s.fixture.detectChanges();
+      expect(s.text()).toContain("Imprimer l'affiche");
+      expect(s.text()).not.toContain('Renouveler le QR');
+      s.http.verify();
+    }
+  });
+
+  it('hides the static-QR "Afficher" action from a PEDAGOGICAL_MANAGER', () => {
+    const s = setup(['PEDAGOGICAL_MANAGER']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    expect(s.text()).not.toContain('Afficher le QR fixe de la salle A101');
+  });
+
+  it('renews the QR only after an explicit confirmation, then reloads the rooms list', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    s.internals.openQr(ROOM);
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+    s.fixture.detectChanges();
+
+    // First click only reveals the danger confirmation — no request yet.
+    s.internals.startRotateQr();
+    s.fixture.detectChanges();
+    s.http.expectNone((r) => r.url === `/api/v1/rooms/r-1/static-qr/rotate`);
+    expect(s.text()).toContain('immédiatement invalides');
+
+    s.internals.confirmRotateQr();
+    const rotate = s.http.expectOne(`/api/v1/rooms/r-1/static-qr/rotate`);
+    expect(rotate.request.method).toBe('POST');
+    rotate.flush({ ...QR_VIEW, staticQrReference: 'ZZZZnew', maskedReference: 'ZZZZ…wnew' });
+
+    // Rooms list reloads to refresh the issue-date column.
+    s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+    s.fixture.detectChanges();
+    expect(notifications.info).toHaveBeenCalled();
+  });
+
+  it('surfaces an API error from a renew without crashing', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    s.internals.openQr(ROOM);
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+    s.fixture.detectChanges();
+    s.internals.startRotateQr();
+    s.fixture.detectChanges();
+    s.internals.confirmRotateQr();
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr/rotate`).flush(
+      { status: 403, code: 'X', message: 'Accès refusé', path: '', correlationId: null, details: [] },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    s.fixture.detectChanges();
+    const el = s.fixture.nativeElement as HTMLElement;
+    // The error is surfaced in the panel (role="alert") and the panel is still there.
+    expect(el.querySelector('.esic-reveal__error')?.textContent ?? '').not.toBe('');
+    expect(s.text()).toContain('Renouveler et invalider les affiches');
+  });
+
+  // --- URL pour tag NFC (même URL que le QR fixe) -------------------
+
+  async function openQrPanel(roles: Role[]) {
+    const s = setup(roles);
+    s.flushSite();
+    const buildings = s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/buildings`);
+    buildings.flush(bpage([]));
+    s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+    if (roles.includes('SUPER_ADMIN')) {
+      s.expectRanges().flush(npage([]));
+    }
+    s.fixture.detectChanges();
+    s.internals.openQr(ROOM);
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr`).flush(QR_VIEW);
+    s.fixture.detectChanges();
+    return s;
+  }
+
+  it.each([['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION']] as Role[][])(
+    'exposes the collapsible "URL pour tag NFC" block to %s',
+    async (role) => {
+      const s = await openQrPanel([role]);
+      expect(s.text()).toContain('URL pour tag NFC');
+      // Repliée par défaut : l'URL n'est pas encore dans le DOM.
+      expect((s.fixture.nativeElement as HTMLElement).querySelector('#nfc-url-field')).toBeNull();
+
+      s.internals.toggleNfcUrl();
+      s.fixture.detectChanges();
+      const field = (s.fixture.nativeElement as HTMLElement).querySelector(
+        '#nfc-url-field',
+      ) as HTMLInputElement;
+      expect(field).not.toBeNull();
+      expect(field.readOnly).toBe(true);
+      expect(field.value).toBe(s.internals.nfcUrl());
+      expect(field.value).toContain('/attendance?ref=');
+      s.http.verify();
+    },
+  );
+
+  it('does not show the NFC URL block to a PEDAGOGICAL_MANAGER (no QR panel at all)', () => {
+    const s = setup(['PEDAGOGICAL_MANAGER']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    expect(s.text()).not.toContain('URL pour tag NFC');
+  });
+
+  it('copies the exact URL via the clipboard service and reports success — no renew triggered', async () => {
+    const s = await openQrPanel(['ADMIN']);
+    s.internals.toggleNfcUrl();
+    s.fixture.detectChanges();
+    await s.internals.copyNfcUrl();
+    s.fixture.detectChanges();
+    expect(clipboard.copy).toHaveBeenCalledWith(s.internals.nfcUrl());
+    expect(s.text()).toContain('URL copiée dans le presse-papiers.');
+    s.http.expectNone(`/api/v1/rooms/r-1/static-qr/rotate`);
+    s.http.verify();
+  });
+
+  it('falls back to a manual-copy message when the clipboard write fails', async () => {
+    const s = await openQrPanel(['ADMIN']);
+    clipboard.copy.mockResolvedValue(false);
+    s.internals.toggleNfcUrl();
+    s.fixture.detectChanges();
+    await s.internals.copyNfcUrl();
+    s.fixture.detectChanges();
+    expect(s.text()).toContain("copiez l'URL");
+    s.http.verify();
+  });
+
+  it('resets the copy state after a QR renewal (the URL changed)', async () => {
+    const s = await openQrPanel(['ADMIN']);
+    s.internals.toggleNfcUrl();
+    await s.internals.copyNfcUrl();
+    s.fixture.detectChanges();
+    expect(s.internals.nfcCopyState()).toBe('copied');
+
+    s.internals.startRotateQr();
+    s.fixture.detectChanges();
+    s.internals.confirmRotateQr();
+    s.http.expectOne(`/api/v1/rooms/r-1/static-qr/rotate`).flush({
+      ...QR_VIEW,
+      staticQrReference: 'ZZZZnew1234567890123456789012345678901234',
+      maskedReference: 'ZZZZ…1234',
+      checkInPath: '/attendance?ref=ZZZZnew1234567890123456789012345678901234',
+    });
+    s.http.expectOne((r) => r.url === `/api/v1/sites/${ID}/rooms`).flush(rpage([ROOM]));
+    s.fixture.detectChanges();
+    expect(s.internals.nfcCopyState()).toBe('idle');
+    s.http.verify();
+  });
+
+  it('never renders the NFC URL in the general rooms list', () => {
+    const s = setup(['ADMIN']);
+    s.flushSite();
+    s.flushChildren([], [ROOM]);
+    // Panneau QR fermé : ni URL, ni checkInPath dans le texte de la liste.
+    expect(s.text()).not.toContain('/attendance?ref=');
   });
 
   it('loads and shows the network-range panel for a SUPER_ADMIN', () => {

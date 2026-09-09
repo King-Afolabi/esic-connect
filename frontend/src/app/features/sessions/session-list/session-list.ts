@@ -8,8 +8,9 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
+import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { frenchPaginatorIntl } from '../../alternation/alternation-paginator';
 import { SessionsApiService } from '../sessions-api.service';
@@ -75,6 +76,8 @@ export class SessionList {
   private readonly api = inject(SessionsApiService);
   private readonly roleContext = inject(RoleContextService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly statuses = SESSION_STATUSES;
   protected readonly statusLabel = sessionStatusLabel;
@@ -124,6 +127,15 @@ export class SessionList {
   });
 
   constructor() {
+    // Lot G : restaure l'état de la liste depuis l'URL.
+    const params = new ListQueryReader(this.route);
+    this.filters.patchValue({
+      status: params.oneOf('status', [...SESSION_STATUSES, ''] as const, ''),
+    });
+    this.sortField.set(params.oneOf('sort', SESSION_SORT_FIELDS, DEFAULT_SORT_FIELD));
+    this.sortDirection.set(params.direction('dir', DEFAULT_SORT_DIRECTION));
+    this.pageIndex.set(params.int('page', 0));
+    this.pageSize.set(params.int('size', 20));
     this.load();
   }
 
@@ -158,11 +170,24 @@ export class SessionList {
     this.load();
   }
 
+  /** Lot G : reflète l'état courant dans l'URL (défauts non écrits). */
+  private syncUrl(status: string): void {
+    writeListQueryParams(this.router, this.route, {
+      status,
+      sort: this.sortField() === DEFAULT_SORT_FIELD ? null : this.sortField(),
+      dir: this.sortDirection() === DEFAULT_SORT_DIRECTION ? null : this.sortDirection(),
+      page: this.pageIndex(),
+      size: this.pageSize() === 20 ? null : this.pageSize(),
+    });
+  }
+
   private load(): void {
     this.state.set({ kind: 'loading' });
+    const status = this.filters.getRawValue().status;
+    this.syncUrl(status);
     this.api
       .listSessions({
-        status: this.filters.getRawValue().status || null,
+        status: status || null,
         sort: `${this.sortField()},${this.sortDirection()}`,
         page: this.pageIndex(),
         size: this.pageSize(),

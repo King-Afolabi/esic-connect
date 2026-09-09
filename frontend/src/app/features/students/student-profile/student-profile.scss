@@ -1,22 +1,11 @@
-.profile__back {
-  margin: 0 0 1rem;
-}
-
-.profile__back a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font: var(--mat-sys-body-medium);
-}
-
-.profile__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 1rem;
-}
+// Aligné sur le système de design ESIC (jetons `--esic-*`, primitives).
 
 .profile__section-title {
-  font: var(--mat-sys-title-large);
-  margin: 2rem 0 1rem;
+  margin: var(--esic-space-7) 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
 }
 
 .profile__card {
@@ -27,69 +16,92 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  gap: 0.75rem 1.5rem;
+  gap: var(--esic-space-3) var(--esic-space-5);
 }
 
 .profile__facts dt {
-  font: var(--mat-sys-label-medium);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--esic-ink-faint);
 }
 
 .profile__facts dd {
   margin: 0;
-  font: var(--mat-sys-body-medium);
+  color: var(--esic-ink);
   word-break: break-word;
 }
 
-.profile__status {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 1rem 0;
+.profile__status,
+.profile__hint,
+.profile__empty {
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
+}
+
+.profile__hint {
+  max-width: 62ch;
+  line-height: 1.5;
 }
 
 .profile__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
 .profile__table-wrapper {
-  overflow-x: auto;
-}
-
-.profile__table-wrapper table[mat-table] {
   width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
+
+  table[mat-table] {
+    width: 100%;
+  }
 }
 
 .profile__reason {
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--esic-ink-faint);
 }
 
-/* Suivi à distance individuel (EF-ENR-004). */
-.profile__hint {
-  max-width: 60ch;
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-body-medium);
-}
-
-.profile__empty {
-  color: var(--mat-sys-on-surface-variant);
+.profile__current + .profile__hint {
+  margin-top: var(--esic-space-3);
+  margin-bottom: 0;
 }
 
 .profile__error {
-  color: var(--mat-sys-error);
+  margin: var(--esic-space-3) 0;
+  color: var(--esic-danger);
 }
 
 .profile__remote-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--esic-space-3) var(--esic-space-4);
   align-items: flex-start;
-  margin-top: 1rem;
+  margin-top: var(--esic-space-4);
+
+  .mat-mdc-form-field {
+    width: auto;
+    min-width: 12rem;
+    flex: 0 1 16rem;
+  }
 }

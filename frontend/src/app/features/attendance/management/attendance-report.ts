@@ -15,7 +15,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { Observable } from 'rxjs';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
@@ -55,7 +55,6 @@ type State =
   selector: 'app-attendance-report',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    RouterLink,
     ReactiveFormsModule,
     MatTableModule,
     MatButtonModule,

@@ -1,21 +1,23 @@
 <h1 class="academic__title">Référentiels académiques</h1>
 
-<nav class="academic__tabs" aria-label="Référentiels académiques">
-  @for (tab of tabs; track tab.slug) {
-    <a
-      [routerLink]="['/academic', tab.slug]"
-      routerLinkActive="academic__tab--active"
-      #tabLink="routerLinkActive"
-      [attr.aria-current]="tabLink.isActive ? 'page' : null"
-    >
-      {{ tab.label }}
-    </a>
-  }
+<nav class="esic-subnav" aria-label="Référentiels académiques">
+  <div class="esic-subnav__list">
+    @for (tab of tabs; track tab.slug) {
+      <a
+        class="esic-subnav__link"
+        [routerLink]="['/academic', tab.slug]"
+        routerLinkActive="esic-subnav__link--active"
+        ariaCurrentWhenActive="page"
+      >
+        {{ tab.label }}
+      </a>
+    }
+  </div>
 </nav>
 
 <h2 class="academic__subtitle">{{ config.listTitle }}</h2>
 
-<form class="academic__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="academic__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="academic__filter">
     <mat-label>Code ou nom</mat-label>
     <input matInput type="search" formControlName="q" autocomplete="off" />

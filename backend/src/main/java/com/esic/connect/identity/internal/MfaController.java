@@ -1,7 +1,10 @@
 package com.esic.connect.identity.internal;
 
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -37,9 +40,11 @@ import java.util.UUID;
 public class MfaController {
 
     private final MfaService mfaService;
+    private final RefreshService refreshService;
 
-    public MfaController(MfaService mfaService) {
+    public MfaController(MfaService mfaService, RefreshService refreshService) {
         this.mfaService = mfaService;
+        this.refreshService = refreshService;
     }
 
     /**
@@ -60,7 +65,7 @@ public class MfaController {
      * n'a pas à ressaisir son mot de passe après avoir enrôlé.
      */
     @PostMapping("/enroll/confirm")
-    public MfaWeb.ConfirmEnrollmentResponse confirmEnrollment(
+    public ResponseEntity<MfaWeb.ConfirmEnrollmentResponse> confirmEnrollment(
             @Valid @RequestBody MfaWeb.ConfirmEnrollmentRequest request,
             @RequestHeader(value = AuthController.DEVICE_HEADER, required = false) String deviceId,
             @AuthenticationPrincipal Jwt jwt) {
@@ -73,9 +78,16 @@ public class MfaController {
             mfaService.rememberDevice(actor, deviceId);
             LoginResponse session = mfaService.issueFor(mfaService.requireAccount(actor),
                     List.of(AccessTokenIssuer.AMR_PASSWORD, AccessTokenIssuer.AMR_OTP));
-            return new MfaWeb.ConfirmEnrollmentResponse(result.recoveryCodes(), session);
+            MfaWeb.ConfirmEnrollmentResponse body =
+                    new MfaWeb.ConfirmEnrollmentResponse(result.recoveryCodes(), session);
+            return refreshService.onAuthenticated(session, deviceId)
+                    .map(cookie -> ResponseEntity.ok()
+                            .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                            .body(body))
+                    .orElseGet(() -> ResponseEntity.ok(body));
         }
-        return new MfaWeb.ConfirmEnrollmentResponse(result.recoveryCodes(), null);
+        return ResponseEntity.ok(
+                new MfaWeb.ConfirmEnrollmentResponse(result.recoveryCodes(), null));
     }
 
     /**
@@ -85,10 +97,16 @@ public class MfaController {
      * valide, lui-même délivré contre un mot de passe correct.
      */
     @PostMapping("/verify")
-    public LoginResponse verify(@Valid @RequestBody MfaWeb.VerifyRequest request,
-                                @RequestHeader(value = AuthController.DEVICE_HEADER,
-                                        required = false) String deviceId) {
-        return mfaService.verifyChallenge(request.challengeId(), request.code(), deviceId);
+    public ResponseEntity<LoginResponse> verify(
+            @Valid @RequestBody MfaWeb.VerifyRequest request,
+            @RequestHeader(value = AuthController.DEVICE_HEADER, required = false) String deviceId) {
+        LoginResponse response = mfaService.verifyChallenge(
+                request.challengeId(), request.code(), deviceId);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+        refreshService.onAuthenticated(response, deviceId)
+                .map(ResponseCookie::toString)
+                .ifPresent(cookie -> builder.header(HttpHeaders.SET_COOKIE, cookie));
+        return builder.body(response);
     }
 
     /** État du second facteur du compte connecté. */

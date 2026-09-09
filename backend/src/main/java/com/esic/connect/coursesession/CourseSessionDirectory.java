@@ -129,6 +129,21 @@ public interface CourseSessionDirectory {
     List<SessionRef> findClassSchedule(Set<UUID> classGroupPublicIds, Instant from, Instant to, int limit);
 
     /**
+     * Identifiants publics des classes rattachées à au moins une séance
+     * (toutes dates, séances annulées comprises) dont
+     * {@code teacherPublicId} est le <strong>formateur principal</strong>
+     * ou un <strong>remplaçant {@code ACTIVE}</strong> à l'instant courant
+     * — mêmes règles d'appartenance que {@link #findTeacherSchedule}.
+     *
+     * <p><strong>Sans</strong> contrôle d'accès de l'appelant : le module
+     * {@code enrollment} l'utilise pour restreindre la liste des
+     * apprenants consultée par un {@code TEACHER} à ses seules classes,
+     * sans fuite inter-classes (cahier §5.5, §18.3). Formateur inconnu ⇒
+     * ensemble vide.
+     */
+    Set<UUID> findTaughtClassGroupPublicIds(UUID teacherPublicId);
+
+    /**
      * Séances dont le titre contient {@code query} (EF-USER-009).
      *
      * @param visibleClassGroupPublicIds restriction de périmètre ;

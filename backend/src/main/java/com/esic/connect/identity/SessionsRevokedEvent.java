@@ -13,6 +13,8 @@ public record SessionsRevokedEvent(Long userId,
                                    String reason) {
 
     public static final String REASON_PASSWORD_RESET = "PASSWORD_RESET";
+    /** Changement volontaire du mot de passe par l'utilisateur connecté. */
+    public static final String REASON_PASSWORD_CHANGE = "PASSWORD_CHANGE";
     public static final String REASON_LOGOUT_ALL = "LOGOUT_ALL";
     public static final String REASON_ADMIN_REVOCATION = "ADMIN_REVOCATION";
 }

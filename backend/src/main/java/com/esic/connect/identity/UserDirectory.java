@@ -58,6 +58,15 @@ public interface UserDirectory {
     java.util.Map<Long, PersonName> findNames(java.util.Collection<Long> userInternalIds);
 
     /**
+     * Comme {@link #findNames}, mais renvoie aussi l'identifiant public du
+     * compte : une liste d'apprenants doit afficher le nom <em>et</em>
+     * pouvoir lier vers la fiche, sans une requête de résolution par
+     * ligne (NFR-PERF-08). Les identifiants inconnus sont absents du
+     * résultat.
+     */
+    java.util.Map<Long, NamedUserRef> findNamedRefs(java.util.Collection<Long> userInternalIds);
+
+    /**
      * Comptes non archivés porteurs d'un rôle actif donné.
      *
      * <p>Sert à désigner un <strong>guichet</strong> plutôt qu'une
@@ -100,6 +109,16 @@ public interface UserDirectory {
      * @param roleCode code du rôle, par exemple {@code "STUDENT"}
      */
     java.util.List<NamedUserRef> searchByName(String query, String roleCode, int limit);
+
+    /**
+     * Comme {@link #searchByName}, mais inclut les comptes <strong>non
+     * activés</strong> (tout statut sauf {@code ARCHIVED}). Réservé à la
+     * liste d'administration des apprenants, qui doit retrouver par son
+     * nom un apprenant fraîchement importé ou créé, encore en attente
+     * d'activation. La recherche globale continue d'utiliser
+     * {@link #searchByName} (comptes actifs uniquement).
+     */
+    java.util.List<NamedUserRef> searchByNameIncludingInactive(String query, String roleCode, int limit);
 
     /** Compte trouvé par recherche : identité civile, jamais d'adresse. */
     record NamedUserRef(long internalId, UUID publicId, String firstName, String lastName) {

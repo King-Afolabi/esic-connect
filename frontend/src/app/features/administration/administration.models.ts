@@ -180,3 +180,220 @@ export interface CreateUserRequest {
   role: string;
   sendInvitation?: boolean;
 }
+
+/**
+ * Opérations de masse (EF-USER-004) — `POST /api/v1/users/bulk`,
+ * `BulkUserWeb.BulkRequest` / `BulkResult` / `BulkOutcome`
+ * (`UserAccountController`, rôles `ADMIN` / `SUPER_ADMIN` /
+ * `SCHOOL_ADMINISTRATION`).
+ *
+ * <p>`confirm` absent ou `false` → **aperçu seul, aucune écriture**
+ * (RG-034) : le serveur calcule exactement le même résultat qu'à
+ * l'exécution (éligibles / ignorés / refusés), sans rien modifier.
+ * `confirm: true` exécute réellement l'action, compte par compte,
+ * isolant les échecs individuels sans faire échouer le lot entier.
+ */
+export const BULK_ACTIONS = ['SUSPEND', 'RESTORE', 'ARCHIVE', 'RESEND_INVITATION'] as const;
+export type BulkAction = (typeof BULK_ACTIONS)[number];
+
+export const BULK_ACTION_LABELS: Record<BulkAction, string> = {
+  SUSPEND: 'Suspendre',
+  RESTORE: 'Réactiver',
+  ARCHIVE: 'Archiver',
+  RESEND_INVITATION: "Réémettre l'invitation",
+};
+
+export function bulkActionLabel(action: string): string {
+  return (BULK_ACTION_LABELS as Record<string, string>)[action] ?? action;
+}
+
+/** Maximum d'identifiants acceptés par lot (`BulkRequest.userIds`, `@Size(max = 500)`). */
+export const BULK_MAX_USER_IDS = 500;
+
+export interface BulkRequest {
+  action: BulkAction;
+  userIds: string[];
+  reason: string;
+  /** Absent/`false` = aperçu ; `true` = exécution réelle. */
+  confirm?: boolean;
+}
+
+export const BULK_OUTCOMES = ['ELIGIBLE', 'IGNORED', 'REJECTED'] as const;
+export type BulkOutcomeStatus = (typeof BULK_OUTCOMES)[number];
+
+export const BULK_OUTCOME_LABELS: Record<BulkOutcomeStatus, string> = {
+  ELIGIBLE: 'Éligible',
+  IGNORED: 'Ignoré',
+  REJECTED: 'Refusé',
+};
+
+export function bulkOutcomeLabel(outcome: string): string {
+  return (BULK_OUTCOME_LABELS as Record<string, string>)[outcome] ?? outcome;
+}
+
+/** Un compte du lot et l'issue qui lui a été appliquée (ou le serait). */
+export interface BulkOutcome {
+  userId: string;
+  /** `null` si l'identifiant ne correspondait à aucun compte. */
+  email: string | null;
+  outcome: BulkOutcomeStatus;
+  /** Motif lisible (déjà ÉLIGIBLE, rôle protégé, identifiant inconnu…). */
+  reason: string;
+}
+
+export interface BulkResult {
+  /** `false` pour un aperçu — rien n'a été écrit. */
+  applied: boolean;
+  action: BulkAction;
+  requested: number;
+  eligible: number;
+  ignored: number;
+  rejected: number;
+  outcomes: BulkOutcome[];
+}
+
+/**
+ * Détection de doublons (EF-USER-005) — `GET /api/v1/users/duplicates`,
+ * `BulkUserWeb.DuplicateGroup` / `DuplicateCandidate`
+ * (`UserAccountController`, rôles `ADMIN` / `SUPER_ADMIN` uniquement —
+ * plus restreint que les opérations de masse).
+ *
+ * <p>Le service **signale** les doublons, il ne les fusionne ni ne les
+ * supprime jamais (docs/02 §9.5) : aucune route de fusion n'existe côté
+ * serveur, et cette interface n'en propose donc aucune. La réponse est un
+ * simple tableau JSON, sans pagination — recalculé à chaque appel, jamais
+ * mis en cache côté serveur.
+ */
+export interface DuplicateCandidate {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: AccountStatus;
+  createdAt: string;
+}
+
+export interface DuplicateGroup {
+  /** Valeur normalisée à l'origine du rapprochement (nom ou téléphone). */
+  signature: string;
+  /** Motif lisible, ex. « Même nom et prénom, à la casse et aux accents près. » */
+  reason: string;
+  accounts: DuplicateCandidate[];
+}
+
+/**
+ * Comparaison contrôlée de deux doublons (ANO-USER-001) —
+ * `POST /api/v1/users/duplicates/compare`,
+ * `DuplicateComparisonWeb.CompareRequest` / `ComparisonResponse`
+ * (`UserAccountController`, rôles `ADMIN` / `SUPER_ADMIN` — même
+ * périmètre que `GET .../duplicates`).
+ *
+ * <p><strong>Lecture seule.</strong> L'endpoint ne fusionne rien, ne
+ * modifie rien, n'écrit aucune trace : il renvoie une *simulation*
+ * (concordances, divergences, conflits bloquants, volume de données
+ * rattaché, verdict informatif). Aucune route de fusion n'existe côté
+ * serveur ; cette interface n'expose donc aucun bouton « Fusionner »
+ * actif (docs/02 §9.5).
+ */
+export interface DuplicateCompareRequest {
+  firstUserId: string;
+  secondUserId: string;
+}
+
+/** `DuplicateComparisonWeb.Assessment` — verdict *informatif*, jamais une action. */
+export type DuplicateAssessment =
+  | 'POTENTIALLY_SAFE'
+  | 'MANUAL_REVIEW_REQUIRED'
+  | 'NOT_MERGEABLE';
+
+export const DUPLICATE_ASSESSMENT_LABELS: Record<DuplicateAssessment, string> = {
+  POTENTIALLY_SAFE: 'Fusion potentiellement sûre',
+  MANUAL_REVIEW_REQUIRED: 'Revue manuelle requise',
+  NOT_MERGEABLE: 'Fusion impossible',
+};
+
+export function duplicateAssessmentLabel(value: string): string {
+  return (DUPLICATE_ASSESSMENT_LABELS as Record<string, string>)[value] ?? value;
+}
+
+/** Un côté de la comparaison — `DuplicateComparisonWeb.ComparisonSide`. */
+export interface DuplicateComparisonSide {
+  id: string;
+  displayName: string;
+  email: string | null;
+  phone: string | null;
+  status: AccountStatus;
+  roles: string[];
+  hasStudentProfile: boolean;
+  studentNumber: string | null;
+  hasActiveEnrollment: boolean;
+  hasLoginCredential: boolean;
+  mfaConfigured: boolean;
+  passkeys: number;
+  trustedDevices: number;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+/** Un point de divergence, de blocage ou de vigilance — `DuplicateComparisonWeb.Note`. */
+export interface DuplicateComparisonNote {
+  code: string;
+  detail: string;
+}
+
+export interface DuplicateComparisonResponse {
+  first: DuplicateComparisonSide;
+  second: DuplicateComparisonSide;
+  /** Champs concordants (clés machine : `normalizedName`, `phone`, `status`…). */
+  matchingFields: string[];
+  /** Champs divergents (`name`, `email`, `roles`, `activeEnrollment`…). */
+  differentFields: string[];
+  /** Conflits bloquants : au moins un ⇒ `assessment = NOT_MERGEABLE`. */
+  conflicts: DuplicateComparisonNote[];
+  /** Points de vigilance non bloquants. */
+  warnings: DuplicateComparisonNote[];
+  /** Conséquences qu'une fusion — non réalisée ici — devrait traiter. */
+  consequences: string[];
+  /** Décompte, par catégorie, des données rattachées aux deux comptes. */
+  dependencySummary: Record<string, number>;
+  assessment: DuplicateAssessment;
+  reasons: string[];
+}
+
+/** Libellés lisibles des clés de champ renvoyées par la comparaison. */
+export const DUPLICATE_FIELD_LABELS: Record<string, string> = {
+  email: 'Adresse électronique',
+  normalizedName: 'Nom normalisé',
+  name: 'Nom et prénom',
+  phone: 'Téléphone',
+  status: 'Statut',
+  roles: 'Rôles',
+  studentProfile: 'Profil apprenant',
+  studentNumber: 'Numéro étudiant',
+  activeEnrollment: 'Inscription active',
+};
+
+export function duplicateFieldLabel(key: string): string {
+  return DUPLICATE_FIELD_LABELS[key] ?? key;
+}
+
+/** Libellés lisibles des clés du résumé des dépendances. */
+export const DUPLICATE_DEPENDENCY_LABELS: Record<string, string> = {
+  studentProfile: 'Profil apprenant',
+  enrollments: 'Inscriptions',
+  activeEnrollments: 'Inscriptions actives',
+  attendanceRecords: 'Présences enregistrées',
+  justifications: 'Justificatifs déposés',
+  earlyDepartures: 'Départs anticipés',
+  claims: 'Réclamations',
+  notifications: 'Notifications',
+  pushSubscriptions: 'Abonnements push',
+  invitations: 'Invitations',
+  passkeys: 'Passkeys',
+  trustedDevices: 'Appareils de confiance',
+  activeRoles: 'Rôles actifs',
+};
+
+export function duplicateDependencyLabel(key: string): string {
+  return DUPLICATE_DEPENDENCY_LABELS[key] ?? key;
+}

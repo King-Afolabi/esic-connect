@@ -1,0 +1,170 @@
+// =============================================================================
+// Réalignement Angular Material sur l'identité ESIC — retouches de composants
+// =============================================================================
+// Les jetons système (`--mat-sys-*`) sont réalignés dans `styles.scss`, juste
+// après `mat.theme()`. Ce fichier ne porte que des retouches de composants,
+// via des classes Material publiques et documentées. Aucun `::ng-deep`,
+// aucune règle métier.
+
+@use "./primitives" as prim;
+
+// -- Boutons -------------------------------------------------------------
+// Sentence case (déjà le cas en M3), poids affirmé, rayon des contrôles,
+// hauteur de cible tactile respectée (WCAG 2.5.5).
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-outlined-button {
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: var(--esic-radius-xs);
+}
+
+.mat-mdc-button-base {
+  min-height: var(--esic-tap-min);
+}
+
+// Amélioration visuelle légère : l'action primaire (bouton plein / relevé)
+// porte une petite ombre STATIQUE — jamais animée. Les boutons secondaires
+// (contour) et les boutons texte n'en portent aucune.
+.mat-mdc-unelevated-button:not(:disabled),
+.mat-mdc-raised-button:not(:disabled) {
+  box-shadow: var(--esic-shadow-sm);
+}
+
+.mat-mdc-button,
+.mat-mdc-outlined-button {
+  box-shadow: none;
+}
+
+// -- Champs de formulaire ---------------------------------------------
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+// -- Carte Material = « carte de contenu » ESIC (plate, filet fin) -------
+.mat-mdc-card {
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  box-shadow: none;
+  background: var(--esic-surface);
+}
+
+// -- Tableaux Material ----------------------------------------------
+.mat-mdc-table {
+  background: var(--esic-surface);
+
+  .mat-mdc-header-row {
+    background: var(--esic-surface-sunken);
+  }
+
+  .mat-mdc-header-cell {
+    color: var(--esic-ink-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    border-bottom-color: var(--esic-line-strong);
+  }
+
+  .mat-mdc-cell {
+    border-bottom-color: var(--esic-line);
+    color: var(--esic-ink);
+  }
+
+  .mat-mdc-row:hover .mat-mdc-cell {
+    background: var(--esic-blue-100);
+  }
+}
+
+// -- Navigation : arête active structurelle -------------------------
+// L'élément courant du menu porte une arête pleine en bleu ESIC et un fond
+// teinté — information de position, pas décoration.
+.mat-mdc-nav-list .mat-mdc-list-item {
+  border-radius: var(--esic-radius-xs);
+
+  &.mdc-list-item--activated,
+  &.active {
+    background: var(--esic-blue-100);
+    // Arête active en bleu foncé ESIC (Lot C) : plus lisible que le bleu
+    // primaire sur le fond teinté, sans épaissir le trait.
+    box-shadow: inset 3px 0 0 var(--esic-blue-700);
+
+    .mdc-list-item__primary-text {
+      color: var(--esic-blue-700);
+      font-weight: 600;
+    }
+
+    .mat-icon {
+      color: var(--esic-primary);
+    }
+  }
+}
+
+// -- Surcouches : ombre « float » ESIC + rayon moyen ------------------
+.mat-mdc-menu-panel,
+.mat-mdc-dialog-surface,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel {
+  border-radius: var(--esic-radius-md) !important;
+  box-shadow: var(--esic-shadow-float) !important;
+}
+
+// Panneau « Profil » de l'en-tête (Lot §3) : plus large que la limite
+// Material par défaut (280 px), pour hiérarchiser identité / rôles /
+// accès au compte sans empiler verticalement. Reste borné sur petit
+// écran.
+.mat-mdc-menu-panel.profile-menu__panel {
+  max-width: min(420px, 92vw);
+}
+
+// Déclencheur « Profil » de l'en-tête : `mat-button` enferme son contenu
+// dans `.mdc-button__label`, si bien que le `gap` posé sur le bouton dans
+// `profile-menu.scss` n'agissait pas — l'avatar, le nom et le chevron se
+// touchaient. On rend le label lui-même flex, centré, avec l'espacement,
+// et on annule le décalage vertical résiduel du texte Material.
+.profile-menu__trigger.mat-mdc-button {
+  .mdc-button__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mat-mdc-button-touch-target {
+    height: 100%;
+  }
+}
+
+// -- Bandeau transitoire (snack-bar) — seule surcouche « dialogue » du
+//    produit : aucune fenêtre modale n'est ouverte ailleurs. Encre claire
+//    sur fond encré, arête d'accent, action « Fermer » lisible.
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-shape: var(--esic-radius-sm);
+  --mdc-snackbar-container-color: var(--esic-ink);
+  --mdc-snackbar-supporting-text-color: var(--esic-surface);
+  --mat-snack-bar-button-color: var(--esic-blue-200);
+
+  .mdc-snackbar__surface {
+    box-shadow: var(--esic-shadow-float);
+    border-left: 3px solid var(--esic-blue-400);
+  }
+
+  // Variante erreur (`panelClass: 'app-snackbar-error'`) : arête et fond
+  // rouges ESIC — l'information ne repose pas sur la seule couleur, le
+  // texte reste explicite et le bandeau est annoncé `assertive`.
+  &.app-snackbar-error {
+    --mdc-snackbar-container-color: var(--esic-red-700);
+
+    .mdc-snackbar__surface {
+      border-left-color: var(--esic-red-500);
+    }
+  }
+}
+
+// -- Onglets : indicateur bleu ESIC --------------------------------
+.mat-mdc-tab .mdc-tab-indicator__content--underline {
+  border-color: var(--esic-primary);
+}
+
+// -- Anneau de focus clavier homogène ------------------------------
+.mat-mdc-button-base:focus-visible {
+  @include prim.esic-focus-ring;
+}

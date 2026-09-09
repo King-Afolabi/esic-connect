@@ -30,12 +30,24 @@ spring:
       ddl-auto: validate
   mail:
     # Serveur SMTP local (Mailpit) par défaut ; surchargé par MAIL_HOST /
-    # MAIL_PORT. Aucune authentification en développement.
+    # MAIL_PORT. Aucune authentification en développement (EF-INT-004 —
+    # fournisseur réel — reste optionnel, jamais requis pour démarrer).
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
+    # Charset de tout message sortant (objet + corps). Explicite ici pour
+    # garantir un rendu UTF-8 correct des accents français chez le
+    # destinataire, quel que soit le charset par défaut de la plateforme.
+    # Appliqué par JavaMailSenderImpl à la conversion SimpleMailMessage
+    # -> MIME : objet encodé RFC 2047 en UTF-8, corps déclaré charset=UTF-8.
+    default-encoding: UTF-8
+    # Vides par défaut : Mailpit n'authentifie personne. Un fournisseur
+    # réel (Brevo, etc.) les exige — jamais une valeur en dur, jamais
+    # dans le dépôt.
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
-      mail.smtp.auth: false
-      mail.smtp.starttls.enable: false
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:false}
 
 management:
   endpoints:
@@ -62,6 +74,19 @@ app:
       secret: ${JWT_SECRET}
       issuer: esic-connect
       access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}
+      # Jeton de renouvellement de session (EF-AUTH-014, docs/02 §17.7),
+      # stocké dans Redis, remis au navigateur dans un cookie HttpOnly.
+      # - idle : durée d'inactivité, glissante (repoussée à chaque
+      #   renouvellement) — « 30 minutes d'inactivité » du cahier ;
+      # - absolute : plafond absolu, jamais repoussé — au-delà, une
+      #   nouvelle connexion est exigée.
+      refresh-token-idle-ttl: ${JWT_REFRESH_TOKEN_IDLE_TTL:PT30M}
+      refresh-token-absolute-ttl: ${JWT_REFRESH_TOKEN_ABSOLUTE_TTL:PT12H}
+    cookies:
+      # Attribut Secure du cookie de renouvellement. Vrai par défaut ;
+      # désactivé pour les seuls profils servis en clair (local,
+      # démonstration, test) via application-*.yml.
+      secure: ${APP_COOKIE_SECURE:true}
     invitation:
       # Durée de validité d'une invitation d'activation (RG-005 / RG-08 :
       # « un mois »). Configurable, doit rester strictement positive

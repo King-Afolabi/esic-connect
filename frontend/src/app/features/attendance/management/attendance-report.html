@@ -1,13 +1,7 @@
-<h1 class="att__title">{{ title() }}</h1>
-<nav class="att__crumbs" aria-label="Sections">
-  <a routerLink="../summary">Synthèse</a> ·
-  <a routerLink="../sessions">Par séance</a> ·
-  <a routerLink="../classes">Par classe</a> ·
-  <a routerLink="../students">Par apprenant</a> ·
-  <a routerLink="../justifications">Justificatifs</a>
-</nav>
+<!-- Titre de page et navigation secondaire : `app-attendance-management-shell`. -->
+<h2 class="att__subtitle">{{ title() }}</h2>
 
-<form class="att__filters" [formGroup]="filters" (ngSubmit)="apply()">
+<form class="att__filters esic-filters" [formGroup]="filters" (ngSubmit)="apply()">
   <mat-form-field appearance="outline">
     <mat-label>Depuis</mat-label>
     <input matInput type="date" formControlName="from" />
@@ -66,7 +60,7 @@
     @if (rows().length === 0) {
       <p class="att__status" role="status">Aucune donnée pour ces filtres.</p>
     } @else {
-      <div class="att__table-wrapper">
+      <div class="att__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="rows()">
           <ng-container matColumnDef="label">
             <th mat-header-cell *matHeaderCellDef>{{ kind === 'sessions' ? 'Séance' : kind === 'classes' ? 'Classe' : 'Apprenant' }}</th>
@@ -116,7 +110,7 @@
             <th mat-header-cell *matHeaderCellDef>Taux présence</th>
             <td mat-cell *matCellDef="let r">{{ percent(kind === 'sessions' ? r.attendanceRate : r.totals.attendanceRate) }}</td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns()"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns(); sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns()"></tr>
         </table>
       </div>

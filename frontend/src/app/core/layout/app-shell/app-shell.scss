@@ -7,86 +7,238 @@
   height: 100%;
 }
 
-.shell__sidenav {
-  width: 15rem;
-  border-right: 1px solid var(--mat-sys-outline-variant);
+.shell__container {
+  height: 100%;
+  background: var(--esic-paper);
 }
 
-.shell__toolbar {
+// -- Rail de navigation ---------------------------------------------------
+.shell__rail {
+  width: var(--esic-rail-width);
+  padding: var(--esic-space-3) var(--esic-space-2);
+  background: var(--esic-surface);
+  border-right: 1px solid var(--esic-line);
+  transition: width 160ms ease;
+  overflow-x: hidden;
+}
+
+.shell__nav {
+  // La liste Material gère ses propres espacements ; on retire la marge
+  // haute quand le rail n'a pas de bandeau de marque (mode desktop).
+  margin-top: var(--esic-space-1);
+}
+
+// -- Rail replié : bande d'icônes (desktop) --------------------------
+// Les libellés restent dans le DOM (arbre d'accessibilité) mais sont
+// masqués visuellement ; une infobulle les rend au survol / focus.
+.shell__rail--collapsed {
+  width: var(--esic-rail-width-collapsed);
+  padding-left: 0;
+  padding-right: 0;
+
+  .mat-mdc-list-item {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .mdc-list-item__content {
+    justify-content: center;
+  }
+
+  .mdc-list-item__primary-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .mat-mdc-list-item-icon {
+    margin-right: 0 !important;
+  }
+}
+
+// -- Barre supérieure ---------------------------------------------------
+.shell__topbar {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--esic-z-sticky);
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: var(--esic-space-2);
+  min-height: var(--esic-topbar-height);
+  padding: 0 var(--esic-space-4);
+  background: var(--esic-surface);
+  border-bottom: 1px solid var(--esic-line);
 }
 
+.shell__menu-btn {
+  margin-left: calc(var(--esic-space-2) * -1);
+}
+
+// -- Marque : pastille monogramme + mot-symbole ------------------------
 .shell__brand {
-  font: var(--mat-sys-title-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esic-space-2);
+  padding: var(--esic-space-1);
+  border-radius: var(--esic-radius-xs);
+  text-decoration: none;
+  color: var(--esic-ink);
+
+  &:hover {
+    color: var(--esic-ink);
+  }
+
+  &--rail {
+    margin: var(--esic-space-1) var(--esic-space-2) var(--esic-space-4);
+  }
+}
+
+// Monogramme : le « E » du logo ESIC officiel, recadré sans déformation
+// (`public/brand/mark-esic.png`, dérivé de `logo-esic.png`). Fond
+// transparent — le dégradé vert-bleu du glyphe porte l'identité.
+.shell__mark {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex-shrink: 0;
+  background: url("/brand/mark-esic.png") center / contain no-repeat;
+}
+
+.shell__wordmark {
+  font-family: var(--esic-font-sans);
   font-weight: 600;
+  font-size: 1.0625rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .shell__spacer {
   flex: 1 1 auto;
 }
 
+// -- Identité de l'utilisateur connecté -------------------------------
+// Un panneau compact « Profil » (`app-profile-menu`, Lot §3) porte
+// désormais l'adresse et les rôles ; l'en-tête ne les affiche plus à
+// plat. Un filet sépare ce bloc des outils (contexte, notifications,
+// déconnexion).
 .shell__identity {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.2;
-  margin-right: 0.5rem;
+  align-items: center;
+  gap: var(--esic-space-2);
+  min-width: 0;
+  padding-right: var(--esic-space-2);
+  border-right: 1px solid var(--esic-line);
 }
 
-.shell__email {
-  font: var(--mat-sys-body-small);
-  max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+// Écran étroit (pliable replié, ~280–350 px) : la barre supérieure garde
+// la pastille de marque mais lâche le mot-symbole, faute de place pour la
+// navigation et les outils.
+@media (max-width: 22rem) {
+  .shell__wordmark {
+    display: none;
+  }
 }
 
-.shell__roles {
+.shell__tools {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  justify-content: flex-end;
+  align-items: center;
+  gap: var(--esic-space-1);
 }
 
-.shell__role-chip {
-  font: var(--mat-sys-label-small);
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mat-sys-on-primary) 20%, transparent);
+.shell__install .mat-icon {
+  margin-right: 0.35rem;
 }
 
+// -- Bandeaux d'état (hors ligne, actions différées) ------------------
+// L'information ne dépend jamais de la seule couleur : icône + texte
+// (docs/02 §32.5). Filet de couleur à gauche pour la catégorie.
+.shell__banner {
+  display: flex;
+  align-items: center;
+  gap: var(--esic-space-2);
+  margin: 0;
+  padding: 0.625rem var(--esic-space-4);
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--esic-line);
+
+  .mat-icon {
+    flex-shrink: 0;
+  }
+
+  &--offline {
+    color: var(--esic-ink);
+    background: var(--esic-surface-sunken);
+    box-shadow: inset 3px 0 0 var(--esic-ink-faint);
+  }
+
+  &--pending {
+    color: var(--esic-warning);
+    background: var(--esic-warning-tint);
+    box-shadow: inset 3px 0 0 var(--esic-warning);
+  }
+}
+
+// -- Zone de contenu -------------------------------------------------
+// `container-type: inline-size` : les requêtes `@container` des primitives
+// (`.esic-kv`, etc.) se calent sur la largeur réelle de la colonne de
+// contenu — qui change quand le rail se replie —, jamais sur celle de la
+// fenêtre. C'est la stratégie « largeur disponible », pas « modèle
+// d'appareil ».
 .shell__main {
   display: block;
-  padding: 1.5rem;
-  max-width: 72rem;
+  width: 100%;
+  max-width: var(--esic-content-max);
   margin: 0 auto;
+  padding: var(--esic-space-5) var(--esic-space-5) var(--esic-space-7);
   outline: none;
+  container: esic-content / inline-size;
 }
 
-@media (max-width: 599px) {
+// -- Adaptatif -----------------------------------------------------
+@media (max-width: 1023px) {
+  .shell__main {
+    padding: var(--esic-space-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .shell__topbar {
+    padding: 0 var(--esic-space-3);
+  }
+
+  // Le panneau « Profil » reste joignable sur mobile : le déclencheur se
+  // réduit à sa pastille (le nom court et le chevron sont masqués par
+  // `profile-menu.scss`), le filet de séparation disparaît.
   .shell__identity {
-    display: none;
+    padding-right: 0;
+    border-right: 0;
+  }
+}
+
+// Paysage court (téléphone couché, hauteur < ~30 rem) : la barre
+// supérieure se resserre pour ne pas manger la zone de lecture.
+@media (orientation: landscape) and (max-height: 30rem) {
+  .shell__topbar {
+    min-height: 3rem;
   }
 
   .shell__main {
-    padding: 1rem;
+    padding-top: var(--esic-space-3);
   }
 }
 
-// Bandeaux d'état hors ligne et d'actions différées (EF-PWA-002/003).
-// Contraste et icône : l'information ne dépend jamais de la seule couleur
-// (docs/02 §32.5).
-.shell__offline,
-.shell__pending {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.625rem 1rem;
-  border-bottom: 1px solid rgb(0 0 0 / 20%);
-  background: rgb(0 0 0 / 6%);
+@media (max-width: 640px) {
+  .shell__logout-label {
+    // Icône seule sur très petit écran ; le bouton garde son aria-label.
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .shell__main {
+    padding: var(--esic-space-3);
+  }
 }

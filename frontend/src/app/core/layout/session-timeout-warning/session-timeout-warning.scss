@@ -1,0 +1,67 @@
+// Avertissement de fin de session (Lot A).
+// Seul élément modal du produit — voir le commentaire d'en-tête du composant.
+
+.session-warning__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgb(23 33 43 / 45%);
+}
+
+.session-warning {
+  position: fixed;
+  z-index: 1101;
+  inset-inline: 0;
+  inset-block-start: max(1rem, env(safe-area-inset-top));
+  margin-inline: auto;
+  width: min(28rem, calc(100vw - 2 * var(--esic-space-4)));
+  padding: var(--esic-space-5);
+  background: var(--esic-surface);
+  color: var(--esic-ink);
+  border: 1px solid var(--esic-line);
+  border-inline-start: 4px solid var(--esic-warning);
+  border-radius: var(--esic-radius-md);
+  box-shadow: var(--esic-shadow-float);
+  animation: session-warning-in 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-warning {
+    animation: none;
+  }
+}
+
+@keyframes session-warning-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+}
+
+.session-warning__title {
+  display: flex;
+  gap: var(--esic-space-2);
+  align-items: center;
+  margin: 0 0 var(--esic-space-3);
+  font-family: var(--esic-font-serif, inherit);
+  font-size: 1.125rem;
+  line-height: 1.3;
+
+  mat-icon {
+    color: var(--esic-warning);
+  }
+}
+
+.session-warning__desc {
+  margin: 0 0 var(--esic-space-4);
+  color: var(--esic-ink-soft);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.session-warning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-3);
+  justify-content: flex-end;
+}

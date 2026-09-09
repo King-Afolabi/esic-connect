@@ -1,40 +1,39 @@
-.dashboard__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.5rem;
+// Tableau de bord — trois registres visuels distincts (pas une pile de cartes
+// identiques) : bande d'identité (filet seul), bandeau d'indicateurs (chiffres
+// en grand, point d'entrée du regard), cartes de détail (surface Material).
+// Toutes les couleurs viennent de `_tokens.scss`.
+
+:host {
+  display: block;
 }
 
-.dashboard__intro {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0 0 1.5rem;
+// -- Bande d'identité : information utilitaire, filet de base, pas d'accent ----
+.dashboard__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--esic-space-3) var(--esic-space-6);
+  padding-bottom: var(--esic-space-4);
+  margin-bottom: var(--esic-space-6);
+  border-bottom: 1px solid var(--esic-line);
+  font-size: 0.875rem;
 }
 
-.dashboard__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: 1rem;
-}
-
-.dashboard__card {
-  height: 100%;
-}
-
-.dashboard__facts {
+.dashboard__identity-facts {
   margin: 0;
+
+  dt {
+    color: var(--esic-ink-faint);
+  }
+}
+
+.dashboard__identity-roles {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-}
-
-.dashboard__facts dt {
-  font: var(--mat-sys-label-medium);
-  color: var(--mat-sys-on-surface-variant);
-}
-
-.dashboard__facts dd {
-  margin: 0;
-  font: var(--mat-sys-body-medium);
-  word-break: break-word;
+  gap: var(--esic-space-2);
+  align-items: flex-end;
+  text-align: right;
 }
 
 .dashboard__roles {
@@ -43,100 +42,367 @@
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
+  justify-content: flex-end;
 }
 
 .dashboard__role-chip {
-  font: var(--mat-sys-label-large);
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-primary-tint);
+  color: var(--esic-blue-700);
 }
 
 .dashboard__context {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0.75rem 0 0;
-}
-
-.dashboard__empty {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
   margin: 0;
+  max-width: 46ch;
 }
 
-/*
- * Histogramme et tableau équivalent (EF-REP-008).
- *
- * La barre n'est jamais le seul porteur de l'information : chaque ligne
- * affiche sa valeur en toutes lettres à droite, et le tableau qui suit
- * reprend les mêmes chiffres. Une personne qui ne distingue pas les
- * couleurs, ou qui navigue au lecteur d'écran, lit exactement la même
- * chose (docs/02 §22.6, §32.5).
- */
+// -- Sections « Accès rapides » / « Mon activité » -------------------------
+.dashboard__role {
+  margin-top: var(--esic-space-6);
+}
+
+// Les accès rapides sont hissés juste sous l'identité (Lot §3) : la bande
+// d'identité porte déjà sa marge basse, pas de double espace.
+.dashboard__role--shortcuts {
+  margin-top: 0;
+}
+
+.dashboard__subtitle {
+  margin: 0 0 var(--esic-space-4);
+  font-family: var(--esic-font-serif);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--esic-ink);
+}
+
+// Bandeau d'indicateurs : tous les rôles utilisent désormais la primitive
+// partagée `.esic-metric-grid` (grille compacte à 2 colonnes, filets
+// internes, tonalité de statut par `data-tone`) — voir `_primitives.scss`.
+// Un seul écart : dans le vis-à-vis « Mon activité | Mon périmètre » du
+// responsable, la grille ne porte pas sa marge basse (gérée par
+// `.dashboard__split`).
+
+// -- Grille de détail : une colonne en pile, DEUX colonnes dès que la colonne
+// de contenu est large (Lot §3 — « grille en deux colonnes » sur ordinateur,
+// sans les 3-4 colonnes étroites de l'`auto-fill` qui laissaient des vides).
+// `@container` : la bascule suit la largeur réelle de `.shell__main`, donc
+// l'état du rail (déplié / replié), jamais la fenêtre. Alignée en haut : une
+// carte courte reste courte.
+.dashboard__grid {
+  display: grid;
+  gap: var(--esic-space-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+  margin-bottom: var(--esic-space-5);
+}
+
+// La primitive `.esic-metric-grid` n'a pas de marge propre : dans les
+// tableaux de bord apprenant / formateur / administration, le bandeau
+// d'indicateurs doit se détacher des cartes qui suivent. (Le vis-à-vis
+// du responsable la remet à 0 juste en dessous.)
+.dashboard__role > .esic-metric-grid {
+  margin-bottom: var(--esic-space-5);
+}
+
+// Lot §2 — les deux lignes en vis-à-vis : une colonne par défaut (pile
+// sur petit écran / conteneur étroit), alignée en haut pour qu'une carte
+// courte reste courte. La bascule 2 colonnes est dans le `@container`
+// ci-dessous — ces règles de base DOIVENT rester AVANT lui (même
+// spécificité : la dernière règle source l'emporte).
+.dashboard__split {
+  display: grid;
+  gap: var(--esic-space-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+  margin-bottom: var(--esic-space-5);
+}
+
+.dashboard__split .esic-metric-grid {
+  margin-bottom: 0;
+  align-self: start;
+}
+
+.dashboard__card--facing {
+  align-self: start;
+}
+
+// Amélioration visuelle légère : les cartes du tableau de bord portent une
+// ombre discrète et statique (jamais animée), en plus du filet — elles se
+// détachent un peu du fond chaud sans « flotter ». Les tableaux internes
+// gardent bordure + surface, aucune ombre par ligne.
+.dashboard__card.mat-mdc-card {
+  box-shadow: var(--esic-shadow-sm);
+}
+
+@container esic-content (min-width: 52rem) {
+  .dashboard__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  // Lot §2 — « Mon activité » (indicateurs) | « Mon périmètre » qui se
+  // font face. La colonne de gauche prend l'essentiel de la largeur :
+  // le bandeau d'indicateurs a besoin de place, la fiche périmètre non.
+  .dashboard__split {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  }
+
+  // Lot §2 — « Taux d'assiduité par classe » (histogramme + tableau
+  // équivalent, plus large) | « Séances à venir ». Le panneau large
+  // n'occupe plus toute la ligne dans le tableau de bord responsable.
+  .dashboard__grid--facing {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  }
+
+  .dashboard__grid--facing .dashboard__card--lead {
+    grid-column: auto;
+  }
+}
+
+// Repli si le conteneur nommé n'est pas disponible (le navigateur ne
+// connaît pas `container-name`, ou la coquille n'établit pas le contexte).
+@supports not (container-type: inline-size) {
+  @media (min-width: 60rem) {
+    .dashboard__grid,
+    .dashboard__split,
+    .dashboard__grid--facing {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}
+
+// Un panneau « large » (histogramme + tableau équivalent) occupe la
+// pleine largeur de la grille.
 .dashboard__card--wide {
   grid-column: 1 / -1;
 }
 
-.dashboard__chart {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
+// Listes longues dans une carte : hauteur bornée, défilement contenu —
+// une carte « Séances à venir » de vingt lignes n'écrase plus le reste.
+.dashboard__card .dashboard__list {
+  max-height: 22rem;
+  overflow-y: auto;
 }
 
-.dashboard__bar-row {
-  align-items: center;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(6rem, 10rem) 1fr minmax(4.5rem, auto);
-  margin-bottom: 0.35rem;
-}
-
-.dashboard__bar-label {
-  font-weight: 600;
+// D.2 — aperçu BORNÉ des classes du périmètre (3 codes + « +N autres »),
+// jamais la liste complète. Le lien « Voir les classes » mène à la liste
+// existante, filtrée au périmètre côté serveur.
+.dashboard__scope-preview {
+  margin: var(--esic-space-3) 0 0;
+  font-size: 0.875rem;
+  color: var(--esic-ink);
   overflow-wrap: anywhere;
 }
 
-.dashboard__bar-track {
-  background: rgb(0 0 0 / 8%);
-  border-radius: 0.2rem;
-  display: block;
-  height: 0.9rem;
-  overflow: hidden;
+.dashboard__card--facing .mat-mdc-card-content > a {
+  margin-top: var(--esic-space-3);
 }
 
-.dashboard__bar-fill {
-  background: #0b3d7a;
-  display: block;
-  height: 100%;
+.dashboard__facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  align-items: baseline;
+
+  dt {
+    font-size: 0.8125rem;
+    color: var(--esic-ink-soft);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--esic-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    word-break: break-word;
+  }
 }
 
-.dashboard__bar-value {
+// -- Listes de séances : lignes compactes séparées d'un filet ---------------
+.dashboard__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem var(--esic-space-3);
+    padding: var(--esic-space-3) 0;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  li + li {
+    border-top: 1px solid var(--esic-line);
+  }
+
+  a {
+    font-weight: 600;
+  }
+
+  .dashboard__meta {
+    margin: 0;
+  }
+}
+
+.dashboard__meta {
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  margin: var(--esic-space-3) 0 0;
 }
 
+.dashboard__empty {
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
+  margin: 0;
+}
+
+.dashboard__error-ref {
+  margin: var(--esic-space-2) 0 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-soft);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+// -- Tableau « Taux d'assiduité par classe / par formation » (EF-REP-008)
+// Un seul visuel : une table à DEUX colonnes (libellé | taux). Le détail
+// en demi-journées tient sur la ligne de la colonne « Taux », en texte
+// discret. `table-layout: fixed` + aucune enveloppe à défilement : plus
+// aucune barre de défilement horizontale sur le tableau de bord, quel que
+// soit l'état du rail. Le détail complet reste dans Suivi d'assiduité.
 .dashboard__table {
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  width: 100%;
+  font-size: 0.875rem;
 
   caption {
     caption-side: top;
+    text-align: left;
     font-weight: 600;
-    padding-bottom: 0.4rem;
+    font-size: 0.8125rem;
+    color: var(--esic-ink-soft);
+    padding: var(--esic-space-3) var(--esic-space-3) 0;
+  }
+}
+
+.dashboard__rate-table {
+  width: 100%;
+  table-layout: fixed;
+
+  th[scope="col"]:first-child,
+  th[scope="row"] {
+    inline-size: 34%;
+    overflow-wrap: anywhere;
+  }
+
+  td {
+    // La cellule « Taux » empile la barre + le pourcentage, puis la
+    // ligne de détail.
+    white-space: normal;
+  }
+
+  .esic-rate-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esic-space-2);
+    min-width: 0;
+  }
+
+  .esic-rate-cell__track {
+    flex: 1 1 4rem;
+    min-width: 3rem;
+  }
+}
+
+.dashboard__bar-value {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--esic-ink);
+  flex-shrink: 0;
+}
+
+// Détail en demi-journées sous la barre de taux : information secondaire,
+// jamais un tableau large qui déborde.
+.dashboard__rate-meta {
+  display: block;
+  margin-top: var(--esic-space-1);
+  font-size: 0.75rem;
+  color: var(--esic-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+// -- Adaptatif : sous 640 px, l'identité et les indicateurs passent en pleine
+// largeur. Le filet gauche remplace le filet supérieur pour séparer les cellules
+// empilées (l'accent de statut, porté par `border-top`, reste visible).
+@media (max-width: 640px) {
+  .dashboard__identity-roles {
+    align-items: flex-start;
     text-align: left;
   }
 
-  th,
-  td {
-    border-bottom: 1px solid rgb(0 0 0 / 12%);
-    padding: 0.35rem 0.5rem;
-    text-align: left;
+  .dashboard__roles {
+    justify-content: flex-start;
+  }
+}
+
+// -- Raccourcis de tableau de bord (Lot D) -------------------------------
+// Grille de tuiles compactes, pas une pile verticale ni une copie du rail
+// de navigation. `auto-fill` + `minmax` : trois à cinq par ligne sur un
+// écran large, deux sur tablette, une seule sur mobile — piloté par la
+// largeur réelle de la colonne de contenu.
+.dashboard__shortcuts {
+  display: grid;
+  gap: var(--esic-space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+}
+
+.dashboard__shortcut {
+  display: flex;
+  align-items: center;
+  gap: var(--esic-space-3);
+  min-height: 3rem;
+  padding: var(--esic-space-3) var(--esic-space-4);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink);
+  font-weight: 500;
+  line-height: 1.3;
+  text-decoration: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+
+  mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-primary);
   }
 
-  td {
-    font-variant-numeric: tabular-nums;
+  &:hover {
+    border-color: var(--esic-line-strong);
+    box-shadow: var(--esic-shadow-raise);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--esic-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard__shortcut:hover {
+    transform: translateY(-1px);
   }
 }

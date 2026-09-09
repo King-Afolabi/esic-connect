@@ -258,6 +258,62 @@ class EnrollmentIntegrationTests {
         assertThat(response.getBody().get("code")).isEqualTo("ENR_INVALID_SORT");
     }
 
+    @Test
+    void blankStudentNumberIsGeneratedInTheNormalisedEsicFormat() {
+        String admin = adminToken();
+        // Aucun champ studentNumber -> le serveur alloue ESIC-{année}-{séquence}.
+        Map<String, Object> created = created("/api/v1/student-profiles",
+                Map.of("userPublicId", studentAccountPublicId()), admin);
+        assertThat((String) created.get("studentNumber"))
+                .as("numéro généré au format normalisé")
+                .matches("ESIC-\\d{4}-\\d{5}");
+
+        // Deux créations successives -> deux numéros distincts (séquence).
+        Map<String, Object> second = created("/api/v1/student-profiles",
+                Map.of("userPublicId", studentAccountPublicId()), admin);
+        assertThat((String) second.get("studentNumber")).isNotEqualTo(created.get("studentNumber"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void studentProfileListSearchesByNameAndCarriesTheCivilName() {
+        String admin = adminToken();
+        String unique = "Zeldapratt" + shortCode().substring(0, 6);
+        String studentUser = accountWithName("Camille", unique, RoleCode.STUDENT).publicId();
+        String number = "ESIC-2026-" + shortCode();
+        created("/api/v1/student-profiles",
+                Map.of("userPublicId", studentUser, "studentNumber", number), admin);
+
+        // Recherche par NOM (pas seulement par numéro) — et la ligne porte
+        // le prénom / nom résolus depuis le module identity.
+        Map<String, Object> byName = getMap("/api/v1/student-profiles?q=" + unique, admin);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) byName.get("content");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("lastName")).isEqualTo(unique);
+        assertThat(rows.get(0).get("firstName")).isEqualTo("Camille");
+        assertThat(rows.get(0).get("studentNumber")).isEqualTo(number);
+
+        // Recherche par NUMÉRO — toujours possible.
+        Map<String, Object> byNumber = getMap("/api/v1/student-profiles?q="
+                + number.substring(number.length() - 6), admin);
+        assertThat((List<Map<String, Object>>) byNumber.get("content"))
+                .anySatisfy(r -> assertThat(r.get("lastName")).isEqualTo(unique));
+
+        // Un apprenant encore EN ATTENTE D'ACTIVATION est aussi trouvé par
+        // son nom (la recherche globale, elle, ne verrait que les actifs).
+        String pendingLast = "Pendingsearch" + shortCode().substring(0, 6);
+        String pendingUser = accountWithName("Noé", pendingLast,
+                AccountStatus.PENDING_ACTIVATION, RoleCode.STUDENT).publicId();
+        created("/api/v1/student-profiles", Map.of("userPublicId", pendingUser), admin);
+        Map<String, Object> pendingHit = getMap("/api/v1/student-profiles?q=" + pendingLast, admin);
+        assertThat((List<Map<String, Object>>) pendingHit.get("content"))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.get("lastName")).isEqualTo(pendingLast);
+                    assertThat((String) r.get("studentNumber")).matches("ESIC-\\d{4}-\\d{5}");
+                });
+    }
+
     // ------------------------------------------------------------------
     // Utilitaires
     // ------------------------------------------------------------------
@@ -349,8 +405,17 @@ class EnrollmentIntegrationTests {
     }
 
     private Account accountWithRoles(RoleCode... roles) {
+        return accountWithName("Enr", "Tester", roles);
+    }
+
+    private Account accountWithName(String firstName, String lastName, RoleCode... roles) {
+        return accountWithName(firstName, lastName, AccountStatus.ACTIVE, roles);
+    }
+
+    private Account accountWithName(String firstName, String lastName, AccountStatus status,
+                                   RoleCode... roles) {
         UserAccount account = new UserAccount("enr-" + UUID.randomUUID() + "@esic-connect.test",
-                "Enr", "Tester", AccountStatus.ACTIVE);
+                firstName, lastName, status);
         account.setPasswordHash(passwordEncoder.encode(PASSWORD));
         account = userAccountRepository.saveAndFlush(account);
         for (RoleCode roleCode : roles) {

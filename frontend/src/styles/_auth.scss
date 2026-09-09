@@ -1,0 +1,247 @@
+// =============================================================================
+// Écrans publics d'authentification — mise en page partagée
+// =============================================================================
+// Connexion, second facteur, mot de passe oublié, réinitialisation,
+// activation de compte : une seule carte centrée, mêmes proportions, même
+// marque, pour que le parcours reste visuellement continu. Namespace
+// `.esic-auth`.
+
+.esic-auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--esic-space-5) var(--esic-space-4);
+  background: var(--esic-paper);
+}
+
+// Fenêtre courte (téléphone couché, petit portrait) : la carte peut être
+// plus haute que la fenêtre — on l'ancre en haut et on laisse défiler,
+// plutôt que de rogner son sommet avec un centrage vertical.
+@media (max-height: 34rem) {
+  .esic-auth {
+    align-items: flex-start;
+  }
+}
+
+.esic-auth__card {
+  width: 100%;
+  max-width: 26rem;
+  padding: var(--esic-space-6) var(--esic-space-6) var(--esic-space-5);
+  background: var(--esic-surface);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-md);
+  box-shadow: var(--esic-shadow-raise);
+  container-type: inline-size;
+}
+
+.esic-auth__brand {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 11rem;
+  margin: 0 auto var(--esic-space-4);
+}
+
+// -- Portrait étroit (téléphone debout, ~≤ 26rem) : composition
+//    verticale plus compacte — logo plus petit, marges resserrées, le
+//    formulaire prioritaire dans la zone visible (Lot E).
+@media (orientation: portrait) and (max-width: 26rem) {
+  .esic-auth {
+    padding: var(--esic-space-4) var(--esic-space-3);
+  }
+
+  .esic-auth__card {
+    padding: var(--esic-space-5) var(--esic-space-4) var(--esic-space-4);
+  }
+
+  .esic-auth__brand {
+    max-width: 8rem;
+    margin-bottom: var(--esic-space-3);
+  }
+
+  .esic-auth__header {
+    margin-bottom: var(--esic-space-4);
+  }
+
+  .esic-auth__title {
+    font-size: 1.25rem;
+  }
+}
+
+// -- Paysage court (téléphone couché, tablette couchée basse, fenêtre
+//    desktop de faible hauteur) : deux colonnes — identité ESIC à gauche,
+//    contenu (titre + formulaire) à droite —, dès que hauteur ET largeur
+//    le permettent. Le formulaire reste entièrement visible ; si la
+//    hauteur est vraiment faible, `.esic-auth` ancre en haut et défile
+//    (règle `max-height: 34rem` plus haut).
+@media (orientation: landscape) and (min-width: 40rem) and (max-height: 30rem) {
+  .esic-auth {
+    padding: var(--esic-space-4);
+  }
+
+  .esic-auth__card {
+    max-width: 44rem;
+    display: grid;
+    grid-template-columns: minmax(8rem, 14rem) 1fr;
+    column-gap: var(--esic-space-6);
+    align-items: center;
+    padding: var(--esic-space-5) var(--esic-space-6);
+  }
+
+  // Colonne de gauche : la marque, centrée verticalement sur toute la
+  // hauteur de la carte.
+  .esic-auth__brand {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: center;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  // Tout le reste (titre, encarts, formulaire, statut) : colonne de droite.
+  .esic-auth__card > :not(.esic-auth__brand) {
+    grid-column: 2;
+  }
+
+  .esic-auth__header {
+    margin-bottom: var(--esic-space-3);
+    text-align: left;
+  }
+
+  .esic-auth__aux,
+  .esic-auth__status {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .esic-auth__link {
+    align-self: flex-start;
+  }
+}
+
+.esic-auth__header {
+  margin-bottom: var(--esic-space-5);
+  text-align: center;
+}
+
+.esic-auth__title {
+  margin: 0;
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: 1.375rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
+}
+
+.esic-auth__subtitle {
+  margin: var(--esic-space-2) 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
+}
+
+.esic-auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-2);
+}
+
+.esic-auth__form .mat-mdc-form-field {
+  width: 100%;
+}
+
+.esic-auth__hint {
+  margin: 0 0 var(--esic-space-2);
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+}
+
+// Encart d'information / de succès (session expirée, mot de passe changé,
+// activation réussie…). Filet de couleur à gauche, jamais la couleur seule.
+.esic-auth__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-2);
+  margin: 0 0 var(--esic-space-4);
+  padding: var(--esic-space-3);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  border-radius: var(--esic-radius-xs);
+  color: var(--esic-ink);
+  background: var(--esic-info-tint);
+  box-shadow: inset 3px 0 0 var(--esic-info);
+
+  .mat-icon {
+    flex: none;
+  }
+
+  &--success {
+    background: var(--esic-success-tint);
+    box-shadow: inset 3px 0 0 var(--esic-success);
+  }
+
+  &--warning {
+    background: var(--esic-warning-tint);
+    box-shadow: inset 3px 0 0 var(--esic-warning);
+  }
+}
+
+// Ligne d'erreur sous le formulaire — réserve sa hauteur pour éviter les
+// sauts de mise en page à l'apparition.
+.esic-auth__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-height: 1.5rem;
+  margin: 0 0 var(--esic-space-2);
+  color: var(--esic-danger);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+
+  .mat-icon {
+    flex: none;
+  }
+}
+
+.esic-auth__submit {
+  align-self: stretch;
+  width: 100%;
+  min-height: 2.75rem;
+  margin-top: var(--esic-space-1);
+}
+
+// Actions secondaires (lien « mot de passe oublié », retour à la connexion).
+.esic-auth__aux {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esic-space-1);
+  margin-top: var(--esic-space-4);
+  font-size: 0.875rem;
+}
+
+.esic-auth__link {
+  align-self: center;
+  margin-top: var(--esic-space-3);
+  font-size: 0.875rem;
+}
+
+// Bloc d'état centré (activation réussie, chargement).
+.esic-auth__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esic-space-3);
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
+}
+
+.esic-auth__status-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 2.5rem;
+  color: var(--esic-success);
+}

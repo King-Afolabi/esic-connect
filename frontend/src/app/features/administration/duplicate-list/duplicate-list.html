@@ -1,0 +1,316 @@
+<a class="esic-back" routerLink="/administration">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux comptes</span>
+</a>
+
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Doublons détectés</h1>
+    <p class="esic-page-header__description">
+      Comptes rapprochés par nom complet normalisé (accents et casse neutralisés) ou par numéro de
+      téléphone. Sélectionnez <strong>exactement deux</strong> comptes pour les comparer côte à côte.
+      La comparaison est une <strong>simulation en lecture seule</strong> : aucune fusion ni
+      suppression n'est réalisée ici (docs/02 §9.5).
+    </p>
+  </div>
+</header>
+
+@if (state().kind === 'loading') {
+  <mat-progress-bar mode="indeterminate" aria-label="Chargement des doublons"></mat-progress-bar>
+  <p class="duplicates__status" role="status">Chargement des doublons…</p>
+}
+
+@if (state().kind === 'forbidden') {
+  <div class="duplicates__panel" role="alert">
+    <mat-icon aria-hidden="true">lock</mat-icon>
+    <p>Vous n'êtes pas autorisé à consulter la détection de doublons.</p>
+    <a mat-stroked-button routerLink="/administration">Retour aux comptes</a>
+  </div>
+}
+
+@if (state().kind === 'error') {
+  <div class="duplicates__panel" role="alert">
+    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <p>{{ errorMessage() }}</p>
+    <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+  </div>
+}
+
+@if (state().kind === 'ready') {
+  @if (isEmpty()) {
+    <p class="duplicates__status" role="status">Aucun doublon détecté.</p>
+  } @else {
+    <div class="duplicates__selection-bar" role="region" aria-label="Sélection pour comparaison">
+      <p class="duplicates__counter" aria-live="polite">
+        <strong>{{ selectedCount() }}/2</strong> compte(s) sélectionné(s)
+      </p>
+      <div class="duplicates__selection-actions">
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          [disabled]="!canCompare()"
+          (click)="compare($event.target)"
+        >
+          Comparer
+        </button>
+        <button
+          mat-button
+          type="button"
+          [disabled]="selectedCount() === 0"
+          (click)="clearSelection()"
+        >
+          Effacer la sélection
+        </button>
+      </div>
+      <p class="duplicates__selection-hint">
+        La fusion réelle n'est pas disponible : ce parcours s'arrête à la comparaison et à la
+        simulation (docs/02 §9.5).
+      </p>
+    </div>
+
+    @for (group of groups(); track group.signature) {
+      <section class="duplicates__group">
+        <h2 class="duplicates__group-title">{{ group.reason }}</h2>
+        <div class="duplicates__table-wrapper esic-table-wrap--tall">
+          <table class="duplicates__table">
+            <caption class="duplicates__sr-only">Comptes rapprochés par : {{ group.signature }}</caption>
+            <thead>
+              <tr>
+                <th scope="col"><span class="duplicates__sr-only">Sélection</span></th>
+                <th scope="col">Adresse électronique</th>
+                <th scope="col">Nom</th>
+                <th scope="col">Statut</th>
+                <th scope="col">Créé le</th>
+                <th scope="col"><span class="duplicates__sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (candidate of group.accounts; track candidate.userId) {
+                <tr [class.duplicates__row--selected]="isSelected(candidate.userId)">
+                  <td>
+                    <input
+                      type="checkbox"
+                      class="duplicates__checkbox"
+                      [checked]="isSelected(candidate.userId)"
+                      [disabled]="checkboxDisabled(candidate.userId)"
+                      (change)="onCheckboxChange(candidate.userId, $event)"
+                      [attr.aria-label]="'Sélectionner ' + candidate.email + ' pour comparaison'"
+                    />
+                  </td>
+                  <td>{{ candidate.email }}</td>
+                  <td>{{ candidate.firstName }} {{ candidate.lastName }}</td>
+                  <td><span class="esic-badge" [attr.data-status]="candidate.status">{{ statusLabel(candidate.status) }}</span></td>
+                  <td>{{ candidate.createdAt | date: 'dd/MM/yyyy' }}</td>
+                  <td>
+                    <a
+                      mat-button
+                      color="primary"
+                      [routerLink]="['/administration', candidate.userId]"
+                      [attr.aria-label]="'Consulter la fiche de ' + candidate.email"
+                    >
+                      Consulter
+                    </a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (comparison().kind !== 'idle') {
+      <section
+        class="esic-reveal duplicates__comparison"
+        role="group"
+        aria-label="Comparaison de deux comptes"
+      >
+        <div class="duplicates__comparison-head">
+          <h2 class="esic-reveal__title">Comparaison — simulation en lecture seule</h2>
+          <button
+            class="duplicates__close"
+            mat-button
+            type="button"
+            (click)="closeComparison()"
+          >
+            Fermer
+          </button>
+        </div>
+
+        @if (comparisonLoading()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Comparaison en cours"></mat-progress-bar>
+          <p class="duplicates__status" role="status">Comparaison en cours…</p>
+        }
+
+        @if (comparisonError(); as err) {
+          <div class="duplicates__panel" role="alert">
+            <mat-icon aria-hidden="true">error_outline</mat-icon>
+            <div>
+              <p>{{ err.message }}</p>
+              @if (err.correlationId) {
+                <p class="duplicates__ref">Référence à citer au support : {{ err.correlationId }}</p>
+              }
+              <button mat-stroked-button type="button" (click)="retryComparison()">Réessayer</button>
+            </div>
+          </div>
+        }
+
+        @if (comparisonResult(); as result) {
+          <p
+            class="duplicates__assessment"
+            [attr.data-assessment]="result.assessment"
+            role="status"
+          >
+            <mat-icon aria-hidden="true">
+              {{
+                result.assessment === 'NOT_MERGEABLE'
+                  ? 'block'
+                  : result.assessment === 'POTENTIALLY_SAFE'
+                    ? 'check_circle'
+                    : 'help'
+              }}
+            </mat-icon>
+            <span>{{ assessmentLabel(result.assessment) }}</span>
+          </p>
+
+          @if (result.reasons.length) {
+            <ul class="duplicates__reasons">
+              @for (reason of result.reasons; track reason) {
+                <li>{{ reason }}</li>
+              }
+            </ul>
+          }
+
+          <div class="duplicates__sides">
+            @for (side of [result.first, result.second]; track side.id) {
+              <div class="duplicates__side">
+                <h3 class="duplicates__side-title">{{ side.displayName }}</h3>
+                <dl class="esic-kv">
+                  <dt>Adresse électronique</dt>
+                  <dd>{{ side.email ?? '—' }}</dd>
+                  <dt>Téléphone</dt>
+                  <dd>{{ side.phone ?? '—' }}</dd>
+                  <dt>Statut</dt>
+                  <dd><span class="esic-badge" [attr.data-status]="side.status">{{ statusLabel(side.status) }}</span></dd>
+                  <dt>Rôles</dt>
+                  <dd>{{ side.roles.length ? side.roles.join(', ') : '—' }}</dd>
+                  <dt>Numéro étudiant</dt>
+                  <dd>{{ side.studentNumber ?? '—' }}</dd>
+                  <dt>Inscription active</dt>
+                  <dd>{{ side.hasActiveEnrollment ? 'Oui' : 'Non' }}</dd>
+                  <dt>Identifiants de connexion</dt>
+                  <dd>{{ side.hasLoginCredential ? 'Oui' : 'Non' }}</dd>
+                  <dt>Second facteur</dt>
+                  <dd>{{ side.mfaConfigured ? 'Configuré' : 'Non' }}</dd>
+                  <dt>Passkeys / appareils</dt>
+                  <dd>{{ side.passkeys }} / {{ side.trustedDevices }}</dd>
+                </dl>
+              </div>
+            }
+          </div>
+
+          <div class="duplicates__notes">
+            <div class="duplicates__note-block">
+              <h3>Correspondances</h3>
+              @if (result.matchingFields.length) {
+                <ul>
+                  @for (field of result.matchingFields; track field) {
+                    <li>{{ fieldLabel(field) }}</li>
+                  }
+                </ul>
+              } @else {
+                <p class="duplicates__status">Aucune concordance.</p>
+              }
+            </div>
+
+            <div class="duplicates__note-block">
+              <h3>Différences</h3>
+              @if (result.differentFields.length) {
+                <ul>
+                  @for (field of result.differentFields; track field) {
+                    <li>{{ fieldLabel(field) }}</li>
+                  }
+                </ul>
+              } @else {
+                <p class="duplicates__status">Aucune différence relevée.</p>
+              }
+            </div>
+
+            <div class="duplicates__note-block duplicates__note-block--conflict">
+              <h3>Conflits bloquants</h3>
+              @if (result.conflicts.length) {
+                <ul>
+                  @for (note of result.conflicts; track note.code) {
+                    <li>{{ note.detail }}</li>
+                  }
+                </ul>
+              } @else {
+                <p class="duplicates__status">Aucun conflit bloquant.</p>
+              }
+            </div>
+
+            <div class="duplicates__note-block duplicates__note-block--warning">
+              <h3>Avertissements</h3>
+              @if (result.warnings.length) {
+                <ul>
+                  @for (note of result.warnings; track note.code) {
+                    <li>{{ note.detail }}</li>
+                  }
+                </ul>
+              } @else {
+                <p class="duplicates__status">Aucun avertissement.</p>
+              }
+            </div>
+          </div>
+
+          <div class="duplicates__dependencies">
+            <h3>Données rattachées</h3>
+            <div class="duplicates__table-wrapper">
+              <table class="duplicates__table">
+                <caption class="duplicates__sr-only">
+                  Décompte des données rattachées aux deux comptes
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Catégorie</th>
+                    <th scope="col">Total (deux comptes)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of result.dependencySummary | keyvalue; track entry.key) {
+                    <tr>
+                      <td>{{ dependencyLabel(entry.key) }}</td>
+                      <td>{{ entry.value }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          @if (result.consequences.length) {
+            <div class="duplicates__note-block">
+              <h3>Conséquences potentielles d'une fusion</h3>
+              <ul>
+                @for (line of result.consequences; track line) {
+                  <li>{{ line }}</li>
+                }
+              </ul>
+            </div>
+          }
+
+          <p class="duplicates__no-merge">
+            <button mat-stroked-button type="button" disabled>
+              Fusionner — disponible après validation du parcours
+            </button>
+            <span class="duplicates__sr-only">
+              La fusion des comptes n'est pas disponible : ce parcours livre uniquement la
+              comparaison et la simulation en lecture seule.
+            </span>
+          </p>
+        }
+      </section>
+    }
+  }
+}

@@ -13,11 +13,13 @@ record RoomResponse(
         Integer capacity,
         String floorLabel,
         /**
-         * Jeton du QR fixe (EF-ORG-003). Exposé aux seuls rôles qui
-         * peuvent l'imprimer : c'est un secret d'affiche, pas un
-         * identifiant public de salle.
+         * Date d'émission du QR fixe (EF-ORG-003), ou {@code null} si
+         * aucun n'a été émis. Sert d'indicateur « affiche disponible »
+         * dans la liste des salles. Le <strong>jeton</strong> lui-même
+         * n'apparaît <strong>jamais</strong> ici : c'est un secret
+         * d'affiche, renvoyé uniquement par {@code GET
+         * /rooms/{id}/static-qr} ({@link RoomStaticQrView}).
          */
-        String staticQrReference,
         Instant staticQrIssuedAt,
         OrganizationStatus status,
         Instant archivedAt,
@@ -34,7 +36,6 @@ record RoomResponse(
                 room.getName(),
                 room.getCapacity(),
                 room.getFloorLabel(),
-                room.getStaticQrReference(),
                 room.getStaticQrIssuedAt(),
                 room.getStatus(),
                 room.getArchivedAt(),

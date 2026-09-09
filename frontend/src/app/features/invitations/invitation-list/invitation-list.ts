@@ -5,6 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { InvitationsApiService } from '../invitations-api.service';
@@ -26,6 +27,8 @@ import { EmailDelivery, InvitationSummary } from '../invitations.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe,
+    RouterLink,
+    RouterLinkActive,
     MatCardModule,
     MatTableModule,
     MatButtonModule,

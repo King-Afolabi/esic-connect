@@ -162,7 +162,11 @@ test.describe("Piste d'audit (EF-AUD-002)", () => {
 test.describe('Invitations non activées (EF-REP-010)', () => {
   test("l'écran s'affiche et ne montre que des adresses masquées", async ({ page }) => {
     await loginAsUi(page, ACCOUNTS.PEDAGOGICAL_MANAGER_TEACHER, '/invitations/non-activees');
-    await expect(page.getByRole('heading', { name: 'Invitations non activées' })).toBeVisible();
+    // ANO-NAV-001 : « Non activées » est devenu une vue de « Invitations »,
+    // reliée par une sous-navigation `.esic-subnav`. Le titre de page est
+    // désormais « Invitations », l'onglet actif « Non activées ».
+    await expect(page.getByRole('heading', { name: 'Invitations', exact: true })).toBeVisible();
+    await expect(page.locator('.esic-subnav__link--active')).toHaveText('Non activées');
     await expect(page.getByText('corrigez-la depuis le suivi des invitations')).toBeVisible();
     const table = page.locator('table.pending__table');
     const empty = page.getByText("Aucun compte en attente d'activation.");

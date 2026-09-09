@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, HttpResponse } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { NotificationService } from '../../../core/notifications/notification.service';
@@ -53,6 +54,7 @@ describe('PendingInvitationReport', () => {
     await TestBed.configureTestingModule({
       imports: [PendingInvitationReport],
       providers: [
+        provideRouter([]),
         { provide: InvitationsApiService, useValue: api },
         { provide: NotificationService, useValue: notifications },
       ],

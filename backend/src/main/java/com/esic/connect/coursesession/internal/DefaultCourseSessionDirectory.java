@@ -298,6 +298,32 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
                 .getContent());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> findTaughtClassGroupPublicIds(UUID teacherPublicId) {
+        if (teacherPublicId == null) {
+            return Set.of();
+        }
+        Long teacherId = userDirectory.findByPublicId(teacherPublicId)
+                .map(UserDirectory.UserRef::internalId)
+                .orElse(null);
+        if (teacherId == null) {
+            return Set.of();
+        }
+        Specification<CourseSession> assigned = CourseSessionSpecifications.taughtBy(teacherId);
+        List<Long> substituted =
+                substitutionRepository.findActiveSubstitutedSessionIds(teacherId, clock.instant());
+        if (!substituted.isEmpty()) {
+            assigned = Specification.anyOf(assigned,
+                    CourseSessionSpecifications.hasInternalIdIn(substituted));
+        }
+        Specification<CourseSession> spec = Specification.allOf(
+                CourseSessionSpecifications.notSupersededByScheduling(), assigned);
+        return sessionRepository.findAll(spec).stream()
+                .flatMap(session -> classPublicIds(session).stream())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     private static int bound(int limit) {
         return Math.max(1, Math.min(limit, SCHEDULE_LIMIT));
     }

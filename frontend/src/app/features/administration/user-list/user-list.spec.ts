@@ -5,9 +5,14 @@ import {
   TestRequest,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { vi } from 'vitest';
 
-import { PageResponse, UserSummaryResponse } from '../administration.models';
+import { RoleContextService } from '../../../core/auth/role-context.service';
+import { Role } from '../../../core/models/role';
+import { NotificationService } from '../../../core/notifications/notification.service';
+import { BulkResult, PageResponse, UserSummaryResponse } from '../administration.models';
 import { UserList } from './user-list';
 
 interface ListInternals {
@@ -17,6 +22,14 @@ interface ListInternals {
   onSortChange: (sort: { active: string; direction: 'asc' | 'desc' | '' }) => void;
   onPageChange: (event: { pageIndex: number; pageSize: number; length: number }) => void;
   retry: () => void;
+  toggleAllOnPage: () => void;
+  toggleRow: (publicId: string) => void;
+  selectedCount: () => number;
+  bulkForm: { setValue: (v: { action: string; reason: string }) => void };
+  previewBulk: () => void;
+  confirmBulk: () => void;
+  cancelBulkPreview: () => void;
+  clearSelection: () => void;
 }
 
 const URL = '/api/v1/users';
@@ -165,5 +178,139 @@ describe('UserList', () => {
     expectList().flush(page([USER]));
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+});
+
+const BULK_URL = '/api/v1/users/bulk';
+
+function bulkResult(overrides: Partial<BulkResult> = {}): BulkResult {
+  return {
+    applied: false,
+    action: 'SUSPEND',
+    requested: 1,
+    eligible: 1,
+    ignored: 0,
+    rejected: 0,
+    outcomes: [{ userId: 'u-1', email: 'alice.dupont@esic.test', outcome: 'ELIGIBLE', reason: '' }],
+    ...overrides,
+  };
+}
+
+describe('UserList — opérations de masse (EF-USER-004)', () => {
+  let fixture: ComponentFixture<UserList>;
+  let http: HttpTestingController;
+  let internals: ListInternals;
+  const notifications = { info: vi.fn(), error: vi.fn() };
+
+  function setup(effectiveRoles: Role[]): void {
+    notifications.info.mockReset();
+    notifications.error.mockReset();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { effectiveRoles: signal(effectiveRoles) } },
+        { provide: NotificationService, useValue: notifications },
+      ],
+    });
+    fixture = TestBed.createComponent(UserList);
+    http = TestBed.inject(HttpTestingController);
+    internals = fixture.componentInstance as unknown as ListInternals;
+    fixture.detectChanges();
+    http.expectOne((r) => r.url === URL).flush(page([USER]));
+    fixture.detectChanges();
+  }
+
+  const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+  afterEach(() => http.verify());
+
+  it('shows no selection column nor bulk panel for a role outside LIFECYCLE_ROLES', () => {
+    setup(['TEACHER']);
+    expect(fixture.nativeElement.querySelector('mat-checkbox')).toBeNull();
+  });
+
+  it('shows the selection column and count for ADMIN, matching the server LIFECYCLE_ROLES', () => {
+    setup(['ADMIN']);
+    expect(fixture.nativeElement.querySelector('mat-checkbox')).not.toBeNull();
+    internals.toggleRow('u-1');
+    fixture.detectChanges();
+    expect(text()).toContain('1 compte(s) sélectionné(s)');
+  });
+
+  it('preview (confirm omitted) shows eligible/ignored/rejected without applying anything', () => {
+    setup(['ADMIN']);
+    internals.toggleRow('u-1');
+    internals.bulkForm.setValue({ action: 'SUSPEND', reason: 'Test' });
+    internals.previewBulk();
+
+    const req = http.expectOne((r) => r.url === BULK_URL);
+    expect(req.request.body).toEqual({
+      action: 'SUSPEND',
+      userIds: ['u-1'],
+      reason: 'Test',
+      confirm: false,
+    });
+    req.flush(bulkResult());
+    fixture.detectChanges();
+
+    expect(text()).toContain("Aperçu — rien n'a encore été écrit.");
+    expect(text()).toContain('alice.dupont@esic.test');
+    expect(notifications.info).not.toHaveBeenCalled();
+  });
+
+  it('confirming re-posts with confirm: true, clears the selection and reloads the list', () => {
+    setup(['ADMIN']);
+    internals.toggleRow('u-1');
+    internals.bulkForm.setValue({ action: 'SUSPEND', reason: 'Test' });
+    internals.previewBulk();
+    http.expectOne((r) => r.url === BULK_URL).flush(bulkResult());
+    fixture.detectChanges();
+
+    internals.confirmBulk();
+    const confirmReq = http.expectOne((r) => r.url === BULK_URL);
+    expect(confirmReq.request.body).toEqual({
+      action: 'SUSPEND',
+      userIds: ['u-1'],
+      reason: 'Test',
+      confirm: true,
+    });
+    confirmReq.flush(bulkResult({ applied: true }));
+    fixture.detectChanges();
+
+    expect(notifications.info).toHaveBeenCalledTimes(1);
+    expect(internals.selectedCount()).toBe(0);
+    // La liste est rechargée après une exécution réelle.
+    http.expectOne((r) => r.url === URL).flush(page([USER]));
+  });
+
+  it('cancelling the preview discards it without ever calling confirm', () => {
+    setup(['ADMIN']);
+    internals.toggleRow('u-1');
+    internals.bulkForm.setValue({ action: 'SUSPEND', reason: 'Test' });
+    internals.previewBulk();
+    http.expectOne((r) => r.url === BULK_URL).flush(bulkResult());
+    fixture.detectChanges();
+
+    internals.cancelBulkPreview();
+    fixture.detectChanges();
+    expect(text()).not.toContain('éligible');
+    http.expectNone(BULK_URL);
+  });
+
+  it('surfaces a server error on the bulk panel instead of throwing', () => {
+    setup(['ADMIN']);
+    internals.toggleRow('u-1');
+    internals.bulkForm.setValue({ action: 'SUSPEND', reason: 'Test' });
+    internals.previewBulk();
+    http
+      .expectOne((r) => r.url === BULK_URL)
+      .flush(
+        { status: 400, code: 'USER_INVALID_FILTER', message: 'Action inconnue.', path: '', correlationId: null, details: [] },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    fixture.detectChanges();
+    expect(text()).toContain('Action inconnue.');
   });
 });

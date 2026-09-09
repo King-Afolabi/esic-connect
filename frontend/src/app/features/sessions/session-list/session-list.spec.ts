@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter } from '@angular/router';
 
 import { Role } from '../../../core/models/role';
 import { RoleContextService } from '../../../core/auth/role-context.service';
@@ -101,6 +101,22 @@ describe('SessionList', () => {
     expect(text()).toContain('Ouverte');
   });
 
+  it('bounds the long table height and pins its header (ANO-UX-002)', () => {
+    ({ fixture, http, internals } = setup(true));
+    expectList().flush(page([SESSION]));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    // L'enveloppe de la table longue porte la variante « --tall » :
+    // hauteur bornée + défilement vertical interne (le <body> reste
+    // librement défilable pour atteindre les autres sections).
+    expect(el.querySelector('.sessions__table-wrapper.esic-table-wrap--tall')).not.toBeNull();
+    // Angular Material marque l'entête figée d'un `sticky: true`.
+    expect(el.querySelector('.mat-mdc-table-sticky, tr.mat-mdc-header-row')).not.toBeNull();
+    // La pagination reste HORS de l'enveloppe défilante (toujours visible).
+    const wrap = el.querySelector('.sessions__table-wrapper')!;
+    expect(wrap.querySelector('mat-paginator')).toBeNull();
+  });
+
   it('shows the empty state when there is no session', () => {
     ({ fixture, http, internals } = setup(true));
     expectList().flush(page([]));
@@ -193,5 +209,33 @@ describe('SessionList', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('a[href="/sessions/new"]'),
     ).toBeNull();
+  });
+
+  it('restaure filtre / tri / page depuis les query params (Lot G)', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { effectiveRoles: signal(['ADMIN'] as Role[]) } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParams: { status: 'CANCELLED', sort: 'createdAt', dir: 'asc', page: '1' } },
+          },
+        },
+      ],
+    });
+    const local = TestBed.createComponent(SessionList);
+    const localHttp = TestBed.inject(HttpTestingController);
+    local.detectChanges();
+
+    const req = localHttp.expectOne((r) => r.url === '/api/v1/sessions');
+    expect(req.request.params.get('status')).toBe('CANCELLED');
+    expect(req.request.params.get('sort')).toBe('createdAt,asc');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush(page([]));
+    localHttp.verify();
   });
 });

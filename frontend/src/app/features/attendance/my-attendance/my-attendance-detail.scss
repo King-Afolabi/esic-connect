@@ -1,8 +1,9 @@
+// Style partagé porté par `my-attendance-list.scss` (`styleUrl`).
+// Ici : le bandeau propre à l'état de l'analyse antivirus (T-04).
 
-// Bandeau d'information sur l'état réel de l'analyse antivirus (T-04).
 .att__notice {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  margin: 0 0 0.75rem;
+  gap: var(--esic-space-2);
+  margin: 0 0 var(--esic-space-3);
 }

@@ -81,6 +81,15 @@ describe('AuditTrail', () => {
     expect(text()).not.toContain('127.0.0.1');
   });
 
+  it('bounds the long table and pins its native header (ANO-UX-002)', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    const scroll = el.querySelector('.audit__scroll.esic-table-wrap--tall');
+    expect(scroll).not.toBeNull();
+    // L'entête reste dans le flux de la table (rendu natif) ; la
+    // stickiness est portée par la primitive `.esic-table-wrap--tall thead th`.
+    expect(scroll!.querySelector('thead th')).not.toBeNull();
+  });
+
   it('offers no way to edit or delete an audit entry', () => {
     const html = fixture.nativeElement.innerHTML as string;
     expect(html).not.toContain('Supprimer');

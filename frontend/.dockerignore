@@ -1,0 +1,38 @@
+# Contexte de build minimal — voir compose.prod.yaml (contexte ./frontend).
+# Le Dockerfile fait `COPY . .` puis `npm run build`, puis copie
+# `nginx.conf` dans l'image finale. À NE PAS exclure : package.json,
+# package-lock.json, angular.json, tsconfig*.json, eslint.config.js,
+# src/, public/, nginx.conf.
+
+# Dépendances et sorties — réinstallées / reconstruites dans l'image
+node_modules/
+dist/
+.angular/
+out-tsc/
+coverage/
+
+# Outillage et métadonnées non nécessaires à l'image
+Dockerfile
+.dockerignore
+.gitignore
+.editorconfig
+README.md
+proxy.conf.json
+
+# IDE / éditeurs
+.vscode/
+.idea/
+*.iml
+
+# Journaux et fichiers d'OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Secrets — jamais copiés dans une image
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks

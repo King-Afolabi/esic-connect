@@ -21,11 +21,13 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
-      withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
+      // `enabled` : au retour arrière, la position de défilement de la
+      // liste est restaurée (Lot G) ; une navigation avant repart en haut.
+      withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
     ),
-    // Tente de rétablir une session avant le premier rendu. Sans
-    // persistance client autorisée, cet appel se termine sans session
-    // aujourd'hui (voir AuthService.restoreSession).
+    // Rétablit la session avant le premier rendu : échange le cookie de
+    // renouvellement HttpOnly contre un jeton d'accès (voir
+    // AuthService.restoreSession). Sans cookie valide, démarrage anonyme.
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
     // Enregistrement du service worker (EF-PWA-001). Silencieux si le
     // navigateur ne le prend pas en charge : la PWA est un supplément,

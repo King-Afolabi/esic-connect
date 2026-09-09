@@ -1,11 +1,15 @@
-<h1 class="att__title">Mes présences</h1>
-<p class="att__intro">
-  Historique de vos points de contrôle d'émargement. Une absence sur un point de contrôle fermé peut être
-  justifiée : le justificatif est une information (catégorie, référence, commentaire) — aucune pièce jointe
-  n'est demandée dans cette version. Les personnels autorisés y ont accès.
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Mes présences</h1>
+    <p class="esic-page-header__description">
+      Historique de vos points de contrôle d'émargement. Une absence sur un point de contrôle fermé peut être
+      justifiée : le justificatif est une information (catégorie, référence, commentaire) — aucune pièce jointe
+      n'est demandée dans cette version. Les personnels autorisés y ont accès.
+    </p>
+  </div>
+</header>
 
-<form class="att__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="att__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline">
     <mat-label>Depuis</mat-label>
     <input matInput type="date" formControlName="from" />
@@ -52,7 +56,7 @@
     @if (rows().length === 0) {
       <p class="att__status" role="status">Aucune présence sur la période sélectionnée.</p>
     } @else {
-      <div class="att__table-wrapper">
+      <div class="att__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="rows()">
           <ng-container matColumnDef="session">
             <th mat-header-cell *matHeaderCellDef>Séance</th>
@@ -117,7 +121,7 @@
               }
             </td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
       </div>

@@ -1,10 +1,14 @@
 <section class="planning-calendar">
-  <h1>Construire un planning</h1>
-  <p class="planning-calendar__intro">
-    Les créneaux saisis ici forment un <strong>brouillon</strong>. Ils ne
-    deviennent des séances qu'après publication, avec les mêmes contrôles de
-    conflit qu'un import de fichier.
-  </p>
+  <header class="esic-page-header">
+    <div class="esic-page-header__text">
+      <h1 class="esic-page-header__title">Construire un planning</h1>
+      <p class="esic-page-header__description">
+        Les créneaux saisis ici forment un <strong>brouillon</strong>. Ils ne
+        deviennent des séances qu'après publication, avec les mêmes contrôles de
+        conflit qu'un import de fichier.
+      </p>
+    </div>
+  </header>
 
   @if (classesError(); as message) {
     <div class="planning-calendar__error" role="alert">

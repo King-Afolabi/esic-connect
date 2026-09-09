@@ -234,21 +234,47 @@ Garde-fous de non-régression : `PlanningImportIntegrationTests`
 
 ## Stratégie
 
-- access token court ;
-- cookie `HttpOnly` ;
-- attribut `Secure` ;
-- `SameSite` adapté ;
-- refresh token rotatif ;
-- révocation ;
-- CSRF adapté au cookie.
+`IMPLEMENTED_AND_TESTED` (module `identity`,
+`RefreshTokenStore` / `RefreshService` / `RefreshCookies`).
+
+- **access token court** — JWT HS256 en mémoire seule côté client
+  (`JWT_ACCESS_TOKEN_TTL_SECONDS`, défaut 900 s) ;
+- **cookie `HttpOnly`** — `refresh_token`, jamais lisible par un script,
+  jamais dans `localStorage` ;
+- **attribut `Secure`** — piloté par `APP_COOKIE_SECURE` (vrai par
+  défaut ; `false` seulement pour les profils servis en clair) ;
+- **`SameSite=Strict`** — le cookie n’accompagne aucune navigation d’un
+  autre site : c’est la protection CSRF de ce cookie ;
+- **`Path=/api/v1/auth`** — jamais envoyé aux routes métier ;
+- **refresh token rotatif** — jeton opaque stocké dans Redis (une clé par
+  session, empreinte SHA-256 du secret courant), réécrit à chaque
+  renouvellement ; un secret périmé rejoué **coupe toute la famille** ;
+- **CSRF** — pas de jeton anti-CSRF distinct : `SameSite=Strict`, la
+  réponse de `/auth/refresh` ne rend le jeton d’accès que dans son corps
+  (illisible en cross-origin), et aucune route métier n’accorde
+  d’autorité par cookie (en-tête `Authorization` exigé) ;
+- **révocation** — voir Expiration.
+
+Test : `RefreshTokenIntegrationTests`, `RefreshTokenExpiryIntegrationTests`
+(back-end) ; `auth.service.spec.ts`, `api-error.interceptor.spec.ts`
+(front-end).
 
 ## Expiration
 
-- 30 minutes d’inactivité ;
-- durée absolue configurable ;
-- révocation après changement de mot de passe ;
-- révocation après suspension ;
-- révocation à la déconnexion.
+- **30 minutes d’inactivité** — durée de vie Redis glissante,
+  `JWT_REFRESH_TOKEN_IDLE_TTL` (défaut `PT30M`) ;
+- **durée absolue configurable** — `JWT_REFRESH_TOKEN_ABSOLUTE_TTL`
+  (défaut `PT12H`), inscrite dans l’entrée et jamais repoussée ;
+- **révocation après changement de mot de passe** — la famille est
+  ouverte avant `credentials_invalidated_at`, donc refusée au
+  renouvellement (même règle que `RevokedTokenValidator`) ;
+- **révocation après suspension** — le renouvellement recharge le compte
+  et refuse tout statut autre qu’`ACTIVE` ;
+- **révocation à la déconnexion** — `POST /auth/logout` supprime la
+  famille et vide le cookie ;
+- **démarrage à froid hors ligne** — non couvert : le cookie exige le
+  réseau et le jeton d’accès ne survit pas au rechargement sans lui
+  (arbitrage RG-093, dette T-14).
 
 ## Interdiction
 
@@ -471,6 +497,40 @@ Le serveur vérifie :
 - unicité ;
 - canal ;
 - risque.
+
+## Scan caméra dans l'application (8 septembre 2026)
+
+- la caméra n'est ouverte **qu'après un clic** ; jamais au chargement ;
+- les pistes caméra sont libérées à la fermeture, au changement de route,
+  à la destruction du composant et **dès la première lecture** ;
+- le contenu scanné est une **chaîne opaque** transmise telle quelle aux
+  routes d'émargement existantes — le frontend ne décide d'aucune
+  validité ; il n'est **jamais** persisté (`localStorage` /
+  `sessionStorage` exclus) ;
+- une **URL externe** (origine hors application) est refusée et jamais
+  suivie ni ouverte automatiquement ;
+- décodage `BarcodeDetector` natif si présent, sinon `jsQR` (Apache-2.0,
+  aucune dépendance native, aucun réseau, aucune télémétrie) ;
+- aucune image de caméra n'est envoyée ni stockée.
+
+## Tag NFC de salle
+
+- **même URL** que le QR fixe, référence opaque seule — aucune donnée
+  personnelle, aucun secret ;
+- **aucune sécurité autonome** : le serveur applique exactement les mêmes
+  contrôles que pour le QR fixe (réseau ESIC, fenêtre de séance) ;
+- Web NFC n'est pas utilisé ; pas de canal `ROOM_STATIC_NFC` distinct
+  (rien ne distingue de façon fiable un tap NFC d'une ouverture d'URL).
+
+## URL de salle côté administration
+
+- servie **uniquement** par la route dédiée du QR fixe, aux rôles
+  `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION` ;
+- **jamais** dans `RoomResponse`, jamais dans la liste des salles, jamais
+  journalisée, jamais dans un événement d'audit ni un message d'erreur ;
+- copie presse-papiers **en écriture seule**, sur clic ; jamais de
+  lecture du presse-papiers ; repli sur sélection manuelle d'un champ
+  `readonly`.
 
 ---
 

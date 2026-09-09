@@ -1,12 +1,7 @@
-<h1 class="att__title">Suivi d'assiduité</h1>
-<nav class="att__crumbs" aria-label="Sections">
-  <a routerLink="../sessions">Par séance</a> ·
-  <a routerLink="../classes">Par classe</a> ·
-  <a routerLink="../students">Par apprenant</a> ·
-  <a routerLink="../justifications">Justificatifs</a>
-</nav>
+<!-- Titre de page et navigation secondaire : `app-attendance-management-shell`. -->
+<h2 class="att__subtitle">Synthèse</h2>
 
-<form class="att__filters" [formGroup]="filters" (ngSubmit)="apply()">
+<form class="att__filters esic-filters" [formGroup]="filters" (ngSubmit)="apply()">
   <mat-form-field appearance="outline">
     <mat-label>Depuis</mat-label>
     <input matInput type="date" formControlName="from" />
@@ -44,43 +39,49 @@
   }
   @case ('ready') {
     @if (summary(); as s) {
-      <div class="att__cards">
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Classes / séances</p>
-          <p class="att__card-value">{{ s.classCount }} / {{ s.sessionCount }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Taux de présence (demi-journées)</p>
-          <p class="att__card-value">{{ percent(s.totals.attendanceRate) }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Absences injustifiées</p>
-          <p class="att__card-value">{{ s.totals.absentHalfDays }}</p>
-          <p class="att__meta">{{ percent(s.totals.unjustifiedAbsenceRate) }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Absences excusées</p>
-          <p class="att__card-value">{{ s.totals.excusedHalfDays }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Retards</p>
-          <p class="att__card-value">{{ s.totals.lateCount }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Demi-journées en entreprise (exclues)</p>
-          <p class="att__card-value">{{ s.totals.companyHalfDays }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Demi-journées au contexte indéterminé</p>
-          <p class="att__card-value">{{ s.totals.unknownHalfDays }}</p>
-        </mat-card-content></mat-card>
-        <mat-card appearance="outlined"><mat-card-content>
-          <p class="att__meta">Justificatifs en attente</p>
-          <p class="att__card-value">
+      <!--
+        Synthèse compacte : une grille de DEUX colonnes (primitive
+        `.esic-metric-grid`), libellés courts, valeurs non coupées, filets
+        internes plutôt que huit cartes séparées. Alignée sur « Mon
+        activité » du tableau de bord responsable.
+      -->
+      <ul class="esic-metric-grid" aria-label="Indicateurs de synthèse d'assiduité">
+        <li class="esic-metric">
+          <span class="esic-metric__label">Classes / séances</span>
+          <span class="esic-metric__value">{{ s.classCount }} / {{ s.sessionCount }}</span>
+        </li>
+        <li class="esic-metric" data-tone="present">
+          <span class="esic-metric__label">Taux de présence (½-journées)</span>
+          <span class="esic-metric__value">{{ percent(s.totals.attendanceRate) }}</span>
+        </li>
+        <li class="esic-metric" data-tone="absent">
+          <span class="esic-metric__label">Absences injustifiées</span>
+          <span class="esic-metric__value">{{ s.totals.absentHalfDays }}</span>
+          <span class="esic-metric__hint">{{ percent(s.totals.unjustifiedAbsenceRate) }}</span>
+        </li>
+        <li class="esic-metric" data-tone="excused">
+          <span class="esic-metric__label">Absences excusées</span>
+          <span class="esic-metric__value">{{ s.totals.excusedHalfDays }}</span>
+        </li>
+        <li class="esic-metric" data-tone="late">
+          <span class="esic-metric__label">Retards</span>
+          <span class="esic-metric__value">{{ s.totals.lateCount }}</span>
+        </li>
+        <li class="esic-metric">
+          <span class="esic-metric__label">½-journées en entreprise (exclues)</span>
+          <span class="esic-metric__value">{{ s.totals.companyHalfDays }}</span>
+        </li>
+        <li class="esic-metric">
+          <span class="esic-metric__label">½-journées au contexte indéterminé</span>
+          <span class="esic-metric__value">{{ s.totals.unknownHalfDays }}</span>
+        </li>
+        <li class="esic-metric" data-tone="pending">
+          <span class="esic-metric__label">Justificatifs en attente</span>
+          <span class="esic-metric__value">
             <a routerLink="../justifications">{{ s.pendingJustifications }}</a>
-          </p>
-        </mat-card-content></mat-card>
-      </div>
+          </span>
+        </li>
+      </ul>
       @for (note of s.notes; track note) {
         <p class="att__meta" role="note">{{ note }}</p>
       }

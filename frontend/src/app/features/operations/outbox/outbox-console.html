@@ -76,9 +76,7 @@
                 <tr>
                   <td>{{ message.messageType }}</td>
                   <td>
-                    <span class="outbox__status" [class.outbox__status--dead]="message.status === 'DEAD'">
-                      {{ message.status }}
-                    </span>
+                    <span class="esic-badge" [attr.data-status]="message.status">{{ message.status }}</span>
                   </td>
                   <td>{{ message.attempts }}</td>
                   <td>{{ message.lastError ?? '—' }}</td>

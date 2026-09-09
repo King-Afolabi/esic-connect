@@ -57,6 +57,23 @@ class DefaultUserDirectory implements UserDirectory {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<NamedUserRef> searchByNameIncludingInactive(String query, String roleCode, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        RoleCode role = parseRole(roleCode);
+        if (pattern == null || role == null) {
+            return java.util.List.of();
+        }
+        return userAccountRepository.searchByNameExcludingStatus(pattern, role, AccountStatus.ARCHIVED,
+                        org.springframework.data.domain.PageRequest.of(0,
+                                com.esic.connect.shared.SearchPattern.bound(limit)))
+                .stream()
+                .map(account -> new NamedUserRef(account.getId(), account.getPublicId(),
+                        account.getFirstName(), account.getLastName()))
+                .toList();
+    }
+
     /** Code de rôle inconnu : aucun résultat, jamais une exception. */
     private static RoleCode parseRole(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {
@@ -81,6 +98,21 @@ class DefaultUserDirectory implements UserDirectory {
             names.put(account.getId(), new PersonName(account.getFirstName(), account.getLastName()));
         }
         return names;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, NamedUserRef> findNamedRefs(java.util.Collection<Long> userInternalIds) {
+        if (userInternalIds == null || userInternalIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, NamedUserRef> refs = new java.util.HashMap<>();
+        for (UserAccount account : userAccountRepository.findAllById(
+                userInternalIds.stream().filter(java.util.Objects::nonNull).distinct().toList())) {
+            refs.put(account.getId(), new NamedUserRef(account.getId(), account.getPublicId(),
+                    account.getFirstName(), account.getLastName()));
+        }
+        return refs;
     }
 
     @Override

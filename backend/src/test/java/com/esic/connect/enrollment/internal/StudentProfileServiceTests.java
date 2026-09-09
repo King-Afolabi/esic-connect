@@ -41,9 +41,16 @@ class StudentProfileServiceTests {
     private UserDirectory userDirectory;
     @Mock
     private EnrollmentChangePublisher changePublisher;
+    @Mock
+    private StudentNumberAllocator studentNumberAllocator;
+    @Mock
+    private EnrollmentRepository enrollmentRepository;
+    @Mock
+    private RosterScopeResolver rosterScope;
 
     private StudentProfileService service() {
-        return new StudentProfileService(profileRepository, persister, userDirectory, changePublisher);
+        return new StudentProfileService(profileRepository, enrollmentRepository, persister, userDirectory,
+                changePublisher, studentNumberAllocator, rosterScope);
     }
 
     private static StudentProfileRequests.Create create(UUID userPublicId, String studentNumber) {
@@ -176,7 +183,7 @@ class StudentProfileServiceTests {
 
     @Test
     void listRejectsSortOutsideWhitelist() {
-        assertThatThrownBy(() -> service().list(null, null, null, 0, 20, "userId,asc"))
+        assertThatThrownBy(() -> service().list(null, null, null, 0, 20, "userId,asc", null))
                 .extracting(ex -> ((EnrollmentException) ex).kind())
                 .isEqualTo(EnrollmentException.Kind.INVALID_SORT);
     }

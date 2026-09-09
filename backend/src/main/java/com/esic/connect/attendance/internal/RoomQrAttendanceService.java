@@ -131,21 +131,25 @@ class RoomQrAttendanceService {
                 .collect(Collectors.toSet());
 
         // Séances de CES classes, dans CETTE salle, dont la fenêtre de QR
-        // fixe est ouverte : de `openBefore` avant le début jusqu'au début.
+        // fixe est ouverte : de `openBefore` avant le début jusqu'à
+        // STRICTEMENT avant le début. À l'heure de début exacte (H) et
+        // au-delà, le QR fixe n'est plus accepté (RG-051, docs/02 §16.5) —
+        // c'est le QR dynamique du formateur qui prend le relais.
         Optional<CourseSessionDirectory.SessionRef> candidate = courseSessionDirectory
                 .findSessionsForClasses(classPublicIds, from, to).stream()
                 .filter(session -> room.code().equalsIgnoreCase(session.roomCode()))
                 .filter(session -> !now.isBefore(session.startsAt().minus(openBefore)))
-                .filter(session -> !now.isAfter(session.startsAt()))
+                .filter(session -> now.isBefore(session.startsAt()))
                 .min(Comparator.comparing(CourseSessionDirectory.SessionRef::startsAt));
 
         if (candidate.isEmpty()) {
             // Distinguer « pas de séance » de « trop tard » aide
-            // l'apprenant sans rien révéler d'une autre classe.
+            // l'apprenant sans rien révéler d'une autre classe. « Trop
+            // tard » couvre l'heure de début exacte : `now >= startsAt`.
             boolean startedAlready = courseSessionDirectory
                     .findSessionsForClasses(classPublicIds, from, to).stream()
                     .filter(session -> room.code().equalsIgnoreCase(session.roomCode()))
-                    .anyMatch(session -> now.isAfter(session.startsAt()));
+                    .anyMatch(session -> !now.isBefore(session.startsAt()));
             throw new AttendanceException(startedAlready
                     ? AttendanceException.Kind.ROOM_QR_SESSION_STARTED
                     : AttendanceException.Kind.ROOM_QR_NO_SESSION);

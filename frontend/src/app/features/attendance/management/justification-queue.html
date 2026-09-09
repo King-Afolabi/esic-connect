@@ -1,10 +1,5 @@
-<h1 class="att__title">Justificatifs</h1>
-<nav class="att__crumbs" aria-label="Sections">
-  <a routerLink="../summary">Synthèse</a> ·
-  <a routerLink="../sessions">Par séance</a> ·
-  <a routerLink="../classes">Par classe</a> ·
-  <a routerLink="../students">Par apprenant</a>
-</nav>
+<!-- Titre de page et navigation secondaire : `app-attendance-management-shell`. -->
+<h2 class="att__subtitle">Justificatifs</h2>
 
 <div class="att__filter-actions">
   <button mat-button type="button" (click)="setFilter('PENDING')" [disabled]="statusFilter() === 'PENDING'">En attente</button>
@@ -32,7 +27,7 @@
     @if (rows().length === 0) {
       <p class="att__status" role="status">Aucun justificatif dans cette vue.</p>
     } @else {
-      <div class="att__table-wrapper">
+      <div class="att__table-wrapper esic-table-wrap--tall">
         <table mat-table [dataSource]="rows()">
           <ng-container matColumnDef="student">
             <th mat-header-cell *matHeaderCellDef>Apprenant</th>
@@ -110,7 +105,7 @@
               }
             </td>
           </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
           <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
       </div>

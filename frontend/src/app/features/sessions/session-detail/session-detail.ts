@@ -305,6 +305,15 @@ export class SessionDetail {
   protected readonly openCheckpoints = computed(() =>
     this.checkpoints().filter((cp) => cp.status === 'OPEN'),
   );
+  /**
+   * Plusieurs points de contrôle peuvent être `OPEN` en même temps (règle
+   * du dépôt — voir DECISIONS_NEEDED.md, Lot I), mais **un seul** détient
+   * la fenêtre d'émargement active : le back-end n'a qu'un pointeur de
+   * jeton par séance (`AttendanceTokenService`), et émettre un code pour
+   * un autre point de contrôle ferme immédiatement le précédent. Ce
+   * signal sert à l'expliquer dans l'interface.
+   */
+  protected readonly multipleCheckpointsOpen = computed(() => this.openCheckpoints().length > 1);
   protected readonly selectedCheckpoint = computed<CheckpointView | null>(() => {
     const id = this.selectedCheckpointId();
     const open = this.openCheckpoints();

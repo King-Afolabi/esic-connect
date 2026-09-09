@@ -18,3 +18,11 @@ management:
     # indisponibilité ne doit pas faire passer /actuator/health en DOWN.
     mail:
       enabled: false
+
+app:
+  security:
+    cookies:
+      # Développement servi en clair (http://localhost) : le cookie de
+      # renouvellement ne peut pas porter l'attribut Secure sur toutes les
+      # configurations locales. Reste HttpOnly et SameSite=Strict.
+      secure: false

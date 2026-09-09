@@ -1,5 +1,6 @@
-import { Page, expect } from '@playwright/test';
+import { Page, expect, test } from '@playwright/test';
 import { DemoAccount } from './accounts';
+import { claimTotpCode } from './totp';
 
 /**
  * IMPORTANT — architecture réelle observée : le jeton JWT vit uniquement dans un service Angular en
@@ -27,10 +28,24 @@ import { DemoAccount } from './accounts';
  */
 export async function loginAsUi(page: Page, account: DemoAccount, targetPath?: string): Promise<void> {
   await page.goto(targetPath ?? '/login');
-  // Si `targetPath` est déjà accessible sans connexion (ne devrait pas
-  // arriver pour une route protégée), on retombe simplement sur /login.
-  if (!/\/login(\?|$)/.test(page.url())) {
-    // Improbable : la page cible s'est chargée sans redirection.
+  // `authGuard`/`roleGuard` redirigent vers /login de façon ASYNCHRONE
+  // (évaluation du routeur Angular après l'événement `load` de la
+  // navigation dure) : lire `page.url()` immédiatement après `goto` est
+  // une course réelle, gagnée par le guard la plupart du temps mais pas
+  // toujours — reproduit sur un chunk Vite jamais compilé (premier accès
+  // à la route), où la redirection prend juste assez de retard pour que
+  // la lecture synchrone voie encore l'URL cible et morde à l'hameçon
+  // « déjà accessible », sautant la connexion entière. On attend donc
+  // explicitement le passage par /login, avec une redirection déjà
+  // observée traitée comme immédiate (délai quasi nul).
+  try {
+    await page.waitForURL((url) => /\/login(\?|$)/.test(url.pathname + url.search), {
+      timeout: 3_000,
+    });
+  } catch {
+    // Toujours pas sur /login après ce délai : la page cible s'est
+    // réellement chargée sans redirection (cas improbable pour une route
+    // protégée, mais pas exclu pour un appelant sans garde).
     return;
   }
   await page.getByLabel('Adresse électronique').fill(account.email);
@@ -41,12 +56,135 @@ export async function loginAsUi(page: Page, account: DemoAccount, targetPath?: s
   // Sans cela, Playwright échoue en « strict mode violation » et TOUTE la
   // suite navigateur tombe dès l'authentification.
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
-  // On attend seulement la sortie de /login : la destination finale dépend
-  // du rôle (targetPath, un enfant par défaut de targetPath comme
-  // `/academic` → `/academic/academic-years`, ou `/forbidden` si le rôle
-  // n'a pas accès) — c'est au test appelant de vérifier laquelle, pas à ce
-  // helper de la présupposer.
+  // On attend la sortie de /login : soit directement vers la destination
+  // finale (rôle sans second facteur obligatoire), soit vers l'écran de
+  // second facteur `/connexion/verification` (ADMIN / SUPER_ADMIN,
+  // RG-007) — c'est ce dernier cas que `resolveMfaChallengeIfPresent`
+  // franchit ci-dessous.
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 10_000 });
+  await resolveMfaChallengeIfPresent(page, account);
+  // La destination finale dépend du rôle (targetPath, un enfant par défaut
+  // de targetPath comme `/academic` → `/academic/academic-years`, ou
+  // `/forbidden` si le rôle n'a pas accès) — c'est au test appelant de
+  // vérifier laquelle, pas à ce helper de la présupposer.
+}
+
+/**
+ * Franchit l'écran de second facteur (`/connexion/verification`) quand la
+ * connexion vient d'y aboutir — un compte `ADMIN` ou `SUPER_ADMIN`
+ * (RG-007 : second facteur obligatoire) n'obtient jamais de jeton contre
+ * son seul mot de passe (`DEC-S2-005`). Ne contourne aucun contrôle
+ * serveur : franchit le VRAI parcours HTTP `/mfa/verify` ou
+ * `/mfa/enroll` + `/mfa/enroll/confirm`, code TOTP calculé localement
+ * (dette T-19/T-20, `docs/CURRENT-STATE.md`).
+ *
+ * - **VERIFY** (facteur déjà actif) : le secret n'est jamais affiché à
+ *   l'écran — il faut le connaître à l'avance. Utilise
+ *   `account.totpSecret` (`ESIC_DEMO_TOTP_SECRET`), lui-même aligné sur le
+ *   facteur déterministe activé côté serveur par `DemoDataInitializer`.
+ * - **ENROLL** (aucun facteur actif — ex. `ESIC_DEMO_TOTP_SECRET` non
+ *   défini côté back-end) : le secret est généré aléatoirement par le
+ *   serveur et affiché en clair à l'écran (`.mfa__secret code`) — il est
+ *   lu là, jamais depuis l'environnement, qui ne le connaît pas.
+ */
+async function resolveMfaChallengeIfPresent(page: Page, account: DemoAccount): Promise<void> {
+  if (!/\/connexion\/verification(\?|$)/.test(page.url())) {
+    return; // Rôle sans second facteur obligatoire : rien à franchir.
+  }
+
+  // Le titre distingue immédiatement les deux parcours (connu dès la
+  // navigation, sans attendre un appel réseau) — plus fiable qu'une
+  // course entre deux sélecteurs asynchrones.
+  const isEnrolling = await page
+    .getByText('Ajoutez votre second facteur', { exact: false })
+    .isVisible()
+    .catch(() => false);
+
+  let secret: string | undefined;
+  if (isEnrolling) {
+    const secretLocator = page.locator('.mfa__secret code');
+    await secretLocator.waitFor({ state: 'visible', timeout: 10_000 });
+    secret = (await secretLocator.textContent())?.trim();
+  } else {
+    secret = account.totpSecret;
+  }
+  if (!secret) {
+    throw new Error(
+      `Second facteur requis pour ${account.email} mais aucun secret TOTP disponible : ` +
+        'définissez ESIC_DEMO_TOTP_SECRET (même valeur que le back-end, profil demo) ' +
+        'avant de lancer la suite. Voir docs/CURRENT-STATE.md, dette T-19/T-20.',
+    );
+  }
+
+  await submitTotpCode(page, secret, isEnrolling);
+
+  await page.waitForURL((url) => !url.pathname.startsWith('/connexion/verification'), {
+    timeout: 10_000,
+  });
+}
+
+/**
+ * Saisit un code TOTP et soumet le formulaire, avec une marge de sécurité
+ * contre l'anti-rejeu réel (RG-054/055) : `claimTotpCode` réserve
+ * localement un pas jamais soumis PAR CE PROCESSUS pour ce secret (les
+ * comptes ADMIN/SUPER_ADMIN sont partagés par toute la suite,
+ * `workers: 1`), mais cette réservation en mémoire ne survit pas à un
+ * redémarrage du worker Playwright après l'échec d'un test précédent —
+ * document Playwright : un test en échec fait repartir le worker suivant
+ * de zéro. Si le serveur rejette malgré tout (pas déjà consommé par un
+ * worker antérieur, ou par `scripts/seed-demo.sh` lancé juste avant), on
+ * retente UNE fois avec un nouveau pas réservé — jamais un contournement,
+ * seulement l'attente réelle et bornée (≤ 30 s) que la protection impose.
+ * Le timeout du test en cours est prolongé d'autant plutôt que dissimulé.
+ *
+ * Le succès est décidé sur la RÉPONSE HTTP réelle de `/mfa/verify` ou
+ * `/mfa/enroll/confirm` (`page.waitForResponse`), jamais sur un sélecteur
+ * DOM : une course entre le nettoyage synchrone de `errorMessage` côté
+ * Angular (au clic) et le sondage de Playwright avait fait échouer à tort
+ * des connexions dont le second appel avait pourtant réussi côté serveur
+ * (constaté par trace réseau : réponse 200 sur la tentative que ce
+ * helper rapportait comme échouée).
+ */
+async function submitTotpCode(page: Page, secret: string, isEnrolling: boolean): Promise<void> {
+  const codeInput = page.getByLabel('Code de vérification');
+  const endpointPath = isEnrolling ? '/api/v1/auth/mfa/enroll/confirm' : '/api/v1/auth/mfa/verify';
+  const maxAttempts = 2;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const code = await claimTotpCode(secret, async (ms) => {
+      test.setTimeout(test.info().timeout + ms + 5_000);
+      await page.waitForTimeout(ms);
+    });
+
+    await codeInput.waitFor({ state: 'visible', timeout: 10_000 });
+    await codeInput.fill(code);
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().includes(endpointPath) && response.request().method() === 'POST',
+      { timeout: 10_000 },
+    );
+    await page.getByRole('button', { name: 'Valider', exact: true }).click();
+    const response = await responsePromise;
+
+    if (response.ok()) {
+      if (isEnrolling) {
+        // L'enrôlement affiche les codes de récupération et attend un clic
+        // explicite avant de rediriger (mfa-challenge.ts: `finish()`
+        // n'est appelé que par ce bouton, jamais automatiquement après
+        // confirm()).
+        const continueButton = page.getByRole('button', { name: "J'ai noté mes codes, continuer" });
+        await continueButton.waitFor({ state: 'visible', timeout: 10_000 });
+        await continueButton.click();
+      }
+      return;
+    }
+    if (attempt < maxAttempts) {
+      continue; // Le prochain `claimTotpCode` réservera un pas plus récent.
+    }
+    const body = await response.text().catch(() => '');
+    throw new Error(
+      `Échec de vérification du second facteur (tentative ${attempt}, HTTP ${response.status()}) : ${body}`,
+    );
+  }
 }
 
 export async function logoutAsUi(page: Page): Promise<void> {
@@ -63,7 +201,28 @@ export async function logoutAsUi(page: Page): Promise<void> {
  * API direct avec un jeton réel (ex. reproduire un défaut d'API connu).
  */
 export async function loginAndCaptureBearerToken(page: Page, account: DemoAccount): Promise<string> {
-  await loginAsUi(page, account);
+  // Peut être appelé alors qu'une session est DÉJÀ ouverte (l'appelant
+  // vient d'enchaîner un parcours authentifié). Depuis la continuité de
+  // session par cookie de renouvellement (6 sept.), un `page.goto('/login')`
+  // silencieusement ré-authentifié rebondit vers `/dashboard` : on ne
+  // relance donc la connexion QUE si l'écran de connexion est réellement
+  // affiché. Sinon, la session courante suffit à produire une requête
+  // authentifiée observable.
+  await page.goto('/login').catch(() => undefined);
+  const emailField = page.getByLabel('Adresse électronique');
+  if (await emailField.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await emailField.fill(account.email);
+    await page.getByLabel('Mot de passe').fill(account.password);
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 10_000 });
+    await resolveMfaChallengeIfPresent(page, account);
+  } else {
+    // Déjà authentifié : rejoindre le tableau de bord par un clic interne.
+    await page
+      .getByRole('link', { name: 'Tableau de bord', exact: true })
+      .click()
+      .catch(() => undefined);
+  }
   const requestPromise = page.waitForRequest(
     (req) => !!req.headers()['authorization']?.startsWith('Bearer '),
   );

@@ -1,10 +1,11 @@
 <section class="preferences">
-  <header class="preferences__header">
-    <h1>Préférences de notification</h1>
-    <p class="preferences__intro">
-      Choisissez comment vous souhaitez être prévenu, catégorie par catégorie.
-    </p>
-  </header>
+  <!--
+    Le titre de page (« Notifications ») et les onglets sont portés par
+    `app-notifications-shell`. Cette vue n'a qu'une phrase d'introduction.
+  -->
+  <p class="preferences__intro">
+    Choisissez comment vous souhaitez être prévenu, catégorie par catégorie.
+  </p>
 
   @if (state().kind === 'loading') {
     <mat-progress-bar mode="indeterminate" aria-label="Chargement des préférences"></mat-progress-bar>

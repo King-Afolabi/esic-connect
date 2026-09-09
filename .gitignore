@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.prod.example
 *.pem
 *.key
 *.p12
@@ -48,6 +49,14 @@ logs/
 report/generated/
 presentation/generated/
 
+# Documents de travail non versionnés (Lot §6, 6 septembre 2026) : rapports
+# d'audit détaillés, captures de rapport (régénérables par
+# tests/14-report-screenshots.spec.ts), journal de lot. Conservés hors
+# dépôt — voir README.md « Documents de travail locaux ».
+/artifacts/
+/docs/audit/
+/docs/JOURNAL-*.md
+
 # OpenAPI export (commodité de revue, non versionné — voir scripts/dump-openapi.sh)
 docs/openapi.json
 
@@ -58,6 +67,10 @@ temp/.claude/
 # Claude local files
 .claude/
 
+# État d'exécution local (URL publique du tunnel, etc.) — jamais versionné :
+# l'URL *.trycloudflare.com est éphémère et n'est pas une URL de production.
+/.local/
+
 # Playwright / recette e2e navigateur
 node_modules/
 /test-results/
@@ -65,6 +78,7 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+/captures/
 frontend/out-tsc/
 
 # Sauvegarde locale d'une version antérieure du dépôt, réalisée par le

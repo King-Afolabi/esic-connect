@@ -20,6 +20,9 @@ interface NotificationRepository extends JpaRepository<Notification, Long> {
 
     long countByRecipientUserIdAndStatus(Long recipientUserId, NotificationStatus status);
 
+    /** Décompte total des notifications d'un compte (comparaison de doublons, ANO-USER-001). */
+    long countByRecipientUserId(Long recipientUserId);
+
     Optional<Notification> findByRecipientUserIdAndPublicId(Long recipientUserId, UUID publicId);
 
     boolean existsByDedupKey(String dedupKey);

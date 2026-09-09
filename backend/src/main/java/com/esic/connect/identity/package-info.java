@@ -19,6 +19,14 @@
  * d'import — propagation {@code REQUIRED}, publie
  * {@code AccountInvitationIssuedEvent} mais jamais
  * {@code AccountLifecycleEvent}).
+ *
+ * <p>{@link com.esic.connect.identity.DuplicateDependencyContributor} est
+ * un port <em>entrant</em> : {@code identity} le déclare, d'autres
+ * modules ({@code enrollment}, {@code attendance}, {@code claim},
+ * {@code notification}) l'implémentent pour remonter, en lecture seule, le
+ * volume de données qu'ils rattachent à un compte. Sert uniquement à la
+ * comparaison de doublons (ANO-USER-001) ; renverse la dépendance pour
+ * éviter un cycle.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Identity")
 package com.esic.connect.identity;

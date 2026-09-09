@@ -1,7 +1,16 @@
-<nav class="academic__tabs" aria-label="Référentiels académiques">
-  @for (tab of tabs; track tab.slug) {
-    <a [routerLink]="['/academic', tab.slug]">{{ tab.label }}</a>
-  }
+<nav class="esic-subnav" aria-label="Référentiels académiques">
+  <div class="esic-subnav__list">
+    @for (tab of tabs; track tab.slug) {
+      <a
+        class="esic-subnav__link"
+        [routerLink]="['/academic', tab.slug]"
+        routerLinkActive="esic-subnav__link--active"
+        [routerLinkActiveOptions]="{ exact: false }"
+        ariaCurrentWhenActive="page"
+        >{{ tab.label }}</a
+      >
+    }
+  </div>
 </nav>
 
 @switch (state().kind) {
@@ -101,7 +110,9 @@
 
                     <ng-container matColumnDef="status">
                       <th mat-header-cell *matHeaderCellDef>Statut</th>
-                      <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+                      <td mat-cell *matCellDef="let row">
+                        <span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span>
+                      </td>
                     </ng-container>
 
                     <ng-container matColumnDef="actions">

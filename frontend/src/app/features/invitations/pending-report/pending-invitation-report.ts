@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { triggerCsvDownload } from '../../attendance/attendance-api.service';
@@ -28,7 +29,7 @@ type State =
 @Component({
   selector: 'app-pending-invitation-report',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, RouterLinkActive, MatButtonModule, MatIconModule, MatProgressBarModule],
   templateUrl: './pending-invitation-report.html',
   styleUrl: './pending-invitation-report.scss',
 })

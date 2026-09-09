@@ -23,7 +23,8 @@ FAKE_CURL="$WORK/fake-curl"
 cat >"$FAKE_CURL" <<'FAKE'
 #!/usr/bin/env bash
 # Faux curl : journalise "METHOD PATH" dans $CALLLOG et rend une réponse
-# déterministe selon $FAKE_MODE (clean|exists). Gère les options
+# déterministe selon $FAKE_MODE (clean|exists) et $FAKE_LOGIN_MODE
+# (token|verify|enroll — second facteur ADMIN, RG-007). Gère les options
 # réellement utilisées par seed-demo.sh : -sS -o FILE -w FMT -X POST
 # -H ... -d BODY -G --data-urlencode k=v.
 set -euo pipefail
@@ -59,9 +60,64 @@ emit() { # emit STATUS JSON
   if [ "$want_status" = 1 ]; then printf '%s' "$1"; fi
 }
 
+# Même algorithme que totp_code() dans seed-demo.sh (RFC 6238/4226,
+# implémentation Python indépendante) : vérifie que le code REÇU est
+# arithmétiquement correct pour SECRET, sans jamais faire confiance au
+# script testé pour se juger lui-même.
+expected_code() {
+  python3 - "$1" <<'PY'
+import base64, hashlib, hmac, struct, sys, time
+secret = sys.argv[1].strip().upper()
+key = base64.b32decode(secret + "=" * ((8 - len(secret) % 8) % 8))
+step = int(time.time()) // 30
+mac = hmac.new(key, struct.pack(">Q", step), hashlib.sha1).digest()
+offset = mac[-1] & 0x0F
+binary = (((mac[offset] & 0x7F) << 24) | ((mac[offset + 1] & 0xFF) << 16)
+          | ((mac[offset + 2] & 0xFF) << 8) | (mac[offset + 3] & 0xFF))
+print(str(binary % 1_000_000).zfill(6))
+PY
+}
+
+ENROLL_SECRET="KRSXG5CTMVRXEZLU"  # Distinct de ESIC_DEMO_TOTP_SECRET : simule un secret choisi par le serveur.
+
 if [ "$method" = POST ]; then
   case "$path" in
-    */auth/login) emit 200 '{"accessToken":"FAKE-JWT-NOT-A-REAL-SECRET"}'; exit 0 ;;
+    */auth/login)
+      case "${FAKE_LOGIN_MODE:-token}" in
+        verify)
+          emit 200 '{"mfa":{"challengeId":"chal-verify-1","purpose":"VERIFY","expiresInSeconds":300}}' ;;
+        enroll)
+          emit 200 '{"mfa":{"challengeId":"chal-enroll-1","purpose":"ENROLL","expiresInSeconds":300}}' ;;
+        *)
+          emit 200 '{"accessToken":"FAKE-JWT-NOT-A-REAL-SECRET"}' ;;
+      esac
+      exit 0 ;;
+    */auth/mfa/verify)
+      challenge_id="$(printf '%s' "$body" | jq -r '.challengeId')"
+      code="$(printf '%s' "$body" | jq -r '.code')"
+      if [ "$challenge_id" = "chal-verify-1" ] && [ "$code" = "$(expected_code "${ESIC_DEMO_TOTP_SECRET:-}")" ]; then
+        emit 200 '{"accessToken":"FAKE-JWT-NOT-A-REAL-SECRET"}'
+      else
+        emit 401 '{"status":401,"code":"MFA_INVALID_CODE","message":"invalid","path":"x","details":[]}'
+      fi
+      exit 0 ;;
+    */auth/mfa/enroll)
+      challenge_id="$(printf '%s' "$body" | jq -r '.challengeId')"
+      if [ "$challenge_id" = "chal-enroll-1" ]; then
+        emit 200 "$(jq -n --arg s "$ENROLL_SECRET" '{secret:$s,provisioningUri:"otpauth://totp/x",periodSeconds:30}')"
+      else
+        emit 409 '{"status":409,"code":"MFA_ALREADY_ENROLLED","message":"x","path":"x","details":[]}'
+      fi
+      exit 0 ;;
+    */auth/mfa/enroll/confirm)
+      challenge_id="$(printf '%s' "$body" | jq -r '.challengeId')"
+      code="$(printf '%s' "$body" | jq -r '.code')"
+      if [ "$challenge_id" = "chal-enroll-1" ] && [ "$code" = "$(expected_code "$ENROLL_SECRET")" ]; then
+        emit 200 '{"recoveryCodes":["AAAAA-BBBBB"],"session":{"accessToken":"FAKE-JWT-NOT-A-REAL-SECRET"}}'
+      else
+        emit 401 '{"status":401,"code":"MFA_INVALID_CODE","message":"invalid","path":"x","details":[]}'
+      fi
+      exit 0 ;;
   esac
   if [ "${FAKE_MODE:-clean}" = exists ]; then
     case "$path" in
@@ -91,10 +147,11 @@ chmod +x "$FAKE_CURL"
 
 export CALLLOG
 export ESIC_DEMO_PASSWORD="fake-password-not-used"
+export ESIC_DEMO_TOTP_SECRET="JBSWY3DPEHPK3PXP"
 
-run_seed() { # run_seed MODE
+run_seed() { # run_seed FAKE_MODE [FAKE_LOGIN_MODE]
   : >"$CALLLOG"; : >"$CALLLOG.full"
-  FAKE_MODE="$1" CURL="$FAKE_CURL" bash "$SEED" >/dev/null
+  FAKE_MODE="$1" FAKE_LOGIN_MODE="${2:-token}" CURL="$FAKE_CURL" bash "$SEED" >/dev/null
 }
 
 fail() { printf 'ÉCHEC : %b\n' "$*" >&2; exit 1; }
@@ -129,6 +186,28 @@ assert_no_double_post
 # jamais deux fois pour un même appel logique.
 [ "$(count_post '/pedagogical-assignments')" = 1 ] || fail "affectation RP POSTée $(count_post '/pedagogical-assignments') fois (attendu 1)"
 echo "Scénario 2 (ré-exécution) : OK — aucune séance ni inscription supplémentaire, affectation RP en 409 toléré."
+
+# --- Scénario 3 : second facteur ADMIN déjà actif (VERIFY) --------------
+# Simule le cas nominal : ESIC_DEMO_TOTP_SECRET aligné avec le back-end
+# (DemoDataInitializer), qui a donc déjà activé le facteur. Un seul appel
+# supplémentaire à /mfa/verify, avec un code arithmétiquement correct.
+run_seed exists verify
+assert_no_double_post
+[ "$(count_post '/auth/mfa/verify')" = 1 ] || fail "mfa/verify POSTé $(count_post '/auth/mfa/verify') fois (attendu 1)"
+[ "$(count_post '/auth/mfa/enroll')" = 0 ] || fail "mfa/enroll POSTé alors que le facteur était déjà actif (VERIFY)"
+echo "Scénario 3 (second facteur VERIFY) : OK — code TOTP calculé localement accepté en un appel."
+
+# --- Scénario 4 : second facteur ADMIN à enrôler (ENROLL) ---------------
+# Simule un back-end démarré sans ESIC_DEMO_TOTP_SECRET actif : le script
+# doit driver le parcours réel /mfa/enroll -> /mfa/enroll/confirm avec le
+# secret ALÉATOIRE renvoyé par le serveur, jamais celui de la variable
+# d'environnement locale.
+run_seed exists enroll
+assert_no_double_post
+[ "$(count_post '/auth/mfa/enroll')" = 1 ] || fail "mfa/enroll POSTé $(count_post '/auth/mfa/enroll') fois (attendu 1)"
+[ "$(count_post '/auth/mfa/enroll/confirm')" = 1 ] || fail "mfa/enroll/confirm POSTé $(count_post '/auth/mfa/enroll/confirm') fois (attendu 1)"
+[ "$(count_post '/auth/mfa/verify')" = 0 ] || fail "mfa/verify POSTé alors qu'aucun facteur n'était actif (ENROLL)"
+echo "Scénario 4 (second facteur ENROLL) : OK — enrôlement réel avec le secret renvoyé par le serveur, confirmé."
 
 # Aucun jeton réel ne doit transiter dans le journal.
 ! grep -qi 'bearer\|accessToken' "$CALLLOG" || fail "journal contient un jeton"

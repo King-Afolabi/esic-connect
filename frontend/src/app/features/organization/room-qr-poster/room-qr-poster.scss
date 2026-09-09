@@ -1,0 +1,175 @@
+:host {
+  display: block;
+}
+
+.poster-page {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: var(--esic-space-4, 1.5rem);
+}
+
+.poster-page__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-2, 0.75rem);
+  justify-content: space-between;
+  margin-bottom: var(--esic-space-4, 1.5rem);
+}
+
+.poster-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.poster-page__notice {
+  border: 1px solid var(--esic-border, #d7dbe0);
+  border-radius: var(--esic-radius, 0.5rem);
+  padding: var(--esic-space-4, 1.5rem);
+  background: var(--esic-surface, #fff);
+}
+
+.poster-page__notice p {
+  margin: 0 0 0.5rem;
+}
+
+.poster-page__help {
+  margin-top: var(--esic-space-5, 2rem);
+  max-width: 40rem;
+  border: 1px solid var(--esic-line, #d7dbe0);
+  border-left: 3px solid var(--esic-secondary, #1f7a4c);
+  border-radius: var(--esic-radius-sm, 0.375rem);
+  padding: var(--esic-space-4, 1.5rem);
+  background: var(--esic-surface, #fff);
+}
+
+.poster-page__help h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.poster-page__help p {
+  margin: 0 0 0.5rem;
+  color: var(--esic-ink-soft, #5f6368);
+  font-size: 0.9rem;
+}
+
+/* --- The poster itself ------------------------------------------------ */
+
+.poster {
+  border: 2px solid var(--esic-primary, #134e9c);
+  border-radius: var(--esic-radius, 0.5rem);
+  padding: 2rem;
+  background: #fff;
+  color: #10151c;
+  text-align: center;
+}
+
+.poster__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--esic-border, #d7dbe0);
+  padding-bottom: 1rem;
+}
+
+.poster__logo {
+  width: 180px;
+  height: auto;
+}
+
+.poster__title {
+  margin: 0;
+  font-family: var(--esic-font-serif, Georgia, serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--esic-primary, #134e9c);
+}
+
+.poster__room {
+  margin: 1.5rem 0;
+}
+
+.poster__room-code {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.poster__room-name {
+  margin: 0.25rem 0 0;
+  font-size: 1.25rem;
+}
+
+.poster__room-site {
+  margin: 0.25rem 0 0;
+  color: var(--esic-text-muted, #5f6368);
+}
+
+.poster__qr {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+.poster__qr-img {
+  display: block;
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+}
+
+.poster__instructions {
+  display: inline-block;
+  margin: 1rem auto 0;
+  padding-left: 1.25rem;
+  text-align: left;
+  max-width: 30rem;
+  line-height: 1.6;
+}
+
+.poster__instructions li {
+  margin-bottom: 0.4rem;
+}
+
+.poster__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--esic-border, #d7dbe0);
+  color: var(--esic-text-muted, #5f6368);
+  font-size: 0.875rem;
+}
+
+/* --- Print --------------------------------------------------------- */
+
+@media print {
+  // Marges de page à zéro : sur les navigateurs Chromium, cela supprime
+  // les en-têtes / pieds de page générés par le navigateur (titre de
+  // l'onglet, URL, date, numéro de page) qui apparaissaient en bordure de
+  // l'affiche. Le contenu reprend sa propre respiration ci-dessous.
+  @page {
+    margin: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  // `@page` ne laisse plus de marge : on en rétablit une raisonnable sur
+  // le contenu lui-même pour que l'affiche ne soit pas collée au bord.
+  .poster-page {
+    max-width: none;
+    padding: 12mm;
+  }
+
+  .poster {
+    border: none;
+    padding: 0;
+  }
+}

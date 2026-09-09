@@ -28,4 +28,12 @@ interface EarlyDepartureRepository extends JpaRepository<EarlyDeparture, Long> {
     /** Dossiers d'un apprenant dont le départ tombe dans la fenêtre demandée. */
     List<EarlyDeparture> findByEnrollmentIdInAndDepartureAtBetween(
             Collection<Long> enrollmentIds, Instant from, Instant to);
+
+    /**
+     * Dossiers de départ anticipé <strong>signalés par</strong> un compte
+     * (comparaison de doublons, ANO-USER-001). {@code requested_by_id} est
+     * le seul lien direct au compte apprenant : la table est autrement
+     * indexée par inscription.
+     */
+    long countByRequestedById(Long requestedById);
 }

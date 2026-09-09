@@ -62,4 +62,24 @@ describe('toSessionError', () => {
     expect(view.code).toBeNull();
     expect(view.message).toBe(SAFE_FALLBACK_MESSAGE);
   });
+
+  it.each([
+    ['ATT_ROOM_QR_UNKNOWN', 404, "Ce QR de salle n'est pas reconnu."],
+    [
+      'ATT_ROOM_QR_OUT_OF_NETWORK',
+      403,
+      "Ce QR de salle ne peut être utilisé que depuis le réseau de l'établissement.",
+    ],
+    [
+      'ATT_ROOM_QR_SESSION_STARTED',
+      409,
+      "La séance a commencé : demandez au formateur d'afficher son code.",
+    ],
+    ['ATT_ROOM_QR_NO_SESSION', 409, 'Aucune séance ne vous attend dans cette salle à cette heure.'],
+    ['ATT_REMOTE_NOT_AUTHORIZED', 403, "vous n'êtes pas autorisé à la suivre à distance."],
+  ])('surfaces the safe server message for %s (scan feedback)', (code, status, message) => {
+    const view = toSessionError(apiError(status, code, message));
+    expect(view.code).toBe(code);
+    expect(view.message).toBe(message);
+  });
 });

@@ -190,6 +190,22 @@ export const routes: Routes = [
       import('./features/account-activation/account-activation').then((m) => m.AccountActivation),
   },
   {
+    // Affiche imprimable du QR fixe permanent d'une salle (EF-ORG-003 ;
+    // ANO-QR-001). Déclarée EN DEHORS du sous-arbre `AppShell` : une
+    // affiche destinée à l'impression ne doit pas être rendue à
+    // l'intérieur du rail de navigation et de la barre supérieure, sinon
+    // `window.print()` imprime toute la coquille (menu, topbar, fond).
+    // L'authentification et le périmètre de rôles sont donc portés
+    // explicitement ici — mêmes rôles que `RoomController.STATIC_QR_VIEW_ROLES`
+    // (`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`). Le chemin est
+    // inchangé : les liens existants (`site-detail.html`) restent valides.
+    path: 'organization/sites/:publicId/rooms/:roomId/qr-poster',
+    canActivate: [authGuard, roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+    title: `Affiche QR de salle — ${APP_NAME}`,
+    loadComponent: () =>
+      import('./features/organization/room-qr-poster/room-qr-poster').then((m) => m.RoomQrPoster),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     canActivateChild: [authGuard],
@@ -237,27 +253,42 @@ export const routes: Routes = [
           import('./features/account/security/account-security').then((m) => m.AccountSecurity),
       },
       {
-        // Centre de notifications de l'appelant (G1-D). Aucune garde de
-        // rôle : `NotificationController` porte `@PreAuthorize("isAuthenticated()")`
-        // et l'isolation par destinataire est faite côté serveur.
+        // Espace « Notifications » : une seule entrée latérale, deux vues
+        // internes en onglets (liste / préférences). Les anciennes URL
+        // `/notifications` et `/notifications/preferences` restent valides
+        // — ce sont les chemins des enfants. Aucune garde de rôle :
+        // `NotificationController` et `NotificationPreferenceController`
+        // portent `@PreAuthorize("isAuthenticated()")` et l'isolation par
+        // destinataire est faite côté serveur.
         path: 'notifications',
-        title: `Notifications — ${APP_NAME}`,
         loadComponent: () =>
-          import('./features/notifications/notification-list/notification-list').then(
-            (m) => m.NotificationList,
+          import('./features/notifications/notifications-shell/notifications-shell').then(
+            (m) => m.NotificationsShell,
           ),
-      },
-      {
-        // Préférences de notification de l'appelant (EF-NOTIF-006).
-        // Aucune garde de rôle : `NotificationPreferenceController` porte
-        // `@PreAuthorize("isAuthenticated()")` et le propriétaire est le
-        // sujet du JWT, jamais un paramètre.
-        path: 'notifications/preferences',
-        title: `Préférences de notification — ${APP_NAME}`,
-        loadComponent: () =>
-          import('./features/notifications/preferences/notification-preferences').then(
-            (m) => m.NotificationPreferences,
-          ),
+        children: [
+          // `/notifications` (favori historique) redirige vers la vue
+          // liste, qui porte désormais un chemin propre (`centre`) : un
+          // onglet lié à un chemin d'enfant NON vide se réévalue
+          // correctement quand seul l'enfant change (mode zoneless),
+          // contrairement à un `routerLink` vers l'enfant à chemin vide.
+          { path: '', pathMatch: 'full', redirectTo: 'centre' },
+          {
+            path: 'centre',
+            title: `Notifications — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/notifications/notification-list/notification-list').then(
+                (m) => m.NotificationList,
+              ),
+          },
+          {
+            path: 'preferences',
+            title: `Préférences de notification — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/notifications/preferences/notification-preferences').then(
+                (m) => m.NotificationPreferences,
+              ),
+          },
+        ],
       },
       {
         // Recherche globale (EF-USER-009 ; docs/02 §22.7). Périmètre
@@ -353,6 +384,23 @@ export const routes: Routes = [
               import('./features/administration/user-list/user-list').then((m) => m.UserList),
           },
           {
+            // Déclaré AVANT `:publicId` et hors de son sous-arbre — sinon
+            // Angular router route « duplicates » vers `UserDetail` avec
+            // `publicId = 'duplicates'` (même précaution que `students/import`
+            // face à `students/:id`).
+            path: 'duplicates',
+            // Périmètre plus restreint (`ADMIN_ROLES`) que le reste de
+            // `/administration` (`READ_ROLES`, qui inclut aussi
+            // `SCHOOL_ADMINISTRATION`) — aligné sur
+            // `UserAccountController.duplicates()` (EF-USER-005).
+            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+            title: `Doublons détectés — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/administration/duplicate-list/duplicate-list').then(
+                (m) => m.DuplicateList,
+              ),
+          },
+          {
             path: ':publicId',
             title: `Fiche compte — ${APP_NAME}`,
             loadComponent: () =>
@@ -396,19 +444,51 @@ export const routes: Routes = [
         ],
       },
       {
-        // Périmètre de rôles aligné sur `EnrollmentWeb.MANAGE_ROLES`
-        // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`).
-        // Le garde ne fait que masquer la navigation : Spring Security
-        // reste l'autorité (un 403 API est rendu comme « accès refusé »).
+        // Périmètre de rôles aligné sur `EnrollmentWeb.READ_ROLES`
+        // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`) : les
+        // trois rôles d'administration + `PEDAGOGICAL_MANAGER` + `TEACHER`,
+        // ces deux derniers restreints à leur périmètre côté serveur
+        // (`RosterScopeResolver`). Le garde ne fait que masquer la
+        // navigation : Spring Security reste l'autorité (un 403 API est
+        // rendu comme « accès refusé »).
         path: 'students',
-        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
-        canActivateChild: [roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'])],
+        canActivate: [
+          roleGuard([
+            'ADMIN',
+            'SUPER_ADMIN',
+            'SCHOOL_ADMINISTRATION',
+            'PEDAGOGICAL_MANAGER',
+            'TEACHER',
+          ]),
+        ],
+        canActivateChild: [
+          roleGuard([
+            'ADMIN',
+            'SUPER_ADMIN',
+            'SCHOOL_ADMINISTRATION',
+            'PEDAGOGICAL_MANAGER',
+            'TEACHER',
+          ]),
+        ],
         title: `Apprenants — ${APP_NAME}`,
         children: [
           {
             path: '',
             loadComponent: () =>
               import('./features/students/student-list/student-list').then((m) => m.StudentList),
+          },
+          {
+            // Déclaré AVANT `:publicId` (sinon `nouveau` serait pris pour
+            // un identifiant). Création manuelle d'un apprenant (Lot H) :
+            // `POST /api/v1/users` exige `ADMIN` / `SUPER_ADMIN` côté
+            // serveur, d'où ce garde plus restrictif que le parent.
+            path: 'nouveau',
+            canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+            title: `Ajouter un apprenant — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/students/student-create/student-create').then(
+                (m) => m.StudentCreate,
+              ),
           },
           {
             path: ':publicId',
@@ -419,6 +499,22 @@ export const routes: Routes = [
               ),
           },
         ],
+      },
+      {
+        // Point d'entrée « Organisation & planning » : une seule entrée
+        // latérale rassemblant les quatre sous-sections ci-dessous
+        // (référentiels, organisation, planning, alternance). Aucune route
+        // n'est déplacée — ce hub ne fait que lancer. Périmètre : union
+        // des rôles de lecture des quatre, le serveur restant l'autorité.
+        path: 'organisation-planning',
+        canActivate: [
+          roleGuard(['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER']),
+        ],
+        title: `Organisation & planning — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/organisation-planning/organisation-planning-hub').then(
+            (m) => m.OrganisationPlanningHub,
+          ),
       },
       {
         // Consultation en LECTURE SEULE du référentiel académique
@@ -519,6 +615,12 @@ export const routes: Routes = [
               import('./features/organization/site-detail/site-detail').then((m) => m.SiteDetail),
           },
           {
+            // NB : l'affiche imprimable du QR fixe de salle
+            // (`sites/:publicId/rooms/:roomId/qr-poster`) est déclarée en
+            // tête de fichier, HORS du sous-arbre `AppShell` (ANO-QR-001) :
+            // elle ne doit pas être rendue dans le rail + la topbar, sinon
+            // l'impression emporte toute la coquille. Le chemin public est
+            // identique, les liens existants restent valides.
             path: 'sites/:publicId/edit',
             canActivate: [roleGuard([...ORGANIZATION_WRITE_ROLES])],
             data: { mode: 'edit' },
@@ -780,6 +882,13 @@ export const routes: Routes = [
         canActivate: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
         canActivateChild: [roleGuard([...ATTENDANCE_MANAGE_ROLES])],
         title: `Suivi d'assiduité — ${APP_NAME}`,
+        // Coquille commune : un seul titre de page + navigation secondaire
+        // visible (`.esic-subnav`) entre les cinq vues. Les chemins des
+        // enfants sont inchangés (favoris, liens).
+        loadComponent: () =>
+          import('./features/attendance/management/attendance-management-shell').then(
+            (m) => m.AttendanceManagementShell,
+          ),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'summary' },
           {

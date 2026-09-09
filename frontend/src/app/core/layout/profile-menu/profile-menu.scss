@@ -1,0 +1,133 @@
+.profile-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  // L'espacement réel entre avatar / nom / chevron est posé sur
+  // `.mdc-button__label` dans `_material-overrides.scss` (le contenu d'un
+  // `mat-button` y est enfermé). On garde `gap` ici pour le cas où la
+  // structure Material changerait.
+  gap: 0.5rem;
+  min-width: 0;
+  // Hauteur maîtrisée : la cible tactile (44 px) est portée par le
+  // padding, pas par une pilule démesurée. Centrage vertical strict de
+  // l'avatar, du nom et du chevron.
+  height: 2.25rem;
+  padding: 0 0.5rem;
+  line-height: 1;
+}
+
+.profile-menu__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex-shrink: 0;
+  border-radius: var(--esic-radius-pill);
+  background: var(--esic-primary-tint);
+  color: var(--esic-blue-700);
+
+  .mat-icon {
+    font-size: 1.125rem;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    line-height: 1.125rem;
+  }
+
+  &--lg {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+
+    .mat-icon {
+      font-size: 1.5rem;
+      inline-size: 1.5rem;
+      block-size: 1.5rem;
+      line-height: 1.5rem;
+    }
+  }
+}
+
+// Le nom n'est plus affiché dans la barre haute : le déclencheur est la
+// pastille + le chevron. Le libellé reste dans le DOM (lecteurs d'écran)
+// et l'`aria-label` du bouton porte déjà l'adresse complète.
+.profile-menu__name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.profile-menu__caret {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  line-height: 1.25rem;
+  color: var(--esic-ink-faint);
+}
+
+// -- Panneau (surcouche `mat-menu`) ----------------------------------
+// En-tête d'identité (avatar + rôle principal + adresse + contexte),
+// filet, rôles en badges, puis le lien de gestion du compte comme entrée
+// de menu focusable. Panneau plus LARGE (≈ 420 px, cf.
+// `_material-overrides.scss`) et mieux hiérarchisé — pas simplement plus
+// long. L'adresse tient sur une ligne quand la place le permet.
+.profile-menu__body {
+  padding: var(--esic-space-4) var(--esic-space-4) var(--esic-space-3);
+}
+
+.profile-menu__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-3);
+}
+
+.profile-menu__head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.profile-menu__primary {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--esic-ink);
+}
+
+.profile-menu__email {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--esic-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-menu__context {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+}
+
+.profile-menu__section {
+  margin-top: var(--esic-space-3);
+  padding-top: var(--esic-space-3);
+  border-top: 1px solid var(--esic-line);
+}
+
+.profile-menu__section-title {
+  margin: 0 0 var(--esic-space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--esic-ink-faint);
+}
+
+.profile-menu__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}

@@ -30,7 +30,13 @@ interface RouteExpectation {
 
 const ROUTES: RouteExpectation[] = [
   { path: '/administration', allowed: ['ADMIN', 'SUPER_ADMIN'] },
-  { path: '/students', allowed: ['ADMIN', 'SUPER_ADMIN'] },
+  {
+    // Consultation ouverte au PEDAGOGICAL_MANAGER et au TEACHER, périmètre
+    // restreint côté serveur (RosterScopeResolver — voir
+    // backend RosterScopeIntegrationTests). `EnrollmentWeb.READ_ROLES`.
+    path: '/students',
+    allowed: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER_TEACHER', 'TEACHER'],
+  },
   {
     path: '/students/import',
     allowed: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER_TEACHER'],
@@ -126,8 +132,11 @@ test.describe('Cas ciblés du cahier des charges', () => {
     page,
   }) => {
     await loginAsUi(page, ACCOUNTS.TEACHER);
-    await expect(sidebar(page).getByRole('link', { name: 'Organisation' })).toHaveCount(0);
-    await expect(sidebar(page).getByRole('link', { name: 'Planning' })).toHaveCount(0);
+    // Regroupement : une seule entrée « Organisation & planning », masquée
+    // pour un TEACHER sans rôle de gestion.
+    await expect(
+      sidebar(page).getByRole('link', { name: 'Organisation & planning' }),
+    ).toHaveCount(0);
     // En revanche « Séances » doit être visible (SESSION_READ_ROLES l'inclut).
     await expect(sidebar(page).getByRole('link', { name: 'Séances' })).toBeVisible();
   });
@@ -138,17 +147,21 @@ test.describe('Cas ciblés du cahier des charges', () => {
       'Tableau de bord',
       'Administration',
       'Apprenants',
-      'Import apprenants',
-      'Référentiels',
-      'Organisation',
-      'Planning',
-      'Alternance',
+      // ANO-NAV-001 : « Import apprenants » n'est plus une entrée racine —
+      // il est atteint depuis l'en-tête de la liste des apprenants.
+      // Regroupement (Lot §4) : une entrée pour référentiels, organisation,
+      // planning et alternance. Les routes restent adressables directement.
+      'Organisation & planning',
       'Séances',
       "Suivi d'assiduité",
       'Notifications',
     ]) {
       await expect(sidebar(page).getByRole('link', { name: label, exact: true })).toBeVisible();
     }
+    // ANO-NAV-001 : plus d'entrée latérale « Importer des apprenants ».
+    await expect(
+      sidebar(page).getByRole('link', { name: 'Importer des apprenants' }),
+    ).toHaveCount(0);
     // Écrans réservés à STUDENT : jamais montrés à un ADMIN.
     await expect(sidebar(page).getByRole('link', { name: 'Émargement' })).toHaveCount(0);
     await expect(sidebar(page).getByRole('link', { name: 'Mes présences' })).toHaveCount(0);

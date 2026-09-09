@@ -557,6 +557,20 @@ iot            → attendance, coursesession, shared
 > | `coursesession.CourseSessionDirectory#searchSessions`, `#findTeacherSchedule`, `#findClassSchedule` | `coursesession` → `search`, `integration` | recherche et fenêtres de calendrier |
 > | `attendance.AttendanceDashboardDirectory#classDigests`, `#justificationThroughput` | `attendance` → `dashboard` | agrégats d'assiduité périmétrés |
 > | `claim.ClaimDashboardDirectory`, `audit.AuditDashboardDirectory`, `identity.AccountStatsDirectory#countPendingActivationAmong` | → `dashboard` | compteurs bornés des cartes complètes |
+>
+> | Port public ajouté (passe de correction du 9 septembre 2026) | Fournisseur → consommateur(s) | Objet |
+> |---|---|---|
+> | `coursesession.CourseSessionDirectory#findTaughtClassGroupPublicIds` | `coursesession` → `enrollment` | classes rattachées aux séances d'un formateur (principal ou remplaçant actif) — alimente le périmètre de consultation des apprenants du `TEACHER` |
+>
+> Nouvelle dépendance inter-module `enrollment → coursesession`, **sans
+> cycle** (`coursesession` ne dépend pas d'`enrollment`) ; `ModularityTests`
+> reste vert — 19 modules. `enrollment.internal.RosterScopeResolver` en est
+> le seul appelant : il unit le périmètre `academic.AcademicScopeDirectory`
+> (formations dont répond un `PEDAGOGICAL_MANAGER`) et ce nouveau port pour
+> restreindre `GET /api/v1/student-profiles` et `GET /api/v1/enrollments` —
+> lecture seule, résolu depuis le **contexte de sécurité**, jamais d'un
+> paramètre client ; une ressource hors périmètre renvoie `404` (cahier
+> §18.2). Les écritures restent réservées à `EnrollmentWeb.MANAGE_ROLES`.
 
 ## 7.1 `identity`
 
@@ -931,6 +945,79 @@ La PWA doit permettre :
 Les présences hors connexion ne doivent pas être définitivement validées
 avant une vérification serveur.
 
+## 9.7 Système de design
+
+Refonte visuelle et UX menée sur la branche
+`feat/ui-redesign-bootstrap-material` (base `feat/demo-readiness-e2e-ui`).
+**Aucune règle métier, aucun contrôleur, aucune migration touchés** :
+c'est une refonte de la couche de présentation. L'état d'avancement
+détaillé, étape par étape, est dans `docs/CURRENT-STATE.md`.
+
+**Résultat mesurable** : plus **aucune** référence `--mat-sys-*` directe
+ni couleur en dur (`#rrggbb`, `rgb(0 0 0 / …)`) dans
+`src/app/**/*.scss` hors fichiers de jetons — toute la couche de
+présentation dérive du système de design ESIC.
+
+**Identité** : `src/styles/_tokens.scss` est le **point unique** des
+couleurs (vert `#1F7A4C` / bleu `#134E9C` / ambre / neutres), espacements
+(`--esic-space-1..8`), rayons, ombres (deux niveaux), et de la
+correspondance **statut d'assiduité → couleur**, exposés en variables CSS
+`--esic-*`. Reteinter le produit = modifier le bloc « Marque » de ce
+fichier, rien d'autre.
+
+**Trois briques combinées, sans mélange anarchique** :
+
+| Brique | Rôle | Ne fait pas |
+|---|---|---|
+| Angular Material (M3) | tous les composants interactifs (menus, champs, sidenav, tableaux, dates, bandeaux transitoires). Reteinté par `mat.theme()` depuis une palette M3 générée à partir des couleurs ESIC (`_esic-palette.scss`), puis réalignement des jetons système (`--mat-sys-*`, `--mat-button-*`) sur l'échelle ESIC dans `styles.scss` et `_material-overrides.scss`. **Aucune fenêtre modale** (`MatDialog` n'est utilisé nulle part). | — |
+| Bootstrap 5 (SCSS, **sans JavaScript**) | grille 12 colonnes, conteneurs, utilitaires responsive triés (affichage, flex, espacement, alignement, gap). Variables réécrites sur l'échelle ESIC. | aucun composant (`.btn`, `.card`, `.alert`, `.badge`, `.form-control`… exclus), aucune couleur / bordure / typo / ombre Bootstrap |
+| Primitives ESIC (`_primitives.scss`) | présentiel non-Material — voir le catalogue ci-dessous. | — |
+
+**Catalogue des primitives** (`_primitives.scss`, toutes préfixées
+`.esic-`) :
+
+| Primitive | Rôle |
+|---|---|
+| `page-header` (`__text`/`__title`/`__description`/`__actions`) | en-tête de page unique : titre serif, filet de base, action primaire à droite |
+| `back` | lien de retour unique du produit (icône `arrow_back`, jamais un glyphe « ← »), placé avant l'en-tête |
+| `card` (+`--raised`/`--flush`), `card-grid` | surface de contenu plate ; grille de cartes `auto-fill` |
+| `status` (`--present/late/absent/excused/company/pending`) | **pastille d'assiduité** — langage visuel signature : point + libellé, la couleur ne porte jamais seule l'information |
+| `badge` + `badge[data-status]` | étiquette de cycle de vie ; `[data-status]` fait la correspondance **≈40 statuts métier → 5 tonalités** en un seul endroit (le gabarit ne pose que la valeur brute) |
+| `table-wrap` + `table` | enveloppe à défilement horizontal **contenu** (jamais le `<body>`) + table de données |
+| `table-wrap--tall` / `table-wrap--compact` | opt-in : entête `sticky` + défilement vertical **interne** à l'enveloppe (`overscroll-behavior: contain`), plafond `max-height` relatif au viewport et surchargeable par `--esic-table-max-h`. `--tall` ≈ 20-46 rem (tables longues) ; `--compact` ≈ 15-24 rem (~6-7 lignes, le paginator reste hors de l'enveloppe et toujours visible). Aucun gestionnaire `wheel` en JS ; clavier intact |
+| `metric-grid` + `metric` (`__label`/`__value`/`__hint`, `[data-tone]`) | grille compacte d'indicateurs — exactement **2 colonnes** (1 en pile sous `@container` étroit), filets internes plutôt que N cartes ; `[data-tone]` pose un filet supérieur coloré, jamais le seul porteur de l'information. Reprise par « Mon activité » du tableau de bord responsable et la synthèse du suivi d'assiduité |
+| `rate-cell` (`__track`/`__fill`) | barre de taux inline dans une colonne de tableau : piste + remplissage décoratifs (`aria-hidden`), la valeur en toutes lettres à côté — sert la fusion graphique/tableau d'assiduité (EF-REP-008, un seul visuel accessible) |
+| `kv` | liste clé/valeur, bascule en une colonne via `@container` |
+| `filters` (+`__actions`) | barre de recherche / filtres au-dessus d'une liste |
+| `form` (+`--wide`, `__grid`, `__row`, `__group`, `__hint`, `__required-note`, `__error`, `__actions`) | formulaire de saisie : colonne bornée, grappe de champs courts, groupe `<fieldset>`, pied à filet, erreur de **soumission** (distincte de `mat-error`) |
+| `reveal` (+`--danger`, `__title`, `__text`, `__actions`, `__error`) | **dialogue en ligne** : confirmation ou saisie contextuelle ouverte en creux dans le flux de la page, jamais en superposition — d'où l'absence de tout problème de `z-index` ou de piège de focus |
+| `note` (+`--danger`/`--warning`), `section` (`__head`/`__title`), `empty`, `actions-row` | encart d'état ; sous-section titrée ; état « aucune donnée » ; rangée d'actions |
+
+**Assemblage** (`src/styles.scss`) : palette générée → `mat.theme()` →
+jetons ESIC → pont Bootstrap → primitives → styles d'authentification
+(`_auth.scss`) → réalignement Material (`_material-overrides.scss`) → bloc
+`html{}` de réalignement des `--mat-sys-*` (après `mat.theme()`, pour
+gagner la cascade) → styles d'éléments de base.
+
+**Coquille applicative** (`core/layout/app-shell`) : barre supérieure fine
++ rail de navigation repliable (préférence mémorisée par appareil).
+`.shell__main` est un **conteneur** (`container-type: inline-size`) : les
+requêtes `@container` des primitives se calent sur la largeur réelle de la
+colonne de contenu, pas sur la fenêtre. Adaptatif par **largeur et
+orientation** — jamais par modèle d'appareil : compaction < 1100 px,
+< 640 px, < 22rem (pliable replié), et `orientation: landscape` +
+`max-height` (téléphone couché).
+
+**Typographie** : IBM Plex Sans (interface, corps, chiffres tabulaires
+des registres) ; IBM Plex Serif (titres de page, documents officiels —
+attestations, en-têtes de rapport) ; IBM Plex Mono (codes courts).
+
+**Marque** : le logo ESIC réel est `frontend/public/brand/logo-esic.png`
+(mot-symbole complet, écrans d'authentification). Le favicon, les icônes
+PWA (`any` + `maskable`), l'`apple-touch-icon` et le monogramme du
+bandeau (`brand/mark-esic.png`) sont **le « E » de ce logo, recadré sans
+déformation ni recoloration** — jamais un logo inventé ni redessiné.
+
 ---
 
 # 10. Communication API
@@ -1251,12 +1338,25 @@ sequenceDiagram
 
 ## 15.2 Stockage
 
-Les jetons sensibles sont placés dans des cookies :
+`IMPLEMENTED_AND_TESTED` — voir `docs/CURRENT-STATE.md` (6 septembre 2026)
+et `docs/08-securite-rgpd.md` §6.
 
-- `HttpOnly` ;
-- `Secure` en HTTPS ;
-- `SameSite` adapté ;
-- durée courte.
+- **jeton d’accès** : JWT HS256, **en mémoire seule** côté client (jamais
+  `localStorage` ni `sessionStorage`, RG-093), durée courte ;
+- **jeton de renouvellement** : opaque, stocké côté serveur dans Redis
+  (une clé par session, empreinte SHA-256 du secret courant), remis au
+  navigateur dans un cookie `refresh_token` :
+  - `HttpOnly` ;
+  - `Secure` (piloté par configuration, actif hors profils servis en
+    clair) ;
+  - `SameSite=Strict`, `Path=/api/v1/auth` ;
+  - **rotatif** : réécrit à chaque `POST /api/v1/auth/refresh` ; un
+    secret périmé rejoué révoque toute la famille (détection de vol) ;
+  - deux bornes : inactivité glissante (défaut 30 min) et plafond absolu
+    (défaut 12 h) ;
+- **restauration au rechargement** : `restoreSession()` échange le cookie
+  contre un jeton d’accès puis lit `GET /api/v1/auth/me`. Sans cookie
+  valide : démarrage anonyme.
 
 ## 15.3 WebAuthn
 
@@ -2268,6 +2368,34 @@ fonction existe.
 
 **Statut.** Adoptée le 3 septembre 2026.
 
+## DEC-S2-007 — le changement volontaire de mot de passe re-connecte plutôt que de renouveler la session
+
+**Contexte.** Ajout d'un `POST /api/v1/auth/change-password` authentifié
+(tout rôle), demandé par le porteur : mot de passe actuel + nouveau +
+confirmation, depuis « Sécurité de mon compte ». Le compte visé est le
+**sujet du JWT** — un utilisateur ne peut jamais changer le mot de passe
+d'un autre. Que faire de la session courante après le changement ?
+
+**Décision.** `PasswordChangeService` avance `credentials_invalidated_at`
+(toutes les familles de session du compte sont invalidées, RG-010),
+révoque le jeton présenté, vide le cookie de renouvellement, et le front
+renvoie vers `/login?reason=password-changed`. **Aucune session n'est
+conservée ni « renouvelée en place ».**
+
+**Conséquences.** `AccessTokenIssuer.issue` date un jeton neuf à
+`max(now, credentialsInvalidatedAt)` et `credentials_invalidated_at` est
+arrondi à la seconde **supérieure** : une session fraîchement réémise
+dans la même seconde que le changement serait refusée à son premier
+renouvellement. Re-connecter est donc la seule forme sûre, et c'est déjà
+le contrat de `/reset-password`. Le mot de passe actuel est vérifié
+(BCrypt), la `PasswordPolicy` appliquée, un nouveau mot de passe
+identique à l'actuel refusé (`AUTH_PASSWORD_UNCHANGED`), le débit limité
+par compte sur une empreinte. Événements `PasswordChangedEvent`
+(`ORIGIN_SELF_SERVICE`) + `SessionsRevokedEvent` (`REASON_PASSWORD_CHANGE`)
+audités via l'outbox. `mot de passe oublié`, MFA et passkeys inchangés.
+
+**Statut.** Adoptée le 9 septembre 2026.
+
 ## DEC-S3-001 — les groupes temporaires vivent dans `enrollment`, pas dans `academic`
 
 **Contexte.** `EF-ACA-007` demande des groupes rassemblant des apprenants
@@ -2549,6 +2677,98 @@ calculs — exactement ce que le cahier interdit. Et l'identité d'une
 entrée provisoire est *déclarée* par le formateur, pas vérifiée : la
 confondre avec une présence enregistrée reviendrait à traiter une
 affirmation comme un fait.
+
+### DEC-S13-001 — Le jeton du QR fixe sort par une route dédiée, pas par le contrat de salle
+
+**Contexte.** `EF-ORG-003` : consulter, réimprimer et renouveler le QR
+fixe d'une salle, avec des droits distincts par rôle. Jusqu'ici
+`RoomResponse` portait `staticQrReference` dans **toutes** les réponses
+de salle, lisibles par `ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`
+/ `PEDAGOGICAL_MANAGER`.
+
+**Décision.** Le jeton complet quitte `RoomResponse` (seul
+`staticQrIssuedAt` y reste, comme indicateur « affiche disponible ») et
+n'est servi que par trois routes dédiées : `GET /rooms/{id}/static-qr`
+(réimpression — lecture seule), `POST /rooms/{id}/static-qr/rotate`
+(renouvellement) et `DELETE /rooms/{id}/static-qr` (révocation), via la
+vue `RoomStaticQrView`. Consultation / impression :
+`ADMIN` / `SUPER_ADMIN` / `SCHOOL_ADMINISTRATION`. Renouvellement /
+révocation : `ADMIN` **seul** (`403` pour les deux autres). Contrôle par
+`@PreAuthorize` au niveau route, jamais l'affichage Angular.
+
+**Raison.** Un secret d'affiche n'a pas à circuler dans le contrat de
+consultation courant d'une salle : le `PEDAGOGICAL_MANAGER`, qui a une
+lecture seule du référentiel, n'en a aucun usage, et le diffuser
+multiplie les copies à gouverner. La réimpression (même jeton, même
+date, affiches valides) et le renouvellement (jeton neuf, affiches
+invalidées) sont deux gestes de nature différente : le premier est
+courant et ouvert à l'administration scolaire, le second est
+exceptionnel et réservé à l'`ADMIN` fonctionnel — un `SUPER_ADMIN` garde
+la main en cas d'incident, hors parcours normal. Renouvellements
+concurrents : verrou optimiste de `BaseEntity` (`@Version`). Trace :
+outbox transactionnelle (`ROOM_UPDATED`), sans jeton ni adresse IP.
+
+**Impression.** Le module `document` est strictement tabulaire (CSV,
+`.xlsx`, PDF de tableau) ; il n'y a pas de générateur de page côté
+serveur, et `angularx-qrcode` est déjà une dépendance front. L'affiche
+est donc une **vue d'impression Angular** (`room-qr-poster`, `@media
+print`), pas un PDF serveur — le cahier l'autorise explicitement à
+défaut de générateur.
+
+### DEC-S13-002 — Le scan QR vit dans l'app ; l'URL de salle est la forme d'affiche et de tag NFC
+
+**Contexte.** `EF-ATT-001/002/009/010` : l'apprenant émarge par scan
+d'un QR dynamique du formateur ou d'un QR fixe de salle. Jusqu'ici,
+`/attendance` n'offrait que la **saisie manuelle** du code court et du
+code d'affiche. Il fallait aussi préparer un tag NFC de salle.
+
+**Décision.**
+
+1. **Un composant caméra unique, `app-qr-scanner`** (sous
+   `features/attendance/`), ouvert **uniquement après un clic**. Il gère
+   la permission caméra, la sélection de la caméra arrière
+   (`facingMode: environment` puis `enumerateDevices`), la libération des
+   pistes (destruction, fermeture, changement de route, **première
+   lecture**), et un verrou anti-lecture-multiple. Décodage :
+   `BarcodeDetector` natif s'il existe (accélération), sinon `jsQR`
+   (Apache-2.0, zéro dépendance) sur les trames — **jamais**
+   `BarcodeDetector` seul (absent d'iOS Safari). `jsQR` est chargé dans
+   le **chunk paresseux** de `attendance-check-in` : bundle initial
+   inchangé (~588 kio).
+2. **Le frontend ne décide de rien.** Le contenu scanné est analysé par
+   un parseur pur (`parseCheckInReference`) vers un **type fermé**
+   (`DYNAMIC_ATTENDANCE_TOKEN` / `STATIC_ROOM_REFERENCE` / `UNSUPPORTED`),
+   puis transmis **tel quel** aux routes d'émargement **existantes**
+   (`POST /attendance/validate` `{token}`, `POST /attendance/room-qr`
+   `{roomReference}`). Aucune route ni logique de validation nouvelle.
+   Une URL hors des origines internes est `UNSUPPORTED` — jamais suivie.
+3. **Ambiguïté jeton dynamique / référence de salle** : les deux sont des
+   chaînes Base64 URL-safe de longueur voisine. Une chaîne **nue** issue
+   de la caméra est donc traitée comme un **jeton dynamique** ; une
+   **référence de salle** n'est reconnue que dans une **URL interne**
+   `…/attendance?ref=…`. L'affiche `room-qr-poster` encode désormais
+   cette **URL absolue** (construite depuis `checkInPath` fourni par le
+   serveur + l'origine publique configurée), et c'est **la même URL**
+   qu'un tag **NFC NDEF** doit contenir. Les anciennes affiches à
+   référence nue restent utilisables par la **saisie manuelle**.
+4. **NFC : fondations seulement, pas de canal dédié.** Le tag ouvre la
+   même URL ; le serveur applique les mêmes contrôles (plage réseau,
+   fenêtre). Aucun canal `ROOM_STATIC_NFC` : rien ne distingue de façon
+   fiable un tap NFC d'une ouverture d'URL par appareil photo. Web NFC
+   n'est pas utilisé. Détails : `docs/deployment/NFC-ROOM-TAGS.md`.
+5. **URL de salle côté administration** : une section repliable « URL
+   pour tag NFC » dans le panneau QR fixe de la fiche de site (mêmes
+   rôles que l'affichage / l'impression : `ADMIN`, `SUPER_ADMIN`,
+   `SCHOOL_ADMINISTRATION`), avec copie presse-papiers **sur clic**
+   (`ClipboardService`, repli sélection manuelle d'un champ `readonly`).
+   L'URL n'est **jamais** dans `RoomResponse` ni dans la liste des
+   salles, jamais loggée, jamais auditée.
+
+**Raison.** Réutiliser l'unique autorité serveur évite toute divergence
+de règle ; le composant caméra concentre la gestion, difficile, du cycle
+de vie des pistes ; `jsQR` en repli garantit iOS ; l'URL comme forme
+canonique d'affiche unifie QR imprimé et tag NFC derrière un seul chemin
+de code.
 
 ### DEC-S9-001 — L'effet d'un départ anticipé est dérivé, jamais stocké
 
@@ -2880,6 +3100,52 @@ conformité.
 **Limite assumée.** Aucun service de poussée réel n'a été sollicité :
 sans paire de clés VAPID, `InactiveWebPushSender` répond, et l'API
 **déclare** `providerActive: false` plutôt que de simuler un envoi.
+
+### DEC-D01 — Points de contrôle indépendants + jeton d'autorité unique (statu quo)
+
+**Contexte.** docs/02 §16.2–16.5 ; `EF-ATT-003`, `EF-ATT-004` ; RG-054,
+RG-055. Un mandat a envisagé d'imposer côté serveur l'exclusivité stricte
+et l'ordre des fenêtres d'émargement (arrivée fermée avant un
+intermédiaire, `END` interdit tant qu'un autre point est `OPEN`). Le
+cahier est **silencieux** sur cet ordre et décrit des fenêtres
+indépendantes.
+
+**Décision (porteur, 6 septembre 2026 — option 1).** Statu quo. Chaque
+point de contrôle garde son cycle de vie propre
+(`PLANNED → OPEN → CLOSED` / `CANCELLED`) ; plusieurs points peuvent être
+`OPEN` simultanément ; l'exclusion mutuelle réelle est portée par le
+**jeton d'émargement**, pas par le statut. `AttendanceTokenService` ne
+tient qu'un pointeur d'autorité par séance
+(`esic:attendance:session:{id} → token\ncode\ncheckpointId`) : émettre un
+jeton pour un autre point de contrôle invalide immédiatement le
+précédent. L'incohérence de séquence reste traitée après coup par le
+calcul journalier (`PARTIAL` / `TO_CONFIRM`).
+
+**Conséquences.**
+
+- **Aucune ouverture automatique** liée à l'horloge. Seul le premier
+  point (`START`) s'ouvre quand le formateur ouvre la séance
+  (`CourseSessionService.open()`) ; les autres s'ouvrent un par un
+  (`AttendanceCheckpointService.open()`, séance `OPEN` + point
+  `PLANNED`, sans contrôle des autres points).
+- **Aucune fermeture automatique** du statut. `close()` est manuel ; la
+  fermeture de la séance ferme les points encore `OPEN`. Aucun
+  `@Scheduled` ne balaie les fenêtres.
+- Durées réelles : `app.attendance.token-ttl` = `PT30S` (QR dynamique +
+  code court, renouvelés à chaque émission) ; `app.attendance.room-qr-open-before`
+  = `PT15M` (le QR **fixe de salle** n'est accepté que de `début − 15 min`
+  au début, refus strict après le début).
+- **`OPEN` ≠ « accepte les émargements ».** Un point `OPEN` dont le jeton
+  a expiré n'accepte plus rien par QR dynamique / code court ; il faut
+  ré-émettre (ce qui fait tourner l'autorité).
+- Un jeton expiré est refusé (`resolve()` → vide) ; Redis indisponible →
+  `503`, jamais d'acceptation dégradée.
+
+**Ce qui n'a pas été fait, et pourquoi.** Les options 2 (garde sur `END`)
+et 3 (ordre strict complet) casseraient des tests d'intégration verts
+(`DailyAttendanceIntegrationTests`, `AttendanceIntegrationTests`) et le
+modèle demi-journée du cahier §16.3. Aucune fermeture automatique n'a été
+inventée sans spécification. Trace complète : `DECISIONS_NEEDED.md` D-01.
 
 
 ## ADR à rédiger

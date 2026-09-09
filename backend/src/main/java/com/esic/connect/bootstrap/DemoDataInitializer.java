@@ -1,6 +1,7 @@
 package com.esic.connect.bootstrap;
 
 import com.esic.connect.identity.DemoAccountProvisioner;
+import com.esic.connect.identity.DemoMfaProvisioner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,17 @@ import java.util.Set;
  * rendre démontrable le <em>sélecteur de contexte de rôle</em>
  * (EF-AUTH-003). Le cumul de rôles n'élargit jamais le JWT : Spring
  * Security reste l'autorité.
+ *
+ * <p>Si {@code ESIC_DEMO_TOTP_SECRET} (propriété {@code app.demo.totp-secret})
+ * est renseignée, un facteur TOTP <strong>déterministe</strong> est en plus
+ * activé pour {@code superadmin@example.test} et {@code admin@example.test}
+ * (dette T-19/T-20, {@code docs/CURRENT-STATE.md}) : ces deux rôles exigent
+ * un second facteur (RG-007) et, sans secret connu à l'avance, aucun script
+ * ni aucune suite de bout en bout ne peut le franchir. Strictement
+ * optionnel — absent, le comportement est inchangé : ces comptes restent
+ * bloqués à l'écran d'enrôlement, comme avant. Cette variable ne doit
+ * JAMAIS porter un secret de production ; elle n'a d'effet que sous le
+ * profil {@code demo}, jamais en production.
  */
 @Component
 @Profile("demo")
@@ -66,17 +78,23 @@ class DemoDataInitializer implements ApplicationRunner {
                     Set.of("PEDAGOGICAL_MANAGER", "TEACHER"));
 
     private final DemoAccountProvisioner provisioner;
+    private final DemoMfaProvisioner mfaProvisioner;
     private final String demoPassword;
+    private final String demoTotpSecret;
 
     DemoDataInitializer(DemoAccountProvisioner provisioner,
-                        @Value("${app.demo.password}") String demoPassword) {
+                        DemoMfaProvisioner mfaProvisioner,
+                        @Value("${app.demo.password}") String demoPassword,
+                        @Value("${app.demo.totp-secret:}") String demoTotpSecret) {
         if (demoPassword == null || demoPassword.length() < MIN_PASSWORD_LENGTH) {
             throw new IllegalStateException(
                     "ESIC_DEMO_PASSWORD (app.demo.password) est obligatoire sous le profil demo "
                             + "et doit contenir au moins " + MIN_PASSWORD_LENGTH + " caractères.");
         }
         this.provisioner = provisioner;
+        this.mfaProvisioner = mfaProvisioner;
         this.demoPassword = demoPassword;
+        this.demoTotpSecret = demoTotpSecret;
     }
 
     @Override
@@ -92,6 +110,13 @@ class DemoDataInitializer implements ApplicationRunner {
                 + "multi-rôles) — "
                 + "statut ACTIVE et mot de passe aligné sur la valeur courante de "
                 + "ESIC_DEMO_PASSWORD. Complétez avec scripts/seed-demo.sh.");
+
+        if (demoTotpSecret != null && !demoTotpSecret.isBlank()) {
+            mfaProvisioner.ensureDeterministicTotp(SUPER_ADMIN.email(), demoTotpSecret);
+            mfaProvisioner.ensureDeterministicTotp(ADMIN.email(), demoTotpSecret);
+            log.warn("Facteur TOTP déterministe activé pour super-admin et admin de démonstration "
+                    + "(ESIC_DEMO_TOTP_SECRET défini) — réservé au profil demo, jamais en production.");
+        }
     }
 
     private record DemoAccount(String email, String firstName, String lastName, Set<String> roles) {

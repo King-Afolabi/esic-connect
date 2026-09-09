@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { computed, Injectable, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, from, map, of, switchMap } from 'rxjs';
+import { Observable, catchError, finalize, from, map, of, shareReplay, switchMap } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
@@ -20,18 +20,28 @@ import { base64UrlToBytes, bytesToBase64Url } from './webauthn';
 /**
  * Point d'entrée unique de l'état d'authentification côté client.
  *
- * Stratégie de stockage du jeton : **en mémoire uniquement** (signal).
- * Ni `localStorage` ni `sessionStorage` ni cookie écrit en JavaScript.
- * Motivation : docs/08-securite-rgpd.md §6 (« aucun token sensible dans
- * localStorage ») et RG-085. La stratégie cible documentée est un cookie
- * `HttpOnly` + refresh token rotatif (docs/03 §15.2, docs/07 §6), non
- * encore exposée par le back-end (seul `POST /api/v1/auth/login`
- * renvoyant un bearer JSON existe aujourd'hui).
+ * Stratégie de stockage du jeton d'accès : **en mémoire uniquement**
+ * (signal). Ni `localStorage` ni `sessionStorage` ni cookie écrit en
+ * JavaScript. Motivation : docs/08-securite-rgpd.md §6 (« aucun token
+ * sensible dans localStorage ») et RG-093.
  *
- * Conséquence assumée : un rechargement de page perd la session et
- * renvoie l'utilisateur vers la connexion. {@link restoreSession} est le
- * point d'extension où brancher `POST /api/v1/auth/refresh` quand le
- * back-end fournira l'authentification par cookie.
+ * La continuité de session au rechargement repose sur un **cookie de
+ * renouvellement `HttpOnly` rotatif** posé par le back-end
+ * (docs/02 §17.7). {@link restoreSession}, appelée au démarrage, échange
+ * ce cookie contre un nouveau jeton d'accès via `POST /api/v1/auth/refresh`
+ * puis récupère l'identité via `GET /api/v1/auth/me`. En l'absence de
+ * cookie valide (jamais connecté, session expirée, déconnexion), elle se
+ * termine sans session : l'utilisateur voit l'écran de connexion.
+ *
+ * {@link refreshSession} rejoue le même échange en cours de session,
+ * lorsqu'un appel métier revient en `401` parce que le jeton d'accès —
+ * de courte durée — a expiré. L'appel est en **file unique** : plusieurs
+ * `401` concurrents partagent un seul renouvellement.
+ *
+ * Tous les appels d'authentification portent `withCredentials: true` :
+ * indispensable pour qu'un déploiement multi-origine transmette le
+ * cookie ; sans effet en mono-origine (proxy `ng serve`, reverse proxy
+ * de production).
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -68,7 +78,7 @@ export class AuthService {
       .post<LoginResponse>(
         `${environment.apiBaseUrl}/v1/auth/login`,
         { email: normalizedEmail, password, captchaToken: captchaToken ?? null },
-        { headers: this.deviceHeaders() },
+        { headers: this.deviceHeaders(), withCredentials: true },
       )
       .pipe(map((response) => this.toOutcome(response, normalizedEmail)));
   }
@@ -79,7 +89,7 @@ export class AuthService {
       .post<LoginResponse>(
         `${environment.apiBaseUrl}/v1/auth/mfa/verify`,
         { challengeId, code },
-        { headers: this.deviceHeaders() },
+        { headers: this.deviceHeaders(), withCredentials: true },
       )
       .pipe(map((response) => this.establish(response, email)));
   }
@@ -111,7 +121,7 @@ export class AuthService {
       .post<{ recoveryCodes: string[]; session?: LoginResponse }>(
         `${environment.apiBaseUrl}/v1/auth/mfa/enroll/confirm`,
         challengeId ? { challengeId, code } : { code },
-        { headers: this.deviceHeaders() },
+        { headers: this.deviceHeaders(), withCredentials: true },
       )
       .pipe(
         map((response) => ({
@@ -196,6 +206,7 @@ export class AuthService {
         switchMap((body) =>
           this.http.post<LoginResponse>(`${environment.apiBaseUrl}/v1/auth/webauthn/login`, body, {
             headers: this.deviceHeaders(),
+            withCredentials: true,
           }),
         ),
         map((response) => this.establish(response, this.currentUserEmail() ?? '')),
@@ -214,17 +225,89 @@ export class AuthService {
     return this.http.delete<void>(`${environment.apiBaseUrl}/v1/auth/devices/${id}`);
   }
 
+  /** Renouvellement en cours, partagé tant qu'il n'est pas terminé (file unique). */
+  private refreshInFlight: Observable<boolean> | null = null;
+
   /**
    * Restauration de session après rechargement.
    *
-   * Aucune persistance client n'étant autorisée (voir en-tête de classe),
-   * il n'y a rien à restaurer aujourd'hui : la méthode complète sans
-   * établir de session. Elle est appelée au démarrage via
-   * `provideAppInitializer` et constitue le point d'ancrage d'un futur
-   * `POST /api/v1/auth/refresh` fondé sur un cookie `HttpOnly`.
+   * Échange le cookie de renouvellement `HttpOnly` contre un jeton
+   * d'accès (`POST /api/v1/auth/refresh`), puis lit l'identité du compte
+   * (`GET /api/v1/auth/me`) — le jeton seul ne porte pas l'adresse. En
+   * l'absence de cookie valide, la méthode se termine sans session, sans
+   * erreur ni redirection : c'est un démarrage anonyme normal.
+   *
+   * Appelée une fois au démarrage via `provideAppInitializer`.
    */
   restoreSession(): Observable<void> {
-    return of(undefined);
+    return this.http
+      .post<LoginResponse>(
+        `${environment.apiBaseUrl}/v1/auth/refresh`,
+        {},
+        { headers: this.deviceHeaders(), withCredentials: true },
+      )
+      .pipe(
+        switchMap((response) => {
+          if (!response.accessToken) {
+            return of(undefined);
+          }
+          const token = response.accessToken;
+          return this.http
+            .get<{ email: string }>(`${environment.apiBaseUrl}/v1/auth/me`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            .pipe(
+              map((me) => {
+                this._session.set(this.toSession(response, me.email));
+                return undefined;
+              }),
+            );
+        }),
+        catchError(() => {
+          this._session.set(null);
+          return of(undefined);
+        }),
+      );
+  }
+
+  /**
+   * Renouvelle le jeton d'accès en cours de session, à partir du cookie
+   * `HttpOnly`. Sert à l'intercepteur d'erreurs : quand un appel métier
+   * revient en `401`, le jeton d'accès — de courte durée — a expiré, mais
+   * la session de renouvellement peut être encore valide.
+   *
+   * File unique : plusieurs `401` concurrents s'abonnent au même appel.
+   * Résout `true` si un nouveau jeton est en place, `false` sinon. En cas
+   * d'échec, la session locale n'est **pas** purgée ici : l'appelant
+   * (l'intercepteur) décide, via {@link handleUnauthorized}, de renvoyer
+   * l'utilisateur vers la connexion.
+   */
+  refreshSession(): Observable<boolean> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+    const currentEmail = this._session()?.email ?? '';
+    this.refreshInFlight = this.http
+      .post<LoginResponse>(
+        `${environment.apiBaseUrl}/v1/auth/refresh`,
+        {},
+        { headers: this.deviceHeaders(), withCredentials: true },
+      )
+      .pipe(
+        map((response) => {
+          if (!response.accessToken) {
+            return false;
+          }
+          this._session.set(this.toSession(response, currentEmail));
+          return true;
+        }),
+        catchError(() => of(false)),
+        finalize(() => {
+          this.refreshInFlight = null;
+        }),
+        shareReplay(1),
+      );
+    return this.refreshInFlight;
   }
 
   /**
@@ -244,7 +327,7 @@ export class AuthService {
     const wasAuthenticated = this._session() !== null;
     if (wasAuthenticated) {
       this.http
-        .post<void>(`${environment.apiBaseUrl}/v1/auth/logout`, {})
+        .post<void>(`${environment.apiBaseUrl}/v1/auth/logout`, {}, { withCredentials: true })
         .subscribe({ next: () => undefined, error: () => undefined });
     }
     this._session.set(null);
@@ -277,15 +360,61 @@ export class AuthService {
   }
 
   /**
+   * Change le mot de passe de l'utilisateur connecté (EF-AUTH,
+   * docs/02 §17.1). Le serveur vérifie le mot de passe actuel, applique
+   * la politique, puis ferme **toutes** les sessions du compte et vide le
+   * cookie de renouvellement — `withCredentials` est donc indispensable.
+   * Le compte visé est le sujet du jeton : aucun identifiant n'est
+   * transmis, on ne peut pas viser un autre compte.
+   */
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(
+      `${environment.apiBaseUrl}/v1/auth/change-password`,
+      { currentPassword, newPassword },
+      { withCredentials: true },
+    );
+  }
+
+  /**
+   * Termine la session locale après un changement de mot de passe réussi
+   * et renvoie vers la connexion avec le bandeau dédié. Le serveur a
+   * déjà invalidé toutes les sessions et vidé le cookie ; il ne reste
+   * qu'à oublier le jeton en mémoire.
+   */
+  completePasswordChange(): void {
+    this._session.set(null);
+    void this.router.navigate(['/login'], { queryParams: { reason: 'password-changed' } });
+  }
+
+  /**
    * Traitement d'une réponse 401 sur un appel authentifié : la session
    * locale est considérée comme expirée ou invalide.
    */
   handleUnauthorized(): void {
+    this.expireSession();
+  }
+
+  /**
+   * Termine la session locale et renvoie vers la connexion en
+   * **préservant la route de retour** (`?redirect=`), sauf si l'on est
+   * déjà sur `/login`. Sert aussi bien au parcours réactif (401 sur un
+   * appel métier) qu'au parcours proactif (expiration d'inactivité,
+   * plafond absolu — voir {@link SessionActivityService}).
+   *
+   * La préservation de la route permet à l'utilisateur de reprendre là
+   * où il était après s'être reconnecté (Lot A / Lot G).
+   */
+  expireSession(): void {
     if (this._session() === null) {
       return;
     }
     this._session.set(null);
-    void this.router.navigate(['/login'], { queryParams: { reason: 'expired' } });
+    const current = this.router.url;
+    const preserved =
+      current && current !== '/' && !current.startsWith('/login') ? current : undefined;
+    void this.router.navigate(['/login'], {
+      queryParams: { reason: 'expired', ...(preserved ? { redirect: preserved } : {}) },
+    });
   }
 
   hasAnyRole(required: readonly Role[]): boolean {

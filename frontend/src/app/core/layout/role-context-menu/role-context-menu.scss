@@ -2,8 +2,25 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .role-context__label {
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// Sous 640 px, le déclencheur devient une icône seule (pastille + chevron).
+// Le libellé reste dans le DOM pour les technologies d'assistance.
+@media (max-width: 640px) {
+  .role-context__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }

@@ -1,6 +1,10 @@
 package com.esic.connect.alternation;
 
 import com.esic.connect.support.AuthTestSupport;
+import com.esic.connect.alternation.AlternationDirectory.Axis;
+import com.esic.connect.alternation.AlternationDirectory.EnrollmentDay;
+import com.esic.connect.alternation.AlternationDirectory.EnrollmentDescriptor;
+import com.esic.connect.enrollment.EnrollmentDirectory;
 import com.esic.connect.audit.internal.AuditEvent;
 import com.esic.connect.audit.internal.AuditEventRepository;
 import com.esic.connect.identity.internal.AccountStatus;
@@ -33,6 +37,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -79,6 +84,10 @@ class AlternationIntegrationTests {
     private AuditEventRepository auditEventRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private AlternationDirectory alternationDirectory;
+    @Autowired
+    private EnrollmentDirectory enrollmentDirectory;
 
     @BeforeEach
     void useJdkClient() {
@@ -541,6 +550,71 @@ class AlternationIntegrationTests {
                         "endAt", "2026-09-07T18:00:00Z", "timeZoneId", "Europe/Paris", "reason", "x"), admin);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().get("code")).isEqualTo("ALT_ENROLLMENT_NOT_USABLE");
+    }
+
+    // ------------------------------------------------------------------
+    // Résolution en lot (ANO-PERF-001/002) — port AlternationDirectory
+    // ------------------------------------------------------------------
+
+    @Test
+    void batchEnrollmentContextMatchesTheSingleCallResolutionForEveryDay() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        String pattern = (String) created("/api/v1/alternation/patterns", threeTwoBody("RYT-" + code()), admin)
+                .get("publicId");
+        // Rythme 3j école (lun-mer) / 2j entreprise (jeu-ven) affecté à C1.
+        created("/api/v1/alternation/class-assignments", Map.of(
+                "classGroupPublicId", chain.classA(), "workStudyPatternPublicId", pattern,
+                "cycleStartDate", "2026-09-01", "validFrom", "2026-09-01"), admin);
+
+        String e1 = enrollmentInClass(admin, chain.classA());
+        String e2 = enrollmentInClass(admin, chain.classA());
+
+        // Exception individuelle sur e1 : COMPANY_PERIOD le lundi 2026-09-07,
+        // jour où le rythme dit SCHOOL -> l'exception prime.
+        created("/api/v1/alternation/student-exceptions", Map.of(
+                "enrollmentPublicId", e1, "type", "COMPANY_PERIOD",
+                "startAt", "2026-09-07T00:00:00Z", "endAt", "2026-09-07T23:59:00Z",
+                "timeZoneId", "Europe/Paris", "reason", "immersion"), admin);
+
+        long e1Internal = enrollmentDirectory.findByPublicId(UUID.fromString(e1)).orElseThrow().internalId();
+        long e2Internal = enrollmentDirectory.findByPublicId(UUID.fromString(e2)).orElseThrow().internalId();
+        List<EnrollmentDescriptor> descriptors = List.of(
+                new EnrollmentDescriptor(UUID.fromString(e1), e1Internal, UUID.fromString(chain.classA())),
+                new EnrollmentDescriptor(UUID.fromString(e2), e2Internal, UUID.fromString(chain.classA())));
+
+        LocalDate from = LocalDate.parse("2026-09-07"); // lundi
+        LocalDate to = LocalDate.parse("2026-09-11");    // vendredi
+        var batch = alternationDirectory.resolveEnrollmentContexts(descriptors, from, to);
+
+        // 2 inscriptions x 5 jours = 10 couples, tous présents.
+        assertThat(batch).hasSize(10);
+
+        // Valeurs métier attendues.
+        assertThat(batch.get(new EnrollmentDay(UUID.fromString(e1), LocalDate.parse("2026-09-07"))))
+                .as("e1 lundi : exception COMPANY prime sur le rythme SCHOOL")
+                .isEqualTo(Axis.COMPANY);
+        assertThat(batch.get(new EnrollmentDay(UUID.fromString(e2), LocalDate.parse("2026-09-07"))))
+                .as("e2 lundi : rythme SCHOOL, aucune exception")
+                .isEqualTo(Axis.SCHOOL);
+        assertThat(batch.get(new EnrollmentDay(UUID.fromString(e2), LocalDate.parse("2026-09-10"))))
+                .as("e2 jeudi : rythme COMPANY")
+                .isEqualTo(Axis.COMPANY);
+
+        // Parité stricte : chaque couple du lot == la résolution unitaire.
+        for (var entry : batch.entrySet()) {
+            EnrollmentDay key = entry.getKey();
+            Axis single = alternationDirectory
+                    .resolveEnrollmentContext(key.enrollmentPublicId(), key.day())
+                    .effective();
+            assertThat(entry.getValue())
+                    .as("parité lot/unitaire pour " + key)
+                    .isEqualTo(single);
+        }
+
+        // Entrées vides tolérées.
+        assertThat(alternationDirectory.resolveEnrollmentContexts(List.of(), from, to)).isEmpty();
+        assertThat(alternationDirectory.resolveEnrollmentContexts(descriptors, to, from)).isEmpty();
     }
 
     // ------------------------------------------------------------------

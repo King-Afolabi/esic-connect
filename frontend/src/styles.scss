@@ -1,38 +1,210 @@
+// =============================================================================
+// ESIC Connect — feuille de style racine
+// =============================================================================
+// Système de design : `src/styles/_tokens.scss` est le point unique de
+// l'identité visuelle (couleurs vert / bleu ESIC, espacements, rayons,
+// ombres). Voir aussi docs/03-architecture.md.
+//
+// Assemblage :
+//   1. palette Material 3 générée à partir des couleurs ESIC ;
+//   2. thème Angular Material (composants interactifs) ;
+//   3. jetons ESIC ;
+//   4. pont Bootstrap (grille 12 colonnes + utilitaires responsive, sans JS) ;
+//   5. primitives ESIC (en-têtes de page, cartes, pastilles de statut,
+//      tableaux de données) ;
+//   6. réalignement des composants Material sur les primitives ;
+//   7. styles d'éléments de base.
 
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
-@use '@angular/material' as mat;
+@use "@angular/material" as mat;
+@use "./styles/esic-palette" as esic-palette;
+@use "./styles/tokens";
+@use "./styles/bootstrap-bridge";
+@use "./styles/primitives";
+@use "./styles/auth";
+@use "./styles/material-overrides";
 
+// -- 2. Thème Angular Material (Material 3), teinté ESIC ------------------
 html {
+  color-scheme: light;
+
+  @include mat.theme(
+    (
+      color: (
+        primary: esic-palette.$primary-palette,
+        tertiary: esic-palette.$tertiary-palette,
+        theme-type: light,
+      ),
+      typography: (
+        plain-family: ("IBM Plex Sans", "Segoe UI", system-ui, sans-serif),
+        brand-family: ("IBM Plex Sans", "Segoe UI", system-ui, sans-serif),
+        bold-weight: 600,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
+      density: 0,
+    )
+  );
+}
+
+// -- 6b. Réalignement des jetons système Material sur l'échelle ESIC -------
+// Bloc `html` placé APRÈS `mat.theme()` : il gagne la cascade sur les jetons
+// générés. Les retouches de composants sont dans `_material-overrides.scss`.
+html {
+  // Neutres = surfaces ESIC
+  --mat-sys-background: var(--esic-paper);
+  --mat-sys-surface: var(--esic-surface);
+  --mat-sys-surface-dim: var(--esic-surface-sunken);
+  --mat-sys-surface-bright: var(--esic-surface);
+  --mat-sys-surface-container-lowest: var(--esic-surface);
+  --mat-sys-surface-container-low: var(--esic-surface);
+  --mat-sys-surface-container: var(--esic-surface);
+  --mat-sys-surface-container-high: var(--esic-surface-sunken);
+  --mat-sys-surface-container-highest: var(--esic-surface-sunken);
+  --mat-sys-on-surface: var(--esic-ink);
+  --mat-sys-on-surface-variant: var(--esic-ink-soft);
+  --mat-sys-outline: var(--esic-line-strong);
+  --mat-sys-outline-variant: var(--esic-line);
+
+  // Rayons : hiérarchie ESIC plutôt qu'une valeur unique
+  --mat-sys-corner-extra-small: var(--esic-radius-xs);
+  --mat-sys-corner-small: var(--esic-radius-xs);
+  --mat-sys-corner-medium: var(--esic-radius-sm);
+  --mat-sys-corner-large: var(--esic-radius-md);
+  --mat-sys-corner-extra-large: var(--esic-radius-md);
+
+  // Boutons : rayon des contrôles (M3 les met en pleine capsule par défaut).
+  // La capsule reste pour les FAB et les jetons (chips), pas pour les
+  // boutons d'action. Jetons Angular Material 21 (`--mat-button-*`).
+  --mat-button-text-container-shape: var(--esic-radius-xs);
+  --mat-button-filled-container-shape: var(--esic-radius-xs);
+  --mat-button-protected-container-shape: var(--esic-radius-xs);
+  --mat-button-outlined-container-shape: var(--esic-radius-xs);
+  --mat-button-tonal-container-shape: var(--esic-radius-xs);
+
+  // Élévations : les deux ombres ESIC, pas les cinq niveaux Material
+  --mat-sys-level0: none;
+  --mat-sys-level1: var(--esic-shadow-raise);
+  --mat-sys-level2: var(--esic-shadow-raise);
+  --mat-sys-level3: var(--esic-shadow-float);
+  --mat-sys-level4: var(--esic-shadow-float);
+  --mat-sys-level5: var(--esic-shadow-float);
+}
+
+// -- 7. Éléments de base ------------------------------------------------
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
   height: 100%;
-  @include mat.theme((
-    color: (
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
-    ),
-    typography: Roboto,
-    density: 0,
-  ));
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
-  color-scheme: light;
-
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-body-medium);
-
-  // Reset the user agent margin.
   margin: 0;
-  height: 100%;
+  background: var(--esic-paper);
+  color: var(--esic-ink);
+  font-family: var(--esic-font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-/* You can add global styles to this file, and also import other style files */
+
+// Titres : serif (registre « document officiel »). Les composants Material
+// gardent leur propre échelle typographique.
+h1,
+h2,
+h3 {
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  color: var(--esic-ink);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: clamp(1.5rem, 1.3rem + 1vw, 1.875rem);
+  margin: 0 0 var(--esic-space-4);
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin: var(--esic-space-6) 0 var(--esic-space-3);
+}
+
+h3 {
+  font-size: 1.0625rem;
+  margin: var(--esic-space-5) 0 var(--esic-space-2);
+}
+
+a {
+  color: var(--esic-primary);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--esic-primary-hover);
+}
+
+:focus-visible {
+  outline: 3px solid var(--esic-focus-ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--esic-blue-200);
+  color: var(--esic-ink);
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+// -- Impression -----------------------------------------------------------
+// Garde-fou global (ANO-QR-001) : l'affiche imprimable du QR de salle est
+// désormais rendue HORS du sous-arbre `AppShell` (voir `app.routes.ts`),
+// donc le rail et la topbar ne sont plus dans le DOM lors de son
+// impression. Ce bloc reste en défense en profondeur : si un autre écran
+// déclenche `window.print()` depuis l'intérieur de la coquille, la
+// navigation et les bandeaux applicatifs ne doivent jamais partir à
+// l'imprimante. `.no-print` est l'utilitaire commun pour masquer une
+// barre d'actions à l'impression.
+@media print {
+  .shell__rail,
+  .shell__topbar,
+  .shell__banner,
+  app-skip-link,
+  app-session-timeout-warning,
+  .no-print {
+    display: none !important;
+  }
+
+  .shell__main {
+    padding: 0 !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  // Amélioration visuelle légère : aucune ombre à l'impression (affiche
+  // QR de salle, rapports) — l'élévation est un repère d'écran.
+  * {
+    box-shadow: none !important;
+  }
+}

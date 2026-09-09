@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { InvitationsApiService } from '../invitations-api.service';
@@ -50,7 +51,7 @@ describe('InvitationList', () => {
 
     await TestBed.configureTestingModule({
       imports: [InvitationList],
-      providers: [{ provide: InvitationsApiService, useValue: api }],
+      providers: [provideRouter([]), { provide: InvitationsApiService, useValue: api }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(InvitationList);

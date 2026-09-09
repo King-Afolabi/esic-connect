@@ -15,4 +15,6 @@ interface TrustedDeviceRepository extends JpaRepository<TrustedDevice, Long> {
                                                                   TrustedDeviceStatus status);
 
     Optional<TrustedDevice> findByPublicIdAndUserId(UUID publicId, Long userId);
+
+    long countByUserIdAndStatus(Long userId, TrustedDeviceStatus status);
 }

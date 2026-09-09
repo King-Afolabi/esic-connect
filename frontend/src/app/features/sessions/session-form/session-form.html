@@ -1,12 +1,19 @@
-<nav class="sessions__crumbs" aria-label="Fil d'Ariane">
-  <a routerLink="/sessions">← Retour à la liste des séances</a>
-</nav>
+<a class="esic-back" routerLink="/sessions">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux séances</span>
+</a>
 
-<h1 class="sessions__title">Nouvelle séance exceptionnelle</h1>
-<p class="sessions__intro">
-  Une séance est créée manuellement (sans planning) : le motif est obligatoire.
-  Elle référence un formateur actif et au moins une classe.
-</p>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Nouvelle séance exceptionnelle</h1>
+    <p class="esic-page-header__description">
+      Une séance est créée manuellement (sans planning) : le motif est obligatoire.
+      Elle référence un formateur actif et au moins une classe.
+    </p>
+  </div>
+</header>
+
+<p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
 
 @switch (loadState().kind) {
   @case ('loading') {
@@ -42,7 +49,8 @@
   }
 
   @case ('ready') {
-    <form class="sessions__form" [formGroup]="form" (ngSubmit)="submit()">
+    <form class="sessions__form esic-form esic-form--wide" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="esic-form__grid">
       <mat-form-field appearance="outline" class="sessions__form-field">
         <mat-label>Formateur</mat-label>
         <mat-select formControlName="teacherPublicId">
@@ -92,8 +100,9 @@
           }
         </mat-select>
       </mat-form-field>
+      </div>
 
-      <mat-form-field appearance="outline" class="sessions__form-field sessions__form-field--wide">
+      <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
         <mat-label>Motif de la séance exceptionnelle</mat-label>
         <textarea
           matInput
@@ -108,19 +117,19 @@
         }
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="sessions__form-field sessions__form-field--wide">
+      <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
         <mat-label>Libellé (facultatif)</mat-label>
         <input matInput formControlName="title" [maxlength]="titleMaxLength" />
       </mat-form-field>
 
       @if (timeError()) {
-        <p class="sessions__inline-error" role="alert">{{ timeError() }}</p>
+        <p class="esic-form__error" role="alert">{{ timeError() }}</p>
       }
       @if (submitError()) {
-        <p class="sessions__inline-error" role="alert">{{ submitError() }}</p>
+        <p class="esic-form__error" role="alert">{{ submitError() }}</p>
       }
 
-      <div class="sessions__form-actions">
+      <div class="sessions__form-actions esic-form__actions">
         <button mat-flat-button type="submit" [disabled]="submitting()">Créer la séance</button>
         <a mat-button routerLink="/sessions">Annuler</a>
       </div>

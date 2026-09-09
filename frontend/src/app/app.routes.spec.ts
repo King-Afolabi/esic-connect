@@ -126,8 +126,16 @@ describe('application routes (guard wiring)', () => {
     expect(location.path()).toBe('/students/2f1a9b7c-0000-4000-8000-000000000000');
   });
 
-  it('redirects a TEACHER away from a student detail route (canActivateChild)', async () => {
+  it('lets a TEACHER open a student detail route (scoped server-side to their classes)', async () => {
+    // EnrollmentWeb.READ_ROLES : le TEACHER consulte les apprenants de ses
+    // séances ; RosterScopeResolver restreint la réponse côté serveur.
     signIn(['TEACHER']);
+    await router.navigateByUrl('/students/2f1a9b7c-0000-4000-8000-000000000000');
+    expect(location.path()).toBe('/students/2f1a9b7c-0000-4000-8000-000000000000');
+  });
+
+  it('still redirects a STUDENT away from a student detail route (canActivateChild)', async () => {
+    signIn(['STUDENT']);
     await router.navigateByUrl('/students/2f1a9b7c-0000-4000-8000-000000000000');
     expect(location.path()).toBe('/forbidden');
   });
@@ -168,13 +176,19 @@ describe('application routes (guard wiring)', () => {
       expect(location.path()).toBe('/forbidden');
     });
 
-    it('lets a PEDAGOGICAL_MANAGER browse the academic reference but not /students', async () => {
+    it('lets a PEDAGOGICAL_MANAGER browse the academic reference and their scoped /students', async () => {
       signIn(['PEDAGOGICAL_MANAGER']);
 
       await router.navigateByUrl('/academic/programs');
       expect(location.path()).toBe('/academic/programs');
 
+      // EnrollmentWeb.READ_ROLES : consultation ouverte, périmètre
+      // restreint côté serveur (RosterScopeResolver).
       await router.navigateByUrl('/students');
+      expect(location.path()).toBe('/students');
+
+      // La création manuelle reste réservée à ADMIN / SUPER_ADMIN.
+      await router.navigateByUrl('/students/nouveau');
       expect(location.path()).toBe('/forbidden');
     });
 

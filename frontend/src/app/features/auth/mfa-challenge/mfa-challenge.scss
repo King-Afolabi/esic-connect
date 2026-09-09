@@ -1,33 +1,54 @@
+// Mise en page générale portée par `src/styles/_auth.scss` (`.esic-auth`).
+// Ici : les blocs propres au second facteur (clé d'enrôlement, liste de
+// codes de récupération).
+
 .mfa__setup,
 .mfa__recovery {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-block: 1rem;
+  gap: var(--esic-space-3);
+  margin-block: var(--esic-space-4);
+  font-size: 0.9375rem;
+  line-height: 1.5;
 }
 
 .mfa__recovery-title {
-  font-size: 1rem;
   margin: 0;
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
+}
+
+// Clé partagée et codes de récupération : encart en creux, chasse fixe,
+// sélectionnables d'un bloc.
+.mfa__secret,
+.mfa__recovery-list {
+  margin: 0;
+  padding: var(--esic-space-3);
+  background: var(--esic-surface-sunken);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-xs);
 }
 
 .mfa__secret code,
 .mfa__recovery-list code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.08em;
+  font-family: var(--esic-font-mono);
+  font-size: 0.9375rem;
+  letter-spacing: 0.06em;
+  color: var(--esic-ink);
   word-break: break-all;
 }
 
 .mfa__recovery-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 0.25rem 1rem;
-  margin: 0;
-  padding-left: 1.25rem;
+  gap: var(--esic-space-1) var(--esic-space-4);
+  list-style: none;
 }
 
 .mfa__hint {
   margin: 0;
-  font-size: 0.875rem;
-  opacity: 0.8;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
 }

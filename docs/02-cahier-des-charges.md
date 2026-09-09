@@ -756,6 +756,20 @@ L'émargement doit être rapide, sécurisé, accessible, traçable,
 compatible avec les cours hybrides, résistant au rejeu, et toujours
 doublé d'un contrôle humain possible.
 
+> **Précision d'implémentation (ajout du 9 septembre 2026)** — le scan du
+> QR (dynamique du formateur comme fixe de salle) est réalisé **dans
+> l'application** : composant caméra dédié, décodeur logiciel de repli,
+> accélération native `BarcodeDetector` quand elle existe, alternative
+> **code court** systématique (caméra indisponible, accessibilité).
+> L'application n'ajoute **aucune route ni logique de validation** : le
+> scan atteint les routes d'émargement existantes. La lecture d'un **tag
+> NFC** de salle repose sur la **même URL opaque** que le QR fixe et
+> déclenche exactement les mêmes contrôles serveur (plage réseau, fenêtre
+> de séance) ; aucun canal `ROOM_STATIC_NFC` distinct n'est enregistré,
+> rien ne permettant de distinguer de façon fiable un tap NFC d'une
+> ouverture d'URL. Détail : `docs/03-architecture.md` DEC-S13-002,
+> `docs/CURRENT-STATE.md`.
+
 ## 16.2 Points de contrôle journaliers
 
 Quatre points de contrôle nommés :
@@ -817,6 +831,21 @@ inscription et la fenêtre applicable.
 
 Il est **refusé** après le début de la séance, hors plage réseau
 autorisée, et en l'absence de séance correspondante.
+
+> **Précision d'implémentation (ajout du 9 septembre 2026)** — le QR fixe
+> est un **jeton permanent généré par le serveur** (`SecureRandom`,
+> unique, daté), à ne pas confondre avec le jeton **temporaire rotatif**
+> du QR dynamique (§16.8). Il se gère par une **API administrative
+> dédiée** — consultation / réimpression (ne modifie rien),
+> renouvellement (invalide immédiatement les affiches posées),
+> révocation — et une **vue d'affiche imprimable**. Le jeton complet ne
+> figure plus dans le contrat général de salle. Matrice de rôles :
+> consultation et impression pour `ADMIN`, `SUPER_ADMIN` et
+> `SCHOOL_ADMINISTRATION` ; renouvellement et révocation pour `ADMIN`
+> **seul** (`403` pour les deux autres) ; aucun accès pour
+> `PEDAGOGICAL_MANAGER`, `TEACHER`, `STUDENT`. Renouvellement audité via
+> l'outbox, sans jeton ni adresse IP. Détail :
+> `docs/03-architecture.md` DEC-S13-001, `docs/CURRENT-STATE.md`.
 
 ## 16.7 Contrôle réseau
 

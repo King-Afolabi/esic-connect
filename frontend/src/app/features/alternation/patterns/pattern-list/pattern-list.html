@@ -1,24 +1,28 @@
-<div class="alt-list__header">
-  <h1 class="alt__title">Modèles de rythme d'alternance</h1>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Modèles de rythme d'alternance</h1>
+    <p class="esic-page-header__description">
+      Modèles réutilisables de rythme (3 jours / 2 jours, semaine sur 4, personnalisé).
+      Sélectionnez un modèle pour consulter sa configuration et son cycle.
+    </p>
+  </div>
   @if (canWrite) {
-    <a mat-flat-button routerLink="/alternation/patterns/new">
-      <mat-icon aria-hidden="true">add</mat-icon>
-      Nouveau modèle
-    </a>
+    <div class="esic-page-header__actions">
+      <a mat-flat-button routerLink="/alternation/patterns/new">
+        <mat-icon aria-hidden="true">add</mat-icon>
+        Nouveau modèle
+      </a>
+    </div>
   }
-</div>
-<p class="alt__intro">
-  Modèles réutilisables de rythme (3 jours / 2 jours, semaine sur 4, personnalisé).
-  Sélectionnez un modèle pour consulter sa configuration et son cycle.
-</p>
+</header>
 
 <nav class="alt__tabs" aria-label="Alternance">
-  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active" aria-current="page">Modèles</a>
-  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active">Affectations aux classes</a>
-  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active">Exceptions par inscription</a>
+  <a routerLink="/alternation/patterns" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Modèles</a>
+  <a routerLink="/alternation/classes" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Affectations aux classes</a>
+  <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Exceptions par inscription</a>
 </nav>
 
-<form class="alt__filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="alt__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="alt__filter">
     <mat-label>Code ou nom</mat-label>
     <input matInput type="search" formControlName="q" autocomplete="off" />
@@ -105,7 +109,9 @@
 
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef>Statut</th>
-          <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+          <td mat-cell *matCellDef="let row">
+            <span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span>
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="updatedAt">

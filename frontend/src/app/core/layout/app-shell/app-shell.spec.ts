@@ -13,7 +13,16 @@ describe('AppShell', () => {
   let fixture: ComponentFixture<AppShell>;
   const roles = signal<Role[]>(['ADMIN']);
   const currentUserEmail = signal<string | null>('admin@esic.test');
-  const auth = { roles, currentUserEmail, logout: vi.fn() };
+  // `session` / `refreshSession` / `expireSession` : requis par
+  // SessionActivityService, armé par la coquille (Lot A).
+  const auth = {
+    roles,
+    currentUserEmail,
+    logout: vi.fn(),
+    session: () => null,
+    refreshSession: vi.fn(),
+    expireSession: vi.fn(),
+  };
 
   beforeEach(async () => {
     roles.set(['ADMIN']);
@@ -44,9 +53,15 @@ describe('AppShell', () => {
   const navLinks = () =>
     Array.from(fixture.nativeElement.querySelectorAll('nav a')) as HTMLAnchorElement[];
 
-  it('shows the brand, the current user email and a logout control', () => {
+  it('shows the brand, a compact profile control and a logout control', () => {
     expect(text()).toContain('ESIC Connect');
-    expect(text()).toContain('admin@esic.test');
+    // L'adresse complète est passée dans le panneau « Profil » (Lot §3) ;
+    // l'en-tête ne garde qu'un identifiant court + l'adresse en aria-label.
+    expect(text()).toContain('admin');
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector(
+      'app-profile-menu button[aria-haspopup="menu"]',
+    );
+    expect(trigger?.getAttribute('aria-label')).toContain('admin@esic.test');
     expect(text()).toContain('Se déconnecter');
   });
 
@@ -55,25 +70,26 @@ describe('AppShell', () => {
       '/dashboard',
       '/administration',
       '/students',
-      '/students/import',
-      '/academic',
-      '/organization',
-      '/planning',
-      '/alternation',
+      // ANO-NAV-001 : « Import apprenants » n'est plus une entrée racine
+      // pour les rôles d'administration — l'import est atteint depuis
+      // l'en-tête de la liste des apprenants ; l'entrée racine ne subsiste
+      // que pour le PEDAGOGICAL_MANAGER (voir son test dédié).
+      // Regroupement (Lot §4) : une seule entrée pour référentiels,
+      // organisation, planning et alternance.
+      '/organisation-planning',
       '/sessions',
       // Réclamations livrées au sprint 9 (EF-CLAIM-001..004) : visibles
       // de tous les rôles, chacun n'y voyant que son propre périmètre.
       '/claims',
       '/attendance-management',
       '/notifications',
-      '/notifications/preferences',
-      // Recherche globale, attestations, invitations non activées,
-      // abonnement calendrier et piste d'audit : livrés au sprint 11
-      // (EF-USER-009, EF-REP-006, EF-REP-010, EF-INT-001, EF-AUD-002).
-      // Chaque entrée reprend le `@PreAuthorize` de son contrôleur.
+      // Recherche globale, attestations, abonnement calendrier et piste
+      // d'audit : livrés au sprint 11 (EF-USER-009, EF-REP-006,
+      // EF-INT-001, EF-AUD-002). « Invitations non activées » (EF-REP-010)
+      // n'est plus une entrée racine : c'est une vue de « Invitations »
+      // (ANO-NAV-001).
       '/recherche',
       '/attestations',
-      '/invitations/non-activees',
       '/mon-compte/calendrier',
       '/exploitation/audit',
       // File d'échec des effets de bord (sprint 10, EF-OPS-005) :
@@ -86,11 +102,7 @@ describe('AppShell', () => {
     expect(text()).toContain('Tableau de bord');
     expect(text()).toContain('Administration');
     expect(text()).toContain('Apprenants');
-    expect(text()).toContain('Import apprenants');
-    expect(text()).toContain('Référentiels');
-    expect(text()).toContain('Organisation');
-    expect(text()).toContain('Planning');
-    expect(text()).toContain('Alternance');
+    expect(text()).toContain('Organisation & planning');
     expect(text()).toContain('Séances');
   });
 
@@ -104,15 +116,17 @@ describe('AppShell', () => {
     expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/administration');
   });
 
-  it('shows a TEACHER the dashboard, Séances (their own sessions server-side) and Notifications', () => {
+  it('shows a TEACHER the dashboard, their scoped Apprenants, Séances (their own sessions server-side) and Notifications', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
+      // Consultation des apprenants de ses classes (EnrollmentWeb.READ_ROLES,
+      // périmètre restreint côté serveur par RosterScopeResolver).
+      '/students',
       '/sessions',
       '/claims',
       '/notifications',
-      '/notifications/preferences',
       // Abonnement iCalendar (sprint 11, EF-INT-001) : propre à chaque
       // personne, donc visible quel que soit le rôle. Le formateur y
       // trouve ses séances, l'apprenant les siennes.
@@ -137,33 +151,33 @@ describe('AppShell', () => {
       '/my-attendance/early-departures',
       '/claims',
       '/notifications',
-      '/notifications/preferences',
       // Abonnement iCalendar (sprint 11, EF-INT-001).
       '/mon-compte/calendrier',
       '/mon-compte/securite',
     ]);
   });
 
-  it('hides Apprenants but shows Import apprenants, Référentiels and Alternance for a PEDAGOGICAL_MANAGER', () => {
+  it('shows a PEDAGOGICAL_MANAGER a scoped Apprenants entry (no import root entry) and Organisation & planning', () => {
     roles.set(['PEDAGOGICAL_MANAGER']);
     fixture.detectChanges();
     const hrefs = navLinks().map((a) => a.getAttribute('href'));
-    expect(hrefs).not.toContain('/students');
-    expect(hrefs).toContain('/students/import');
-    expect(hrefs).toContain('/academic');
-    expect(hrefs).toContain('/alternation');
+    // Il voit « Apprenants » — restreint à ses formations côté serveur
+    // (RosterScopeResolver). L'import n'a plus d'entrée racine : il est
+    // atteint depuis l'en-tête de la liste.
+    expect(hrefs).toContain('/students');
+    expect(hrefs).not.toContain('/students/import');
+    expect(text()).toContain('Apprenants');
+    expect(hrefs).toContain('/organisation-planning');
   });
 
-  it('hides Alternance for a role outside the alternation read roles', () => {
+  it('hides Organisation & planning for a role outside its sub-section read roles', () => {
     roles.set(['TEACHER']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/alternation');
-  });
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/organisation-planning');
 
-  it('hides Référentiels for a role outside AcademicWeb.READ_ROLES', () => {
     roles.set(['STUDENT']);
     fixture.detectChanges();
-    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/academic');
+    expect(navLinks().map((a) => a.getAttribute('href'))).not.toContain('/organisation-planning');
   });
 
   it('offers no usage-context switch for a single-role account', () => {

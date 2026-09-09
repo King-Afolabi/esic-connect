@@ -14,7 +14,7 @@
         @for (row of rows(); track row.publicId) {
           <li class="ed__item">
             <p>
-              <strong>{{ statusLabel(row.status) }}</strong>
+              <span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span>
               — départ annoncé à {{ formatInstantUtc(row.departureAt) }}
             </p>
             <p class="ed__meta">
@@ -49,7 +49,7 @@
             @if (openForm(); as open) {
               @if (open.id === row.publicId && open.mode === 'forward') {
                 <form
-                  class="ed__form"
+                  class="ed__form esic-form"
                   [formGroup]="forwardForm"
                   (ngSubmit)="submitForward(row.publicId)"
                   aria-label="Transmettre le départ anticipé"
@@ -85,7 +85,7 @@
               }
               @if (open.id === row.publicId && open.mode === 'decide') {
                 <form
-                  class="ed__form"
+                  class="ed__form esic-form"
                   [formGroup]="decideForm"
                   (ngSubmit)="submitDecision(row.publicId)"
                   aria-label="Décider du départ anticipé"

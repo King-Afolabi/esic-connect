@@ -1,9 +1,7 @@
-<p class="profile__back">
-  <a routerLink="/students">
-    <mat-icon aria-hidden="true">arrow_back</mat-icon>
-    Retour à la liste des apprenants
-  </a>
-</p>
+<a class="esic-back" routerLink="/students">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux apprenants</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
@@ -37,13 +35,17 @@
 
   @case ('ready') {
     @if (profile(); as currentProfile) {
-      <h1 class="profile__title">
-        @if (identity(); as civil) {
-          {{ civil.firstName }} {{ civil.lastName }}
-        } @else {
-          Apprenant {{ currentProfile.studentNumber }}
-        }
-      </h1>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">
+            @if (identity(); as civil) {
+              {{ civil.firstName }} {{ civil.lastName }}
+            } @else {
+              Apprenant {{ currentProfile.studentNumber }}
+            }
+          </h1>
+        </div>
+      </header>
 
       <mat-card appearance="outlined" class="profile__card">
         <mat-card-header>
@@ -63,7 +65,11 @@
             }
             <div>
               <dt>Statut</dt>
-              <dd>{{ statusLabel(currentProfile.status) }}</dd>
+              <dd>
+                <span class="esic-badge" [attr.data-status]="currentProfile.status">
+                  {{ statusLabel(currentProfile.status) }}
+                </span>
+              </dd>
             </div>
             <div>
               <dt>Alternance</dt>
@@ -84,6 +90,51 @@
               <dd>{{ currentProfile.createdAt | date: 'dd/MM/yyyy' }}</dd>
             </div>
           </dl>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined" class="profile__card">
+        <mat-card-header>
+          <mat-card-title>Scolarité actuelle</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @switch (history().kind) {
+            @case ('loading') {
+              <p class="profile__status" role="status">Chargement de la scolarité…</p>
+            }
+            @case ('error') {
+              <p class="profile__status" role="status">
+                Scolarité indisponible : voir l'historique ci-dessous.
+              </p>
+            }
+            @case ('ready') {
+              @if (currentEnrollment(); as e) {
+                <dl class="esic-kv profile__current">
+                  <dt>Formation</dt>
+                  <dd>{{ e.programCode }}</dd>
+                  <dt>Classe active</dt>
+                  <dd>{{ e.classGroupCode }}</dd>
+                  <dt>Année scolaire</dt>
+                  <dd>{{ e.academicYearCode }}</dd>
+                  <dt>Statut de l'inscription</dt>
+                  <dd>
+                    <span class="esic-badge" [attr.data-status]="e.status">
+                      {{ enrollmentStatusLabel(e.status) }}
+                    </span>
+                  </dd>
+                  <dt>Depuis le</dt>
+                  <dd>{{ e.startDate | date: 'dd/MM/yyyy' }}</dd>
+                </dl>
+                <p class="profile__hint">
+                  Niveau, promotion et rythme d'alternance ne sont pas exposés par cette fiche.
+                </p>
+              } @else {
+                <p class="profile__status" role="status">
+                  Aucune inscription active. Voir l'historique ci-dessous.
+                </p>
+              }
+            }
+          }
         </mat-card-content>
       </mat-card>
 
@@ -113,7 +164,7 @@
                 Aucune inscription n'est enregistrée pour cet apprenant.
               </p>
             } @else {
-              <div class="profile__table-wrapper">
+              <div class="profile__table-wrapper esic-table-wrap--compact">
                 <table mat-table [dataSource]="historyRows()">
                   <ng-container matColumnDef="academicYear">
                     <th mat-header-cell *matHeaderCellDef>Année scolaire</th>
@@ -140,7 +191,9 @@
 
                   <ng-container matColumnDef="status">
                     <th mat-header-cell *matHeaderCellDef>Statut</th>
-                    <td mat-cell *matCellDef="let row">{{ enrollmentStatusLabel(row.status) }}</td>
+                    <td mat-cell *matCellDef="let row">
+                      <span class="esic-badge" [attr.data-status]="row.status">{{ enrollmentStatusLabel(row.status) }}</span>
+                    </td>
                   </ng-container>
 
                   <ng-container matColumnDef="source">
@@ -153,7 +206,7 @@
                     </td>
                   </ng-container>
 
-                  <tr mat-header-row *matHeaderRowDef="historyColumns"></tr>
+                  <tr mat-header-row *matHeaderRowDef="historyColumns; sticky: true"></tr>
                   <tr mat-row *matRowDef="let row; columns: historyColumns"></tr>
                 </table>
               </div>
@@ -185,7 +238,7 @@
               @if (remoteRows().length === 0) {
                 <p class="profile__empty">Aucune autorisation enregistrée.</p>
               } @else {
-                <div class="profile__table-wrapper">
+                <div class="profile__table-wrapper esic-table-wrap--compact">
                   <table mat-table [dataSource]="remoteRows()">
                     <ng-container matColumnDef="period">
                       <th mat-header-cell *matHeaderCellDef scope="col">Période</th>
@@ -207,7 +260,7 @@
                     <ng-container matColumnDef="status">
                       <th mat-header-cell *matHeaderCellDef scope="col">Statut</th>
                       <td mat-cell *matCellDef="let row">
-                        {{ remoteStatusLabel(row.status) }}
+                        <span class="esic-badge" [attr.data-status]="row.status">{{ remoteStatusLabel(row.status) }}</span>
                         @if (row.revocationReason) {
                           <span class="profile__reason">— {{ row.revocationReason }}</span>
                         }
@@ -222,7 +275,7 @@
                         }
                       </td>
                     </ng-container>
-                    <tr mat-header-row *matHeaderRowDef="remoteColumns"></tr>
+                    <tr mat-header-row *matHeaderRowDef="remoteColumns; sticky: true"></tr>
                     <tr mat-row *matRowDef="let row; columns: remoteColumns"></tr>
                   </table>
                 </div>

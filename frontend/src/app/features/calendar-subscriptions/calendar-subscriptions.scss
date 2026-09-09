@@ -9,31 +9,17 @@
 
 .cal__intro,
 .cal__note {
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-body-medium);
+  color: var(--esic-ink-soft);
+  font-size: 0.9375rem;
 }
 
-.cal__form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.cal__field {
-  flex: 1 1 22rem;
-}
-
-.cal__actions {
-  align-items: flex-start;
-  display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-}
+// Le formulaire de création s'appuie sur la primitive `.esic-form` /
+// `.esic-form__actions` (`_primitives.scss`).
 
 .cal__fresh {
-  background: var(--mat-sys-secondary-container);
-  border-radius: 0.5rem;
-  color: var(--mat-sys-on-secondary-container);
+  background: var(--esic-secondary-tint);
+  border-radius: var(--esic-radius-sm);
+  color: var(--esic-green-800);
   padding: 0.75rem;
 }
 
@@ -49,7 +35,7 @@
 
   th,
   td {
-    border-bottom: 1px solid rgb(0 0 0 / 12%);
+    border-bottom: 1px solid var(--esic-line);
     padding: 0.35rem 0.5rem;
     text-align: left;
   }

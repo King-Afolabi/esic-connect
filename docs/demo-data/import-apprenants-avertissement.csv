@@ -1,0 +1,2 @@
+last_name,first_name,email,formation_code,class_code,academic_year,student_number,birth_date,work_study,company_name,level_code
+Test,Chloé,fx.chloe@example.test,BTS-SIO,BTS-SIO-1,AY-2026,FX-003,2005-01-02,true,Capgemini,SIO1

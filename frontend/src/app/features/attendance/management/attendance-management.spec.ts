@@ -67,6 +67,11 @@ describe('AttendanceSummary', () => {
     expect(text).toContain('Justificatifs en attente');
     expect(text).toContain('contexte COMPANY sont exclues');
     expect(localStorage.length).toBe(0);
+    // Synthèse compacte : grille 2 colonnes (primitive `.esic-metric-grid`),
+    // huit cellules, plus les huit cartes séparées d'avant.
+    const grid = (fixture.nativeElement as HTMLElement).querySelector('.esic-metric-grid');
+    expect(grid).not.toBeNull();
+    expect(grid?.querySelectorAll('.esic-metric').length).toBe(8);
     http.verify();
   });
 
@@ -177,6 +182,40 @@ describe('AttendanceReport', () => {
     });
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Atelier');
+    http.verify();
+  });
+
+  it('bounds the long table height and pins its header (ANO-UX-002)', () => {
+    const { fixture, http } = setupReport('sessions');
+    http.expectOne((r) => r.url === SESSIONS_URL).flush({
+      content: [
+        {
+          sessionPublicId: 's-1',
+          sessionTitle: 'Atelier',
+          startsAt: '2026-09-10T08:00:00Z',
+          endsAt: '2026-09-10T12:00:00Z',
+          classCodes: 'C1',
+          teacherName: 'A. Martin',
+          checkpointCount: 1,
+          expectedCount: 2,
+          presentCount: 1,
+          lateCount: 0,
+          absentCount: 1,
+          excusedCount: 0,
+          attendanceRate: 0.5,
+        },
+      ],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.att__table-wrapper.esic-table-wrap--tall')).not.toBeNull();
+    expect(el.querySelector('.mat-mdc-table-sticky, tr.mat-mdc-header-row')).not.toBeNull();
+    // La pagination reste HORS de l'enveloppe défilante (toujours visible).
+    expect(el.querySelector('.att__table-wrapper .att__pager')).toBeNull();
     http.verify();
   });
 

@@ -160,24 +160,28 @@ describe('Dashboard', () => {
     }
   });
 
-  it('offers Apprenants as a quick link only for the roles behind EnrollmentWeb.MANAGE_ROLES', () => {
-    for (const held of [['ADMIN'], ['SUPER_ADMIN'], ['SCHOOL_ADMINISTRATION']] as Role[][]) {
+  it('offers Apprenants as a quick link for the roles behind EnrollmentWeb.READ_ROLES (PEDAGOGICAL_MANAGER + TEACHER included, scoped server-side), and hides it from a STUDENT', () => {
+    for (const held of [
+      ['ADMIN'],
+      ['SUPER_ADMIN'],
+      ['SCHOOL_ADMINISTRATION'],
+      ['PEDAGOGICAL_MANAGER'],
+      ['TEACHER'],
+    ] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
       expect(
         (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
       ).not.toBeNull();
     }
-    for (const held of [['TEACHER'], ['PEDAGOGICAL_MANAGER'], ['STUDENT']] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
-      ).toBeNull();
-    }
+    roles.set(['STUDENT']);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('a[href="/students"]'),
+    ).toBeNull();
   });
 
-  it('offers Référentiels as a quick link only for the roles behind AcademicWeb.READ_ROLES', () => {
+  it('offers Organisation & planning as a quick link only for its sub-section read roles', () => {
     for (const held of [
       ['ADMIN'],
       ['SUPER_ADMIN'],
@@ -186,37 +190,17 @@ describe('Dashboard', () => {
     ] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
-      ).not.toBeNull();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('a[href="/organisation-planning"]')).not.toBeNull();
+      // Les anciennes entrées séparées ne sont plus des raccourcis.
+      expect(el.querySelector('a[href="/academic"]')).toBeNull();
+      expect(el.querySelector('a[href="/alternation"]')).toBeNull();
     }
     for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
       roles.set(held);
       fixture.detectChanges();
       expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/academic"]'),
-      ).toBeNull();
-    }
-  });
-
-  it('offers Alternance as a quick link only for the alternation read roles', () => {
-    for (const held of [
-      ['ADMIN'],
-      ['SUPER_ADMIN'],
-      ['SCHOOL_ADMINISTRATION'],
-      ['PEDAGOGICAL_MANAGER'],
-    ] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
-      ).not.toBeNull();
-    }
-    for (const held of [['TEACHER'], ['STUDENT']] as Role[][]) {
-      roles.set(held);
-      fixture.detectChanges();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('a[href="/alternation"]'),
+        (fixture.nativeElement as HTMLElement).querySelector('a[href="/organisation-planning"]'),
       ).toBeNull();
     }
   });
@@ -261,6 +245,18 @@ describe('Dashboard', () => {
     expect(text()).toContain("Aucun autre écran n'est disponible");
   });
 
+  it('renders the quick links as a labelled grid of shortcut tiles, not a nav list (Lot D)', () => {
+    roles.set(['ADMIN']);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const grid = host.querySelector('nav.dashboard__shortcuts');
+    expect(grid).not.toBeNull();
+    expect(grid?.getAttribute('aria-label')).toBe('Raccourcis');
+    expect(host.querySelectorAll('.dashboard__shortcut').length).toBeGreaterThan(1);
+    // Plus de liste de navigation Material (qui dupliquait le rail).
+    expect(host.querySelector('mat-nav-list')).toBeNull();
+  });
+
   // --- Tableau de bord par rôle (bloc G1-F) ---------------------
 
   const reload = (payload: Record<string, unknown>) => {
@@ -270,9 +266,9 @@ describe('Dashboard', () => {
   };
 
   it('renders the administration counts from the server payload', () => {
-    expect(text()).toContain('Actifs');
+    expect(text()).toContain('Comptes actifs');
     expect(text()).toContain('12');
-    expect(text()).toContain('En attente');
+    expect(text()).toContain("En attente d'activation");
   });
 
   it('renders a STUDENT card without any /sessions link', () => {
@@ -350,6 +346,35 @@ describe('Dashboard', () => {
     expect(text()).toContain("Le tableau de bord n'a pas pu être chargé");
   });
 
+  it('surfaces the correlation id of a failed load so it can be quoted to support', () => {
+    (fixture.componentInstance as unknown as { loadDashboard: () => void }).loadDashboard();
+    http.expectOne(DASH_URL).flush(
+      { timestamp: 't', status: 500, code: 'INTERNAL_ERROR', message: 'x', path: '/', correlationId: 'corr-abc-123', details: [] },
+      { status: 500, statusText: 'Server Error' },
+    );
+    fixture.detectChanges();
+    expect(text()).toContain('Référence à citer au support : corr-abc-123');
+  });
+
+  it('ignores a stale response that resolves after a newer reload (switchMap-like)', () => {
+    const internals = fixture.componentInstance as unknown as {
+      loadDashboard: () => void;
+      dash: () => { generatedAt: string } | null;
+    };
+    internals.loadDashboard(); // requête « lente » (A)
+    internals.loadDashboard(); // rechargement plus récent (B)
+    const pending = http.match(DASH_URL);
+    expect(pending.length).toBe(2);
+
+    // B répond en premier avec des données fraîches…
+    pending[1].flush({ ...EMPTY_ADMIN_DASH, generatedAt: '2026-09-10T10:00:00Z' });
+    // …puis A répond en retard avec des données périmées : elles sont ignorées.
+    pending[0].flush({ ...EMPTY_ADMIN_DASH, generatedAt: '2026-09-10T08:00:00Z' });
+    fixture.detectChanges();
+
+    expect(internals.dash()?.generatedAt).toBe('2026-09-10T10:00:00Z');
+  });
+
   /**
    * EF-REP-008 — « tout graphique dispose […] d'un tableau équivalent »
    * (docs/02 §22.6). L'histogramme et la table lisent la MÊME liste :
@@ -402,6 +427,62 @@ describe('Dashboard', () => {
     expect(table?.textContent).toContain('95.00 %');
     // La barre porte aussi sa valeur : la couleur n'est jamais seule.
     expect(root.querySelector('.dashboard__bar-value')?.textContent).toContain('95.00 %');
+  });
+
+  it('folds the class attendance chart into a single enriched table (no duplicate visual)', () => {
+    roles.set(['PEDAGOGICAL_MANAGER']);
+    reload({
+      role: 'PEDAGOGICAL_MANAGER',
+      generatedAt: '2026-09-10T09:00:00Z',
+      student: null,
+      teacher: null,
+      administration: null,
+      notes: [],
+      manager: {
+        classCount: 12,
+        upcomingSessions: [],
+        classCodes: ['BTS1-A', 'BTS1-B', 'BTS2-A', 'M1-A', 'M2-A'],
+        periodFrom: '2026-08-11T09:00:00Z',
+        periodTo: '2026-09-10T09:00:00Z',
+        attendanceRate: 0.9125,
+        lateCount: 7,
+        unjustifiedAbsenceHalfDays: 5,
+        pendingJustifications: 3,
+        openClaims: 1,
+        pendingActivations: 2,
+        classRates: [
+          {
+            label: 'BTS1-A',
+            expectedHalfDays: 40,
+            presentHalfDays: 38,
+            absentHalfDays: 1,
+            excusedHalfDays: 1,
+            lateCount: 4,
+            attendanceRate: 0.95,
+          },
+        ],
+      },
+    });
+    const root = fixture.nativeElement as HTMLElement;
+
+    // Un seul visuel : le graphique séparé a disparu du bloc responsable.
+    expect(root.querySelector('.dashboard__chart')).toBeNull();
+    // Le tableau enrichi reste, avec la barre + la valeur dans la colonne « Taux ».
+    const table = root.querySelector('table.dashboard__table');
+    expect(table?.querySelector('.esic-rate-cell__fill')).not.toBeNull();
+    expect(table?.querySelector('.dashboard__bar-value')?.textContent).toContain('95.00 %');
+    expect(table?.querySelector('caption')?.textContent).toContain('Tableau équivalent');
+
+    // « Mon activité » : grille compacte de 2 colonnes, 6 cellules, dont
+    // « Comptes non activés » — plus de carte séparée.
+    const grid = root.querySelector('.esic-metric-grid');
+    expect(grid).not.toBeNull();
+    expect(grid?.querySelectorAll('.esic-metric').length).toBe(6);
+    expect(grid?.textContent).toContain('Comptes non activés');
+
+    // « Mon périmètre » : aperçu borné + lien vers la liste des classes.
+    expect(root.textContent).toContain('+2 autres');
+    expect(root.querySelector('a[href="/academic/class-groups"]')).not.toBeNull();
   });
 
   it('renders the full manager indicators the specification asks for', () => {

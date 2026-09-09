@@ -21,9 +21,28 @@ interface EnrollmentRepository
 
     List<Enrollment> findByStudentProfile_UserId(Long userId);
 
+    /** Décompte borné des inscriptions d'un compte (comparaison de doublons, ANO-USER-001). */
+    long countByStudentProfile_UserId(Long userId);
+
+    long countByStudentProfile_UserIdAndStatus(Long userId, EnrollmentStatus status);
+
     long countByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);
 
     List<Enrollment> findByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);
+
+    /**
+     * Identifiants internes distincts des profils apprenants ayant une
+     * inscription au statut donné dans l'une des classes indiquées —
+     * filtre de périmètre pédagogique pour la liste des profils
+     * (un {@code PEDAGOGICAL_MANAGER} ne voit que ses apprenants).
+     */
+    @Query("""
+            SELECT DISTINCT e.studentProfile.id FROM Enrollment e
+            WHERE e.status = :status AND e.classGroupId IN :classGroupIds
+            """)
+    List<Long> findStudentProfileIdsByClassGroupIdInAndStatus(
+            @Param("classGroupIds") Collection<Long> classGroupIds,
+            @Param("status") EnrollmentStatus status);
 
     boolean existsByStudentProfileIdAndAcademicYearIdAndStatus(Long studentProfileId, Long academicYearId,
                                                               EnrollmentStatus status);

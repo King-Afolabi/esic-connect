@@ -48,18 +48,27 @@ class StudentProfileService {
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
 
     private final StudentProfileRepository profileRepository;
+    private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentPersister persister;
     private final UserDirectory userDirectory;
     private final EnrollmentChangePublisher changePublisher;
+    private final StudentNumberAllocator studentNumberAllocator;
+    private final RosterScopeResolver rosterScope;
 
     StudentProfileService(StudentProfileRepository profileRepository,
+                          EnrollmentRepository enrollmentRepository,
                           EnrollmentPersister persister,
                           UserDirectory userDirectory,
-                          EnrollmentChangePublisher changePublisher) {
+                          EnrollmentChangePublisher changePublisher,
+                          StudentNumberAllocator studentNumberAllocator,
+                          RosterScopeResolver rosterScope) {
         this.profileRepository = profileRepository;
+        this.enrollmentRepository = enrollmentRepository;
         this.persister = persister;
         this.userDirectory = userDirectory;
         this.changePublisher = changePublisher;
+        this.studentNumberAllocator = studentNumberAllocator;
+        this.rosterScope = rosterScope;
     }
 
     /**
@@ -76,8 +85,15 @@ class StudentProfileService {
             throw new EnrollmentException(EnrollmentException.Kind.USER_NOT_ELIGIBLE);
         }
 
-        String studentNumber = request.studentNumber().trim();
-        if (profileRepository.existsByStudentNumberIgnoreCase(studentNumber)) {
+        // Numéro étudiant : fourni -> contrôle d'unicité immédiat ;
+        // laissé vide -> génération au format normalisé
+        // ESIC-{année}-{séquence} pour garantir une norme de nommage
+        // homogène (une saisie libre finissait par produire des numéros
+        // hétérogènes). L'unicité SQL reste l'autorité finale.
+        String studentNumber = EnrollmentQuerySupport.trimToNull(request.studentNumber());
+        if (studentNumber == null) {
+            studentNumber = allocateFreshStudentNumber();
+        } else if (profileRepository.existsByStudentNumberIgnoreCase(studentNumber)) {
             throw new EnrollmentException(EnrollmentException.Kind.DUPLICATE_STUDENT_NUMBER);
         }
         if (profileRepository.existsByUserId(target.internalId())) {
@@ -104,22 +120,68 @@ class StudentProfileService {
 
         changePublisher.publish(EnrollmentResourceType.STUDENT_PROFILE, saved.getPublicId(),
                 EnrollmentChangeAction.CREATED, actorId, null);
-        return StudentProfileResponse.from(saved, target.publicId());
+        UserDirectory.PersonName name = userDirectory.findName(target.internalId()).orElse(null);
+        return StudentProfileResponse.from(saved, target.publicId(),
+                name == null ? null : name.firstName(),
+                name == null ? null : name.lastName());
     }
 
     @Transactional(readOnly = true)
-    StudentProfileResponse get(UUID publicId) {
+    StudentProfileResponse get(UUID publicId, String callerSubject) {
         StudentProfile profile = require(publicId);
-        return StudentProfileResponse.from(profile, resolveUserPublicId(profile.getUserId()));
+        // Périmètre de consultation : un PEDAGOGICAL_MANAGER / TEACHER ne
+        // voit que les apprenants de ses classes. Hors périmètre ⇒ 404
+        // (l'existence de la fiche est elle-même une information à
+        // protéger — cahier §18.2), pas 403.
+        rosterScope.visibleClassGroupInternalIds(callerSubject).ifPresent(visible -> {
+            if (!hasActiveEnrollmentIn(profile, visible)) {
+                throw new EnrollmentException(EnrollmentException.Kind.STUDENT_PROFILE_NOT_FOUND);
+            }
+        });
+        UserDirectory.NamedUserRef ref = userDirectory.findNamedRefs(List.of(profile.getUserId()))
+                .get(profile.getUserId());
+        if (ref == null) {
+            return StudentProfileResponse.from(profile, resolveUserPublicId(profile.getUserId()));
+        }
+        return StudentProfileResponse.from(profile, ref.publicId(), ref.firstName(), ref.lastName());
     }
 
     @Transactional(readOnly = true)
     PageResponse<StudentProfileResponse> list(String q, String statusFilter, String userPublicId,
-                                              int page, int size, String sort) {
+                                              int page, int size, String sort, String callerSubject) {
         Pageable pageable = EnrollmentQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
         List<Specification<StudentProfile>> specs = new ArrayList<>();
-        EnrollmentQuerySupport.normalizeText(q)
-                .ifPresent(text -> specs.add(EnrollmentSpecifications.profileMatchesStudentNumber(text)));
+        // Périmètre de consultation : un PEDAGOGICAL_MANAGER / TEACHER ne
+        // voit que les apprenants ayant une inscription ACTIVE dans l'une
+        // de ses classes ; l'administration a l'accès global (aucun
+        // filtre). Périmètre vide ⇒ page vide, jamais tous.
+        Optional<java.util.Set<Long>> visibleClasses =
+                rosterScope.visibleClassGroupInternalIds(callerSubject);
+        if (visibleClasses.isPresent()) {
+            List<Long> scopedProfileIds = visibleClasses.get().isEmpty()
+                    ? List.of()
+                    : enrollmentRepository.findStudentProfileIdsByClassGroupIdInAndStatus(
+                            visibleClasses.get(), EnrollmentStatus.ACTIVE);
+            if (scopedProfileIds.isEmpty()) {
+                return PageResponse.of(Page.<StudentProfile>empty(pageable),
+                        profile -> StudentProfileResponse.from(profile, null));
+            }
+            specs.add(EnrollmentSpecifications.profileIdIn(scopedProfileIds));
+        }
+        // Recherche : numéro étudiant OU nom / prénom. Le nom n'est pas
+        // une colonne de `student_profile` — `identity` résout d'abord les
+        // comptes STUDENT dont le nom correspond (borné à 200), puis le
+        // filtre porte sur `student_number LIKE … OR user_id IN (…)`.
+        // L'adresse électronique reste exclue (énumération, RG-001).
+        EnrollmentQuerySupport.normalizeText(q).ifPresent(text -> {
+            // Inclut les apprenants encore en attente d'activation :
+            // l'administration doit retrouver par le nom un apprenant
+            // fraîchement importé ou créé.
+            List<Long> nameHits = userDirectory.searchByNameIncludingInactive(text, STUDENT_ROLE, 200).stream()
+                    .map(UserDirectory.NamedUserRef::internalId)
+                    .toList();
+            specs.add(EnrollmentSpecifications.profileMatchesNumberOrUsers(text, nameHits));
+        });
         parseStatus(statusFilter).ifPresent(status -> specs.add(EnrollmentSpecifications.profileHasStatus(status)));
         if (userPublicId != null && !userPublicId.isBlank()) {
             Optional<UserDirectory.UserRef> user = userDirectory.findByPublicId(parseUuid(userPublicId,
@@ -131,8 +193,43 @@ class StudentProfileService {
             specs.add(EnrollmentSpecifications.profileHasUser(user.get().internalId()));
         }
         Page<StudentProfile> result = profileRepository.findAll(Specification.allOf(specs), pageable);
-        return PageResponse.of(result, profile ->
-                StudentProfileResponse.from(profile, resolveUserPublicId(profile.getUserId())));
+        // Noms + identifiant public résolus en UNE requête pour toute la
+        // page (anti-N+1, NFR-PERF-08) — remplace la résolution unitaire
+        // par ligne de `resolveUserPublicId`.
+        java.util.Map<Long, UserDirectory.NamedUserRef> refs = userDirectory.findNamedRefs(
+                result.getContent().stream().map(StudentProfile::getUserId).toList());
+        return PageResponse.of(result, profile -> {
+            UserDirectory.NamedUserRef ref = refs.get(profile.getUserId());
+            return ref == null
+                    ? StudentProfileResponse.from(profile, null)
+                    : StudentProfileResponse.from(profile, ref.publicId(), ref.firstName(), ref.lastName());
+        });
+    }
+
+    /**
+     * Numéro généré, avec quelques tentatives si la valeur allouée entre
+     * en collision avec un numéro déjà saisi manuellement (rare : la
+     * séquence est propre, le recouvrement ne peut venir que d'une saisie
+     * libre passée). L'unicité SQL reste l'autorité.
+     */
+    private String allocateFreshStudentNumber() {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            String candidate = studentNumberAllocator.allocate();
+            if (!profileRepository.existsByStudentNumberIgnoreCase(candidate)) {
+                return candidate;
+            }
+        }
+        throw new EnrollmentException(EnrollmentException.Kind.STUDENT_NUMBER_EXHAUSTED);
+    }
+
+    private boolean hasActiveEnrollmentIn(StudentProfile profile, java.util.Set<Long> classGroupIds) {
+        if (classGroupIds.isEmpty()) {
+            return false;
+        }
+        return enrollmentRepository
+                .findByStudentProfile_UserIdAndStatus(profile.getUserId(), EnrollmentStatus.ACTIVE)
+                .stream()
+                .anyMatch(enrollment -> classGroupIds.contains(enrollment.getClassGroupId()));
     }
 
     private UUID resolveUserPublicId(Long userInternalId) {

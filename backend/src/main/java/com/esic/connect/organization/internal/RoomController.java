@@ -26,6 +26,23 @@ import java.util.UUID;
 @RequestMapping("/api/v1")
 class RoomController {
 
+    /**
+     * Consultation et impression du QR fixe (EF-ORG-003). Volontairement
+     * plus large que {@link SiteController#WRITE_ROLES} : l'administration
+     * scolaire doit pouvoir réimprimer une affiche décollée sans pouvoir
+     * la renouveler.
+     */
+    static final String STATIC_QR_VIEW_ROLES =
+            "hasAnyRole('ADMIN','SUPER_ADMIN','SCHOOL_ADMINISTRATION')";
+    /**
+     * Renouvellement / révocation du QR fixe (EF-ORG-003) — action
+     * exceptionnelle qui invalide toutes les affiches en salle. Réservée
+     * à {@code ADMIN} : {@code SUPER_ADMIN} garde la lecture et
+     * l'impression, mais ne renouvelle pas dans le parcours normal, et
+     * {@code SCHOOL_ADMINISTRATION} non plus.
+     */
+    static final String STATIC_QR_ROTATE_ROLES = "hasRole('ADMIN')";
+
     private final RoomService roomService;
 
     RoomController(RoomService roomService) {
@@ -68,27 +85,48 @@ class RoomController {
     }
 
     /**
-     * Émet ou renouvelle le QR fixe de la salle (EF-ORG-003 ; docs/02
-     * §7.1). Le jeton est <strong>généré par le serveur</strong> : une
-     * référence saisie à la main serait devinable, et un QR devinable
-     * n'est pas un contrôle.
+     * Vue administrative du QR fixe de la salle (EF-ORG-003 ; docs/02
+     * §7.1, §16.6) — <strong>réimpression</strong>. Ne modifie rien : même
+     * jeton, même date d'émission, les affiches posées restent valides.
+     * Renvoie {@code issued == false} tant qu'aucun QR n'a été émis.
      *
-     * <p>Réservé aux rôles d'écriture de l'organisation : l'affiche
-     * matérialise un droit d'entrée, elle n'est pas une donnée de
-     * consultation.
+     * <p>Ouvert à {@code SCHOOL_ADMINISTRATION} en plus de
+     * {@code ADMIN} / {@code SUPER_ADMIN} : réimprimer une affiche est un
+     * geste d'exploitation courant. La référence complète n'est renvoyée
+     * qu'ici — elle a disparu de {@link RoomResponse}.
      */
-    @PostMapping("/rooms/{publicId}/static-qr")
-    @PreAuthorize(SiteController.WRITE_ROLES)
-    RoomResponse issueStaticQr(@PathVariable String publicId,
-                               @AuthenticationPrincipal Jwt caller) {
-        return roomService.issueStaticQr(parseRoomUuid(publicId), subject(caller));
+    @GetMapping("/rooms/{publicId}/static-qr")
+    @PreAuthorize(STATIC_QR_VIEW_ROLES)
+    RoomStaticQrView getStaticQr(@PathVariable String publicId) {
+        return roomService.getStaticQr(parseRoomUuid(publicId));
     }
 
-    /** Retire le QR : la salle n'accepte plus d'émargement par affiche. */
+    /**
+     * Émet ou <strong>renouvelle</strong> le QR fixe de la salle
+     * (EF-ORG-003 ; docs/02 §7.1). Le jeton est <strong>généré par le
+     * serveur</strong> : une référence saisie à la main serait devinable,
+     * et un QR devinable n'est pas un contrôle.
+     *
+     * <p>Réservé à {@code ADMIN} : le renouvellement invalide
+     * immédiatement toutes les affiches en salle, il n'est pas dans le
+     * parcours normal d'un {@code SUPER_ADMIN} ni d'un
+     * {@code SCHOOL_ADMINISTRATION}. Audité via l'outbox transactionnelle.
+     */
+    @PostMapping({"/rooms/{publicId}/static-qr", "/rooms/{publicId}/static-qr/rotate"})
+    @PreAuthorize(STATIC_QR_ROTATE_ROLES)
+    RoomStaticQrView rotateStaticQr(@PathVariable String publicId,
+                                    @AuthenticationPrincipal Jwt caller) {
+        return roomService.rotateStaticQr(parseRoomUuid(publicId), subject(caller));
+    }
+
+    /**
+     * Retire le QR : la salle n'accepte plus d'émargement par affiche.
+     * Même restriction que le renouvellement ({@code ADMIN} seul).
+     */
     @org.springframework.web.bind.annotation.DeleteMapping("/rooms/{publicId}/static-qr")
-    @PreAuthorize(SiteController.WRITE_ROLES)
-    RoomResponse revokeStaticQr(@PathVariable String publicId,
-                                @AuthenticationPrincipal Jwt caller) {
+    @PreAuthorize(STATIC_QR_ROTATE_ROLES)
+    RoomStaticQrView revokeStaticQr(@PathVariable String publicId,
+                                    @AuthenticationPrincipal Jwt caller) {
         return roomService.revokeStaticQr(parseRoomUuid(publicId), subject(caller));
     }
 

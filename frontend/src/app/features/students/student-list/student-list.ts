@@ -10,8 +10,10 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
+import { RoleContextService } from '../../../core/auth/role-context.service';
+import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { StudentsApiService } from '../students-api.service';
 import {
@@ -40,9 +42,10 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
  * Liste des profils apprenants — `GET /api/v1/student-profiles`.
  *
  * Recherche, filtre, tri et pagination reflètent **exactement** ce que
- * l'API accepte : recherche `q` sur le seul numéro étudiant, filtre
- * `status`, tri sur `studentNumber` / `createdAt`, pagination bornée à
- * 100. Aucune capacité inventée.
+ * l'API accepte : recherche `q` sur le nom, le prénom **ou** le numéro
+ * étudiant (l'adresse électronique n'est jamais un critère — énumération),
+ * filtre `status`, tri sur `studentNumber` / `createdAt`, pagination
+ * bornée à 100. Aucune capacité inventée.
  *
  * Le contrôle d'accès reste côté Spring Security : un `403` renvoyé par
  * l'API est rendu comme un état « accès refusé » explicite, même si le
@@ -72,11 +75,44 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 export class StudentList {
   private readonly api = inject(StudentsApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  /**
+   * « Ajouter un apprenant » (Lot H) : visible uniquement pour les rôles
+   * qui peuvent réellement créer le compte côté serveur (`POST /users`
+   * exige `ADMIN` / `SUPER_ADMIN`). Le garde de route reste l'autorité.
+   */
+  protected readonly canCreateStudent = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN'),
+  );
+
+  /**
+   * « Importer des apprenants » : l'import CSV n'a pas d'entrée racine
+   * dans la navigation (ANO-NAV-001) — il est atteint d'ici. Périmètre
+   * aligné sur `StudentImportWeb.MANAGE_ROLES` (les quatre rôles qui
+   * peuvent importer, `PEDAGOGICAL_MANAGER` compris — limité à son
+   * périmètre côté serveur) ; le garde de route `/students/import` reste
+   * l'autorité. Un `TEACHER` consulte la liste mais n'importe pas.
+   */
+  protected readonly canImportStudents = computed(() =>
+    this.roleContext
+      .effectiveRoles()
+      .some(
+        (r) =>
+          r === 'ADMIN' ||
+          r === 'SUPER_ADMIN' ||
+          r === 'SCHOOL_ADMINISTRATION' ||
+          r === 'PEDAGOGICAL_MANAGER',
+      ),
+  );
 
   protected readonly statuses = STUDENT_PROFILE_STATUSES;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   protected readonly statusLabel = studentProfileStatusLabel;
   protected readonly displayedColumns = [
+    'name',
     'studentNumber',
     'workStudy',
     'companyName',
@@ -116,6 +152,19 @@ export class StudentList {
   });
 
   constructor() {
+    // Lot G : restaure filtres / tri / pagination depuis l'URL — une
+    // fiche ouverte puis « Retour » (ou une URL partagée) retrouve l'état.
+    const params = new ListQueryReader(this.route);
+    this.filters.patchValue({
+      q: params.str('q'),
+      status: params.oneOf('status', [...STUDENT_PROFILE_STATUSES, ''] as const, ''),
+    });
+    this.sortField.set(
+      params.oneOf('sort', STUDENT_PROFILE_SORT_FIELDS, DEFAULT_SORT_FIELD),
+    );
+    this.sortDirection.set(params.direction('dir', DEFAULT_SORT_DIRECTION));
+    this.pageIndex.set(params.int('page', 0));
+    this.pageSize.set(params.int('size', 20));
     this.load();
   }
 
@@ -150,9 +199,22 @@ export class StudentList {
     this.load();
   }
 
+  /** Lot G : reflète l'état courant dans l'URL (défauts non écrits). */
+  private syncUrl(q: string, status: string): void {
+    writeListQueryParams(this.router, this.route, {
+      q,
+      status,
+      sort: this.sortField() === DEFAULT_SORT_FIELD ? null : this.sortField(),
+      dir: this.sortDirection() === DEFAULT_SORT_DIRECTION ? null : this.sortDirection(),
+      page: this.pageIndex(),
+      size: this.pageSize() === 20 ? null : this.pageSize(),
+    });
+  }
+
   private load(): void {
     this.state.set({ kind: 'loading' });
     const raw = this.filters.getRawValue();
+    this.syncUrl(raw.q.trim(), raw.status);
     this.api
       .listProfiles({
         q: raw.q.trim() || null,

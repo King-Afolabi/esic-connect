@@ -1,74 +1,92 @@
-// Styles communs aux écrans « Séances et émargement ». Repris du style des
-// espaces Alternance / Apprenants (Angular Material, tokens `--mat-sys-*`,
-// tables défilables, panneaux d'état).
+// Styles communs aux écrans « Séances et émargement ».
+// Alignés sur le système de design ESIC : jetons `--esic-*`, primitives de
+// `src/styles/_primitives.scss` (en-tête de page, barre de filtres, encart
+// d'état, panneau dépliant, tableau de données). Les classes historiques
+// `.sessions__*` sont conservées mais délèguent désormais au vocabulaire
+// commun — les gabarits n'ont pas à changer.
 
 .sessions__title {
-  font: var(--mat-sys-headline-medium);
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--esic-space-2);
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  font-size: clamp(1.375rem, 1.2rem + 0.9vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--esic-ink);
 }
 
 .sessions__subtitle {
-  font: var(--mat-sys-title-medium);
-  margin: 1.5rem 0 0.75rem;
+  margin: var(--esic-space-6) 0 var(--esic-space-3);
+  font-family: var(--esic-font-serif);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--esic-ink);
 }
 
 .sessions__intro {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0 0 1.25rem;
+  margin: 0 0 var(--esic-space-5);
+  max-width: 68ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--esic-ink-soft);
 }
 
 .sessions__header {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--esic-space-2) var(--esic-space-4);
+  margin-bottom: var(--esic-space-4);
 }
 
-.sessions__filters,
-.sessions__form {
+// Barre de filtres — cf. primitive `.esic-filters` (`_primitives.scss`),
+// posée à côté de `.sessions__filters`. Le formulaire de séance s'appuie sur
+// `.esic-form`. Ne reste ici que la rangée d'actions.
+.sessions__filter-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem;
-  margin: 0.5rem 0 1rem;
-}
-
-.sessions__filter,
-.sessions__form-field {
-  min-width: 13rem;
-}
-
-.sessions__filter-actions,
-.sessions__form-actions {
-  display: flex;
-  gap: 0.5rem;
+  gap: var(--esic-space-2);
   align-items: center;
   flex-wrap: wrap;
-  padding-top: 0.5rem;
+  padding-top: 0.25rem;
 }
 
 .sessions__status {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 1rem 0;
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
 }
 
+// Encart d'état — cf. primitive `.esic-note`.
 .sessions__panel {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  background: var(--mat-sys-surface-container-low);
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
 }
 
+// Enveloppe à défilement horizontal contenu — cf. `.esic-table-wrap`.
 .sessions__table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table[mat-table] {
@@ -76,13 +94,14 @@ table[mat-table] {
 }
 
 .sessions__card {
-  margin: 1rem 0;
+  margin: var(--esic-space-4) 0;
 }
 
+// Liste clé / valeur — cf. `.esic-kv`.
 .sessions__facts {
   display: grid;
-  grid-template-columns: minmax(10rem, max-content) 1fr;
-  gap: 0.35rem 1rem;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: var(--esic-space-2) var(--esic-space-4);
   margin: 0;
 }
 
@@ -91,44 +110,113 @@ table[mat-table] {
 }
 
 .sessions__facts dt {
-  font: var(--mat-sys-body-medium);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--esic-ink-faint);
 }
 
 .sessions__facts dd {
   margin: 0;
-  font: var(--mat-sys-body-medium);
+  color: var(--esic-ink);
 }
 
+// Panneau dépliant (saisie / confirmation en ligne) — cf. `.esic-reveal`.
 .sessions__reveal {
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 0.5rem 0;
-  background: var(--mat-sys-surface-container-lowest);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  border: 1px solid var(--esic-line);
+  border-left: 3px solid var(--esic-primary);
+  border-radius: var(--esic-radius-xs);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-3) 0;
+  background: var(--esic-surface-sunken);
+
+  > p {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--esic-ink-soft);
+  }
 }
 
-.sessions__inline-error {
-  color: var(--mat-sys-error);
-  font: var(--mat-sys-body-small);
-  margin: 0.25rem 0 0;
+// Erreur de soumission — cf. primitive `.esic-form__error`.
+
+// Pastille de statut (séance, point de contrôle, présence) — même vocabulaire
+// que `.esic-status` : point + libellé, la couleur ne porte jamais seule
+// l'information (docs/02 §32.5).
+.sessions__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border-radius: var(--esic-radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--esic-ink-soft);
+  background: var(--esic-surface-sunken);
+
+  &::before {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: currentcolor;
+    flex-shrink: 0;
+  }
+}
+
+.sessions__chip[data-status='PRESENT'],
+.sessions__chip[data-status='OPEN'] {
+  color: var(--esic-status-present-fg);
+  background: var(--esic-status-present-bg);
+}
+
+.sessions__chip[data-status='LATE'],
+.sessions__chip[data-status='PLANNED'] {
+  color: var(--esic-status-late-fg);
+  background: var(--esic-status-late-bg);
+}
+
+.sessions__chip[data-status='ABSENT'] {
+  color: var(--esic-status-absent-fg);
+  background: var(--esic-status-absent-bg);
+}
+
+.sessions__chip[data-status='EXCUSED_ABSENCE'] {
+  color: var(--esic-status-excused-fg);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentcolor;
+}
+
+.sessions__chip[data-status='CANCELLED'],
+.sessions__chip[data-status='CLOSED'] {
+  color: var(--esic-status-company-fg);
+  background: var(--esic-status-company-bg);
+}
+
+.sessions__chip[data-status='CANCELLED'] {
+  text-decoration: line-through;
 }
 
 .sessions__section {
-  margin: 2rem 0;
+  margin: var(--esic-space-7) 0;
 }
 
 .sessions__code {
-  font-family: var(--mat-sys-body-large-font, monospace);
-  font-size: 1.6rem;
-  letter-spacing: 0.25rem;
+  font-family: var(--esic-font-mono);
+  font-size: 1.5rem;
+  letter-spacing: 0.2rem;
   font-weight: 600;
+  color: var(--esic-ink);
 }
 
 .sessions__meta {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
-  margin: 0.5rem 0 0;
+  margin: var(--esic-space-2) 0 0;
+  font-size: 0.8125rem;
+  color: var(--esic-ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .sessions__sr-only {

@@ -185,6 +185,25 @@ class RoomQrAttendanceIntegrationTests {
     }
 
     @Test
+    void leQrFixeEstRefuseExactementALHeureDeDebut() {
+        String admin = adminToken();
+        Fixture fx = fixture(admin, LOCAL_RANGE);
+        String reference = issueQr(admin, fx);
+        // Séance commençant « maintenant » : le temps de poster la requête,
+        // l'horloge du serveur a atteint (ou dépassé) H. Le QR fixe n'est
+        // plus accepté — c'est le QR dynamique qui prend le relais (RG-051,
+        // docs/02 §16.5).
+        openSessionIn(admin, fx, 0);
+
+        ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST,
+                "/api/v1/attendance/room-qr", Map.of("roomReference", reference),
+                tokenFor(fx.student));
+
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(denied.getBody().get("code")).isEqualTo("ATT_ROOM_QR_SESSION_STARTED");
+    }
+
+    @Test
     void leQrFixeEstRefuseSansSeanceCorrespondante() {
         String admin = adminToken();
         Fixture fx = fixture(admin, LOCAL_RANGE);

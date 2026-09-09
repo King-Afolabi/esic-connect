@@ -1,0 +1,114 @@
+<div class="poster-page">
+  @switch (state().kind) {
+    @case ('loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Chargement de l'affiche"></mat-progress-bar>
+    }
+    @case ('error') {
+      <div class="poster-page__notice" role="alert">
+        <p>{{ state().kind === 'error' ? $any(state()).message : '' }}</p>
+        <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+      </div>
+    }
+    @case ('forbidden') {
+      <div class="poster-page__notice" role="alert">
+        <p>Vous n'êtes pas autorisé à consulter le QR fixe de cette salle.</p>
+      </div>
+    }
+    @case ('not-found') {
+      <div class="poster-page__notice" role="alert">
+        <p>Cette salle est introuvable.</p>
+      </div>
+    }
+    @case ('ready') {
+      <div class="poster-page__toolbar no-print">
+        <a
+          mat-button
+          [routerLink]="['/organization/sites', sitePublicId]"
+          class="poster-page__back"
+        >
+          <mat-icon aria-hidden="true">arrow_back</mat-icon>
+          Retour au site
+        </a>
+        <button mat-flat-button type="button" (click)="print()">
+          <mat-icon aria-hidden="true">print</mat-icon>
+          Imprimer l'affiche
+        </button>
+      </div>
+
+      @if (!view()!.issued) {
+        <div class="poster-page__notice" role="status">
+          <p>
+            Aucun QR fixe n'a encore été émis pour la salle
+            <strong>{{ view()!.roomCode }}</strong>.
+          </p>
+          <p>Un administrateur doit l'émettre depuis la fiche du site avant impression.</p>
+        </div>
+      } @else {
+        <article class="poster" aria-label="Affiche du QR fixe de la salle {{ view()!.roomCode }}">
+          <header class="poster__head">
+            <img
+              class="poster__logo"
+              src="brand/logo-esic.png"
+              alt="ESIC Connect"
+              width="1472"
+              height="700"
+            />
+            <p class="poster__title">ESIC Connect — Émargement</p>
+          </header>
+
+          <div class="poster__room">
+            <p class="poster__room-code">{{ view()!.roomCode }}</p>
+            <p class="poster__room-name">{{ view()!.roomName }}</p>
+            @if (siteLine()) {
+              <p class="poster__room-site">{{ siteLine() }}</p>
+            }
+          </div>
+
+          <div class="poster__qr">
+            <qrcode
+              [qrdata]="qrPayload()!"
+              [width]="320"
+              [margin]="2"
+              errorCorrectionLevel="M"
+              elementType="img"
+              alt="QR code d'émargement de la salle {{ view()!.roomCode }}"
+              cssClass="poster__qr-img"
+            ></qrcode>
+          </div>
+
+          <ol class="poster__instructions">
+            <li>Scannez ce code <strong>avant le début</strong> de votre séance.</li>
+            <li>
+              Après l'ouverture de la séance, utilisez le QR dynamique ou le code court du
+              formateur.
+            </li>
+            <li>Ce code fonctionne uniquement depuis le réseau autorisé de l'établissement.</li>
+            <li><strong>Ne pas déplacer cette affiche.</strong></li>
+          </ol>
+
+          <footer class="poster__foot">
+            <span>Émise le {{ formatDate(view()!.staticQrIssuedAt) }}</span>
+            <span aria-hidden="true">·</span>
+            <span>Réf. support {{ view()!.maskedReference }}</span>
+          </footer>
+        </article>
+
+        <aside class="poster-page__help no-print" aria-label="Équiper la salle en NFC">
+          <h2>Équiper cette salle en NFC</h2>
+          <p>
+            Pour poser un tag NFC dans cette salle, programmez un tag <strong>NDEF</strong> avec
+            <strong>la même URL que ce QR fixe</strong> (enregistrement URL HTTPS, référence
+            opaque uniquement — jamais de nom, de numéro étudiant ni de secret). Le tap NFC
+            ouvre alors le même écran d'émargement que le scan du QR, sous les mêmes contrôles
+            serveur (réseau autorisé, fenêtre de séance).
+          </p>
+          <p>
+            L'URL exacte à programmer est disponible dans la fiche du site, panneau « QR fixe »,
+            section « URL pour tag NFC ». Après un <strong>renouvellement</strong> du QR fixe,
+            reprogrammez le tag avec la nouvelle URL.
+          </p>
+        </aside>
+      }
+    }
+  }
+</div>

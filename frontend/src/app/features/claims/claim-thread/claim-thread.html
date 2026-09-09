@@ -1,6 +1,7 @@
-<nav class="claims__actions" aria-label="Fil d'Ariane">
-  <a routerLink="/claims">← Retour aux réclamations</a>
-</nav>
+<a class="esic-back" routerLink="/claims">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour aux réclamations</span>
+</a>
 
 @switch (state().kind) {
   @case ('loading') {
@@ -23,12 +24,18 @@
   }
   @case ('ready') {
     @if (thread(); as t) {
-      <h1 class="claims__title">{{ t.claim.subject }}</h1>
-      <p class="claims__meta">
-        {{ categoryLabel(t.claim.category) }} · {{ audienceLabel(t.claim.audience) }} ·
-        {{ statusLabel(t.claim.status) }} · ouverte le
-        {{ formatInstantUtc(t.claim.createdAt) }}
-      </p>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="esic-page-header__title">{{ t.claim.subject }}</h1>
+          <p class="esic-page-header__description">
+            {{ categoryLabel(t.claim.category) }} · {{ audienceLabel(t.claim.audience) }} ·
+            ouverte le {{ formatInstantUtc(t.claim.createdAt) }}
+          </p>
+        </div>
+        <div class="esic-page-header__actions">
+          <span class="esic-badge" [attr.data-status]="t.claim.status">{{ statusLabel(t.claim.status) }}</span>
+        </div>
+      </header>
 
       <section class="claims__section" aria-label="Fil de la conversation">
         <h2 class="claims__subtitle">Conversation</h2>
@@ -49,14 +56,16 @@
             historique est conservé.
           </p>
         } @else {
-          <form [formGroup]="messageForm" (ngSubmit)="sendMessage()">
+          <form class="esic-form" [formGroup]="messageForm" (ngSubmit)="sendMessage()">
             <mat-form-field appearance="outline" class="claims__field">
               <mat-label>Votre message</mat-label>
               <textarea matInput rows="4" formControlName="body" maxlength="5000"></textarea>
             </mat-form-field>
-            <button mat-flat-button type="submit" [disabled]="busy() || messageForm.invalid">
-              Envoyer
-            </button>
+            <div class="esic-form__actions">
+              <button mat-flat-button type="submit" [disabled]="busy() || messageForm.invalid">
+                Envoyer
+              </button>
+            </div>
           </form>
         }
       </section>
@@ -102,7 +111,7 @@
 
         @switch (openPanel()) {
           @case ('transfer') {
-            <form [formGroup]="transferForm" (ngSubmit)="transfer()" aria-label="Transférer">
+            <form class="esic-form" [formGroup]="transferForm" (ngSubmit)="transfer()" aria-label="Transférer">
               <p class="claims__meta">
                 Le transfert change de guichet, jamais d'historique : le fil reste
                 entier (RG-088).
@@ -119,13 +128,15 @@
                 <mat-label>Motif du transfert</mat-label>
                 <input matInput formControlName="motive" maxlength="500" />
               </mat-form-field>
-              <button mat-flat-button type="submit" [disabled]="busy() || transferForm.invalid">
-                Transférer
-              </button>
+              <div class="esic-form__actions">
+                <button mat-flat-button type="submit" [disabled]="busy() || transferForm.invalid">
+                  Transférer
+                </button>
+              </div>
             </form>
           }
           @case ('decide') {
-            <form [formGroup]="decideForm" (ngSubmit)="decide()" aria-label="Décider">
+            <form class="esic-form" [formGroup]="decideForm" (ngSubmit)="decide()" aria-label="Décider">
               <mat-form-field appearance="outline" class="claims__field">
                 <mat-label>Nouveau statut</mat-label>
                 <mat-select formControlName="status">
@@ -138,26 +149,30 @@
                 <mat-label>Motif de la décision</mat-label>
                 <input matInput formControlName="motive" maxlength="500" />
               </mat-form-field>
-              <button mat-flat-button type="submit" [disabled]="busy() || decideForm.invalid">
-                Enregistrer
-              </button>
+              <div class="esic-form__actions">
+                <button mat-flat-button type="submit" [disabled]="busy() || decideForm.invalid">
+                  Enregistrer
+                </button>
+              </div>
             </form>
           }
           @case ('reopen') {
-            <form [formGroup]="reopenForm" (ngSubmit)="reopen()" aria-label="Rouvrir">
+            <form class="esic-form" [formGroup]="reopenForm" (ngSubmit)="reopen()" aria-label="Rouvrir">
               <mat-form-field appearance="outline" class="claims__field">
                 <mat-label>Motif de la réouverture</mat-label>
                 <input matInput formControlName="motive" maxlength="500" />
               </mat-form-field>
-              <button mat-flat-button type="submit" [disabled]="busy() || reopenForm.invalid">
-                Rouvrir
-              </button>
+              <div class="esic-form__actions">
+                <button mat-flat-button type="submit" [disabled]="busy() || reopenForm.invalid">
+                  Rouvrir
+                </button>
+              </div>
             </form>
           }
         }
 
         @if (actionError(); as message) {
-          <p class="claims__error" role="alert">{{ message }}</p>
+          <p class="esic-form__error" role="alert">{{ message }}</p>
         }
       </section>
     }
