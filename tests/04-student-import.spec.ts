@@ -37,7 +37,7 @@ test.describe('Import apprenants — parcours nominal (simulation → confirmati
     // 2 lignes valides et nouvelles → 2 comptes à créer, 0 erreur.
     const createCard = page.locator('.card', { hasText: 'À créer' });
     await expect(createCard.locator('.card__value')).toHaveText('2');
-    const errorCard0 = page.locator('.card--error', { hasText: 'Erreurs' });
+    const errorCard0 = page.locator('.card--error', { hasText: 'Lignes en erreur' });
     await expect(errorCard0.locator('.card__value')).toHaveText('0');
 
     await page.getByRole('button', { name: "Confirmer l'import" }).click();

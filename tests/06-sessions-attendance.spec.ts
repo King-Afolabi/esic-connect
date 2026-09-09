@@ -143,7 +143,7 @@ test.describe('Parcours prioritaire réel : création → ouverture → émargem
     await loginAsUi(page, ACCOUNTS.STUDENT, '/attendance');
     await page.getByLabel('Code court').fill(shortCode);
     await page.getByRole('button', { name: 'Valider ma présence' }).click();
-    await expect(page.locator('.checkin__inline-error')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.esic-form__error')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Présence enregistrée.')).not.toBeVisible();
     await page.screenshot({
       path: path.join(CAPTURES, 'errors', '05-double-emargement-refuse.png'),

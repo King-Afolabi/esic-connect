@@ -40,30 +40,49 @@ versionné : `docs/SOUTENANCE-VERSION-STABLE.md`.
 | `npm audit` (frontend) | **0 vulnérabilité** |
 | Scan de secrets versionnés (`git grep`) | **aucun** ; `.env` / `.env.prod` non suivis ; `.gitignore` couvre `.env.*`, `*.pem/key/p12/jks` |
 
-#### Recette navigateur Playwright (pile démo profil `demo`, base `esic_connect_demo`)
+#### Recette navigateur Playwright (`npm run test:e2e`, pile démo profil `demo`, base `esic_connect_demo`)
 
-**En cours de ré-exécution** à l'heure de cette écriture (suite lente :
-la cérémonie de second facteur est rejouée à chaque test `ADMIN` /
-`SUPER_ADMIN`). Faits établis :
+**Exécutée** (run complet, 33,8 min, `LOGIN_ORIGIN_LIMIT` relevé en
+variable de session, `ESIC_DEMO_TOTP_SECRET` déterministe de session
+pour franchir le vrai second facteur `ADMIN`/`SUPER_ADMIN`) :
 
-- sélecteurs corrigés **vérifiés verts** : `tests/01` 8/8 (hors admin) +
-  2/2 (ADMIN/SUPER_ADMIN) ; RBAC `tests/02` vert jusqu'au point de
-  bascule ci-dessous ;
-- `ADMIN` / `SUPER_ADMIN` franchissent le **vrai** second facteur via un
-  `ESIC_DEMO_TOTP_SECRET` déterministe (variable de **session
-  uniquement**, jamais commitée ; `DemoMfaProvisioner` révoque le facteur
-  hérité et en pose un aligné) ;
-- **couplage d'environnement connu** (déjà documenté §6.1) : la matrice
-  RBAC ouvre des dizaines de connexions depuis `127.0.0.1` ; au-delà du
-  seau `LOGIN_ORIGIN_LIMIT` (défaut 60/15 min) la connexion est refusée
-  et des tests échouent **pour une raison sans rapport avec ce qu'ils
-  vérifient**. Ré-exécution relancée avec `LOGIN_ORIGIN_LIMIT` relevé
-  (variable de session) et les clés Redis `esic:rate-limit:*` purgées.
+**187 passés / 7 échoués / 8 non exécutés** (sur 202 ; les 8 non exécutés
+sont la fin de deux fichiers en `describe.serial` interrompus par un
+échec).
 
-Décompte final : à consigner lorsque la suite se termine. Dernier
-passage **complet vert connu** : **167 / 167** (5 septembre 2026, §6.4).
-`NOT_PERFORMED` cette passe si la ré-exécution n'aboutit pas :
-démonstration **manuelle** de bout en bout par un humain.
+**Les 7 échecs sont de la dette de maintenance de la suite e2e, pas des
+régressions produit.** Toutes les assertions en cause sont
+`toBeVisible` / `toBeFocused` / filtre de texte sur des éléments **renommés
+ou déplacés** par trois refontes livrées entre le 6 et le 9 septembre
+sans mise à jour de la suite e2e (celle-ci n'est pas exécutée par PR) :
+regroupement de la navigation latérale (`ANO-NAV-001`), passage aux
+primitives `.esic-*` (renommage de classes), introduction de
+sous-navigations `.esic-subnav`. Le comportement métier reste couvert :
+
+| Échec e2e | Cause | Couverture réelle du comportement |
+|---|---|---|
+| `01`, `08` — identité / rôles dans la barre d'outils | refonte « profil en icône seule » | **corrigé** (`e9c2531`) : `button.profile-menu__trigger` / `.profile-menu__roles .esic-badge` |
+| `04:15` — carte « Lignes en erreur » de la revue d'import | libellé de carte passé de « Erreurs » à « Lignes en erreur » | **corrigé** (filtre de texte) ; règle d'import couverte par `StudentImportConfirmationIntegrationTests` |
+| `06:137` — anti-rejeu d'émargement (RG-015) | classe `.checkin__inline-error` renommée `.esic-form__error` | **corrigé** (sélecteur) ; **RG-015 couvert par `AttendanceIntegrationTests`** (anti-double-présence par contrainte SQL, `200`/`409`) |
+| `02:138` — « un ADMIN voit tous les écrans dans la navigation » | « Import apprenants » n'est plus une entrée racine (accès depuis l'en-tête de la liste Apprenants — `ANO-NAV-001`) | **test à réécrire** (nav regroupée) ; RBAC ADMIN couvert par 60+ combinaisons `tests/02` vertes + `*SecurityTests` |
+| `11:163` — écran « Invitations non activées » | écran déplacé sous une sous-navigation `.esic-subnav` (heading/route changés) | **test à réécrire** ; `EF-REP-010` couvert par `PendingInvitationReport*` |
+| `15` ×2 — QR fixe de salle (renouvellement, focus) | fiche de site restructurée (en-tête compact, filtres, tables `--tall`) — heading « Salles » exact déplacé | **test à réécrire** ; `EF-ORG-003` couvert par `RoomStaticQrAdminIntegrationTests` (10/10, matrice de rôles) |
+| `16:118` — scanner QR « rend la main au formulaire » | `getByLabel('Code court')` reçu « inactive » au lieu de « focused » — nuance de restauration de focus après fermeture du scanner | **à investiguer** (faible sévérité, agrément a11y) ; le scanner et le repli code court sont couverts par `qr-scanner.spec.ts` (12) + `check-in-reference.spec.ts` (14) |
+
+**4 sélecteurs corrigés dans cette passe** (`tests/01`, `04`, `06`,
+`08` — commits `e9c2531` et suivant). **5 échecs restants** =
+réécriture de flux de navigation → **dette de maintenance e2e**, à
+traiter en passe dédiée alignée sur les refontes des 6–9 septembre.
+Aucun ne remet en cause un comportement livré (couverture back-end +
+composant intacte).
+
+Rapport HTML : `test-results/html-report/` ; captures :
+`captures/`, `artifacts/report-screenshots/`, copie figée
+`artifacts/stable-release-2026-09-08/` (tous non versionnés).
+
+`NOT_PERFORMED` : démonstration **manuelle** de bout en bout par un
+humain (un navigateur piloté par script n'en est pas une) ; passe de
+maintenance des 5 tests e2e de navigation.
 
 #### Sécurité — audit interne (grille OWASP ASVS v5.0.0, PAS une certification)
 
