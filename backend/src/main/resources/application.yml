@@ -34,6 +34,12 @@ spring:
     # fournisseur réel — reste optionnel, jamais requis pour démarrer).
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
+    # Charset de tout message sortant (objet + corps). Explicite ici pour
+    # garantir un rendu UTF-8 correct des accents français chez le
+    # destinataire, quel que soit le charset par défaut de la plateforme.
+    # Appliqué par JavaMailSenderImpl à la conversion SimpleMailMessage
+    # -> MIME : objet encodé RFC 2047 en UTF-8, corps déclaré charset=UTF-8.
+    default-encoding: UTF-8
     # Vides par défaut : Mailpit n'authentifie personne. Un fournisseur
     # réel (Brevo, etc.) les exige — jamais une valeur en dur, jamais
     # dans le dépôt.

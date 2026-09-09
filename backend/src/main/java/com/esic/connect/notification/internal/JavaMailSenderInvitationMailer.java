@@ -43,14 +43,14 @@ class JavaMailSenderInvitationMailer implements InvitationMailer {
         message.setText("""
                 Bonjour %s,
 
-                Un compte ESIC Connect a ete cree pour vous.
-                Pour definir votre mot de passe et activer votre compte,
+                Un compte ESIC Connect a été créé pour vous.
+                Pour définir votre mot de passe et activer votre compte,
                 ouvrez le lien ci-dessous :
 
                 %s
 
                 Ce lien expire le %s.
-                Si vous n'etes pas concerne, ignorez ce message.
+                Si vous n'êtes pas concerné, ignorez ce message.
                 """.formatted(firstName, link, expiresAt));
 
         mailSender.send(message);

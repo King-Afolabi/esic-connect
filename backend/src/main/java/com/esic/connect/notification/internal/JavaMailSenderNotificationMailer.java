@@ -41,11 +41,11 @@ class JavaMailSenderNotificationMailer implements NotificationMailer {
 
                 %s
 
-                Retrouvez le detail dans votre espace ESIC Connect :
+                Retrouvez le détail dans votre espace ESIC Connect :
                 %s
 
-                Vous pouvez regler les notifications que vous recevez par
-                courriel depuis vos preferences.
+                Vous pouvez régler les notifications que vous recevez par
+                courriel depuis vos préférences.
                 """.formatted(body, applicationUrl));
         mailSender.send(message);
     }

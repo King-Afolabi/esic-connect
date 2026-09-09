@@ -41,11 +41,11 @@ class JavaMailSenderPasswordResetMailer implements PasswordResetMailer {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromAddress);
         message.setTo(toEmail);
-        message.setSubject("Reinitialisation de votre mot de passe ESIC Connect");
+        message.setSubject("Réinitialisation de votre mot de passe ESIC Connect");
         message.setText("""
                 Bonjour %s,
 
-                Une reinitialisation de mot de passe a ete demandee pour
+                Une réinitialisation de mot de passe a été demandée pour
                 votre compte ESIC Connect. Pour choisir un nouveau mot de
                 passe, ouvrez le lien ci-dessous :
 
@@ -53,7 +53,7 @@ class JavaMailSenderPasswordResetMailer implements PasswordResetMailer {
 
                 Ce lien expire le %s et ne peut servir qu'une seule fois.
 
-                Si vous n'etes pas a l'origine de cette demande, ignorez ce
+                Si vous n'êtes pas à l'origine de cette demande, ignorez ce
                 message : votre mot de passe actuel reste valable.
                 """.formatted(firstName, link, expiresAt));
 
@@ -65,18 +65,18 @@ class JavaMailSenderPasswordResetMailer implements PasswordResetMailer {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromAddress);
         message.setTo(toEmail);
-        message.setSubject("Votre mot de passe ESIC Connect a ete modifie");
+        message.setSubject("Votre mot de passe ESIC Connect a été modifié");
         message.setText("""
                 Bonjour %s,
 
-                Le mot de passe de votre compte ESIC Connect vient d'etre
-                modifie. Toutes vos sessions ouvertes ont ete fermees.
+                Le mot de passe de votre compte ESIC Connect vient d'être
+                modifié. Toutes vos sessions ouvertes ont été fermées.
 
-                Si vous etes a l'origine de ce changement, aucune action
-                n'est necessaire.
+                Si vous êtes à l'origine de ce changement, aucune action
+                n'est nécessaire.
 
-                Sinon, demandez immediatement une reinitialisation et
-                prevenez l'administration de l'ESIC.
+                Sinon, demandez immédiatement une réinitialisation et
+                prévenez l'administration de l'ESIC.
                 """.formatted(firstName));
 
         mailSender.send(message);
