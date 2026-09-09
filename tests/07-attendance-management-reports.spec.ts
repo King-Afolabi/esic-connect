@@ -5,7 +5,7 @@ import { loginAsUi } from './support/auth';
 /**
  * DOMAINE 4 — Suivi d'assiduité et rapports.
  *
- * `docs/CURRENT-STATE.md` (sprint 11, EF-REP-004/005) : les exports CSV,
+ * `docs/STATUS.md` (EF-REP-004/005) : les exports CSV,
  * Excel et PDF sont livrés et partagent le même bouton par format
  * (`attendance-report.html`, `REPORT_EXPORT_FORMATS`) — vérifié ci-dessous
  * sur l'écran réel, pas seulement supposé absent comme le disait une

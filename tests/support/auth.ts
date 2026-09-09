@@ -76,7 +76,7 @@ export async function loginAsUi(page: Page, account: DemoAccount, targetPath?: s
  * son seul mot de passe (`DEC-S2-005`). Ne contourne aucun contrôle
  * serveur : franchit le VRAI parcours HTTP `/mfa/verify` ou
  * `/mfa/enroll` + `/mfa/enroll/confirm`, code TOTP calculé localement
- * (dette T-19/T-20, `docs/CURRENT-STATE.md`).
+ * (dette T-19/T-20, `docs/STATUS.md`).
  *
  * - **VERIFY** (facteur déjà actif) : le secret n'est jamais affiché à
  *   l'écran — il faut le connaître à l'avance. Utilise
@@ -112,7 +112,7 @@ async function resolveMfaChallengeIfPresent(page: Page, account: DemoAccount): P
     throw new Error(
       `Second facteur requis pour ${account.email} mais aucun secret TOTP disponible : ` +
         'définissez ESIC_DEMO_TOTP_SECRET (même valeur que le back-end, profil demo) ' +
-        'avant de lancer la suite. Voir docs/CURRENT-STATE.md, dette T-19/T-20.',
+        'avant de lancer la suite. Voir docs/STATUS.md, dette T-19/T-20.',
     );
   }
 

@@ -5,7 +5,7 @@ import { loginAsUi } from './support/auth';
 /**
  * DOMAINE 2 (partiel) — Référentiels pédagogiques, organisation, alternance.
  *
- * `/academic` est en LECTURE SEULE dans ce prototype (CURRENT-STATE.md) :
+ * `/academic` est en LECTURE SEULE dans ce périmètre (docs/STATUS.md) :
  * pas de test de création/édition ici, seulement de consultation — écrire
  * un test qui cliquerait un bouton « Créer » inexistant serait un test
  * inventé.

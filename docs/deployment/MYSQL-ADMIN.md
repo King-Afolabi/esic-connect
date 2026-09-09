@@ -20,7 +20,7 @@
 ## Démarrer l'outil (sur la Pi)
 
 ```bash
-ssh king_a@192.168.1.83
+ssh <utilisateur>@<hote-pi>
 cd ~/esic-connect
 
 docker compose -f compose.prod.yaml -f compose.admin.yaml \
@@ -31,13 +31,13 @@ docker compose -f compose.prod.yaml -f compose.admin.yaml ps
 docker port esic-connect-adminer        # doit afficher 127.0.0.1:8081 -> 8080
 ```
 
-## Ouvrir le tunnel SSH (depuis le Mac)
+## Ouvrir le tunnel SSH (depuis le poste d'administration)
 
 ```bash
-ssh -L 8081:127.0.0.1:8081 king_a@192.168.1.83
+ssh -L 8081:127.0.0.1:8081 <utilisateur>@<hote-pi>
 ```
 
-Laisser cette session ouverte, puis, dans un navigateur **du Mac** :
+Laisser cette session ouverte, puis, dans un navigateur **du poste d'administration** :
 
 ```
 http://127.0.0.1:8081
@@ -54,7 +54,7 @@ http://127.0.0.1:8081
 | Base de données | `${MYSQL_DATABASE}` de `.env` |
 
 > Les valeurs `${MYSQL_*}` sont dans le `.env` de la Pi. **Ne pas les
-> recopier ici** ni ailleurs : `ssh king_a@192.168.1.83 'grep MYSQL_ ~/esic-connect/.env'`
+> recopier ici** ni ailleurs : `ssh <utilisateur>@<hote-pi> 'grep MYSQL_ ~/esic-connect/.env'`
 > sur la Pi elle-même si besoin, jamais dans un fichier versionné, un
 > ticket ou un message.
 
@@ -67,7 +67,7 @@ docker compose -f compose.prod.yaml -f compose.admin.yaml \
 ```
 
 (`stop adminer` au lieu de `down adminer` si on prévoit de le relancer
-bientôt.) Fermer aussi la session `ssh -L` côté Mac.
+bientôt.) Fermer aussi la session `ssh -L` côté poste d'administration.
 
 ## Compte SQL d'administration à privilèges limités (recommandé)
 
@@ -76,7 +76,7 @@ lecture/écriture de la seule base applicative, sans privilèges
 d'administration du serveur :
 
 ```bash
-ssh king_a@192.168.1.83
+ssh <utilisateur>@<hote-pi>
 cd ~/esic-connect
 docker compose -f compose.prod.yaml exec mysql \
   mysql -uroot -p"$(: ne pas inliner le mot de passe)" # voir ci-dessous

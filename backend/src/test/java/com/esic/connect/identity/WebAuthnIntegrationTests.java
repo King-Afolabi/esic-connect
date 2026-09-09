@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * réellement. Aucun n'existe dans une JVM de test : la vérification
  * cryptographique elle-même est celle de la bibliothèque WebAuthn, et un
  * test qui « simulerait » une signature valide ne prouverait rien. Cette
- * limite est consignée dans {@code docs/CURRENT-STATE.md} plutôt que
+ * limite est consignée dans {@code docs/STATUS.md} plutôt que
  * masquée par un test décoratif.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)

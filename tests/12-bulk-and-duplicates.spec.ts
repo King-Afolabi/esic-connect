@@ -7,7 +7,7 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
 
 /**
  * DOMAINE 2 (suite) — Opérations de masse et détection de doublons
- * (EF-USER-004, EF-USER-005 ; dette T-18, docs/CURRENT-STATE.md).
+ * (EF-USER-004, EF-USER-005 ; dette T-18, docs/STATUS.md).
  *
  * L'API des deux fonctionnalités est livrée et testée côté serveur
  * depuis le sprint 4 (`BulkUserIntegrationTests`) ; seule l'interface

@@ -587,7 +587,7 @@ définitifs**, motivés.
 | Défaillance de la borne | Moyenne | Moyen | file locale, reprise, simulateur |
 | Erreur produite par l'IA | Moyenne | Élevé | score de confiance, validation humaine obligatoire |
 | Dépendance à un service externe | Moyenne | Moyen | ports et adaptateurs, fonctionnement complet en local |
-| Dérive documentaire | Moyenne | Élevé | `docs/CURRENT-STATE.md` mis à jour à chaque livraison |
+| Dérive documentaire | Moyenne | Élevé | `docs/STATUS.md` mis à jour à chaque livraison |
 | Objectif de performance non atteint | Moyenne | Faible | mesure, publication du réel, optimisation ciblée |
 
 ---
@@ -693,7 +693,7 @@ règles structurantes du cadrage :
 | `docs/10-guide-utilisateur.md` | guide fonctionnel par rôle |
 | `docs/11-guide-deploiement.md` | installation, exploitation, déploiement |
 | `docs/12-prerequis-externes.md` | comptes, clés et matériel à préparer |
-| `docs/CURRENT-STATE.md` | état réel du dépôt, mis à jour à chaque livraison |
+| `docs/STATUS.md` | état réel du dépôt, mis à jour à chaque livraison |
 
 ---
 

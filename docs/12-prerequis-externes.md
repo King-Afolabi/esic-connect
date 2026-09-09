@@ -131,8 +131,8 @@ Options :
 2. **autoriser l'adresse d'expédition**, au choix :
    - domaine que tu contrôles → poser **SPF**, **DKIM** et idéalement
      **DMARC** chez le registrar (meilleure délivrabilité) ;
-   - adresse dont tu ne contrôles pas le DNS (ex. une adresse d'école
-     comme `…@etudiant-esci.fr`) → la déclarer en **expéditeur unique
+   - adresse dont tu ne contrôles pas le DNS (ex. une adresse d'école,
+     `…@<votre-domaine>`) → la déclarer en **expéditeur unique
      validé** dans Brevo (*Senders → Add a sender*), puis cliquer le lien
      de confirmation reçu sur cette adresse. Sans cette validation, Brevo
      renvoie `550` et **aucun message ne part** ;
@@ -249,7 +249,7 @@ configuration. Sans `APP_INTEGRATION_MICROSOFT_ENABLED`, `_TENANT_ID`,
 `GET /api/v1/integrations/microsoft/status` le déclare — le produit ne
 fabrique aucun lien de réunion. **Aucun appel n'a jamais atteint
 Microsoft** : `EF-INT-002` et `EF-INT-003` restent `PARTIAL`, dette T-16
-dans `docs/CURRENT-STATE.md`.
+dans `docs/STATUS.md`.
 
 ---
 
@@ -319,7 +319,7 @@ documents PDF sont produits avec un bandeau et une signature
 l'identifiant du document et la mention de document électronique — mais
 **sans image de logo**, parce qu'aucun fichier n'existe dans le dépôt et
 qu'en dessiner un serait inventer une identité visuelle. Dette T-17 dans
-`docs/CURRENT-STATE.md` ; l'insertion se réduit à un `PDImageXObject`
+`docs/STATUS.md` ; l'insertion se réduit à un `PDImageXObject`
 dans `PdfDocumentWriter.header` le jour où le fichier arrive.
 
 L'émetteur imprimé sur les documents est configurable par

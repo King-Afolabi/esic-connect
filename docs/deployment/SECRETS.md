@@ -1,7 +1,6 @@
 # Secrets — ESIC Connect
 
-**Aucun secret n'est dans le dépôt et aucun ne doit y entrer** (règle
-CLAUDE.md, absolue). Tout est fourni par l'environnement, via un fichier
+**Aucun secret n'est dans le dépôt et aucun ne doit y entrer** (règle absolue du dépôt). Tout est fourni par l'environnement, via un fichier
 `.env` **non versionné** à la racine, chargé par `docker compose`.
 
 Modèle : `.env.prod.example` (versionné, valeurs vides). Copier puis

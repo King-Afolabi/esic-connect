@@ -5,7 +5,7 @@
 | Objet | Rendre le dépôt installable, vérifiable et déployable **sans étape manuelle devinée** |
 | Version | 1.0 — 3 septembre 2026 |
 | Statut du déploiement | **`NOT_PERFORMED`** — aucune instance n'est déployée, aucune URL n'existe |
-| Sources | `docs/CURRENT-STATE.md`, `compose.yaml`, `.github/workflows/**` |
+| Sources | `docs/STATUS.md`, `compose.yaml`, `.github/workflows/**` |
 
 > **Ce que ce document ne fait pas.** Il ne déclare aucun déploiement
 > réalisé. Il décrit ce qui est **outillé et reproductible aujourd'hui**

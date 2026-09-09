@@ -8,7 +8,7 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
 /**
  * DOMAINE 3 — Séances exceptionnelles et émargement intelligent.
  *
- * C'est le cœur du « parcours prioritaire » de CLAUDE.md
+ * C'est le cœur du « parcours prioritaire » du produit
  * (Ouverture par le formateur → Émargement → Rapport). Ce fichier exerce
  * le canal **code court** ; le **scan caméra** (livré depuis le
  * 8 septembre 2026) a son propre fichier `tests/16-qr-scanner.spec.ts`

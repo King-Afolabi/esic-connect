@@ -17,7 +17,7 @@ import java.util.Map;
  * (application permissions).
  *
  * <p><strong>Ce client n'a jamais été exercé contre un locataire
- * Microsoft réel</strong> (dette T-16, {@code docs/CURRENT-STATE.md}) :
+ * Microsoft réel</strong> (dette T-16, {@code docs/STATUS.md}) :
  * il est écrit d'après la documentation de l'API, couvert par des tests
  * contre un serveur HTTP local, et reste <em>inactif par défaut</em>. Ne
  * pas présenter EF-INT-002 ni EF-INT-003 comme vérifiés.

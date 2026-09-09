@@ -24,7 +24,7 @@
 # (DemoDataInitializer), l'activation d'un facteur TOTP déterministe pour
 # ce compte ; ce script calcule localement le même code et le soumet à la
 # VRAIE route /mfa/verify — aucun contournement, aucun accès direct à la
-# base (dette T-19/T-20, docs/CURRENT-STATE.md).
+# base (dette de démonstration liée au second facteur, docs/STATUS.md).
 #
 #   API_BASE=http://localhost:8080 ESIC_DEMO_PASSWORD=... \
 #     ESIC_DEMO_TOTP_SECRET=... ./scripts/seed-demo.sh

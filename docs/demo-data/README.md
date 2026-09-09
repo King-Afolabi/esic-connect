@@ -36,8 +36,9 @@ réelles (second facteur ADMIN franchi via TOTP, jamais contourné) :
   absent ≈ 8 %), clôture ;
 - **jeux de fichiers d'import** valide / avertissement / bloquant /
   multi-anomalies / doublons, pour l'import apprenants **et** l'import
-  planning, écrits ici et **réellement simulés** — verdicts consignés
-  dans `IMPORT-FIXTURES-REPORT.md` et `PLANNING-FIXTURES-REPORT.md`.
+  planning, écrits ici et **réellement simulés** — verdicts consignés dans les
+  comptes rendus générés localement par `scripts/seed-demo-full.py`
+  (non versionnés).
 
 ```bash
 # base demo remise à zéro (ESIC_ALLOW_DEMO_RESET=true attendu par le porteur)

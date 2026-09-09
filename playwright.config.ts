@@ -12,7 +12,7 @@ import { defineConfig, devices } from '@playwright/test';
  * périmètre (aucun test n'est écrit contre un écran qui n'existe pas).
  *
  * Le projet a documenté un choix explicite de NE PAS construire de suite
- * e2e navigateur (`docs/CURRENT-STATE.md`, décision `DEC-G1-011`) au profit
+ * e2e navigateur (décision d'architecture `DEC-G1-011`, cf. `docs/03-architecture.md`) au profit
  * de tests d'intégration API. Cette suite est donc un complément demandé
  * explicitement pour cet audit, pas un remplacement de cette décision.
  */

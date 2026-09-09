@@ -515,7 +515,7 @@ iot            → attendance, coursesession, shared
 > laisse **ni** notification **ni** trace d'audit de succès. **8 des 9
 > listeners d'audit** restent des `@EventListener` **synchrones** en
 > `REQUIRES_NEW` : dette assumée, décrite dans
-> `docs/CURRENT-STATE.md`.
+> `docs/STATUS.md`.
 >
 > Les §6.2, §6.5 et §6.6 (listes de modules et règles de dépendance)
 > décrivent également le découpage cible et ne sont pas alignées sur les
@@ -621,7 +621,7 @@ Responsabilités :
 ### État d’implémentation (lot TR-021, migration V8)
 
 Module Spring Modulith `com.esic.connect.alternation` livré et testé
-(voir `docs/CURRENT-STATE.md`) :
+(voir `docs/STATUS.md`) :
 
 - agrégat `work_study_pattern` (modèle réutilisable de rythme :
   `THREE_DAYS_SCHOOL_TWO_DAYS_COMPANY`, `ONE_WEEK_SCHOOL_OUT_OF_FOUR`,
@@ -771,7 +771,7 @@ responsables pédagogiques** (nouveaux ports `enrollment` / `academic`
 requis — dette **G1-D-AUDIENCE**), **préférences** par type (non
 exigées), **email métier**, **push PWA**, **file persistante / DLQ** et
 **purge / rétention** (`À_DÉFINIR`, `R-G1-30`) — dettes documentées dans
-`docs/CURRENT-STATE.md`
+`docs/STATUS.md`
 (§ « Audit G1-D.1 ») et `docs/05-product-backlog.md` §9bis.
 
 ## 7.12 `reporting`
@@ -951,7 +951,7 @@ Refonte visuelle et UX menée sur la branche
 `feat/ui-redesign-bootstrap-material` (base `feat/demo-readiness-e2e-ui`).
 **Aucune règle métier, aucun contrôleur, aucune migration touchés** :
 c'est une refonte de la couche de présentation. L'état d'avancement
-détaillé, étape par étape, est dans `docs/CURRENT-STATE.md`.
+détaillé, étape par étape, est dans `docs/STATUS.md`.
 
 **Résultat mesurable** : plus **aucune** référence `--mat-sys-*` directe
 ni couleur en dur (`#rrggbb`, `rgb(0 0 0 / …)`) dans
@@ -1338,7 +1338,7 @@ sequenceDiagram
 
 ## 15.2 Stockage
 
-`IMPLEMENTED_AND_TESTED` — voir `docs/CURRENT-STATE.md` (6 septembre 2026)
+`IMPLEMENTED_AND_TESTED` — voir `docs/STATUS.md` (6 septembre 2026)
 et `docs/08-securite-rgpd.md` §6.
 
 - **jeton d’accès** : JWT HS256, **en mémoire seule** côté client (jamais
@@ -1847,8 +1847,8 @@ ou en production.
 
 ```text
 projet_final/
-├── CLAUDE.md
 ├── README.md
+├── LICENSE
 ├── .gitignore
 ├── .env.example
 ├── compose.yaml
@@ -1898,7 +1898,7 @@ projet_final/
 │   ├── 10-guide-utilisateur.md
 │   ├── 11-guide-deploiement.md
 │   ├── 12-prerequis-externes.md
-│   ├── CURRENT-STATE.md
+│   ├── STATUS.md
 │   ├── demo-data/
 │   └── diagrams/
 │
@@ -3145,7 +3145,8 @@ calcul journalier (`PARTIAL` / `TO_CONFIRM`).
 et 3 (ordre strict complet) casseraient des tests d'intégration verts
 (`DailyAttendanceIntegrationTests`, `AttendanceIntegrationTests`) et le
 modèle demi-journée du cahier §16.3. Aucune fermeture automatique n'a été
-inventée sans spécification. Trace complète : `DECISIONS_NEEDED.md` D-01.
+inventée sans spécification. Cette décision (référence D-01) est
+entièrement documentée par la présente section `DEC-D01`.
 
 
 ## ADR à rédiger

@@ -104,7 +104,7 @@ sauvegarde restaurée n'est pas assez ancienne, en prendre une antérieure
 ## Test de restauration (obligatoire avant la première mise en service)
 
 À faire une fois, sur une base jetable, et à consigner
-(`docs/CURRENT-STATE.md` — actuellement `NOT_PERFORMED`) :
+(`docs/STATUS.md` — actuellement `NOT_PERFORMED`) :
 
 ```bash
 # base de contrôle, séparée

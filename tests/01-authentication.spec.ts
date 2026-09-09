@@ -14,8 +14,7 @@ const CAPTURES = path.join(__dirname, '..', 'captures');
  * franchi réellement par `loginAsUi` (`tests/support/auth.ts`, dette
  * T-19/T-20) : chaque connexion `ACCOUNTS.ADMIN`/`ACCOUNTS.SUPER_ADMIN`
  * ci-dessous passe par le VRAI défi `/connexion/verification`, pas par un
- * contournement. `docs/CURRENT-STATE.md` classe encore explicitement en
- * `HORS_PÉRIMÈTRE_ASSUMÉ` : mot de passe oublié, WebAuthn, Turnstile,
+ * contournement. `docs/STATUS.md` recense parmi les limites connues : mot de passe oublié, WebAuthn, Turnstile,
  * logout serveur / révocation de session, timeout de session mesurable
  * (30 min — trop long pour un test E2E, non simulé ici). Ces sous-domaines
  * ne sont donc PAS testés ci-dessous ; voir docs/09-strategie-tests.md
@@ -28,8 +27,7 @@ test.describe('Connexion — comptes réels par rôle', () => {
       // L'identité connectée est portée par le déclencheur du panneau
       // Profil de la barre d'outils (`profile-menu.html`,
       // `aria-label="Profil — <email>"`) depuis la refonte « profil en
-      // icône seule » (CURRENT-STATE, 9 sept. 2026 : le nom court n'est
-      // plus affiché, l'adresse reste sur l'aria-label).
+      // icône seule » (le nom court n'est plus affiché, l'adresse reste sur l'aria-label).
       await expect(page.locator('button.profile-menu__trigger')).toHaveAttribute(
         'aria-label',
         `Profil — ${account.email}`,
@@ -48,7 +46,7 @@ test.describe('Connexion — comptes réels par rôle', () => {
     await loginAsUi(page, ACCOUNTS.PEDAGOGICAL_MANAGER_TEACHER);
     // Les puces de rôle vivent désormais dans le panneau Profil
     // (`profile-menu.html`, `.profile-menu__roles .esic-badge`) et non
-    // plus dans la barre d'outils (CURRENT-STATE, 9 sept. 2026).
+    // plus dans la barre d'outils.
     await page.locator('button.profile-menu__trigger').click();
     const chips = page.locator('.profile-menu__roles .esic-badge');
     await expect(chips).toHaveCount(2);

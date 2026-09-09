@@ -108,7 +108,7 @@ Vérifie que la solution répond aux besoins du Product Owner.
 
 > **Instantané daté du 2 septembre 2026 (HEAD `d3450e6`).** Les totaux
 > ci-dessous n'ont pas été mis à jour à chaque sprint : les chiffres
-> **courants** sont dans `docs/CURRENT-STATE.md` — au 9 septembre 2026
+> **courants** sont dans `docs/STATUS.md` — au 9 septembre 2026
 > (passe de correction, `6a864a9`) : back-end **1275 tests / 0 échec**
 > (schéma V34), front-end **935 tests / 0 échec**, recette Playwright
 > **202 passés / 0 échoué / 0 non exécuté**. Nouvelles classes back-end
@@ -184,7 +184,7 @@ Elle **complète** la recette d'intégration API
 |---|---|
 | Emplacement | `tests/01-*.spec.ts` … `tests/16-*.spec.ts`, `tests/support/`, `tests/fixtures/`, `playwright.config.ts` |
 | Commande | `npm run test:e2e` — pile complète démarrée, `ESIC_DEMO_PASSWORD` exporté |
-| Volume | 16 fichiers ; 10 fichiers / **149 tests** exécutés à l'audit du 3 septembre, plus `tests/11-pilotage-restitution.spec.ts` (sprint 11, exécuté), `tests/12`…`tests/15` (hors sprint) et `tests/16-qr-scanner.spec.ts` (8 sept. 2026, caméra simulée, **non exécuté — pile de démonstration requise**) — voir `docs/CURRENT-STATE.md` §6.1 |
+| Volume | 16 fichiers ; 10 fichiers / **149 tests** exécutés à l'audit du 3 septembre, plus `tests/11-pilotage-restitution.spec.ts` (sprint 11, exécuté), `tests/12`…`tests/15` (hors sprint) et `tests/16-qr-scanner.spec.ts` (8 sept. 2026, caméra simulée, **non exécuté — pile de démonstration requise**) — voir `docs/STATUS.md` §6 |
 | Résultat fonctionnel | **149 / 149** (le run livré affiche 145/149 ; les 4 écarts sont des blocages d'environnement sous charge) |
 | Durée | 18-20 min en environnement sain |
 | CI | `.github/workflows/e2e.yml`, **manuel** (`workflow_dispatch`) |
@@ -214,7 +214,7 @@ adresse en clair · tableau équivalent d'un graphique de tableau de bord.
 
 1. aucun test n'est écrit contre un écran qui n'existe pas — les
    domaines non implémentés apparaissent comme écarts documentés
-   dans `docs/CURRENT-STATE.md`, jamais comme tests fabriqués ;
+   dans `docs/STATUS.md`, jamais comme tests fabriqués ;
 2. aucun identifiant technique n'est figé dans le dépôt : le `publicId`
    du formateur de démonstration est **résolu à l'exécution**
    (`tests/support/api.ts`), parce qu'il est régénéré à chaque recréation

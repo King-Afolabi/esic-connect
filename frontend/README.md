@@ -233,7 +233,7 @@ un lien vers `/login`.
   (lien d'évitement, `role="alert"`, icônes décoratives masquées,
   navigation clavier).
 - Limite assumée : **aucun audit WCAG outillé complet**, aucun test avec
-  un lecteur d'écran réel (`../docs/CURRENT-STATE.md`).
+  un lecteur d'écran réel (`../docs/STATUS.md`).
 
 ## Authentification / session
 

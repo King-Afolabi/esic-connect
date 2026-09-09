@@ -49,23 +49,29 @@ logs/
 report/generated/
 presentation/generated/
 
-# Documents de travail non versionnés (Lot §6, 6 septembre 2026) : rapports
-# d'audit détaillés, captures de rapport (régénérables par
-# tests/14-report-screenshots.spec.ts), journal de lot. Conservés hors
-# dépôt — voir README.md « Documents de travail locaux ».
+# Documents de travail internes, conservés hors dépôt (voir README.md
+# « Documents de travail locaux ») : rapports d'audit détaillés, captures
+# de rapport, journaux de lot, journal d'ingénierie, dossier de
+# soutenance, registres d'anomalies, comptes rendus de fixtures.
 /artifacts/
 /docs/audit/
 /docs/JOURNAL-*.md
+/docs/CURRENT-STATE.md
+/docs/SOUTENANCE-*.md
+/docs/anomalies/
+/docs/demo-data/*-REPORT.md
+/DECISIONS_NEEDED.md
 
 # OpenAPI export (commodité de revue, non versionné — voir scripts/dump-openapi.sh)
 docs/openapi.json
 
 # Temporary imports
 tmp/
-temp/.claude/
+temp/
 
-# Claude local files
+# Fichiers locaux d'outillage / IDE / OS
 .claude/
+/CLAUDE.md
 
 # État d'exécution local (URL publique du tunnel, etc.) — jamais versionné :
 # l'URL *.trycloudflare.com est éphémère et n'est pas une URL de production.

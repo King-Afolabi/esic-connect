@@ -47,9 +47,8 @@ up -d`. Chaque case non cochée est un motif de report.
 - [ ] `docker build ./backend` et `docker build ./frontend` : réussis
       **sur la Pi elle-même** (build natif arm64, jamais d'émulation).
 - [ ] Recette Playwright : état d'exécution consigné dans
-      `docs/CURRENT-STATE.md` (§6.1) et le rapport d'audit local
-      (`~/esic-connect-local-docs/`, non versionné) ; à rejouer contre la
-      pile de démonstration avant de présenter la recette comme passée.
+      `docs/STATUS.md` (§6) ; à rejouer contre la pile de démonstration
+      avant de présenter la recette comme passée.
 
 ## Réseau et exposition
 

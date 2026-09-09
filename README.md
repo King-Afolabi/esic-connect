@@ -14,12 +14,12 @@ réclamations, notifications, rapports et attestations.
 | **Front-end** | Angular 21 standalone / zoneless / signaux, Angular Material |
 | **Infrastructure** | Docker Compose — MySQL, Redis, Mailpit, Mosquitto |
 | **Tests** | JUnit, Vitest, Playwright |
-| **État réel** | [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) — seule source de vérité sur ce qui est livré |
+| **État réel** | [`docs/STATUS.md`](docs/STATUS.md) — livré, partiel, non implémenté, avec preuves |
 
 > **Règle du dépôt** : ce README décrit le produit et son installation.
 > Il ne déclare jamais qu'une fonctionnalité est livrée. Cette
-> information est exclusivement dans `docs/CURRENT-STATE.md`, mise à
-> jour à chaque livraison et adossée à des tests exécutés.
+> information est dans [`docs/STATUS.md`](docs/STATUS.md), mise à jour à
+> chaque livraison et adossée à des tests exécutés.
 
 ---
 
@@ -242,8 +242,8 @@ Les tests marqués `perf` sont exclus par défaut :
 `./mvnw test -Pperf` pour les exécuter.
 
 Les résultats des dernières exécutions sont consignés dans
-[`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md). Aucun chiffre de test
-n'est écrit ailleurs sans avoir été exécuté.
+[`docs/STATUS.md`](docs/STATUS.md). Aucun chiffre de test n'est écrit
+ailleurs sans avoir été exécuté.
 
 ---
 
@@ -287,7 +287,7 @@ compose.yaml      MySQL, Redis, Mailpit, Mosquitto
 
 | Fichier | Contenu |
 |---|---|
-| [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) | **état courant réel** — livré, partiel, non implémenté, avec preuves |
+| [`docs/STATUS.md`](docs/STATUS.md) | **état courant** — livré, partiel, non implémenté, avec preuves |
 | [`docs/01-cadrage.md`](docs/01-cadrage.md) | vision, objectifs, acteurs, exclusions de conception |
 | [`docs/02-cahier-des-charges.md`](docs/02-cahier-des-charges.md) | exigences, règles de gestion, critères d'acceptation |
 | [`docs/03-architecture.md`](docs/03-architecture.md) | architecture logique et technique, décisions |
@@ -300,23 +300,17 @@ compose.yaml      MySQL, Redis, Mailpit, Mosquitto
 | [`docs/10-guide-utilisateur.md`](docs/10-guide-utilisateur.md) | guide fonctionnel par rôle |
 | [`docs/11-guide-deploiement.md`](docs/11-guide-deploiement.md) | installation, exploitation, déploiement |
 | [`docs/12-prerequis-externes.md`](docs/12-prerequis-externes.md) | comptes, clés et matériel à préparer |
-| [`docs/deployment/`](docs/deployment/) | procédures Raspberry Pi : pré-vol, déploiement, rollback, secrets |
+| [`docs/deployment/`](docs/deployment/) | procédures de déploiement : pré-vol, mise en service, rollback, secrets |
+| [`LICENSE`](LICENSE) | conditions d'usage |
 
-### Documents de travail locaux (non versionnés)
+### Documents de travail internes (non versionnés)
 
-Pour garder le dépôt au strict nécessaire (Lot §6, 6 septembre 2026),
-ces documents sont conservés **hors dépôt**, sur le poste du porteur,
-sous `~/esic-connect-local-docs/<date>/` :
-
-| Chemin local | Contenu | Régénération |
-|---|---|---|
-| `docs/audit/` | rapports d'audit détaillés, comptes rendus de lots (`FINAL-*`, `LOT-*`) | à la main |
-| `artifacts/report-screenshots/` | captures de rapport | `npx playwright test tests/14-report-screenshots.spec.ts` (pile démo démarrée) |
-| `docs/JOURNAL-BATCH-S02A-S11.md` | journal de lot historique | — |
-
-Ils restent présents sur disque et ignorés par Git (`.gitignore`). La
-**seule source de vérité sur l'avancement** reste `docs/CURRENT-STATE.md`,
-versionnée.
+Pour garder le dépôt au strict nécessaire, les documents de travail
+internes — journal d'ingénierie détaillé, rapports d'audit, comptes
+rendus de lots, registres d'anomalies, dossier de soutenance, captures
+de rapport — sont conservés **hors dépôt**, sur le poste de
+développement. Ils sont couverts par `.gitignore`. La source publique
+sur l'avancement est [`docs/STATUS.md`](docs/STATUS.md).
 
 ---
 
@@ -333,8 +327,7 @@ versionnée.
   terminée.
 - Branches : `sprint/SNN-<thème>` ou `feature/<domaine>`, fusionnées par
   demande de tirage revue.
-
-Voir [`CLAUDE.md`](CLAUDE.md) pour les règles complètes de contribution.
+- Commits atomiques et lisibles ; message décrivant l'intention.
 
 ---
 
@@ -353,5 +346,6 @@ Voir [`CLAUDE.md`](CLAUDE.md) pour les règles complètes de contribution.
 
 ## Licence et usage
 
-Projet applicatif de l'ESIC. Données de développement et de
-démonstration strictement fictives.
+Projet applicatif à des fins d'évaluation académique. Voir
+[`LICENSE`](LICENSE). Données de développement et de démonstration
+strictement fictives.

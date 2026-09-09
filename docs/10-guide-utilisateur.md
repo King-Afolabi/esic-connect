@@ -4,7 +4,7 @@
 |---|---|
 | Version | **Refonte complète — 9 septembre 2026** (l'édition « F6 / 31 août » décrivait un état antérieur aux sprints 8 à 11) |
 | Périmètre | ce que chaque rôle peut réellement faire dans l'application livrée |
-| Référence | `docs/CURRENT-STATE.md` — **seule source de vérité** sur l'avancement ; en cas de doute, c'est elle qui prime sur ce guide |
+| Référence | `docs/STATUS.md` — **seule source de vérité** sur l'avancement ; en cas de doute, c'est elle qui prime sur ce guide |
 
 Ce guide décrit **l'application telle qu'elle est livrée**. Les fonctions
 non implémentées ou partielles sont signalées comme telles (§9) et ne
@@ -574,7 +574,7 @@ d'échec). Le **contenu** du message n'est jamais réaffiché.
 
 ## 9. Fonctions non disponibles dans l'interface
 
-> Source de vérité : `docs/CURRENT-STATE.md` §3 (partiels) et §4 (non
+> Source de vérité : `docs/STATUS.md` §3 (partiels) et §4 (non
 > implémenté).
 
 **Livré, mais sans écran dédié** (API uniquement) :

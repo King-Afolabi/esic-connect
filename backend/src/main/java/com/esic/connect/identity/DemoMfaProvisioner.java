@@ -19,7 +19,7 @@ package com.esic.connect.identity;
  * l'avance d'un script ou d'une suite de bout en bout), ce qui rend
  * impossible toute automatisation de {@code scripts/seed-demo.sh} ou de la
  * recette navigateur sur ces deux rôles (dette T-19/T-20,
- * {@code docs/CURRENT-STATE.md}).
+ * {@code docs/STATUS.md}).
  */
 public interface DemoMfaProvisioner {
 

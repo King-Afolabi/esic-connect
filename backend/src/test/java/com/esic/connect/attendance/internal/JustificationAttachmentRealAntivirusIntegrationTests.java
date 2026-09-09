@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * <p><strong>Conditionnel, et un test ignoré n'est pas un test réussi.</strong>
  * Sans démon joignable, la classe est ignorée et l'analyse reste
- * <em>non démontrée</em> — {@code docs/CURRENT-STATE.md} doit alors le
+ * <em>non démontrée</em> — {@code docs/STATUS.md} doit alors le
  * dire.
  *
  * <pre>
