@@ -58,7 +58,7 @@ pour :
 Il se lit avec : `docs/01-cadrage.md`, `docs/03-architecture.md`,
 `docs/04-modele-donnees.md`, `docs/05-product-backlog.md`,
 `docs/07-risques.md`, `docs/08-securite-rgpd.md`,
-`docs/09-strategie-tests.md`, `docs/CURRENT-STATE.md`.
+`docs/09-strategie-tests.md`, `docs/STATUS.md`.
 
 ---
 
@@ -768,7 +768,7 @@ doublé d'un contrôle humain possible.
 > de séance) ; aucun canal `ROOM_STATIC_NFC` distinct n'est enregistré,
 > rien ne permettant de distinguer de façon fiable un tap NFC d'une
 > ouverture d'URL. Détail : `docs/03-architecture.md` DEC-S13-002,
-> `docs/CURRENT-STATE.md`.
+> `docs/STATUS.md`.
 
 ## 16.2 Points de contrôle journaliers
 
@@ -845,7 +845,7 @@ autorisée, et en l'absence de séance correspondante.
 > **seul** (`403` pour les deux autres) ; aucun accès pour
 > `PEDAGOGICAL_MANAGER`, `TEACHER`, `STUDENT`. Renouvellement audité via
 > l'outbox, sans jeton ni adresse IP. Détail :
-> `docs/03-architecture.md` DEC-S13-001, `docs/CURRENT-STATE.md`.
+> `docs/03-architecture.md` DEC-S13-001, `docs/STATUS.md`.
 
 ## 16.7 Contrôle réseau
 
@@ -2336,7 +2336,7 @@ Une exigence est terminée lorsque :
 - la performance attendue est mesurée ;
 - l'accessibilité est vérifiée ;
 - l'API est documentée ;
-- la documentation et `docs/CURRENT-STATE.md` sont à jour ;
+- la documentation et `docs/STATUS.md` sont à jour ;
 - une preuve existe (test, capture, mesure) ;
 - la fonctionnalité peut être expliquée et démontrée.
 
@@ -2359,7 +2359,7 @@ Interdits absolus lors de la rédaction ou de l'implémentation :
 - réécrire intégralement un document pour une modification mineure.
 
 L'état réel de l'implémentation ne figure **pas** dans ce document : il
-est tenu dans `docs/CURRENT-STATE.md`, mis à jour à chaque livraison.
+est tenu dans `docs/STATUS.md`, mis à jour à chaque livraison.
 
 ---
 

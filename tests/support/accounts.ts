@@ -6,7 +6,7 @@
  * Le mot de passe est identique pour les 6 comptes (ESIC_DEMO_PASSWORD,
  * défini localement dans `.env`, jamais commité). Il est lu ici depuis une
  * variable d'environnement plutôt que codé en dur, pour ne jamais faire
- * porter un secret par le dépôt (règle CLAUDE.md : « ne jamais enregistrer
+ * porter un secret par le dépôt (règle du dépôt : « ne jamais enregistrer
  * de secret dans Git »).
  */
 function requiredDemoPassword(): string {
@@ -15,7 +15,7 @@ function requiredDemoPassword(): string {
     throw new Error(
       'ESIC_DEMO_PASSWORD est absent de l\'environnement. ' +
         'Exportez-le avant de lancer la suite : `set -a && source .env && set +a && npm run test:e2e`. ' +
-        'Aucune valeur de repli n\'est fournie : le dépôt ne doit porter aucun mot de passe (CLAUDE.md).',
+        'Aucune valeur de repli n\'est fournie : le dépôt ne doit porter aucun mot de passe.',
     );
   }
   return value;
@@ -27,7 +27,7 @@ export const DEMO_PASSWORD = requiredDemoPassword();
  * Secret TOTP déterministe (ESIC_DEMO_TOTP_SECRET) des comptes fictifs
  * ADMIN / SUPER_ADMIN, pour lesquels le second facteur est OBLIGATOIRE
  * (RG-007) — voir `DemoDataInitializer` (backend, profil `demo`) et
- * `docs/CURRENT-STATE.md` T-19/T-20.
+ * `docs/STATUS.md` (limites connues).
  *
  * Volontairement **non lu de façon stricte** ici (contrairement à
  * `requiredDemoPassword`) : de nombreux tests n'utilisent ni ADMIN ni

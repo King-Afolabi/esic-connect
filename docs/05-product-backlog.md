@@ -291,7 +291,7 @@ sprint qui les rend nécessaires et conditionnent sa clôture.
 ## 17. Règle de tenue
 
 Ce backlog décrit **ce qui doit être construit**. Il ne décrit jamais ce
-qui est construit : cette information est dans `docs/CURRENT-STATE.md`.
+qui est construit : cette information est dans `docs/STATUS.md`.
 
 Une story n'est retirée du backlog que lorsqu'elle est terminée au sens
 du cahier des charges §41, ou lorsque son retrait est décidé et motivé

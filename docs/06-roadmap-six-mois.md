@@ -29,7 +29,7 @@
 > Il ne constitue en aucun cas la preuve que les travaux ont été
 > exécutés aux dates indiquées. **Les preuves réelles sont l'historique
 > Git, les tests exécutés, les mesures relevées et les captures.**
-> L'état réel du produit est tenu dans `docs/CURRENT-STATE.md`, et lui
+> L'état réel du produit est tenu dans `docs/STATUS.md`, et lui
 > seul fait foi.
 
 ---
@@ -45,7 +45,7 @@ vérification de la capacité, identification des risques.
 systématique, tests écrits avec le code.
 
 **Fin** — revue de sprint (démonstration de l'incrément), rétrospective,
-mise à jour de `docs/CURRENT-STATE.md`, pose du jalon Git.
+mise à jour de `docs/STATUS.md`, pose du jalon Git.
 
 **Règle de fin de sprint** : un sprint n'est pas terminé si son
 incrément n'est pas démontrable, testé et documenté.
@@ -388,9 +388,9 @@ livraison partielle présentée comme complète.
 ## 8. Position réelle
 
 L'écart entre cette trajectoire et l'état effectif du dépôt est tenu
-dans `docs/CURRENT-STATE.md`, mis à jour à chaque livraison. Ce
+dans `docs/STATUS.md`, mis à jour à chaque livraison. Ce
 document-ci n'est pas mis à jour pour refléter l'avancement : il décrit
 le plan, pas la réalité.
 
-En cas de contradiction entre cette roadmap et `docs/CURRENT-STATE.md`,
-**c'est `CURRENT-STATE` qui a raison**.
+En cas de contradiction entre cette roadmap et `docs/STATUS.md`,
+**c'est `STATUS.md` qui a raison**.
