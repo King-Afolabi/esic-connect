@@ -10,7 +10,102 @@
 
 ## Dernière mise à jour
 
-### 9 septembre 2026 (passe de correction) — apprenants visibles pour responsable pédagogique & formateur (périmètre serveur), changement de mot de passe, correction ANO-UX-007
+### 9 septembre 2026 (soir) — PR #44 et #45 fusionnées dans `main` : version stable validée
+
+**PR #44** (`Produit complet v2 — sprints 2 à 11`, squash `1bc0252`) et
+**PR #45** (`feat: stabilize demo readiness and hardening (RBAC, password
+self-service, attendance, a11y, E2E)`, squash **`eb412a0`**) sont
+**fusionnées dans `main`**. Les deux affichent « Merged ».
+
+**Version stable validée.** CI entièrement vert sur le commit fusionné
+(`3a9079e`, tête de `feat/demo-readiness-e2e-ui` avant squash) :
+
+| Contrôle CI | Résultat |
+|---|---|
+| `backend tests` | **pass** — 145 classes / **1275 tests / 0 échec / 0 erreur**, `BUILD SUCCESS` |
+| `frontend lint + test + build` | **pass** — `npm run lint` vert, **935 tests / 0 échec**, `tsc --noEmit` 0 erreur, `ng build --configuration production` sans alerte de budget (initial 590 kio), `npm audit` 0 vulnérabilité |
+| `dependency review` | **pass** |
+
+Recette navigateur **Playwright 202 / 0 / 0** (run complet du 9 septembre,
+entrée « passe de correction » ci-dessous). Smoke tests Raspberry Pi
+**12 / 12** (`/`, `/login`, `/dashboard`, `/students`, `/attendance`,
+`/planning/import`, `/organization/sites`, `/administration`,
+`/my-attendance/early-departures` → 200 ; `/api/v1/programs` → 401 ;
+en-têtes de sécurité live vérifiés).
+
+**Commit de production déployé : `6a864a9`** (Raspberry Pi
+`king_a@king-a.local`, frontend + passe RBAC/mot de passe ; 5/5 conteneurs
+`healthy`, `/actuator/health` → `UP`). Le delta `6a864a9..eb412a0` est
+**documentaire + deux correctifs non déployés** (voir plus bas) — **aucun
+redéploiement Pi dans cette passe**.
+
+**Aucune migration de base** — schéma **V34** inchangé, `ddl-auto:
+validate` vert (« Successfully validated 34 migrations »). **Sauvegarde et
+rollback disponibles** : dump MySQL horodaté sur la Pi
+(`backups/…/mysql.sql.gz`, `gzip -t` OK, marqueur « Dump completed ») et
+images taguées `esic-connect-frontend:pre-stable-20260909` /
+`esic-connect-backend:pre-stable-20260909` (`docs/deployment/ROLLBACK.md`
+§ « Rollback du code seul » — aucune restauration MySQL requise).
+
+#### Deux correctifs inclus dans le squash `eb412a0`, à déployer séparément
+
+1. **`test(organization)` — précision `staticQrIssuedAt`.**
+   `RoomStaticQrAdminIntegrationTests.reimprimerConserveLaMemeReferenceEtLaMemeDate`
+   comparait la date renvoyée par `rotate` (Instant en mémoire, précision
+   nanoseconde sur l'horloge Linux du CI) à celle renvoyée par `GET`
+   (relue de MySQL, `DATETIME(6)` → microseconde). Vert sur macOS, **rouge
+   sur le CI Linux**. Comparaison ramenée à `ChronoUnit.MICROS` (précision
+   réellement persistée). **Aucun changement produit** — l'idempotence de
+   la réimpression du QR fixe est inchangée (EF-ORG-003).
+
+2. **`fix(mail)` — rendu UTF-8 des accents français dans les courriels.**
+   *Cause racine, deux effets cumulés* : (a) le texte source des trois
+   mailers fonctionnels (`JavaMailSenderInvitationMailer`,
+   `JavaMailSenderPasswordResetMailer` — lien de réinitialisation **et**
+   avis de changement —, `JavaMailSenderNotificationMailer`) avait été
+   écrit **sans accents** (« a ete cree », « Reinitialisation »,
+   « concerne »…) — contournement qui dégrade le rendu chez le
+   destinataire ; (b) **aucun charset de message n'était déclaré
+   explicitement** : le rendu UTF-8 correct reposait sur le seul défaut de
+   `JavaMailSenderImpl`.
+   *Correctif centralisé* : `spring.mail.default-encoding: UTF-8` explicite
+   dans `application.yml` (objet encodé RFC 2047 en UTF-8, corps déclaré
+   `charset=UTF-8`, sans charset au cas par cas) + **accents français
+   réels rétablis** dans les objets et corps des trois mailers
+   (`é è ê ë à â î ï ô ù û ü ç œ` + majuscules accentuées).
+   `SimpleMailMessage` conservé : **aucun courriel HTML ni moteur de
+   templates dans le produit** — toute la surface e-mail fonctionnelle est
+   en texte brut. MFA (TOTP, sans courriel), pièces jointes, invitations
+   et réinitialisations : chaîne d'envoi **inchangée hors contenu texte**.
+   *Tests* : nouveau `MailUtf8EncodingTests` (5) — objet et corps
+   accentués, données dynamiques accentuées (prénom, salle
+   « Amphithéâtre André Gœury »), `charset=UTF-8` présent dans le MIME
+   généré, objet encodé `=?UTF-8?`, absence de mojibake « Ã© », nom
+   d'expéditeur accentué préservé. **Au niveau MIME, sans SMTP externe ni
+   envoi réel** — verts (inclus dans les 1275).
+
+**Playwright non rejoué pour ces deux correctifs** : l'un est une
+assertion de test, l'autre modifie le texte des courriels et la config
+charset côté back-end. Aucun composant Angular, route, gabarit ni
+notification d'interface touché ; la suite e2e ne lit aucun contenu de
+courriel (les envois vont à Mailpit). Rejeu non nécessaire.
+
+**`NOT_PERFORMED` / étapes de déploiement ultérieures** — le correctif
+e-mail n'atteindra réellement les boîtes qu'après une **passe de
+déploiement dédiée**, non faite ici (choix du porteur) :
+
+1. sur la Pi : `git`/`rsync` du code à `eb412a0`, `docker compose -f
+   compose.prod.yaml build backend` (Java touché : `application.yml` +
+   3 mailers), `up -d --no-deps backend` ;
+2. `mysql` / `redis` / `frontend` / `cloudflared` **non touchés** — URL
+   Quick Tunnel conservée, aucune migration (schéma V34) ;
+3. contrôle : `printenv` néant (pas de nouvelle variable), envoi de test
+   réel via Brevo puis lecture d'une boîte réelle pour **confirmer le
+   rendu des accents chez le destinataire** — la vérification MIME locale
+   ne remplace pas un contrôle de boîte réelle ;
+4. rollback : image `esic-connect-backend:pre-stable-20260909`.
+
+
 
 Branche `feat/demo-readiness-e2e-ui`. **Aucune migration** (schéma V34
 inchangé). Back-end + front-end + tests. **Non déployée** (le porteur
