@@ -1,0 +1,31 @@
+// Le formulaire s'appuie sur la primitive `.esic-form` (`_primitives.scss`)
+// pour la mise en page ; seuls les états de chargement/erreur (identiques
+// à la liste et à la fiche détail du référentiel académique) sont repris
+// ici, faute de partiel partagé dans ce module.
+
+.academic__status {
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
+}
+
+.academic__panel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
+}

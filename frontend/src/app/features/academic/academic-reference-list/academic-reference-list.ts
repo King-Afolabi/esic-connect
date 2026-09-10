@@ -11,6 +11,8 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 
+import { RoleContextService } from '../../../core/auth/role-context.service';
+import { Role } from '../../../core/models/role';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { AcademicApiService } from '../academic-api.service';
 import { ACADEMIC_LIST_TABS, ACADEMIC_RESOURCES, AcademicResourceConfig } from '../academic.config';
@@ -32,6 +34,21 @@ type ListState =
   | { kind: 'ready'; page: PageResponse<AcademicRecord> };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+
+/**
+ * Visibilité du bouton « Nouveau… » par ressource, reprise de
+ * `AcademicWeb.WRITE_ROLES` (années, formations) et
+ * `AcademicWeb.SCOPED_WRITE_ROLES` (niveaux, promotions, classes — ouvert
+ * au `PEDAGOGICAL_MANAGER`). Ne fait que masquer un lien : Spring
+ * Security reste l'autorité sur la route elle-même.
+ */
+const CREATE_ROLES: Record<AcademicResourceSlug, readonly Role[]> = {
+  'academic-years': ['ADMIN', 'SUPER_ADMIN'],
+  programs: ['ADMIN', 'SUPER_ADMIN'],
+  'program-levels': ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+  promotions: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+  'class-groups': ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+};
 
 /**
  * Consultation d'une liste du référentiel académique — pilotée par le
@@ -72,9 +89,13 @@ export class AcademicReferenceList {
   private readonly api = inject(AcademicApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
   private readonly route = inject(ActivatedRoute);
+  private readonly roleContext = inject(RoleContextService);
 
   protected readonly resource = this.route.snapshot.data['resource'] as AcademicResourceSlug;
   protected readonly config: AcademicResourceConfig = ACADEMIC_RESOURCES[this.resource];
+  protected readonly canCreate = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => CREATE_ROLES[this.resource].includes(r)),
+  );
   protected readonly tabs = ACADEMIC_LIST_TABS;
   protected readonly statuses = ACADEMIC_STATUSES;
   protected readonly statusLabel = academicStatusLabel;

@@ -127,6 +127,9 @@ describe('AppShell', () => {
       '/sessions',
       '/claims',
       '/notifications',
+      // « Mon planning » (CDC §5.6/§5.7) : consultation en application,
+      // réservée à TEACHER/STUDENT.
+      '/mon-planning',
       // Abonnement iCalendar (sprint 11, EF-INT-001) : propre à chaque
       // personne, donc visible quel que soit le rôle. Le formateur y
       // trouve ses séances, l'apprenant les siennes.
@@ -151,6 +154,9 @@ describe('AppShell', () => {
       '/my-attendance/early-departures',
       '/claims',
       '/notifications',
+      // « Mon planning » (CDC §5.6/§5.7) : consultation en application,
+      // réservée à TEACHER/STUDENT.
+      '/mon-planning',
       // Abonnement iCalendar (sprint 11, EF-INT-001).
       '/mon-compte/calendrier',
       '/mon-compte/securite',

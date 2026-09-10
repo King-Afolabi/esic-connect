@@ -60,7 +60,11 @@ exploitation avancée). Ce ne sont pas des régressions.
 - **Référentiels et organisation** : années, formations, niveaux,
   promotions, classes, groupes temporaires, matières, sites, bâtiments,
   salles, plages réseau CIDR IPv4/IPv6, rythmes d'alternance et
-  exceptions.
+  exceptions — **création, modification et archivage** (jamais de
+  suppression définitive : `AcademicStatus` = `ACTIVE`/`ARCHIVED`, la
+  trace reste consultable) depuis l'interface pour les années,
+  formations, niveaux, promotions et classes, ainsi que pour les
+  bâtiments et salles.
 - **Population** : import CSV et Excel `.xlsx` (y compris classeur
   multifeuille) en deux phases — simulation sans écriture puis
   confirmation atomique —, détection des doublons, correction ligne à
@@ -74,6 +78,11 @@ exploitation avancée). Ce ne sont pas des régressions.
 - **Séances** : création depuis un planning publié ou en exception,
   cycle de vie strict `PLANNED → OPEN → CLOSED`, annulation, report,
   demandes d'annulation, remplacements datés, séances multi-classes.
+  **« Mon planning »** (CDC §5.6/§5.7) : un formateur et un apprenant
+  consultent désormais leurs propres séances dans l'application
+  (`GET /api/v1/me/planning`, périmètre décidé côté serveur) — jusque-là
+  seul un abonnement iCalendar externe existait pour l'apprenant, et le
+  formateur n'avait aucun écran dédié.
 - **Émargement** : QR dynamique rotatif, code court, QR fixe de salle
   avec contrôle de plage réseau, scan **intégré à l'application**
   (composant caméra + décodeur logiciel de repli), saisie manuelle

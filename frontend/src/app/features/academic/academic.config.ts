@@ -80,6 +80,14 @@ export interface AcademicResourceConfig {
     api: AcademicApiService,
     query: AcademicListQuery,
   ) => Observable<PageResponse<AcademicRecord>>;
+  /**
+   * Archivage / restauration (EF-ACA-001..005) — présent sur toutes les
+   * ressources sauf les niveaux, qui suivent le même contrat mais sont
+   * pilotés par `AcademicReferenceForm` via un chemin dédié (nichés sous
+   * une formation).
+   */
+  archive?: (api: AcademicApiService, publicId: string, reason: string) => Observable<void>;
+  restore?: (api: AcademicApiService, publicId: string) => Observable<void>;
 }
 
 /** Restreint une fonction typée à la lecture d'un {@link AcademicRecord}. */
@@ -142,6 +150,8 @@ const ACADEMIC_YEARS: AcademicResourceConfig = {
   ],
   loadOne: (api, id) => api.getAcademicYear(id),
   loadList: (api, query) => api.listAcademicYears(query),
+  archive: (api, id, reason) => api.archiveAcademicYear(id, { reason }),
+  restore: (api, id) => api.restoreAcademicYear(id),
 };
 
 const PROGRAMS: AcademicResourceConfig = {
@@ -187,6 +197,8 @@ const PROGRAMS: AcademicResourceConfig = {
   ],
   loadOne: (api, id) => api.getProgram(id),
   loadList: (api, query) => api.listPrograms(query),
+  archive: (api, id, reason) => api.archiveProgram(id, { reason }),
+  restore: (api, id) => api.restoreProgram(id),
 };
 
 const PROGRAM_LEVELS: AcademicResourceConfig = {
@@ -217,6 +229,8 @@ const PROGRAM_LEVELS: AcademicResourceConfig = {
     },
   ],
   loadOne: (api, id) => api.getProgramLevel(id),
+  archive: (api, id, reason) => api.archiveProgramLevel(id, { reason }),
+  restore: (api, id) => api.restoreProgramLevel(id),
 };
 
 const PROMOTIONS: AcademicResourceConfig = {
@@ -266,6 +280,8 @@ const PROMOTIONS: AcademicResourceConfig = {
   ],
   loadOne: (api, id) => api.getPromotion(id),
   loadList: (api, query) => api.listPromotions(query),
+  archive: (api, id, reason) => api.archivePromotion(id, { reason }),
+  restore: (api, id) => api.restorePromotion(id),
 };
 
 const CLASS_GROUPS: AcademicResourceConfig = {
@@ -300,6 +316,8 @@ const CLASS_GROUPS: AcademicResourceConfig = {
   children: [],
   loadOne: (api, id) => api.getClassGroup(id),
   loadList: (api, query) => api.listClassGroups(query),
+  archive: (api, id, reason) => api.archiveClassGroup(id, { reason }),
+  restore: (api, id) => api.restoreClassGroup(id),
 };
 
 /** Toutes les configurations, indexées par slug de ressource. */

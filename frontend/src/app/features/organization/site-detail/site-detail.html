@@ -180,6 +180,8 @@
                 <td mat-cell *matCellDef="let row">
                   @if (canWrite()) {
                     @if (row.status === 'ACTIVE') {
+                      <button mat-button type="button" (click)="startEditBuilding(row)"
+                        [attr.aria-label]="'Modifier le bâtiment ' + row.code">Modifier</button>
                       <button mat-button type="button" (click)="archiveBuilding(row)"
                         [attr.aria-label]="'Archiver le bâtiment ' + row.code">Archiver</button>
                     } @else {
@@ -196,6 +198,24 @@
           }
         }
       }
+    }
+
+    @if (editingBuildingId(); as buildingId) {
+      <form class="org__form" [formGroup]="editBuildingForm" (ngSubmit)="submitEditBuilding()" novalidate>
+        <p>Modifier le bâtiment :</p>
+        <mat-form-field appearance="outline">
+          <mat-label>Nom du bâtiment</mat-label>
+          <input matInput formControlName="name" maxlength="150" required autocomplete="off" />
+          @if (editBuildingForm.controls.name.touched && editBuildingForm.controls.name.invalid) {
+            <mat-error>Le nom est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="editBuildingSubmitting()">Enregistrer</button>
+        <button mat-button type="button" (click)="cancelEditBuilding()">Annuler</button>
+        @if (editBuildingError()) {
+          <p class="org__form-error" role="alert">{{ editBuildingError() }}</p>
+        }
+      </form>
     }
 
     <!-- Rooms ---------------------------------------------------- -->
@@ -323,6 +343,8 @@
                 <td mat-cell *matCellDef="let row">
                   @if (canWrite()) {
                     @if (row.status === 'ACTIVE') {
+                      <button mat-button type="button" (click)="startEditRoom(row)"
+                        [attr.aria-label]="'Modifier la salle ' + row.code">Modifier</button>
                       <button mat-button type="button" (click)="archiveRoom(row)"
                         [attr.aria-label]="'Archiver la salle ' + row.code">Archiver</button>
                     } @else {
@@ -339,6 +361,41 @@
           }
         }
       }
+    }
+
+    @if (editingRoomId(); as roomId) {
+      <form class="org__form" [formGroup]="editRoomForm" (ngSubmit)="submitEditRoom()" novalidate>
+        <p>Modifier la salle :</p>
+        <mat-form-field appearance="outline">
+          <mat-label>Nom de la salle</mat-label>
+          <input matInput formControlName="name" maxlength="150" required autocomplete="off" />
+          @if (editRoomForm.controls.name.touched && editRoomForm.controls.name.invalid) {
+            <mat-error>Le nom est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Bâtiment (facultatif)</mat-label>
+          <mat-select formControlName="buildingPublicId">
+            <mat-option [value]="''">Aucun</mat-option>
+            @for (b of activeBuildings(); track b.publicId) {
+              <mat-option [value]="b.publicId">{{ b.code }} — {{ b.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Capacité (facultative)</mat-label>
+          <input matInput type="number" formControlName="capacity" min="1" />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Étage (facultatif)</mat-label>
+          <input matInput formControlName="floorLabel" maxlength="50" autocomplete="off" />
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="editRoomSubmitting()">Enregistrer</button>
+        <button mat-button type="button" (click)="cancelEditRoom()">Annuler</button>
+        @if (editRoomError()) {
+          <p class="org__form-error" role="alert">{{ editRoomError() }}</p>
+        }
+      </form>
     }
 
     <!-- QR fixe de salle (EF-ORG-003) ----------------------------- -->

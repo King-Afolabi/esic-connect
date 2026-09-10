@@ -1,0 +1,210 @@
+<a class="esic-back" [routerLink]="cancelLink()">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour</span>
+</a>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
+    <p class="academic__status" role="status">Chargement…</p>
+  }
+  @case ('not-found') {
+    <div class="academic__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucun élément ne correspond à cet identifiant.</p>
+      <a mat-stroked-button [routerLink]="['/academic', resource]">Retour à la liste</a>
+    </div>
+  }
+  @case ('forbidden') {
+    <div class="academic__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à effectuer cette action.</p>
+      <a mat-stroked-button [routerLink]="['/academic', resource]">Retour à la liste</a>
+    </div>
+  }
+  @case ('load-error') {
+    <div class="academic__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ loadErrorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retryLoad()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    <header class="esic-page-header">
+      <div class="esic-page-header__text">
+        <h1 class="esic-page-header__title">{{ title() }}</h1>
+      </div>
+    </header>
+
+    <p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
+
+    <form class="esic-form esic-form--wide" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="esic-form__grid">
+        <!-- Code : présent partout, immuable en édition -->
+        <mat-form-field appearance="outline">
+          <mat-label>Code</mat-label>
+          <input matInput formControlName="code" maxlength="80" required autocomplete="off" />
+          @if (mode === 'edit') {
+            <mat-hint>Immuable après création.</mat-hint>
+          }
+          @if (form.get('code')?.touched && form.get('code')?.hasError('required')) {
+            <mat-error>Le code est obligatoire.</mat-error>
+          }
+          @if (form.get('code')?.touched && form.get('code')?.hasError('pattern')) {
+            <mat-error>Lettres, chiffres, point, tiret et tiret bas uniquement.</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Nom</mat-label>
+          <input matInput formControlName="name" maxlength="191" required autocomplete="off" />
+          @if (form.get('name')?.touched && form.get('name')?.invalid) {
+            <mat-error>Le nom est obligatoire.</mat-error>
+          }
+        </mat-form-field>
+
+        @switch (resource) {
+          @case ('academic-years') {
+            <mat-form-field appearance="outline">
+              <mat-label>Date de début</mat-label>
+              <input matInput type="date" formControlName="startDate" required />
+              @if (form.get('startDate')?.touched && form.get('startDate')?.invalid) {
+                <mat-error>La date de début est obligatoire.</mat-error>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Date de fin</mat-label>
+              <input matInput type="date" formControlName="endDate" required />
+              @if (form.get('endDate')?.touched && form.get('endDate')?.invalid) {
+                <mat-error>La date de fin est obligatoire.</mat-error>
+              }
+            </mat-form-field>
+          }
+
+          @case ('programs') {
+            <mat-form-field appearance="outline">
+              <mat-label>Type de formation</mat-label>
+              <mat-select formControlName="programType" required>
+                @for (t of programTypes; track t) {
+                  <mat-option [value]="t">{{ programTypeLabel(t) }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Description</mat-label>
+              <textarea matInput formControlName="description" maxlength="5000" rows="3"></textarea>
+            </mat-form-field>
+          }
+
+          @case ('program-levels') {
+            <mat-form-field appearance="outline">
+              <mat-label>Ordre (séquence)</mat-label>
+              <input matInput type="number" formControlName="sequenceNumber" min="1" max="9999" required />
+              @if (form.get('sequenceNumber')?.touched && form.get('sequenceNumber')?.invalid) {
+                <mat-error>L'ordre est obligatoire (nombre entre 1 et 9999).</mat-error>
+              }
+            </mat-form-field>
+          }
+
+          @case ('promotions') {
+            <mat-form-field appearance="outline">
+              <mat-label>Formation</mat-label>
+              <mat-select formControlName="programPublicId" required>
+                @for (o of programOptions(); track o.value) {
+                  <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                }
+              </mat-select>
+              @if (mode === 'edit') {
+                <mat-hint>Immuable après création.</mat-hint>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Année scolaire</mat-label>
+              <mat-select formControlName="academicYearPublicId" required>
+                @for (o of academicYearOptions(); track o.value) {
+                  <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                }
+              </mat-select>
+              @if (mode === 'edit') {
+                <mat-hint>Immuable après création.</mat-hint>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Date de début (facultative)</mat-label>
+              <input matInput type="date" formControlName="startDate" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Date de fin (facultative)</mat-label>
+              <input matInput type="date" formControlName="endDate" />
+            </mat-form-field>
+          }
+
+          @case ('class-groups') {
+            <mat-form-field appearance="outline">
+              <mat-label>Promotion</mat-label>
+              <mat-select
+                formControlName="promotionPublicId"
+                required
+                (selectionChange)="onPromotionChange($event.value)"
+              >
+                @for (o of promotionOptions(); track o.value) {
+                  <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                }
+              </mat-select>
+              @if (mode === 'edit') {
+                <mat-hint>Immuable après création.</mat-hint>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Niveau</mat-label>
+              <mat-select formControlName="programLevelPublicId" required>
+                @for (o of levelOptions(); track o.value) {
+                  <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                }
+              </mat-select>
+              @if (mode === 'create') {
+                <mat-hint>
+                  {{
+                    levelsLoading()
+                      ? 'Chargement des niveaux…'
+                      : levelOptions().length === 0
+                        ? 'Choisissez une promotion pour voir ses niveaux.'
+                        : ''
+                  }}
+                </mat-hint>
+              } @else {
+                <mat-hint>Immuable après création.</mat-hint>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Site</mat-label>
+              <mat-select formControlName="sitePublicId" required>
+                @for (o of siteOptions(); track o.value) {
+                  <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                }
+              </mat-select>
+              @if (mode === 'edit') {
+                <mat-hint>Immuable après création.</mat-hint>
+              }
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Capacité (facultative)</mat-label>
+              <input matInput type="number" formControlName="capacity" min="1" />
+            </mat-form-field>
+          }
+        }
+      </div>
+
+      @if (submitError()) {
+        <p class="esic-form__error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="esic-form__actions">
+        <button mat-flat-button type="submit" [disabled]="submitting()">
+          {{ mode === 'edit' ? 'Enregistrer' : 'Créer' }}
+        </button>
+        <a mat-button [routerLink]="cancelLink()">Annuler</a>
+      </div>
+    </form>
+  }
+}

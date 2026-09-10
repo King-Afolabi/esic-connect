@@ -15,7 +15,19 @@
   </div>
 </nav>
 
-<h2 class="academic__subtitle">{{ config.listTitle }}</h2>
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h2 class="academic__subtitle">{{ config.listTitle }}</h2>
+  </div>
+  @if (canCreate()) {
+    <div class="esic-page-header__actions">
+      <a mat-flat-button [routerLink]="['/academic', resource, 'new']">
+        <mat-icon aria-hidden="true">add</mat-icon>
+        <span>Nouveau — {{ config.singularTitle }}</span>
+      </a>
+    </div>
+  }
+</header>
 
 <form class="academic__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="academic__filter">

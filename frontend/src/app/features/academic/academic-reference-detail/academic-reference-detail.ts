@@ -1,12 +1,18 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 
+import { RoleContextService } from '../../../core/auth/role-context.service';
+import { Role } from '../../../core/models/role';
 import { normalizeHttpError } from '../../../core/models/api-error';
+import { NotificationService } from '../../../core/notifications/notification.service';
 import { AcademicApiService } from '../academic-api.service';
 import {
   ACADEMIC_LIST_TABS,
@@ -21,6 +27,23 @@ import {
   AcademicResourceSlug,
   academicStatusLabel,
 } from '../academic.models';
+
+const ARCHIVE_REASON_MAX = 500;
+
+/**
+ * Visibilité des actions d'écriture (modifier / archiver / restaurer),
+ * reprise de `AcademicWeb.WRITE_ROLES` / `SCOPED_WRITE_ROLES` — voir
+ * `academic-reference-list.ts` pour le détail par ressource.
+ */
+const WRITE_ROLES: Record<AcademicResourceSlug, readonly Role[]> = {
+  'academic-years': ['ADMIN', 'SUPER_ADMIN'],
+  programs: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+  'program-levels': ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+  promotions: ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+  'class-groups': ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'],
+};
+
+type PendingAction = { kind: 'archive' } | { kind: 'restore' };
 
 type DetailState =
   | { kind: 'loading' }
@@ -51,12 +74,15 @@ type ChildState =
   selector: 'app-academic-reference-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ReactiveFormsModule,
     RouterLink,
     RouterLinkActive,
     MatCardModule,
     MatTableModule,
     MatButtonModule,
     MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
     MatProgressBarModule,
   ],
   templateUrl: './academic-reference-detail.html',
@@ -65,6 +91,9 @@ type ChildState =
 export class AcademicReferenceDetail {
   private readonly api = inject(AcademicApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly notifications = inject(NotificationService);
+  private readonly formBuilder = inject(NonNullableFormBuilder);
 
   private readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
   protected readonly resource = this.route.snapshot.data['resource'] as AcademicResourceSlug;
@@ -72,6 +101,27 @@ export class AcademicReferenceDetail {
   protected readonly tabs = ACADEMIC_LIST_TABS;
   protected readonly statusLabel = academicStatusLabel;
   protected readonly childColumns = ['code', 'name', 'status', 'actions'] as const;
+  protected readonly reasonMaxLength = ARCHIVE_REASON_MAX;
+
+  protected readonly canWrite = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => WRITE_ROLES[this.resource].includes(r)),
+  );
+  /** « Ajouter un niveau » n'apparaît que sur la fiche d'une formation. */
+  protected readonly canCreateLevel = computed(
+    () =>
+      this.resource === 'programs' &&
+      this.roleContext.effectiveRoles().some((r) => WRITE_ROLES['program-levels'].includes(r)),
+  );
+
+  protected readonly pendingAction = signal<PendingAction | null>(null);
+  protected readonly actionSubmitting = signal(false);
+  protected readonly actionError = signal<string | null>(null);
+  protected readonly reasonForm = this.formBuilder.group({
+    reason: this.formBuilder.control('', [
+      Validators.required,
+      Validators.maxLength(ARCHIVE_REASON_MAX),
+    ]),
+  });
 
   protected readonly state = signal<DetailState>({ kind: 'loading' });
   /** État de chaque section « enfants », aligné sur `config.children` par index. */
@@ -102,6 +152,65 @@ export class AcademicReferenceDetail {
 
   protected retryRecord(): void {
     this.loadRecord();
+  }
+
+  protected readonly isArchived = computed(() => this.record()?.status === 'ARCHIVED');
+
+  protected startAction(kind: 'archive' | 'restore'): void {
+    this.reasonForm.reset({ reason: '' });
+    this.actionError.set(null);
+    this.pendingAction.set({ kind });
+  }
+
+  protected cancelAction(): void {
+    this.pendingAction.set(null);
+    this.actionError.set(null);
+  }
+
+  protected confirmAction(): void {
+    const action = this.pendingAction();
+    if (!action || this.actionSubmitting()) {
+      return;
+    }
+    if (action.kind === 'archive') {
+      if (this.reasonForm.invalid) {
+        this.reasonForm.markAllAsTouched();
+        return;
+      }
+      if (!this.config.archive) {
+        return;
+      }
+      this.actionSubmitting.set(true);
+      this.actionError.set(null);
+      this.config
+        .archive(this.api, this.publicId, this.reasonForm.getRawValue().reason.trim())
+        .subscribe({
+          next: () => this.onActionDone('Élément archivé.'),
+          error: (error: unknown) => this.onActionError(error),
+        });
+      return;
+    }
+    if (!this.config.restore) {
+      return;
+    }
+    this.actionSubmitting.set(true);
+    this.actionError.set(null);
+    this.config.restore(this.api, this.publicId).subscribe({
+      next: () => this.onActionDone('Élément restauré.'),
+      error: (error: unknown) => this.onActionError(error),
+    });
+  }
+
+  private onActionDone(message: string): void {
+    this.actionSubmitting.set(false);
+    this.pendingAction.set(null);
+    this.notifications.info(message);
+    this.loadRecord();
+  }
+
+  private onActionError(error: unknown): void {
+    this.actionSubmitting.set(false);
+    this.actionError.set(normalizeHttpError(error).message);
   }
 
   protected childState(index: number): ChildState {
