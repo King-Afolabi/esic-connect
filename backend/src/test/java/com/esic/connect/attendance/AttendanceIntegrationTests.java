@@ -1318,8 +1318,15 @@ class AttendanceIntegrationTests {
     }
 
     private Fixture openSessionWithEnrolledStudents(String admin, int studentCount) {
+        // Fenêtre calée sur l'instant réel d'exécution (jamais une date en
+        // dur) : une séance "actuellement ouverte", commencée il y a peu,
+        // doit rester dans la fenêtre PRESENT (`late-threshold`, 15 min par
+        // défaut) quel que soit le jour où la suite tourne — une date fixe
+        // devient un émargement en retard dès qu'elle passe dans le passé.
+        Instant now = Instant.now();
         return openSessionWithEnrolledStudents(admin, studentCount,
-                "2026-09-10T08:00:00Z", "2026-09-10T12:00:00Z");
+                now.minus(5, ChronoUnit.MINUTES).toString(),
+                now.plus(4, ChronoUnit.HOURS).toString());
     }
 
     private Fixture openSessionWithEnrolledStudents(String admin, int studentCount,
