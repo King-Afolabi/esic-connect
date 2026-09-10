@@ -1,0 +1,143 @@
+name: deploy
+
+# Déploiement continu vers la Raspberry Pi de recette, sur le runner
+# auto-hébergé qui y tourne (`pi-esic-connect`, systemd, démarre au
+# boot). Se déclenche à chaque push sur `main` (donc après chaque merge
+# de PR), et reste disponible en manuel pour rejouer un déploiement.
+#
+# Le dépôt déployé (~/esic-connect) N'EST PAS un dépôt git — .env,
+# backups/ et les volumes Docker y vivent en dehors de l'espace de
+# travail du runner. Ce workflow synchronise seulement le code source
+# (rsync --delete, sans toucher .env ni backups/) puis reconstruit
+# uniquement les services dont le code a changé.
+#
+# Sécurité : le runner tourne sur la machine cible elle-même (pas
+# d'accès réseau entrant nécessaire), avec les mêmes droits Docker que
+# l'utilisateur `king_a` qui exploite déjà la pile en production.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-pi
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: déploiement Raspberry Pi
+    runs-on: [self-hosted, pi]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Détecter les services impactés
+        id: changed
+        run: |
+          BACKEND=false
+          FRONTEND=false
+          if git diff --name-only HEAD^ HEAD | grep -qE '^backend/'; then BACKEND=true; fi
+          if git diff --name-only HEAD^ HEAD | grep -qE '^frontend/'; then FRONTEND=true; fi
+          echo "backend=$BACKEND" >> "$GITHUB_OUTPUT"
+          echo "frontend=$FRONTEND" >> "$GITHUB_OUTPUT"
+          echo "Backend modifié : $BACKEND / Frontend modifié : $FRONTEND"
+
+      - name: Sauvegarde préalable (MySQL + justificatifs + images actives)
+        if: steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true'
+        working-directory: /home/king_a/esic-connect
+        run: |
+          set -e
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          mkdir -p backups/$STAMP
+          set -a && source .env && set +a
+          docker compose -f compose.prod.yaml exec -T mysql sh -c \
+            'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+            | gzip > backups/$STAMP/mysql-dump.sql.gz
+          gzip -t backups/$STAMP/mysql-dump.sql.gz
+          if [ "${{ steps.changed.outputs.backend }}" = "true" ]; then
+            docker inspect esic-connect-backend --format '{{.Image}}' > backups/$STAMP/backend-image-before.txt
+            docker tag "$(cat backups/$STAMP/backend-image-before.txt)" "esic-connect-backend:rollback-$STAMP"
+          fi
+          if [ "${{ steps.changed.outputs.frontend }}" = "true" ]; then
+            docker inspect esic-connect-frontend --format '{{.Image}}' > backups/$STAMP/frontend-image-before.txt
+            docker tag "$(cat backups/$STAMP/frontend-image-before.txt)" "esic-connect-frontend:rollback-$STAMP"
+          fi
+          echo "Sauvegarde: backups/$STAMP"
+
+      - name: Synchroniser le code source (sans toucher .env / backups)
+        if: steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true'
+        run: |
+          set -e
+          rsync -a --delete \
+            --exclude '.env' --exclude 'backups/' --exclude 'frontend-*' \
+            "$GITHUB_WORKSPACE"/ /home/king_a/esic-connect/
+
+      - name: Rebuild + redéploiement backend
+        if: steps.changed.outputs.backend == 'true'
+        working-directory: /home/king_a/esic-connect
+        run: |
+          set -e
+          docker compose -f compose.prod.yaml build backend
+          docker compose -f compose.prod.yaml up -d --no-deps backend
+
+      - name: Rebuild + redéploiement frontend
+        if: steps.changed.outputs.frontend == 'true'
+        working-directory: /home/king_a/esic-connect
+        run: |
+          set -e
+          docker compose -f compose.prod.yaml build frontend
+          docker compose -f compose.prod.yaml up -d --no-deps frontend
+
+      - name: Attendre l'état "healthy"
+        if: steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true'
+        working-directory: /home/king_a/esic-connect
+        run: |
+          set -e
+          SERVICES=""
+          [ "${{ steps.changed.outputs.backend }}" = "true" ] && SERVICES="$SERVICES esic-connect-backend"
+          [ "${{ steps.changed.outputs.frontend }}" = "true" ] && SERVICES="$SERVICES esic-connect-frontend"
+          for i in $(seq 1 30); do
+            OK=true
+            for s in $SERVICES; do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$s" 2>/dev/null || echo "unknown")
+              [ "$STATUS" != "healthy" ] && OK=false
+            done
+            $OK && { echo "Tous les services impactés sont healthy."; exit 0; }
+            sleep 4
+          done
+          echo "::error::Au moins un service n'est pas devenu healthy à temps."
+          exit 1
+
+      - name: Vérification publique (tunnel)
+        if: steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true'
+        run: |
+          set -e
+          for i in $(seq 1 15); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" https://app.esic-connect.courses/ || echo 000)
+            [ "$CODE" = "200" ] && { echo "Site public OK (200)."; exit 0; }
+            sleep 4
+          done
+          echo "::error::Le site public ne répond pas 200 après déploiement."
+          exit 1
+
+      - name: Rollback automatique si dégradé
+        if: failure() && (steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true')
+        working-directory: /home/king_a/esic-connect
+        run: |
+          set +e
+          echo "::warning::Échec détecté, rollback vers les images précédentes."
+          if [ "${{ steps.changed.outputs.backend }}" = "true" ] && [ -f "backups/$STAMP/backend-image-before.txt" ]; then
+            docker tag "esic-connect-backend:rollback-$STAMP" esic-connect-backend:latest
+            docker compose -f compose.prod.yaml up -d --no-deps backend
+          fi
+          if [ "${{ steps.changed.outputs.frontend }}" = "true" ] && [ -f "backups/$STAMP/frontend-image-before.txt" ]; then
+            docker tag "esic-connect-frontend:rollback-$STAMP" esic-connect-frontend:latest
+            docker compose -f compose.prod.yaml up -d --no-deps frontend
+          fi
+          echo "::error::Déploiement annulé, rollback appliqué. Base de données NON restaurée automatiquement (dump disponible: backups/$STAMP/mysql-dump.sql.gz) — vérifier manuellement si une migration Flyway a tourné."
