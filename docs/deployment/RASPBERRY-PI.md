@@ -49,28 +49,52 @@ set -a && source .env && set +a
 API_BASE=http://localhost:8080 bash scripts/seed-demo.sh
 ```
 
-## 5. Récupérer l'URL publique (Quick Tunnel)
+## 5. Récupérer l'URL publique (tunnel nommé, domaine possédé)
 
-L'URL `*.trycloudflare.com` est **aléatoire et change à chaque
-redémarrage** de `cloudflared` :
+`compose.prod.yaml` lance `cloudflared` en mode **tunnel nommé** :
+l'URL publique est **stable** (elle ne change jamais au redémarrage),
+contrairement au *Quick Tunnel* (`*.trycloudflare.com`, aléatoire à
+chaque démarrage — utile seulement pour un tout premier essai sans
+domaine).
+
+**Une fois, côté Cloudflare** (dashboard ou CLI `cloudflared`) :
+
+1. Ajouter le domaine à un compte Cloudflare et **déléguer les
+   serveurs de noms (NS)** chez le registrar vers ceux indiqués par
+   Cloudflare (plus rapide et plus sûr qu'un simple CNAME externe :
+   proxy + TLS gérés automatiquement — voir Zero Trust > Networks >
+   Tunnels si le domaine a déjà d'autres enregistrements, ex. MX pour
+   l'email, à recréer dans Cloudflare après la migration).
+2. Créer le tunnel : Zero Trust → Networks → Tunnels → *Create a
+   tunnel* → type *Docker* → nommer le tunnel (ex. `esic-connect`).
+3. Router le sous-domaine choisi vers le tunnel (ex.
+   `app.esic-connect.courses`) — Cloudflare propose ce champ à la
+   création.
+4. Copier le jeton affiché et le renseigner dans `.env` :
+   `CLOUDFLARE_TUNNEL_TOKEN=...` (jamais commité, voir `SECRETS.md`).
+
+**Sur le Pi**, avec `CLOUDFLARE_TUNNEL_TOKEN` renseigné :
 
 ```bash
-docker compose -f compose.prod.yaml logs cloudflared | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
+docker compose -f compose.prod.yaml up -d cloudflared
+docker compose -f compose.prod.yaml logs cloudflared   # "Registered tunnel connection"
 ```
 
-Reporter cette URL dans `.env` (`APP_ALLOWED_ORIGINS`,
-`APP_ACTIVATION_BASE_URL`) puis recréer le back-end pour qu'il en tienne
-compte :
+Reporter l'URL stable choisie à l'étape 3 dans `.env`
+(`APP_ALLOWED_ORIGINS`, `APP_ACTIVATION_BASE_URL`) puis recréer le
+back-end pour qu'il en tienne compte :
 
 ```bash
 docker compose -f compose.prod.yaml up -d backend
 ```
 
-> Pour une URL stable : tunnel **nommé** (domaine possédé). Remplacer la
-> ligne `command:` de `cloudflared` par `tunnel run` et ajouter
-> `environment: TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}` (voir le
-> commentaire dans `compose.prod.yaml`). DNS et domaine : décision et
-> configuration **distinctes**, non couvertes ici.
+> Repli sans domaine (dépannage ponctuel uniquement) : remplacer dans
+> `compose.prod.yaml` `command: tunnel run` / `environment: TUNNEL_TOKEN`
+> par `command: tunnel --no-autoupdate --url http://frontend:80`, puis
+> relever l'URL aléatoire dans les journaux
+> (`docker compose -f compose.prod.yaml logs cloudflared | grep trycloudflare.com`).
+> À éviter en usage courant : c'est justement l'URL qui change à chaque
+> redémarrage que le tunnel nommé élimine.
 
 ## 6. Contrôles post-démarrage
 
