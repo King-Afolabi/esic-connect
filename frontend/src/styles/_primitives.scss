@@ -397,6 +397,12 @@
 .esic-table-wrap {
   width: 100%;
   overflow-x: auto;
+  // Défilement horizontal seulement ; pas de plafond vertical ici, donc
+  // rien à « contenir ». Explicite quand même : un geste vertical ou
+  // diagonal (molette, trackpad, tactile) ne doit jamais rester piégé
+  // dans l'enveloppe et doit pouvoir faire défiler la page.
+  overscroll-behavior: auto;
+  touch-action: pan-x pan-y;
   border: 1px solid var(--esic-line);
   border-radius: var(--esic-radius-sm);
   background: var(--esic-surface);
@@ -435,16 +441,24 @@
 //     lignes quand la page porte déjà beaucoup au-dessus) ;
 //   - une table plus courte que le plafond garde sa hauteur naturelle
 //     (`max-height`, jamais `height`) ;
-//   - défilement INTERNE à l'enveloppe ; `overscroll-behavior: contain`
-//     évite que la molette, une fois la table en butée, emporte la page
-//     — le `<body>` reste défilable dès que le curseur quitte le tableau.
-//     Aucun gestionnaire `wheel` en JS, clavier / PageUp-Down intacts.
+//   - défilement INTERNE à l'enveloppe tant qu'il reste du contenu à
+//     dérouler ; dès que l'enveloppe atteint sa limite (haut, bas, ou
+//     bord horizontal), `overscroll-behavior: auto` (valeur par défaut,
+//     posée explicitement pour ne pas dépendre d'un futur override)
+//     laisse le geste (molette, trackpad, tactile) se propager au
+//     `<body>` au lieu de le piéger — c'est du « scroll chaining »
+//     natif, pas un correctif JS. `overscroll-behavior: contain`
+//     ferait l'inverse : il bloquerait volontairement ce relais, ce qui
+//     enferme l'utilisateur dans le tableau une fois en butée (ANO
+//     défilement — cf. correction dédiée). Aucun gestionnaire `wheel`
+//     en JS, clavier / PageUp-Down intacts.
 .esic-table-wrap--tall,
 .esic-table-wrap--compact {
   max-height: var(--esic-table-max-h, clamp(20rem, 62vh, 46rem));
   overflow-x: auto;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
+  touch-action: pan-x pan-y;
   border: 1px solid var(--esic-line);
   border-radius: var(--esic-radius-sm);
   background: var(--esic-surface);
