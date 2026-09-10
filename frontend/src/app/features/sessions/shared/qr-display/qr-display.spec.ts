@@ -37,4 +37,11 @@ describe('QrDisplay', () => {
       expect(img.getAttribute('alt') ?? '').not.toContain('OPAQUE-SERVER-TOKEN');
     }
   });
+
+  it('offers a fullscreen toggle button alongside the code', () => {
+    const el = render('OPAQUE-SERVER-TOKEN').nativeElement as HTMLElement;
+    const button = el.querySelector('.qr-display__fullscreen-toggle');
+    expect(button).not.toBeNull();
+    expect(button?.textContent).toContain('Plein écran');
+  });
 });
