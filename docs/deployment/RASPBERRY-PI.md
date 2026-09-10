@@ -81,8 +81,11 @@ docker compose -f compose.prod.yaml logs cloudflared   # "Registered tunnel conn
 ```
 
 Reporter l'URL stable choisie à l'étape 3 dans `.env`
-(`APP_ALLOWED_ORIGINS`, `APP_ACTIVATION_BASE_URL`) puis recréer le
-back-end pour qu'il en tienne compte :
+(`APP_ALLOWED_ORIGINS`, `APP_ACTIVATION_BASE_URL` **et**
+`APP_PASSWORD_RESET_BASE_URL` — deux variables distinctes, toutes les
+deux à renseigner, sans quoi le lien de réinitialisation pointe par
+défaut vers `localhost`, injoignable) puis recréer le back-end pour
+qu'il en tienne compte :
 
 ```bash
 docker compose -f compose.prod.yaml up -d backend
