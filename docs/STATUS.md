@@ -19,8 +19,8 @@ Le cahier des charges définit **142 exigences fonctionnelles**.
 | Statut | Nombre | Part |
 |---|---:|---:|
 | `IMPLEMENTED_AND_TESTED` | 112 | 79 % |
-| `PARTIAL` | 5 | 3 % |
-| `NOT_IMPLEMENTED` | 25 | 18 % |
+| `PARTIAL` | 6 | 4 % |
+| `NOT_IMPLEMENTED` | 24 | 17 % |
 
 Les exigences non implémentées correspondent aux derniers incréments de
 la trajectoire (service d'IA, objets connectés, RGPD outillé,
@@ -42,7 +42,7 @@ exploitation avancée). Ce ne sont pas des régressions.
 | Notifications et mobilité (9) | 7 | 2 | 0 |
 | Restitution (10) | 9 | 0 | 1 |
 | IA et objets connectés (10) | 0 | 0 | 10 |
-| Intégrations (4) | 1 | 2 | 1 |
+| Intégrations (4) | 1 | 3 | 0 |
 | Transverse (11) | 4 | 0 | 7 |
 
 ---
@@ -115,6 +115,7 @@ exploitation avancée). Ce ne sont pas des régressions.
 | `EF-PWA-002` | consultation hors ligne **application ouverte** (cache du planning, de l'assiduité, des notifications) | pas de consultation après un démarrage à froid sans réseau (le jeton ne vit qu'en mémoire) |
 | `EF-INT-002` | port et adaptateur Microsoft Graph (réunion Teams), adaptateur inactif | aucun locataire Microsoft réel sollicité ; l'API déclare `meetingActive: false` |
 | `EF-INT-003` | port et adaptateur Microsoft Graph (calendrier) | idem — aucun locataire réel |
+| `EF-INT-004` | fournisseur de courriel réel intégré de bout en bout (SMTP Brevo, domaine authentifié SPF/DKIM/DMARC), code et transaction SMTP testés jusqu'à l'acceptation serveur (`250 OK`) | livraison finale actuellement bloquée par une revue de compte côté fournisseur (suspension anti-abus d'un compte neuf), sans lien avec le code applicatif — en attente de réponse du support Brevo |
 
 ---
 
@@ -130,7 +131,6 @@ Aucune ligne de code — limites explicitement assumées :
 - rapport des anomalies d'émargement (`EF-REP-009`) ;
 - service d'IA complet (`EF-AI-001` à `EF-AI-005`) ;
 - objets connectés MQTT et simulateur (`EF-IOT-001` à `EF-IOT-005`) ;
-- fournisseur de courriel réel intégré de bout en bout (`EF-INT-004`) ;
 - droits RGPD outillés et exploitation avancée
   (`EF-RGPD-001` à `EF-RGPD-003`, `EF-OPS-001` à `EF-OPS-004`).
 
@@ -156,9 +156,9 @@ Dernière exécution complète :
 
 | Suite | Résultat |
 |---|---|
-| Back-end (`./mvnw clean test`) | ~1275 tests, 0 échec ; `ModularityTests` vert (19 modules, 0 cycle) |
+| Back-end (`./mvnw clean test`) | 1280 tests, 0 échec ; `ModularityTests` vert (19 modules, 0 cycle) |
 | Front-end (`ng test`) | ~935 tests, 0 échec ; `ng lint` et `ng build --configuration production` verts, aucune alerte de budget |
-| Recette navigateur (`npm run test:e2e`, Playwright / Chromium) | 202 tests, 0 échec |
+| Recette navigateur (`npm run test:e2e`, Playwright / Chromium) | 209 tests ; suite complète non systématiquement à 0 échec — un flake d'infra préexistant lié au rythme de connexion sur `02-authorization-rbac.spec.ts` provoque parfois des échecs en cascade sur des tests sans rapport, sans reproduction locale ; les 7 tests de non-régression du défilement des tableaux (`17-table-scroll-chaining.spec.ts`) sont, eux, verts à 100 % sur chaque run observé |
 | `npm audit` (front-end) | 0 vulnérabilité |
 
 Les commandes de vérification sont dans le `README.md` et
@@ -172,10 +172,16 @@ défaut.
 - Le produit est **déployable** par `compose.prod.yaml` (Docker
   Compose : MySQL, Redis, front-end, back-end, tunnel sortant). Procédure
   générique : [`docs/deployment/`](deployment/).
-- Une instance de **recette / démonstration** a été montée sur une
-  Raspberry Pi exposée par un tunnel sortant, avec un jeu de données
-  **strictement fictives** (profil `demo`). Ce n'est **pas** un
-  déploiement de production.
+- Une instance de **recette / démonstration** est en ligne sur une
+  Raspberry Pi, exposée par un tunnel Cloudflare **nommé** sur un
+  domaine propre (URL publique stable, ne change plus au redémarrage),
+  avec un jeu de données **strictement fictives** (profil `demo`). Ce
+  n'est **pas** un déploiement de production.
+- **Déploiement continu** : un runner GitHub Actions auto-hébergé
+  tourne sur la Pi elle-même (service systemd) ; chaque fusion sur
+  `main` déclenche automatiquement sauvegarde, reconstruction des
+  seuls services impactés, contrôle `healthy` + vérification publique,
+  et rollback automatique des images en cas d'échec.
 - **`NOT_PERFORMED`** : démonstration manuelle de bout en bout par un
   humain (un navigateur piloté par script n'en est pas une) ; test de
   restauration de sauvegarde ; test de charge d'émargement soutenu.

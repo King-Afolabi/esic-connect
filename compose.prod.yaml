@@ -173,24 +173,23 @@ services:
   # Tunnel sortant vers Cloudflare : rend "frontend" joignable publiquement,
   # SANS ouvrir aucun port entrant sur la box/le pare-feu.
   #
-  # Mode "Quick Tunnel" (choisi ici : gratuit, aucun compte ni domaine
-  # requis) : Cloudflare attribue une URL aléatoire en *.trycloudflare.com
-  # à chaque démarrage du conteneur — elle CHANGE à chaque redémarrage.
-  # Après un `up`/redémarrage, récupérer la nouvelle adresse dans les
-  # journaux :
-  #   docker compose -f compose.prod.yaml logs cloudflared | grep trycloudflare.com
-  # puis mettre à jour APP_ACTIVATION_BASE_URL et APP_ALLOWED_ORIGINS dans
-  # .env avec cette URL et relancer "backend" pour qu'il en tienne compte.
+  # Mode "tunnel nommé" (domaine possédé, DNS délégué à Cloudflare) : URL
+  # STABLE, qui ne change jamais au redémarrage (contrairement au "Quick
+  # Tunnel" *.trycloudflare.com utilisé au tout premier démarrage, voir
+  # `docs/deployment/RASPBERRY-PI.md` §5 pour la bascule et la procédure
+  # complète — création du tunnel, route DNS, jeton).
   #
-  # Passer à un tunnel nommé (URL stable sur un domaine possédé) reste
-  # possible plus tard : remplacer `command` par `tunnel run` et ajouter
-  # `environment: TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}`.
+  # `CLOUDFLARE_TUNNEL_TOKEN` (obtenu via `cloudflared tunnel create` /
+  # le tableau de bord Cloudflare Zero Trust) doit être renseigné dans
+  # `.env` ; jamais commité en clair (voir SECRETS.md).
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: esic-connect-cloudflared
     restart: unless-stopped
     logging: *default-logging
-    command: tunnel --no-autoupdate --url http://frontend:80
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       frontend:
         condition: service_started
