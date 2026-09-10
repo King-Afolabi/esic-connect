@@ -1,0 +1,75 @@
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Mon planning</h1>
+    <p class="esic-page-header__description">
+      Vos séances, dans leur ordre chronologique. Pour recevoir ces mêmes séances dans votre agenda personnel
+      (Outlook, Google Agenda, Apple Calendrier), utilisez
+      <a routerLink="/mon-compte/calendrier">l'abonnement calendrier</a>.
+    </p>
+  </div>
+</header>
+
+<form class="mp__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+  <mat-form-field appearance="outline">
+    <mat-label>Depuis</mat-label>
+    <input matInput type="date" formControlName="from" />
+  </mat-form-field>
+  <mat-form-field appearance="outline">
+    <mat-label>Jusqu'au</mat-label>
+    <input matInput type="date" formControlName="to" />
+  </mat-form-field>
+  <div class="mp__filter-actions">
+    <button mat-flat-button type="submit">Filtrer</button>
+    <button mat-button type="button" (click)="resetFilters()">Réinitialiser</button>
+  </div>
+</form>
+
+@switch (state().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement de votre planning"></mat-progress-bar>
+    <p class="mp__status" role="status">Chargement…</p>
+  }
+  @case ('forbidden') {
+    <div class="mp__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter cet espace.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="mp__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (sessions().length === 0) {
+      <p class="mp__status" role="status">Aucune séance sur la période sélectionnée.</p>
+    } @else {
+      <ul class="mp__list">
+        @for (session of sessions(); track session.sessionPublicId) {
+          <li class="mp__item">
+            <div class="mp__item-header">
+              <span class="mp__title">{{ session.title || 'Séance' }}</span>
+              <span class="mp__chip" [attr.data-status]="session.status">{{ sessionStatusLabel(session.status) }}</span>
+            </div>
+            <p class="mp__meta">
+              {{ formatInstantUtc(session.startsAt) }} – {{ formatInstantUtc(session.endsAt) }}
+            </p>
+            <p class="mp__meta">
+              @if (isTeacher()) {
+                Classe(s) :
+                @for (c of session.classes; track c.publicId) {
+                  <span>{{ c.code || '—' }}</span>
+                }
+              } @else {
+                Formateur : {{ teacherDisplayName(session.teacher) }}
+              }
+              @if (session.roomCode) { · Salle {{ session.roomCode }} }
+            </p>
+          </li>
+        }
+      </ul>
+    }
+  }
+}

@@ -191,6 +191,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION', 'PEDAGOGICAL_MANAGER'],
   },
   {
+    // Écran livré (CDC §5.6/§5.7, `com.esic.connect.myplanning`) : consultation
+    // du planning en application — distincte de l'abonnement calendrier
+    // ci-dessous (agenda externe). Un formateur voyait déjà ses séances
+    // via `GET /api/v1/sessions`, mais sans écran dédié ; un apprenant n'en
+    // avait aucune (constaté en recette, `STUDENT` est exclu de ces routes)
+    // — ce manque motive ce nouvel écran.
+    label: 'Mon planning',
+    path: '/mon-planning',
+    icon: 'event_note',
+    roles: ['TEACHER', 'STUDENT'],
+  },
+  {
     // Écran livré (sprint 11) : abonnement iCalendar au planning
     // (EF-INT-001). Visible par tout rôle : chacun s'abonne au sien, et
     // le serveur dérive le périmètre du sujet du jeton.

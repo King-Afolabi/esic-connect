@@ -22,6 +22,23 @@ const ACADEMIC_READ_ROLES = [
 ] as const;
 
 /**
+ * `AcademicWeb.WRITE_ROLES` — création d'une année scolaire ou d'une
+ * formation, seules écritures réservées à `ADMIN` / `SUPER_ADMIN` (le
+ * reste du cycle de vie de la formation retombe sur le périmètre étendu
+ * ci-dessous). Spring Security reste l'autorité.
+ */
+const ACADEMIC_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN'] as const;
+
+/**
+ * `AcademicWeb.SCOPED_WRITE_ROLES` — modification/archivage/restauration
+ * d'une formation, et cycle de vie complet des niveaux, promotions et
+ * classes : ouvert en plus au `PEDAGOGICAL_MANAGER` (docs/02 §39.1 :
+ * « le responsable crée une promotion et une classe »), toujours filtré
+ * par périmètre côté serveur (`AcademicScopeGuard`).
+ */
+const ACADEMIC_SCOPED_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'] as const;
+
+/**
  * Périmètre de consultation de l'alternance, repris de
  * `AlternationWeb.PATTERN_READ_ROLES` / `SCOPED_ROLES`. Un
  * `PEDAGOGICAL_MANAGER` reste restreint à son périmètre **côté serveur**
@@ -136,6 +153,11 @@ const INVITATION_TRACKING_ROLES = [
 const academicDetail = () =>
   import('./features/academic/academic-reference-detail/academic-reference-detail').then(
     (m) => m.AcademicReferenceDetail,
+  );
+
+const academicForm = () =>
+  import('./features/academic/academic-reference-form/academic-reference-form').then(
+    (m) => m.AcademicReferenceForm,
   );
 
 export const routes: Routes = [
@@ -340,6 +362,17 @@ export const routes: Routes = [
           ),
       },
       {
+        // « Mon planning » (CDC §5.6/§5.7, `com.esic.connect.myplanning`) :
+        // consultation en application, distincte de l'abonnement
+        // iCalendar ci-dessus (agenda externe). Réservée à TEACHER/STUDENT,
+        // seuls rôles servis par `GET /api/v1/me/planning` — Spring
+        // Security reste l'autorité (un 403 est rendu « accès refusé »).
+        path: 'mon-planning',
+        canActivate: [roleGuard(['TEACHER', 'STUDENT'])],
+        title: `Mon planning — ${APP_NAME}`,
+        loadComponent: () => import('./features/my-planning/my-planning').then((m) => m.MyPlanning),
+      },
+      {
         // Rapport des invitations non activées (EF-REP-010). Mêmes rôles
         // que le suivi des invitations : c'est le même besoin.
         path: 'invitations/non-activees',
@@ -517,11 +550,15 @@ export const routes: Routes = [
           ),
       },
       {
-        // Consultation en LECTURE SEULE du référentiel académique
-        // (`com.esic.connect.academic`) : années scolaires → formations →
-        // niveaux → promotions → classes. Périmètre aligné sur
-        // `AcademicWeb.READ_ROLES`. `data.resource` sélectionne la
-        // configuration d'affichage (colonnes, tris, sous-listes).
+        // Référentiel académique (`com.esic.connect.academic`) : années
+        // scolaires → formations → niveaux → promotions → classes.
+        // Lecture alignée sur `AcademicWeb.READ_ROLES` ; création/édition
+        // gardées par `ACADEMIC_WRITE_ROLES` (années, formations — création
+        // seulement) ou `ACADEMIC_SCOPED_WRITE_ROLES` (le reste, ouvert au
+        // `PEDAGOGICAL_MANAGER`, docs/02 §39.1). Spring Security reste
+        // l'autorité (un `403 ACAD_FORBIDDEN` est rendu « accès refusé »).
+        // `data.resource` sélectionne la configuration d'affichage/édition
+        // (colonnes, tris, sous-listes, champs de formulaire).
         path: 'academic',
         canActivate: [roleGuard([...ACADEMIC_READ_ROLES])],
         canActivateChild: [roleGuard([...ACADEMIC_READ_ROLES])],
@@ -534,15 +571,36 @@ export const routes: Routes = [
             loadComponent: academicList,
           },
           {
+            path: 'academic-years/new',
+            canActivate: [roleGuard([...ACADEMIC_WRITE_ROLES])],
+            data: { resource: 'academic-years', mode: 'create' },
+            title: `Nouvelle année scolaire — ${APP_NAME}`,
+            loadComponent: academicForm,
+          },
+          {
             path: 'academic-years/:publicId',
             title: `Année scolaire — ${APP_NAME}`,
             data: { resource: 'academic-years' },
             loadComponent: academicDetail,
           },
           {
+            path: 'academic-years/:publicId/edit',
+            canActivate: [roleGuard([...ACADEMIC_WRITE_ROLES])],
+            data: { resource: 'academic-years', mode: 'edit' },
+            title: `Modifier une année scolaire — ${APP_NAME}`,
+            loadComponent: academicForm,
+          },
+          {
             path: 'programs',
             data: { resource: 'programs' },
             loadComponent: academicList,
+          },
+          {
+            path: 'programs/new',
+            canActivate: [roleGuard([...ACADEMIC_WRITE_ROLES])],
+            data: { resource: 'programs', mode: 'create' },
+            title: `Nouvelle formation — ${APP_NAME}`,
+            loadComponent: academicForm,
           },
           {
             path: 'programs/:publicId',
@@ -551,15 +609,43 @@ export const routes: Routes = [
             loadComponent: academicDetail,
           },
           {
+            path: 'programs/:publicId/edit',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'programs', mode: 'edit' },
+            title: `Modifier une formation — ${APP_NAME}`,
+            loadComponent: academicForm,
+          },
+          {
+            path: 'programs/:programPublicId/levels/new',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'program-levels', mode: 'create' },
+            title: `Nouveau niveau — ${APP_NAME}`,
+            loadComponent: academicForm,
+          },
+          {
             path: 'program-levels/:publicId',
             title: `Niveau — ${APP_NAME}`,
             data: { resource: 'program-levels' },
             loadComponent: academicDetail,
           },
           {
+            path: 'program-levels/:publicId/edit',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'program-levels', mode: 'edit' },
+            title: `Modifier un niveau — ${APP_NAME}`,
+            loadComponent: academicForm,
+          },
+          {
             path: 'promotions',
             data: { resource: 'promotions' },
             loadComponent: academicList,
+          },
+          {
+            path: 'promotions/new',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'promotions', mode: 'create' },
+            title: `Nouvelle promotion — ${APP_NAME}`,
+            loadComponent: academicForm,
           },
           {
             path: 'promotions/:publicId',
@@ -568,15 +654,36 @@ export const routes: Routes = [
             loadComponent: academicDetail,
           },
           {
+            path: 'promotions/:publicId/edit',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'promotions', mode: 'edit' },
+            title: `Modifier une promotion — ${APP_NAME}`,
+            loadComponent: academicForm,
+          },
+          {
             path: 'class-groups',
             data: { resource: 'class-groups' },
             loadComponent: academicList,
+          },
+          {
+            path: 'class-groups/new',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'class-groups', mode: 'create' },
+            title: `Nouvelle classe — ${APP_NAME}`,
+            loadComponent: academicForm,
           },
           {
             path: 'class-groups/:publicId',
             title: `Classe — ${APP_NAME}`,
             data: { resource: 'class-groups' },
             loadComponent: academicDetail,
+          },
+          {
+            path: 'class-groups/:publicId/edit',
+            canActivate: [roleGuard([...ACADEMIC_SCOPED_WRITE_ROLES])],
+            data: { resource: 'class-groups', mode: 'edit' },
+            title: `Modifier une classe — ${APP_NAME}`,
+            loadComponent: academicForm,
           },
         ],
       },

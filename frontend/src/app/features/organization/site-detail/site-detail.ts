@@ -312,6 +312,24 @@ export class SiteDetail {
   protected readonly roomSubmitting = signal(false);
   protected readonly roomFormError = signal<string | null>(null);
 
+  // --- Modification (bâtiment / salle — le code reste immuable) --------
+  protected readonly editingBuildingId = signal<string | null>(null);
+  protected readonly editBuildingForm = this.formBuilder.group({
+    name: this.formBuilder.control('', [Validators.required, Validators.maxLength(150)]),
+  });
+  protected readonly editBuildingSubmitting = signal(false);
+  protected readonly editBuildingError = signal<string | null>(null);
+
+  protected readonly editingRoomId = signal<string | null>(null);
+  protected readonly editRoomForm = this.formBuilder.group({
+    name: this.formBuilder.control('', [Validators.required, Validators.maxLength(150)]),
+    buildingPublicId: this.formBuilder.control(''),
+    capacity: this.formBuilder.control<number | null>(null, [Validators.min(1)]),
+    floorLabel: this.formBuilder.control('', [Validators.maxLength(50)]),
+  });
+  protected readonly editRoomSubmitting = signal(false);
+  protected readonly editRoomError = signal<string | null>(null);
+
   protected readonly rangeForm = this.formBuilder.group({
     cidr: this.formBuilder.control('', [Validators.required, Validators.maxLength(50)]),
     label: this.formBuilder.control('', [Validators.required, Validators.maxLength(100)]),
@@ -434,6 +452,39 @@ export class SiteDetail {
     });
   }
 
+  protected startEditBuilding(building: BuildingResponse): void {
+    this.editBuildingForm.setValue({ name: building.name });
+    this.editBuildingError.set(null);
+    this.editingBuildingId.set(building.publicId);
+  }
+
+  protected cancelEditBuilding(): void {
+    this.editingBuildingId.set(null);
+    this.editBuildingError.set(null);
+  }
+
+  protected submitEditBuilding(): void {
+    const id = this.editingBuildingId();
+    if (!id || this.editBuildingForm.invalid || this.editBuildingSubmitting()) {
+      this.editBuildingForm.markAllAsTouched();
+      return;
+    }
+    this.editBuildingSubmitting.set(true);
+    this.editBuildingError.set(null);
+    this.api.updateBuilding(id, { name: this.editBuildingForm.getRawValue().name.trim() }).subscribe({
+      next: () => {
+        this.editBuildingSubmitting.set(false);
+        this.editingBuildingId.set(null);
+        this.notifications.info('Bâtiment modifié.');
+        this.loadBuildings();
+      },
+      error: (error: unknown) => {
+        this.editBuildingSubmitting.set(false);
+        this.editBuildingError.set(toOrganizationError(error).message);
+      },
+    });
+  }
+
   // --- Rooms --------------------------------------------------------
 
   protected submitRoom(): void {
@@ -501,6 +552,52 @@ export class SiteDetail {
       },
       error: (error: unknown) => this.notifications.error(toOrganizationError(error).message),
     });
+  }
+
+  protected startEditRoom(room: RoomResponse): void {
+    this.editRoomForm.setValue({
+      name: room.name,
+      buildingPublicId: room.buildingPublicId ?? '',
+      capacity: room.capacity,
+      floorLabel: room.floorLabel ?? '',
+    });
+    this.editRoomError.set(null);
+    this.editingRoomId.set(room.publicId);
+  }
+
+  protected cancelEditRoom(): void {
+    this.editingRoomId.set(null);
+    this.editRoomError.set(null);
+  }
+
+  protected submitEditRoom(): void {
+    const id = this.editingRoomId();
+    if (!id || this.editRoomForm.invalid || this.editRoomSubmitting()) {
+      this.editRoomForm.markAllAsTouched();
+      return;
+    }
+    this.editRoomSubmitting.set(true);
+    this.editRoomError.set(null);
+    const raw = this.editRoomForm.getRawValue();
+    this.api
+      .updateRoom(id, {
+        name: raw.name.trim(),
+        buildingPublicId: raw.buildingPublicId || null,
+        capacity: raw.capacity ?? null,
+        floorLabel: raw.floorLabel.trim() || null,
+      })
+      .subscribe({
+        next: () => {
+          this.editRoomSubmitting.set(false);
+          this.editingRoomId.set(null);
+          this.notifications.info('Salle modifiée.');
+          this.loadRooms();
+        },
+        error: (error: unknown) => {
+          this.editRoomSubmitting.set(false);
+          this.editRoomError.set(toOrganizationError(error).message);
+        },
+      });
   }
 
   protected buildingName(publicId: string | null): string {

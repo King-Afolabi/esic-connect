@@ -182,6 +182,87 @@ export interface ClassGroupListQuery extends AcademicListQuery {
   site?: string | null;
 }
 
+/** `POST /api/v1/academic-years` — `AcademicYearRequests.Create`. */
+export interface CreateAcademicYearRequest {
+  code: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+}
+
+/** `PATCH /api/v1/academic-years/{id}` — `AcademicYearRequests.Update`. */
+export interface UpdateAcademicYearRequest {
+  name: string;
+  startDate: string;
+  endDate: string;
+}
+
+/** `POST /api/v1/programs` — `ProgramRequests.Create`. */
+export interface CreateProgramRequest {
+  code: string;
+  name: string;
+  programType: ProgramType;
+  description?: string | null;
+}
+
+/** `PATCH /api/v1/programs/{id}` — `ProgramRequests.Update`. */
+export interface UpdateProgramRequest {
+  name: string;
+  programType: ProgramType;
+  description?: string | null;
+}
+
+/** `POST /api/v1/programs/{id}/levels` — `ProgramLevelRequests.Create`. */
+export interface CreateProgramLevelRequest {
+  code: string;
+  name: string;
+  sequenceNumber: number;
+}
+
+/** `PATCH /api/v1/program-levels/{id}` — `ProgramLevelRequests.Update`. */
+export interface UpdateProgramLevelRequest {
+  name: string;
+  sequenceNumber: number;
+}
+
+/** `POST /api/v1/promotions` — `PromotionRequests.Create`. */
+export interface CreatePromotionRequest {
+  programPublicId: string;
+  academicYearPublicId: string;
+  code: string;
+  name: string;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/** `PATCH /api/v1/promotions/{id}` — `PromotionRequests.Update`. */
+export interface UpdatePromotionRequest {
+  name: string;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/** `POST /api/v1/class-groups` — `ClassGroupRequests.Create`. */
+export interface CreateClassGroupRequest {
+  promotionPublicId: string;
+  programLevelPublicId: string;
+  sitePublicId: string;
+  code: string;
+  name: string;
+  capacity?: number | null;
+}
+
+/** `PATCH /api/v1/class-groups/{id}` — `ClassGroupRequests.Update`. */
+export interface UpdateClassGroupRequest {
+  name: string;
+  capacity?: number | null;
+}
+
+/** `POST .../archive` — `ArchiveRequest` (partagé par toutes les ressources). */
+export interface ArchiveAcademicRequest {
+  reason: string;
+}
+
 /**
  * Formate une date ISO (`yyyy-MM-dd` ou `Instant`) en `jj/mm/aaaa`, en
  * UTC pour rester déterministe quel que soit le fuseau. Renvoie `—` pour

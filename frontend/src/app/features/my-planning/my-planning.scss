@@ -1,0 +1,119 @@
+// Aligné sur le système de design ESIC (jetons `--esic-*`, primitives).
+// Même structure que `my-attendance-list.scss` (préfixe `.mp__` propre à ce
+// module, aucun partiel partagé n'existe pour ces écrans « mes » espaces).
+
+:host {
+  display: block;
+}
+
+.mp__filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esic-space-2) var(--esic-space-3);
+  align-items: center;
+}
+
+.mp__status {
+  margin: var(--esic-space-4) 0;
+  font-size: 0.9375rem;
+  color: var(--esic-ink-soft);
+}
+
+.mp__panel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-4) 0;
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+  color: var(--esic-ink-soft);
+
+  > .mat-icon {
+    flex-shrink: 0;
+    color: var(--esic-ink-faint);
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.mp__list {
+  list-style: none;
+  margin: var(--esic-space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+}
+
+.mp__item {
+  padding: var(--esic-space-4) var(--esic-space-5);
+  border: 1px solid var(--esic-line);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface);
+}
+
+.mp__item-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esic-space-2) var(--esic-space-3);
+}
+
+.mp__title {
+  font-family: var(--esic-font-serif);
+  font-weight: 600;
+  color: var(--esic-ink);
+}
+
+.mp__meta {
+  margin: var(--esic-space-1) 0 0;
+  font-size: 0.875rem;
+  color: var(--esic-ink-soft);
+
+  span + span::before {
+    content: ', ';
+  }
+}
+
+// Pastille de statut — même vocabulaire que `.att__chip`.
+.mp__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border-radius: var(--esic-radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--esic-ink-soft);
+  background: var(--esic-surface-sunken);
+
+  &::before {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: currentcolor;
+    flex-shrink: 0;
+  }
+}
+
+.mp__chip[data-status='PLANNED'] {
+  color: var(--esic-status-present-fg);
+  background: var(--esic-status-present-bg);
+}
+.mp__chip[data-status='OPEN'] {
+  color: var(--esic-status-late-fg);
+  background: var(--esic-status-late-bg);
+}
+.mp__chip[data-status='CANCELLED'] {
+  color: var(--esic-status-absent-fg);
+  background: var(--esic-status-absent-bg);
+  text-decoration: line-through;
+}

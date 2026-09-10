@@ -90,6 +90,16 @@
   width: 100%;
 }
 
+.academic__panel--confirm {
+  flex-direction: column;
+  align-items: stretch;
+
+  form,
+  p {
+    margin: 0 0 var(--esic-space-3);
+  }
+}
+
 .academic__sr-only {
   position: absolute;
   width: 1px;

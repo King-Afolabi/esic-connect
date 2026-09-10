@@ -45,7 +45,65 @@
 
   @case ('ready') {
     @if (record(); as current) {
-      <h1 class="academic__title">{{ config.singularTitle }} {{ current.code }}</h1>
+      <header class="esic-page-header">
+        <div class="esic-page-header__text">
+          <h1 class="academic__title">{{ config.singularTitle }} {{ current.code }}</h1>
+        </div>
+        @if (canWrite()) {
+          <div class="esic-page-header__actions">
+            <a mat-stroked-button [routerLink]="['/academic', resource, current.publicId, 'edit']">
+              <mat-icon aria-hidden="true">edit</mat-icon>
+              <span>Modifier</span>
+            </a>
+            @if (isArchived()) {
+              <button mat-stroked-button type="button" (click)="startAction('restore')">
+                <mat-icon aria-hidden="true">unarchive</mat-icon>
+                <span>Restaurer</span>
+              </button>
+            } @else {
+              <button mat-stroked-button type="button" (click)="startAction('archive')">
+                <mat-icon aria-hidden="true">archive</mat-icon>
+                <span>Archiver</span>
+              </button>
+            }
+          </div>
+        }
+      </header>
+
+      @if (pendingAction(); as action) {
+        <div class="academic__panel academic__panel--confirm" role="alertdialog">
+          @if (action.kind === 'archive') {
+            <form [formGroup]="reasonForm" (ngSubmit)="confirmAction()" novalidate>
+              <p>Motif d'archivage (obligatoire, tracé dans l'audit) :</p>
+              <mat-form-field appearance="outline">
+                <mat-label>Motif</mat-label>
+                <input matInput formControlName="reason" [maxlength]="reasonMaxLength" required autocomplete="off" />
+                @if (reasonForm.controls.reason.touched && reasonForm.controls.reason.invalid) {
+                  <mat-error>Le motif est obligatoire.</mat-error>
+                }
+              </mat-form-field>
+              @if (actionError()) {
+                <p class="esic-form__error" role="alert">{{ actionError() }}</p>
+              }
+              <div class="esic-form__actions">
+                <button mat-flat-button type="submit" [disabled]="actionSubmitting()">Confirmer l'archivage</button>
+                <button mat-button type="button" (click)="cancelAction()">Annuler</button>
+              </div>
+            </form>
+          } @else {
+            <p>Restaurer cet élément ?</p>
+            @if (actionError()) {
+              <p class="esic-form__error" role="alert">{{ actionError() }}</p>
+            }
+            <div class="esic-form__actions">
+              <button mat-flat-button type="button" [disabled]="actionSubmitting()" (click)="confirmAction()">
+                Confirmer la restauration
+              </button>
+              <button mat-button type="button" (click)="cancelAction()">Annuler</button>
+            </div>
+          }
+        </div>
+      }
 
       @if (parentLinks().length) {
         <div class="academic__parent-links">
@@ -73,7 +131,19 @@
 
       @for (section of config.children; track section.title; let i = $index) {
         <section class="academic__children" [attr.aria-label]="section.title">
-          <h2 class="academic__section-title">{{ section.title }}</h2>
+          <div class="esic-page-header">
+            <div class="esic-page-header__text">
+              <h2 class="academic__section-title">{{ section.title }}</h2>
+            </div>
+            @if (resource === 'programs' && section.detailSlug === 'program-levels' && canCreateLevel()) {
+              <div class="esic-page-header__actions">
+                <a mat-stroked-button [routerLink]="['/academic', 'programs', current.publicId, 'levels', 'new']">
+                  <mat-icon aria-hidden="true">add</mat-icon>
+                  <span>Ajouter un niveau</span>
+                </a>
+              </div>
+            }
+          </div>
 
           @switch (childState(i).kind) {
             @case ('loading') {
