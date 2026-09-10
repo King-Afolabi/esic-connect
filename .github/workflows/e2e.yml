@@ -75,6 +75,13 @@ jobs:
       # du run. Lu par le back-end (profil `demo`) ET par la suite e2e
       # (tests/support/accounts.ts) : les deux doivent voir la même valeur.
       ESIC_DEMO_PASSWORD: ci-only-demo-password
+      # Secret TOTP déterministe (base32, fictif), requis pour que les
+      # comptes ADMIN/SUPER_ADMIN (second facteur obligatoire, RG-007)
+      # franchissent réellement le défi MFA dans la suite e2e — sans
+      # cette valeur, `tests/support/auth.ts` échoue explicitement sur
+      # tout scénario ADMIN/SUPER_ADMIN (dette T-19/T-20, docs/STATUS.md).
+      # Lu par le back-end ET par la suite e2e, même valeur des deux côtés.
+      ESIC_DEMO_TOTP_SECRET: JBSWY3DPEHPK3PXP
       SPRING_PROFILES_ACTIVE: demo
       APP_ALLOWED_ORIGINS: http://localhost:4200
 
