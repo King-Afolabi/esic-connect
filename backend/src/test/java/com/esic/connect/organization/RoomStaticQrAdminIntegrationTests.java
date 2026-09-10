@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Gestion administrative du QR fixe de salle (EF-ORG-003 ; docs/02 §7.1,
@@ -176,12 +177,17 @@ class RoomStaticQrAdminIntegrationTests {
         assertThat(reprint.get("staticQrReference")).isEqualTo(first.get("staticQrReference"));
         // La réponse de `rotate` porte l'`Instant` en mémoire (précision
         // nanoseconde sur horloge Linux) ; la réponse de `GET` porte la
-        // même valeur relue de MySQL, où `DATETIME(6)` la tronque à la
-        // microseconde. La réimpression est idempotente : on compare donc
-        // à la précision réellement persistée (RG QR fixe, EF-ORG-003).
+        // même valeur relue de MySQL, où `DATETIME(6)` la stocke avec 6
+        // décimales — par ARRONDI, pas par troncature (constaté : le
+        // driver JDBC arrondit à la microseconde la plus proche). Un
+        // `truncatedTo(MICROS)` échoue donc de façon intermittente (1
+        // microseconde d'écart) chaque fois que la partie sub-microseconde
+        // de l'horloge dépasse 500 ns. La réimpression reste idempotente :
+        // on tolère l'arrondi réel plutôt que de présupposer une
+        // troncature (RG QR fixe, EF-ORG-003).
         Instant firstIssuedAt = Instant.parse((String) first.get("staticQrIssuedAt"));
         Instant reprintIssuedAt = Instant.parse((String) reprint.get("staticQrIssuedAt"));
-        assertThat(reprintIssuedAt).isEqualTo(firstIssuedAt.truncatedTo(ChronoUnit.MICROS));
+        assertThat(reprintIssuedAt).isCloseTo(firstIssuedAt, within(1, ChronoUnit.MICROS));
     }
 
     @Test
