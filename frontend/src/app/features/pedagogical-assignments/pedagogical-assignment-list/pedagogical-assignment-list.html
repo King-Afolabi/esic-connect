@@ -1,0 +1,217 @@
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Responsables pédagogiques</h1>
+    <p class="esic-page-header__subtitle">
+      Affectation d'un responsable pédagogique (principal ou délégué) à une formation entière.
+    </p>
+  </div>
+  <div class="esic-page-header__actions">
+    <button mat-flat-button type="button" (click)="toggleCreateForm()">
+      <mat-icon aria-hidden="true">add</mat-icon>
+      Nouvelle affectation
+    </button>
+  </div>
+</header>
+
+@if (showCreateForm()) {
+  <form class="pa__reveal esic-form" [formGroup]="createForm" (ngSubmit)="submitCreate()">
+    <div class="esic-form__grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Formation</mat-label>
+        <mat-select formControlName="programPublicId">
+          @for (program of programs(); track program.publicId) {
+            <mat-option [value]="program.publicId">{{ program.code }} — {{ program.name }}</mat-option>
+          }
+        </mat-select>
+        @if (createForm.controls.programPublicId.touched && createForm.controls.programPublicId.invalid) {
+          <mat-error>Sélectionnez une formation.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Responsable pédagogique</mat-label>
+        <input
+          matInput
+          formControlName="managerSearch"
+          placeholder="Nom, prénom ou e-mail…"
+          autocomplete="off"
+        />
+        @if (managerSearchLoading()) {
+          <mat-hint>Recherche…</mat-hint>
+        }
+        @if (createForm.controls.userPublicId.touched && createForm.controls.userPublicId.invalid) {
+          <mat-error>Choisissez un compte dans les résultats ci-dessous.</mat-error>
+        }
+      </mat-form-field>
+
+      @if (managerOptions().length > 0) {
+        <ul class="pa__manager-results" role="listbox" aria-label="Résultats de la recherche">
+          @for (option of managerOptions(); track option.publicId) {
+            <li>
+              <button type="button" mat-stroked-button (click)="selectManager(option)">
+                {{ option.firstName }} {{ option.lastName }} — {{ option.email }}
+              </button>
+            </li>
+          }
+        </ul>
+      }
+
+      <mat-form-field appearance="outline">
+        <mat-label>Type d'affectation</mat-label>
+        <mat-select formControlName="type">
+          @for (type of assignmentTypes; track type) {
+            <mat-option [value]="type">{{ typeLabel(type) }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Effective à partir du</mat-label>
+        <input matInput type="date" formControlName="validFrom" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Jusqu'au (facultatif)</mat-label>
+        <input matInput type="date" formControlName="validUntil" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="pa__reason-field">
+        <mat-label>Motif (facultatif)</mat-label>
+        <input matInput formControlName="reason" maxlength="500" />
+      </mat-form-field>
+    </div>
+
+    <div class="esic-form__actions">
+      <button mat-flat-button type="submit" [disabled]="submitting()">Affecter</button>
+      <button mat-button type="button" (click)="toggleCreateForm()" [disabled]="submitting()">Annuler</button>
+    </div>
+    @if (submitting()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Enregistrement en cours"></mat-progress-bar>
+    }
+    @if (submitError()) {
+      <p class="pa__inline-error" role="alert">{{ submitError() }}</p>
+    }
+  </form>
+}
+
+<div class="pa__filters">
+  <mat-form-field appearance="outline">
+    <mat-label>Formation</mat-label>
+    <mat-select [value]="programFilter()" (selectionChange)="setProgramFilter($event.value)">
+      <mat-option value="">Toutes</mat-option>
+      @for (program of programs(); track program.publicId) {
+        <mat-option [value]="program.publicId">{{ program.code }} — {{ program.name }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Statut</mat-label>
+    <mat-select [value]="statusFilter()" (selectionChange)="setStatusFilter($event.value)">
+      <mat-option value="">Tous</mat-option>
+      <mat-option value="ACTIVE">Active</mat-option>
+      <mat-option value="CLOSED">Clôturée</mat-option>
+    </mat-select>
+  </mat-form-field>
+</div>
+
+@switch (loadState().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement des affectations"></mat-progress-bar>
+    <p class="pa__status" role="status">Chargement des affectations…</p>
+  }
+  @case ('forbidden') {
+    <div class="pa__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à consulter les affectations pédagogiques.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="pa__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ errorMessage() }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (assignments().length === 0) {
+      <p class="pa__status" role="status">Aucune affectation ne correspond à ces filtres.</p>
+    } @else {
+      <div class="pa__table-wrapper esic-table-wrap">
+        <table mat-table [dataSource]="assignments()">
+          <ng-container matColumnDef="program">
+            <th mat-header-cell *matHeaderCellDef>Formation</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.programCode }}
+              @if (programName()(row.programPublicId); as name) {
+                <span class="pa__muted"> — {{ name }}</span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="manager">
+            <th mat-header-cell *matHeaderCellDef>Responsable</th>
+            <td mat-cell *matCellDef="let row">{{ managerName(row.userPublicId) }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="type">
+            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <td mat-cell *matCellDef="let row">{{ typeLabel(row.type) }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Statut</th>
+            <td mat-cell *matCellDef="let row">{{ statusLabel(row.status) }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="validFrom">
+            <th mat-header-cell *matHeaderCellDef>Depuis</th>
+            <td mat-cell *matCellDef="let row">{{ row.validFrom }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="validUntil">
+            <th mat-header-cell *matHeaderCellDef>Jusqu'au</th>
+            <td mat-cell *matCellDef="let row">{{ row.validUntil || '—' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>
+              <span class="visually-hidden">Actions</span>
+            </th>
+            <td mat-cell *matCellDef="let row">
+              @if (row.status === 'ACTIVE') {
+                <button mat-button type="button" (click)="startClose(row.publicId)">Clôturer</button>
+              }
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+      </div>
+    }
+  }
+}
+
+@if (closingId()) {
+  <form class="pa__reveal esic-form" role="group" aria-label="Clôturer l'affectation" [formGroup]="closeForm" (ngSubmit)="confirmClose()">
+    <p>La clôture est définitive : une nouvelle affectation devra être créée si besoin.</p>
+    <mat-form-field appearance="outline">
+      <mat-label>Motif de clôture</mat-label>
+      <input matInput formControlName="reason" maxlength="500" required />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Date d'effet (facultatif)</mat-label>
+      <input matInput type="date" formControlName="effectiveDate" />
+    </mat-form-field>
+    <div class="esic-form__actions">
+      <button mat-flat-button type="submit" color="warn" [disabled]="closeSubmitting() || closeForm.invalid">
+        Confirmer la clôture
+      </button>
+      <button mat-button type="button" (click)="cancelClose()" [disabled]="closeSubmitting()">Revenir</button>
+    </div>
+    @if (closeError()) {
+      <p class="pa__inline-error" role="alert">{{ closeError() }}</p>
+    }
+  </form>
+}

@@ -92,6 +92,7 @@ describe('AppShell', () => {
       '/attestations',
       '/mon-compte/calendrier',
       '/exploitation/audit',
+      '/pedagogical-assignments',
       // File d'échec des effets de bord (sprint 10, EF-OPS-005) :
       // réservée à `ADMIN` / `SUPER_ADMIN`, comme le contrôleur.
       '/exploitation/effets-de-bord',
