@@ -219,6 +219,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPER_ADMIN'],
   },
   {
+    // Affectation du responsable pédagogique d'une formation
+    // (RG-004/RG-010/RG-011) : même périmètre que le contrôleur
+    // (`ADMIN` / `SUPER_ADMIN` uniquement).
+    label: 'Responsables pédagogiques',
+    path: '/pedagogical-assignments',
+    icon: 'assignment_ind',
+    roles: ['ADMIN', 'SUPER_ADMIN'],
+  },
+  {
     // Écran livré (sprint 10) : file d'échec des effets de bord et rejeu
     // manuel (EF-OPS-005). Périmètre aligné sur `OutboxAdminController`
     // (`ADMIN` / `SUPER_ADMIN`) : un rejeu peut envoyer un courriel.

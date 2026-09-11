@@ -338,6 +338,18 @@ export const routes: Routes = [
           import('./features/audit/audit-trail').then((m) => m.AuditTrail),
       },
       {
+        // Affectation du responsable pédagogique d'une formation
+        // (RG-004/RG-010/RG-011). Périmètre aligné sur
+        // `AcademicWeb.ASSIGNMENT_ROLES` (`PedagogicalAssignmentController`) :
+        // réservé à `ADMIN` / `SUPER_ADMIN`, y compris pour la lecture.
+        path: 'pedagogical-assignments',
+        canActivate: [roleGuard(['ADMIN', 'SUPER_ADMIN'])],
+        title: `Responsables pédagogiques — ${APP_NAME}`,
+        loadComponent: () =>
+          import('./features/pedagogical-assignments/pedagogical-assignment-list/pedagogical-assignment-list')
+            .then((m) => m.PedagogicalAssignmentList),
+      },
+      {
         // Attestations d'assiduité (EF-REP-006, AC-033). Périmètre aligné
         // sur `AttendanceManagementWeb.REPORT_ROLES` — un `TEACHER` n'y a
         // pas accès, il consulte les présences de ses séances.
