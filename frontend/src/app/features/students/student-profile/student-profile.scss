@@ -44,6 +44,21 @@
   line-height: 1.5;
 }
 
+// Panneau dépliant (changement de classe) — cf. primitive `.esic-reveal`,
+// même motif que `.att__reveal` (assiduité).
+.profile__reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esic-space-3);
+  padding: var(--esic-space-4) var(--esic-space-5);
+  margin: var(--esic-space-3) 0 0;
+  border: 1px solid var(--esic-line);
+  border-left: 3px solid var(--esic-primary);
+  border-radius: var(--esic-radius-xs);
+  background: var(--esic-surface-sunken);
+  max-width: 32rem;
+}
+
 .profile__panel {
   display: flex;
   align-items: flex-start;

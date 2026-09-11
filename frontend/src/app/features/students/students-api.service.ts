@@ -11,10 +11,12 @@ import {
   EnrollmentListQuery,
   EnrollmentResponse,
   PageResponse,
+  CloseEnrollmentRequest,
   RemoteAttendanceAuthorizationResponse,
   RemoteAttendanceAuthorizeRequest,
   StudentProfileListQuery,
   StudentProfileResponse,
+  TransferEnrollmentRequest,
   UserIdentitySummary,
 } from './students.models';
 
@@ -109,6 +111,32 @@ export class StudentsApiService {
   /** `POST /api/v1/enrollments` — inscription initiale dans une classe. */
   enrollStudent(body: EnrollStudentRequest): Observable<EnrollmentResponse> {
     return this.http.post<EnrollmentResponse>(`${this.base}/enrollments`, body);
+  }
+
+  /**
+   * `POST /api/v1/enrollments/{publicId}/transfer` — changement de classe
+   * (docs/04 §13.2). Clôture l'inscription courante en `TRANSFERRED` et en
+   * ouvre une nouvelle dans la classe cible dès le lendemain de
+   * `effectiveDate` : l'ancienne inscription reste consultable dans
+   * l'historique (RG-006, RG-023). Typiquement un passage en année
+   * supérieure en fin d'année scolaire.
+   */
+  transferEnrollment(publicId: string, body: TransferEnrollmentRequest): Observable<EnrollmentResponse> {
+    return this.http.post<EnrollmentResponse>(
+      `${this.base}/enrollments/${encodeURIComponent(publicId)}/transfer`,
+      body,
+    );
+  }
+
+  /**
+   * `POST /api/v1/enrollments/{publicId}/close` — clôture définitive
+   * (fin de cursus ou départ), sans nouvelle inscription associée.
+   */
+  closeEnrollment(publicId: string, body: CloseEnrollmentRequest): Observable<EnrollmentResponse> {
+    return this.http.post<EnrollmentResponse>(
+      `${this.base}/enrollments/${encodeURIComponent(publicId)}/close`,
+      body,
+    );
   }
 
   // -------------------------------------------------------------------
