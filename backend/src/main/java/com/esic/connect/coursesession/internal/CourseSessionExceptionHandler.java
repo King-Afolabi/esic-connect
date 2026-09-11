@@ -178,6 +178,34 @@ class CourseSessionExceptionHandler {
                 code = "ATT_CHECKPOINT_INVALID_STATE";
                 message = "La séance doit être ouverte pour gérer ses points de contrôle.";
             }
+            case SUBJECT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SESSION_SUBJECT_NOT_FOUND";
+                message = "Aucune matière ne correspond à cet identifiant.";
+            }
+            case SUBJECT_INACTIVE -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_SUBJECT_INACTIVE";
+                message = "Cette matière est archivée et ne peut plus être rattachée à une séance.";
+            }
+            case ROOM_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "SESSION_ROOM_NOT_FOUND";
+                message = "Aucune salle ne correspond à cet identifiant.";
+            }
+            case TEACHER_DOUBLE_BOOKING -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_TEACHER_DOUBLE_BOOKING";
+                message = "Ce formateur enseigne déjà une autre séance sur un horaire qui chevauche "
+                        + "celui-ci. Si les classes suivent la séance ensemble, ajoutez-les à une seule "
+                        + "et même séance plutôt que d'en créer une par classe.";
+            }
+            case ROOM_DOUBLE_BOOKING -> {
+                status = HttpStatus.CONFLICT;
+                code = "SESSION_ROOM_DOUBLE_BOOKING";
+                message = "Cette salle est déjà occupée par une autre séance sur un horaire qui "
+                        + "chevauche celui-ci.";
+            }
             case ALREADY_POSTPONED -> {
                 status = HttpStatus.CONFLICT;
                 code = "SESSION_ALREADY_POSTPONED";

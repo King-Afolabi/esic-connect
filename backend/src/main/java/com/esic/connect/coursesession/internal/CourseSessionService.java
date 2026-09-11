@@ -2,11 +2,13 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.academic.AcademicScopeDirectory;
 import com.esic.connect.academic.ClassGroupDirectory;
+import com.esic.connect.academic.SubjectDirectory;
 import com.esic.connect.coursesession.CourseSessionChangeAction;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
 import com.esic.connect.coursesession.SessionLifecycle;
 import com.esic.connect.identity.TeacherDirectory;
 import com.esic.connect.identity.UserDirectory;
+import com.esic.connect.organization.RoomDirectory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -49,6 +51,8 @@ class CourseSessionService {
     private final TeacherDirectory teacherDirectory;
     private final UserDirectory userDirectory;
     private final ClassGroupDirectory classGroupDirectory;
+    private final SubjectDirectory subjectDirectory;
+    private final RoomDirectory roomDirectory;
     private final AcademicScopeDirectory academicScope;
     private final CourseSessionAccessGuard accessGuard;
     private final CourseSessionChangePublisher changePublisher;
@@ -60,6 +64,8 @@ class CourseSessionService {
                          TeacherDirectory teacherDirectory,
                          UserDirectory userDirectory,
                          ClassGroupDirectory classGroupDirectory,
+                         SubjectDirectory subjectDirectory,
+                         RoomDirectory roomDirectory,
                          AcademicScopeDirectory academicScope,
                          CourseSessionAccessGuard accessGuard,
                          CourseSessionChangePublisher changePublisher,
@@ -70,6 +76,8 @@ class CourseSessionService {
         this.teacherDirectory = teacherDirectory;
         this.userDirectory = userDirectory;
         this.classGroupDirectory = classGroupDirectory;
+        this.subjectDirectory = subjectDirectory;
+        this.roomDirectory = roomDirectory;
         this.academicScope = academicScope;
         this.accessGuard = accessGuard;
         this.changePublisher = changePublisher;
@@ -160,11 +168,30 @@ class CourseSessionService {
             throw new CourseSessionException(CourseSessionException.Kind.NO_CLASS);
         }
 
+        Long subjectId = resolveSubject(request.subjectPublicId());
+        String roomCode = resolveRoom(request.roomPublicId());
+
+        // RG-105 : un formateur ne peut pas être sur deux séances dont les
+        // horaires se chevauchent — physiquement impossible. Plusieurs
+        // classes qui suivent la séance ensemble se déclarent sur cette
+        // même séance (classPublicIds ci-dessus), jamais sur deux séances
+        // distinctes : ce contrôle ne les bloque donc pas.
+        if (hasOverlap(CourseSessionSpecifications.taughtBy(teacher.internalId()),
+                request.startsAt(), request.endsAt())) {
+            throw new CourseSessionException(CourseSessionException.Kind.TEACHER_DOUBLE_BOOKING);
+        }
+        if (roomCode != null
+                && hasOverlap(CourseSessionSpecifications.hasRoomCode(roomCode), request.startsAt(), request.endsAt())) {
+            throw new CourseSessionException(CourseSessionException.Kind.ROOM_DOUBLE_BOOKING);
+        }
+
         Long actorId = changePublisher.actorId(callerSubject);
         CourseSession session = new CourseSession(teacher.internalId(), trimToNull(request.title()),
                 request.startsAt(), request.endsAt(), timeZoneId, request.reason().trim());
         session.markCreatedBy(actorId);
         session.applyModality(request.attendanceMode(), trimToNull(request.remoteLink()));
+        session.assignSubject(subjectId);
+        session.assignRoom(roomCode);
         classInternalIds.forEach(session::addClass);
         CourseSession saved = sessionRepository.save(session);
         checkpointRepository.save(new AttendanceCheckpoint(saved));
@@ -172,6 +199,96 @@ class CourseSessionService {
         changePublisher.publish(saved.getPublicId(), CourseSessionChangeAction.CREATED, actorId,
                 "teacher=" + teacher.publicId() + ";classes=" + classInternalIds.size());
         return toResponse(saved);
+    }
+
+    /**
+     * @return l'identifiant interne de la matière, ou {@code null} si
+     *         aucune n'a été précisée (facultatif, RG-105).
+     */
+    private Long resolveSubject(String rawSubjectId) {
+        if (rawSubjectId == null || rawSubjectId.isBlank()) {
+            return null;
+        }
+        UUID subjectPublicId = parseUuid(rawSubjectId, CourseSessionException.Kind.SUBJECT_NOT_FOUND);
+        SubjectDirectory.SubjectRef subject = subjectDirectory.findByPublicId(subjectPublicId)
+                .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.SUBJECT_NOT_FOUND));
+        if (!subject.usable()) {
+            throw new CourseSessionException(CourseSessionException.Kind.SUBJECT_INACTIVE);
+        }
+        return subject.internalId();
+    }
+
+    /**
+     * @return le code fonctionnel de la salle, ou {@code null} si aucune
+     *         n'a été précisée.
+     */
+    private String resolveRoom(String rawRoomId) {
+        if (rawRoomId == null || rawRoomId.isBlank()) {
+            return null;
+        }
+        UUID roomPublicId = parseUuid(rawRoomId, CourseSessionException.Kind.ROOM_NOT_FOUND);
+        return roomDirectory.findByPublicId(roomPublicId)
+                .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.ROOM_NOT_FOUND))
+                .code();
+    }
+
+    /**
+     * @return {@code true} s'il existe une séance opérationnelle
+     *         correspondant à {@code extra} dont la période
+     *         {@code [starts_at, ends_at)} chevauche {@code [from, to)}.
+     */
+    private boolean hasOverlap(Specification<CourseSession> extra, Instant from, Instant to) {
+        return hasOverlap(extra, from, to, null);
+    }
+
+    /**
+     * @param excludeSessionId séance à exclure du contrôle (elle-même,
+     *                         lors d'une affectation de salle a
+     *                         posteriori) ; {@code null} pour aucune
+     */
+    private boolean hasOverlap(Specification<CourseSession> extra, Instant from, Instant to, Long excludeSessionId) {
+        List<Specification<CourseSession>> specs = new ArrayList<>(List.of(
+                CourseSessionSpecifications.operational(),
+                extra,
+                CourseSessionSpecifications.startsBefore(to),
+                CourseSessionSpecifications.endsAfter(from)));
+        if (excludeSessionId != null) {
+            specs.add(CourseSessionSpecifications.excludingId(excludeSessionId));
+        }
+        return sessionRepository.exists(Specification.allOf(specs));
+    }
+
+    /**
+     * Affecte ou change la salle d'une séance {@code PLANNED} ou
+     * {@code OPEN} — la décision de salle est fréquemment prise au
+     * dernier moment, bien après la création de la séance (planning
+     * incomplet, imprévu de dernière minute) : ce n'est donc jamais un
+     * champ obligatoire à la création, et cette action permet de la
+     * préciser, ou de la corriger, ensuite. Même contrôle
+     * anti-double-réservation qu'à la création, la séance elle-même étant
+     * exclue de la recherche de conflit.
+     */
+    @Transactional
+    CourseSessionResponse assignRoom(String publicId, CourseSessionRequests.AssignRoom request, String callerSubject) {
+        CourseSession session = requireOperationalSession(publicId);
+        requireAccess(session, AccessLevel.MANAGE, callerSubject);
+        if (!session.isPlanned() && !session.isOpen()) {
+            throw new CourseSessionException(CourseSessionException.Kind.INVALID_STATE);
+        }
+        String roomCode = resolveRoom(request.roomPublicId());
+        if (roomCode == null) {
+            throw new CourseSessionException(CourseSessionException.Kind.ROOM_NOT_FOUND);
+        }
+        if (hasOverlap(CourseSessionSpecifications.hasRoomCode(roomCode), session.getStartsAt(), session.getEndsAt(),
+                session.getId())) {
+            throw new CourseSessionException(CourseSessionException.Kind.ROOM_DOUBLE_BOOKING);
+        }
+        Long actorId = changePublisher.actorId(callerSubject);
+        session.assignRoom(roomCode);
+        session.markUpdatedBy(actorId);
+        changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.ROOM_ASSIGNED, actorId,
+                "room=" + roomCode);
+        return toResponse(session);
     }
 
     @Transactional
@@ -419,6 +536,11 @@ class CourseSessionService {
         CourseSessionResponse.TeacherView teacherView = new CourseSessionResponse.TeacherView(teacherPublicId,
                 name != null ? name.firstName() : null, name != null ? name.lastName() : null);
 
+        CourseSessionResponse.SubjectView subjectView = session.getSubjectId() == null ? null
+                : subjectDirectory.findByInternalId(session.getSubjectId())
+                        .map(ref -> new CourseSessionResponse.SubjectView(ref.publicId(), ref.code(), ref.name()))
+                        .orElse(null);
+
         List<CourseSessionResponse.SessionClassView> classViews = session.getClasses().stream()
                 .map(SessionClass::getClassGroupId)
                 .map(classGroupDirectory::findByInternalId)
@@ -445,7 +567,8 @@ class CourseSessionService {
                         .map(CourseSession::getPublicId).orElse(null);
 
         return new CourseSessionResponse(session.getPublicId(), session.getStatus(), session.getTitle(),
-                session.getExceptionReason(), teacherView, classViews, session.getStartsAt(), session.getEndsAt(),
+                session.getExceptionReason(), teacherView, subjectView, session.getRoomCode(), classViews,
+                session.getStartsAt(), session.getEndsAt(),
                 session.getTimeZoneId(), session.getAttendanceMode(), session.getRemoteLink(),
                 session.getOpenedAt(), session.getClosedAt(),
                 session.getCancellationReason(), session.getCancelledAt(), postponedTo,

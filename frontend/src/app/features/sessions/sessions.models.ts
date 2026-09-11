@@ -280,6 +280,13 @@ export interface SessionClassView {
   code: string;
 }
 
+/** `CourseSessionResponse.SubjectView` (V35). */
+export interface SessionSubjectView {
+  publicId: string;
+  code: string;
+  name: string;
+}
+
 /** `CourseSessionResponse` — jamais d'identifiant SQL, jamais de jeton. */
 export interface CourseSessionResponse {
   publicId: string;
@@ -287,6 +294,10 @@ export interface CourseSessionResponse {
   title: string | null;
   exceptionReason: string;
   teacher: SessionTeacherView;
+  /** Matière enseignée ; `null` si non précisée (V35). */
+  subject: SessionSubjectView | null;
+  /** Code fonctionnel de la salle ; `null` si non encore affectée — souvent décidée au dernier moment. */
+  roomCode: string | null;
   classes: SessionClassView[];
   /** `Instant` ISO-8601. */
   startsAt: string;
@@ -399,6 +410,10 @@ export interface SessionAttendanceResponse {
 /** `CourseSessionRequests.Create`. */
 export interface CreateSessionRequest {
   teacherPublicId: string;
+  /** Matière enseignée ; facultative (V35). */
+  subjectPublicId?: string | null;
+  /** Salle ; facultative — souvent décidée au dernier moment (V35). */
+  roomPublicId?: string | null;
   classPublicIds: string[];
   /** `Instant` ISO-8601. */
   startsAt: string;
@@ -411,6 +426,15 @@ export interface CreateSessionRequest {
 /** `CourseSessionRequests.Cancel` (G1-C) — motif obligatoire, borné à 500. */
 export interface CancelSessionRequest {
   reason: string;
+}
+
+/**
+ * `CourseSessionRequests.AssignRoom` (V35) — affectation ou changement de
+ * salle a posteriori, la décision étant fréquemment prise après la
+ * création de la séance.
+ */
+export interface AssignRoomRequest {
+  roomPublicId: string;
 }
 
 /** `TeacherSubstitutionStatus` (G1-C.2). */

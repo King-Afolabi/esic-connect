@@ -24,6 +24,10 @@ record CourseSessionResponse(
         String title,
         String exceptionReason,
         TeacherView teacher,
+        /** Matière enseignée ; {@code null} si non précisée (V35). */
+        SubjectView subject,
+        /** Code fonctionnel de la salle ; {@code null} si non encore affectée. */
+        String roomCode,
         List<SessionClassView> classes,
         Instant startsAt,
         Instant endsAt,
@@ -51,6 +55,10 @@ record CourseSessionResponse(
 
     /** Identité minimale d'un formateur pour l'affichage. */
     record TeacherView(UUID publicId, String firstName, String lastName) {
+    }
+
+    /** Identité minimale d'une matière pour l'affichage (V35). */
+    record SubjectView(UUID publicId, String code, String name) {
     }
 
     /** Identité minimale d'une classe rattachée. */

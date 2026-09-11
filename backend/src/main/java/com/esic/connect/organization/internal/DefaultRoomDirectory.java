@@ -44,6 +44,18 @@ class DefaultRoomDirectory implements RoomDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<RoomRef> findByPublicId(UUID roomPublicId) {
+        if (roomPublicId == null) {
+            return Optional.empty();
+        }
+        return roomRepository.findByPublicId(roomPublicId)
+                .filter(room -> !room.isArchived())
+                .map(room -> new RoomRef(room.getId(), room.getPublicId(), room.getCode(),
+                        room.getSite().getPublicId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public java.util.List<RoomSearchRef> search(String query, int limit) {
         String pattern = com.esic.connect.shared.SearchPattern.of(query);
         if (pattern == null) {

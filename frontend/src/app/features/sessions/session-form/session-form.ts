@@ -11,6 +11,10 @@ import { forkJoin } from 'rxjs';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
+import { OrganizationApiService } from '../../organization/organization-api.service';
+import { RoomResponse } from '../../organization/organization.models';
+import { SubjectsApiService } from '../../subjects/subjects-api.service';
+import { SubjectResponse } from '../../subjects/subjects.models';
 import { COMMON_TIME_ZONES, zonedWallTimeToInstant } from '../../alternation/zoned-time';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
@@ -69,6 +73,8 @@ const TITLE_MAX_LENGTH = 191;
 export class SessionForm {
   private readonly api = inject(SessionsApiService);
   private readonly academic = inject(AcademicApiService);
+  private readonly subjectsApi = inject(SubjectsApiService);
+  private readonly organizationApi = inject(OrganizationApiService);
   private readonly router = inject(Router);
   private readonly notifications = inject(NotificationService);
   private readonly roleContext = inject(RoleContextService);
@@ -87,12 +93,21 @@ export class SessionForm {
   protected readonly loadState = signal<LoadState>({ kind: 'loading' });
   protected readonly teachers = signal<TeacherOptionResponse[]>([]);
   protected readonly classes = signal<ClassGroupResponse[]>([]);
+  protected readonly subjects = signal<SubjectResponse[]>([]);
+  /** Salles du site déduit des classes choisies ; vide tant qu'aucune classe n'est sélectionnée. */
+  protected readonly rooms = signal<RoomResponse[]>([]);
+  protected readonly roomsLoading = signal(false);
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<string | null>(null);
   protected readonly timeError = signal<string | null>(null);
 
   protected readonly form = this.formBuilder.group({
     teacherPublicId: this.formBuilder.control('', [Validators.required]),
+    // Facultatives (V35) : une matière et une salle non précisées restent
+    // valides — la salle, en particulier, est souvent décidée au dernier
+    // moment et peut être affectée plus tard depuis la fiche de la séance.
+    subjectPublicId: this.formBuilder.control(''),
+    roomPublicId: this.formBuilder.control(''),
     classPublicIds: this.formBuilder.control<string[]>([], [Validators.required]),
     date: this.formBuilder.control('', [Validators.required]),
     startTime: this.formBuilder.control('08:00', [Validators.required]),
@@ -121,6 +136,40 @@ export class SessionForm {
         this.loadState.set({ kind: 'permission-lost' });
       }
     });
+
+    // Les salles sont rattachées à un site (`GET /sites/{id}/rooms`) : on
+    // recharge la liste dès qu'une classe rattachée à un site différent
+    // est choisie, plutôt que de faire porter un site au formulaire.
+    this.form.controls.classPublicIds.valueChanges.subscribe((ids) => this.loadRoomsFor(ids));
+  }
+
+  private loadRoomsFor(classPublicIds: string[]): void {
+    const site = classPublicIds
+      .map((id) => this.classes().find((c) => c.publicId === id)?.sitePublicId)
+      .find((value): value is string => !!value);
+    if (!site) {
+      this.rooms.set([]);
+      this.form.controls.roomPublicId.setValue('');
+      return;
+    }
+    this.roomsLoading.set(true);
+    this.organizationApi
+      .listRooms(site, { status: 'ACTIVE', size: 200, sort: 'code,asc' })
+      .subscribe({
+        next: (page) => {
+          this.roomsLoading.set(false);
+          this.rooms.set(page.content);
+          // La salle choisie n'appartient plus au site déduit : on la vide
+          // plutôt que de soumettre une valeur incohérente.
+          if (!page.content.some((room) => room.publicId === this.form.controls.roomPublicId.value)) {
+            this.form.controls.roomPublicId.setValue('');
+          }
+        },
+        error: () => {
+          this.roomsLoading.set(false);
+          this.rooms.set([]);
+        },
+      });
   }
 
   protected retry(): void {
@@ -154,6 +203,8 @@ export class SessionForm {
     this.api
       .createSession({
         teacherPublicId: raw.teacherPublicId,
+        subjectPublicId: raw.subjectPublicId || null,
+        roomPublicId: raw.roomPublicId || null,
         classPublicIds: raw.classPublicIds,
         startsAt,
         endsAt,
@@ -186,10 +237,12 @@ export class SessionForm {
     forkJoin({
       teachers: this.api.listEligibleTeachers(),
       classes: this.academic.listClassGroups({ status: 'ACTIVE', size: 100, sort: 'code,asc' }),
+      subjects: this.subjectsApi.list({ status: 'ACTIVE', size: 200, sort: 'name,asc' }),
     }).subscribe({
-      next: ({ teachers, classes }) => {
+      next: ({ teachers, classes, subjects }) => {
         this.teachers.set(teachers);
         this.classes.set(classes.content);
+        this.subjects.set(subjects.content);
         this.loadState.set({ kind: 'ready' });
       },
       error: (error: unknown) => {

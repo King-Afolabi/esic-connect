@@ -26,6 +26,8 @@ const SESSION: CourseSessionResponse = {
   title: 'Rattrapage',
   exceptionReason: 'séance exceptionnelle',
   teacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
+  subject: null,
+  roomCode: null,
   classes: [{ publicId: 'c-1', code: 'BTS-SIO-1' }],
   startsAt: '2026-09-10T06:00:00Z',
   endsAt: '2026-09-10T10:00:00Z',

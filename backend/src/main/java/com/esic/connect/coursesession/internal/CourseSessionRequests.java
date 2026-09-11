@@ -19,13 +19,23 @@ final class CourseSessionRequests {
      * Création d'une séance exceptionnelle.
      *
      * <p>{@code teacherPublicId} : compte {@code TEACHER} actif ;
-     * {@code classPublicIds} : au moins une classe ; {@code reason} :
-     * motif obligatoire (séance exceptionnelle) ; {@code timeZoneId} :
-     * fuseau IANA de saisie ; {@code startsAt} / {@code endsAt} : instants
-     * absolus (le back-end reste l'autorité sur la cohérence de période).
+     * {@code classPublicIds} : au moins une classe — <strong>plusieurs
+     * classes qui suivent la séance ensemble se déclarent ici en une
+     * seule fois</strong>, ce n'est jamais une séance par classe ;
+     * {@code subjectPublicId} : matière enseignée, facultative (une
+     * séance sans matière précisée reste valide) ; {@code roomPublicId} :
+     * salle, facultative — sert aussi au contrôle anti-double-réservation
+     * (deux séances ne peuvent occuper la même salle sur des horaires qui
+     * se chevauchent) ; {@code reason} : motif obligatoire (séance
+     * exceptionnelle) ; {@code timeZoneId} : fuseau IANA de saisie ;
+     * {@code startsAt} / {@code endsAt} : instants absolus (le back-end
+     * reste l'autorité sur la cohérence de période et sur l'absence de
+     * double réservation du formateur — RG-105).
      */
     record Create(
             @NotBlank String teacherPublicId,
+            @Size(max = 40) String subjectPublicId,
+            @Size(max = 40) String roomPublicId,
             @NotEmpty List<@NotBlank String> classPublicIds,
             @NotNull Instant startsAt,
             @NotNull Instant endsAt,
@@ -48,6 +58,15 @@ final class CourseSessionRequests {
      */
     record Cancel(
             @NotBlank @Size(max = 500) String reason) {
+    }
+
+    /**
+     * Affectation ou changement de salle a posteriori (V35) — la décision
+     * de salle est souvent prise au dernier moment, bien après la
+     * création de la séance.
+     */
+    record AssignRoom(
+            @NotBlank @Size(max = 40) String roomPublicId) {
     }
 
     /**

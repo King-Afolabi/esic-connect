@@ -75,6 +75,34 @@
         @if (form.controls.classPublicIds.touched && form.controls.classPublicIds.invalid) {
           <mat-error>Sélectionnez au moins une classe.</mat-error>
         }
+        <mat-hint>Plusieurs classes qui suivent la séance ensemble se choisissent ici, en une seule fois.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Matière (facultatif)</mat-label>
+        <mat-select formControlName="subjectPublicId">
+          <mat-option value="">Non précisée</mat-option>
+          @for (subject of subjects(); track subject.id) {
+            <mat-option [value]="subject.id">{{ subject.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Salle (facultatif)</mat-label>
+        <mat-select formControlName="roomPublicId" [disabled]="!form.controls.classPublicIds.value.length">
+          <mat-option value="">À préciser plus tard</mat-option>
+          @for (room of rooms(); track room.publicId) {
+            <mat-option [value]="room.publicId">{{ room.name }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>
+          @if (!form.controls.classPublicIds.value.length) {
+            Choisissez d'abord une classe pour voir les salles de son site.
+          } @else {
+            La salle se décide souvent au dernier moment : elle peut être affectée ou changée plus tard, depuis la fiche de la séance.
+          }
+        </mat-hint>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="sessions__form-field">

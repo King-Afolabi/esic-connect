@@ -479,9 +479,13 @@ class CourseSessionIntegrationTests {
         Account substitute = accountWithRoles(RoleCode.TEACHER);
         String covered = (String) created("/api/v1/sessions",
                 createBody(principal.publicId(), List.of(chain.classA()), "Couverte"), admin).get("publicId");
-        // Une autre séance du même formateur principal, SANS remplacement.
-        String uncovered = (String) created("/api/v1/sessions",
-                createBody(principal.publicId(), List.of(chain.classA()), "Non couverte"), admin).get("publicId");
+        // Une autre séance du même formateur principal, SANS remplacement —
+        // décalée dans le temps (RG-105) : un même formateur ne peut pas
+        // être sur deux séances qui se chevauchent.
+        Map<String, Object> uncoveredBody = createBody(principal.publicId(), List.of(chain.classA()), "Non couverte");
+        uncoveredBody.put("startsAt", Instant.parse((String) uncoveredBody.get("startsAt")).plusSeconds(24 * 3600).toString());
+        uncoveredBody.put("endsAt", Instant.parse((String) uncoveredBody.get("endsAt")).plusSeconds(24 * 3600).toString());
+        String uncovered = (String) created("/api/v1/sessions", uncoveredBody, admin).get("publicId");
 
         // Remplacement ACTIF couvrant maintenant.
         created("/api/v1/sessions/" + covered + "/substitutions",
