@@ -77,6 +77,58 @@
   </div>
 }
 
+@if (canSeeOrphanAccounts() && orphanAccounts().length > 0) {
+  <section class="students__orphans" aria-labelledby="students-orphans-title">
+    <h2 id="students-orphans-title" class="students__orphans-title">
+      <mat-icon aria-hidden="true">person_off</mat-icon>
+      Comptes apprenants sans profil ({{ orphanAccounts().length }})
+    </h2>
+    <p class="students__orphans-hint">
+      Ces comptes existent (ils peuvent se connecter) mais n'ont pas encore de profil ni de
+      classe — ils sont donc absents de la liste ci-dessous. Complétez-les pour les rattacher
+      à une formation.
+    </p>
+    <ul class="students__orphans-list">
+      @for (user of orphanAccounts(); track user.publicId) {
+        <li class="students__orphan-row">
+          <span>{{ user.lastName }} {{ user.firstName }} — {{ user.email }}</span>
+          @if (completingUserId() === user.publicId) {
+            <form
+              class="students__reveal"
+              role="group"
+              [attr.aria-label]="'Compléter le profil de ' + user.firstName + ' ' + user.lastName"
+              [formGroup]="completeForm"
+              (ngSubmit)="confirmComplete()"
+            >
+              <mat-form-field appearance="outline">
+                <mat-label>Classe</mat-label>
+                <mat-select formControlName="classGroupPublicId">
+                  @for (classGroup of classGroups(); track classGroup.publicId) {
+                    <mat-option [value]="classGroup.publicId">{{ classGroup.code }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <button mat-flat-button type="submit" [disabled]="completeSubmitting()">
+                Créer le profil et inscrire
+              </button>
+              <button mat-button type="button" (click)="cancelComplete()" [disabled]="completeSubmitting()">
+                Annuler
+              </button>
+              @if (completeError()) {
+                <p class="students__inline-error" role="alert">{{ completeError() }}</p>
+              }
+            </form>
+          } @else {
+            <button mat-stroked-button type="button" (click)="startComplete(user.publicId)">
+              Compléter le profil
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+}
+
 @if (state().kind === 'ready') {
   @if (isEmpty()) {
     <p class="students__status" role="status">
@@ -107,6 +159,17 @@
         <ng-container matColumnDef="studentNumber">
           <th mat-header-cell *matHeaderCellDef mat-sort-header>Numéro étudiant</th>
           <td mat-cell *matCellDef="let row">{{ row.studentNumber }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="classGroup">
+          <th mat-header-cell *matHeaderCellDef>Classe</th>
+          <td mat-cell *matCellDef="let row">
+            @if (hasNoClass(row)) {
+              <span class="esic-badge esic-badge--warning">Sans classe</span>
+            } @else {
+              {{ classGroupLabel(row) }}
+            }
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="workStudy">
@@ -146,6 +209,11 @@
             >
               Consulter
             </a>
+            @if (hasNoClass(row) && assigningProfileId() !== row.publicId) {
+              <button mat-button type="button" (click)="startAssign(row.publicId)">
+                Attribuer une classe
+              </button>
+            }
           </td>
         </ng-container>
 
@@ -153,6 +221,37 @@
         <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
       </table>
     </div>
+
+    @if (assigningProfileId()) {
+      <form
+        class="students__reveal"
+        role="group"
+        aria-label="Attribuer une classe"
+        [formGroup]="assignForm"
+        (ngSubmit)="confirmAssign()"
+      >
+        <mat-form-field appearance="outline">
+          <mat-label>Classe</mat-label>
+          <mat-select formControlName="classGroupPublicId">
+            @for (classGroup of classGroups(); track classGroup.publicId) {
+              <mat-option [value]="classGroup.publicId">{{ classGroup.code }}</mat-option>
+            }
+          </mat-select>
+          @if (assignForm.controls.classGroupPublicId.touched && assignForm.controls.classGroupPublicId.invalid) {
+            <mat-error>Sélectionnez une classe.</mat-error>
+          }
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="assignSubmitting() || assignForm.invalid">
+          Confirmer
+        </button>
+        <button mat-button type="button" (click)="cancelAssign()" [disabled]="assignSubmitting()">
+          Annuler
+        </button>
+        @if (assignError()) {
+          <p class="students__inline-error" role="alert">{{ assignError() }}</p>
+        }
+      </form>
+    }
 
     <mat-paginator
       [length]="totalElements()"
