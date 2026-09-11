@@ -10,6 +10,7 @@
       [mode]="isHandset() ? 'over' : 'side'"
       [opened]="!isHandset()"
       [fixedInViewport]="isHandset()"
+      (openedChange)="onSidenavOpenedChange($event)"
     >
       @if (isHandset()) {
         <a class="shell__brand shell__brand--rail" routerLink="/dashboard" (click)="sidenav.close()">
@@ -18,7 +19,7 @@
         </a>
       }
 
-      <nav class="shell__nav" aria-label="Navigation principale">
+      <nav class="shell__nav" #navScroll aria-label="Navigation principale">
         <mat-nav-list>
           @for (item of navItems(); track item.path) {
             <a

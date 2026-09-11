@@ -14,6 +14,9 @@
 
 // -- Rail de navigation ---------------------------------------------------
 .shell__rail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   width: var(--esic-rail-width);
   padding: var(--esic-space-3) var(--esic-space-2);
   background: var(--esic-surface);
@@ -26,6 +29,14 @@
   // La liste Material gère ses propres espacements ; on retire la marge
   // haute quand le rail n'a pas de bandeau de marque (mode desktop).
   margin-top: var(--esic-space-1);
+  // Seul `.shell__nav` défile (et non le conteneur `mat-sidenav` entier) :
+  // c'est ce qui permet de mémoriser et restituer explicitement sa position
+  // de défilement à l'ouverture/fermeture sur mobile (voir `app-shell.ts`,
+  // `onSidenavOpenedChange`), plutôt que de dépendre du conteneur interne
+  // du CDK qui réinitialise sa position pendant l'animation.
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 // -- Rail replié : bande d'icônes (desktop) --------------------------

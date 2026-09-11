@@ -2,10 +2,12 @@ import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnDestroy,
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -154,6 +156,37 @@ export class AppShell implements OnDestroy {
       return localStorage.getItem(this.railKey) === '1';
     } catch {
       return false;
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Position de défilement du menu latéral (mobile)
+  // -------------------------------------------------------------------
+  // En mode « over » (mobile), Angular Material ne détruit jamais le
+  // contenu du `mat-sidenav` : il l'anime hors champ. Le défilement de la
+  // liste n'est donc normalement pas perdu — mais le navigateur peut le
+  // réinitialiser pendant l'animation de fermeture (mise en page recalculée
+  // hors viewport). Résultat perçu : on rouvre le menu après avoir cliqué
+  // tout en bas, et l'entrée qu'on visait est repassée hors écran, en haut.
+  // On fige donc nous-mêmes la position au moment où le panneau se ferme,
+  // et on la restitue explicitement à la réouverture, plutôt que de
+  // dépendre du comportement du CDK.
+  private readonly navScrollRef = viewChild<ElementRef<HTMLElement>>('navScroll');
+  private lastNavScrollTop = 0;
+
+  protected onSidenavOpenedChange(opened: boolean): void {
+    const el = this.navScrollRef()?.nativeElement;
+    if (!el) {
+      return;
+    }
+    if (opened) {
+      // La restauration doit attendre que le panneau soit effectivement
+      // visible et mesurable (fin d'animation) avant d'imposer un scrollTop.
+      requestAnimationFrame(() => {
+        el.scrollTop = this.lastNavScrollTop;
+      });
+    } else {
+      this.lastNavScrollTop = el.scrollTop;
     }
   }
 
