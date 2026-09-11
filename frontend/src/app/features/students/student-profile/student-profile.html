@@ -128,10 +128,56 @@
                 <p class="profile__hint">
                   Niveau, promotion et rythme d'alternance ne sont pas exposés par cette fiche.
                 </p>
+                @if (canManageEnrollment() && !transferOpen()) {
+                  <button mat-stroked-button type="button" (click)="startTransfer()">
+                    <mat-icon aria-hidden="true">swap_horiz</mat-icon>
+                    <span>Changer de classe</span>
+                  </button>
+                }
               } @else {
                 <p class="profile__status" role="status">
                   Aucune inscription active. Voir l'historique ci-dessous.
                 </p>
+              }
+
+              @if (transferOpen()) {
+                <form class="profile__reveal" [formGroup]="transferForm" (ngSubmit)="submitTransfer()" novalidate>
+                  <p class="profile__hint">
+                    L'inscription actuelle est clôturée et une nouvelle démarre dans la classe choisie — l'historique
+                    reste consultable (passage en année supérieure, par exemple).
+                  </p>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Nouvelle classe</mat-label>
+                    <mat-select formControlName="classGroupPublicId" required>
+                      @for (option of classOptions(); track option.publicId) {
+                        <mat-option [value]="option.publicId">{{ option.code }}</mat-option>
+                      }
+                    </mat-select>
+                    @if (classesState() === 'error') {
+                      <mat-hint>Impossible de charger les classes.</mat-hint>
+                    }
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Date d'effet (facultatif, aujourd'hui par défaut)</mat-label>
+                    <input matInput type="date" formControlName="effectiveDate" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Motif</mat-label>
+                    <input matInput formControlName="reason" maxlength="500" required />
+                    @if (transferForm.controls.reason.touched && transferForm.controls.reason.invalid) {
+                      <mat-error>Le motif est obligatoire.</mat-error>
+                    }
+                  </mat-form-field>
+                  @if (transferError()) {
+                    <p class="esic-form__error" role="alert">{{ transferError() }}</p>
+                  }
+                  <div class="esic-form__actions">
+                    <button mat-flat-button type="submit" [disabled]="transferBusy()">Confirmer le changement</button>
+                    <button mat-button type="button" (click)="cancelTransfer()" [disabled]="transferBusy()">
+                      Annuler
+                    </button>
+                  </div>
+                </form>
               }
             }
           }

@@ -139,6 +139,26 @@ export interface EnrollStudentRequest {
 }
 
 /**
+ * Corps de `POST /api/v1/enrollments/{publicId}/transfer`
+ * (`EnrollmentRequests.Transfer`) — changement de classe.
+ */
+export interface TransferEnrollmentRequest {
+  classGroupPublicId: string;
+  reason: string;
+  effectiveDate?: string | null;
+}
+
+/**
+ * Corps de `POST /api/v1/enrollments/{publicId}/close`
+ * (`EnrollmentRequests.Close`).
+ */
+export interface CloseEnrollmentRequest {
+  status: 'COMPLETED' | 'WITHDRAWN';
+  reason: string;
+  effectiveDate?: string | null;
+}
+
+/**
  * Champs de tri réellement acceptés par `GET /api/v1/student-profiles`
  * (liste blanche `StudentProfileService.SORTABLE` ; toute autre valeur →
  * 400 `ENR_INVALID_SORT`).

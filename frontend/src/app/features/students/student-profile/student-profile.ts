@@ -7,9 +7,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
+import { AcademicApiService } from '../../academic/academic-api.service';
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { StudentsApiService } from '../students-api.service';
 import {
@@ -22,6 +25,9 @@ import {
   remoteAuthorizationStatusLabel,
   studentProfileStatusLabel,
 } from '../students.models';
+
+/** Rôles habilités à changer la classe / clôturer une inscription (`EnrollmentWeb.MANAGE_ROLES`). */
+const ENROLLMENT_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const;
 
 type ProfileState =
   | { kind: 'loading' }
@@ -68,12 +74,15 @@ type RemoteState =
     MatInputModule,
     MatIconModule,
     MatProgressBarModule,
+    MatSelectModule,
   ],
   templateUrl: './student-profile.html',
   styleUrl: './student-profile.scss',
 })
 export class StudentProfile {
   private readonly api = inject(StudentsApiService);
+  private readonly academic = inject(AcademicApiService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
@@ -99,6 +108,26 @@ export class StudentProfile {
   protected readonly remote = signal<RemoteState>({ kind: 'loading' });
   protected readonly remoteBusy = signal(false);
   protected readonly remoteActionError = signal<string | null>(null);
+
+  /**
+   * « Changer de classe » (docs/04 §13.2) — typiquement un passage en
+   * année supérieure : l'inscription courante est clôturée en
+   * `TRANSFERRED` et une nouvelle s'ouvre dans la classe cible, sans
+   * perdre l'historique (RG-006, RG-023).
+   */
+  protected readonly canManageEnrollment = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => (ENROLLMENT_WRITE_ROLES as readonly string[]).includes(r)),
+  );
+  protected readonly transferOpen = signal(false);
+  protected readonly transferBusy = signal(false);
+  protected readonly transferError = signal<string | null>(null);
+  protected readonly classOptions = signal<{ publicId: string; code: string }[]>([]);
+  protected readonly classesState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  protected readonly transferForm = this.formBuilder.group({
+    classGroupPublicId: this.formBuilder.control('', Validators.required),
+    reason: this.formBuilder.control('', [Validators.required, Validators.maxLength(500)]),
+    effectiveDate: this.formBuilder.control(''),
+  });
 
   /**
    * Octroi d'une autorisation de suivi à distance (EF-ENR-004).
@@ -239,6 +268,62 @@ export class StudentProfile {
           this.remoteActionError.set(normalizeHttpError(error).message);
         },
       });
+  }
+
+  protected startTransfer(): void {
+    if (!this.canManageEnrollment()) {
+      return;
+    }
+    this.transferOpen.set(true);
+    this.transferError.set(null);
+    this.transferForm.reset({ classGroupPublicId: '', reason: '', effectiveDate: '' });
+    if (this.classesState() === 'idle') {
+      this.loadClassOptions();
+    }
+  }
+
+  protected cancelTransfer(): void {
+    this.transferOpen.set(false);
+    this.transferError.set(null);
+  }
+
+  protected submitTransfer(): void {
+    const enrollment = this.currentEnrollment();
+    if (!enrollment || this.transferForm.invalid || this.transferBusy() || !this.canManageEnrollment()) {
+      this.transferForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.transferForm.getRawValue();
+    this.transferBusy.set(true);
+    this.transferError.set(null);
+    this.api
+      .transferEnrollment(enrollment.publicId, {
+        classGroupPublicId: raw.classGroupPublicId,
+        reason: raw.reason.trim(),
+        effectiveDate: raw.effectiveDate || null,
+      })
+      .subscribe({
+        next: () => {
+          this.transferBusy.set(false);
+          this.transferOpen.set(false);
+          this.loadHistory();
+        },
+        error: (error: unknown) => {
+          this.transferBusy.set(false);
+          this.transferError.set(normalizeHttpError(error).message);
+        },
+      });
+  }
+
+  private loadClassOptions(): void {
+    this.classesState.set('loading');
+    this.academic.listClassGroups({ status: 'ACTIVE', size: 200, sort: 'code,asc' }).subscribe({
+      next: (page) => {
+        this.classOptions.set(page.content.map((c) => ({ publicId: c.publicId, code: c.code })));
+        this.classesState.set('ready');
+      },
+      error: () => this.classesState.set('error'),
+    });
   }
 
   private loadProfile(): void {

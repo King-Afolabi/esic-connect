@@ -1,10 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
-import { Component } from '@angular/core';
+import { Component, WritableSignal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 
+import { Role } from '../../../core/models/role';
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import {
   EnrollmentResponse,
   RemoteAttendanceAuthorizationResponse,
@@ -416,6 +418,88 @@ describe('StudentProfile', () => {
 
     // La décision reste au dossier : elle apparaît révoquée, pas absente.
     expect(text()).toContain('Révoquée');
+    http.verify();
+  });
+});
+
+describe('StudentProfile — changement de classe', () => {
+  async function setupAsAdmin() {
+    localStorage.clear();
+    sessionStorage.clear();
+    const effectiveRoles: WritableSignal<Role[]> = signal(['ADMIN']);
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: 'students', component: ListStub },
+          { path: 'students/:publicId', component: StudentProfile },
+          { path: 'dashboard', component: DashStub },
+        ]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { effectiveRoles } },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(`/students/${ID}`, StudentProfile);
+    harness.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    return { harness, http };
+  }
+
+  it('permet à un ADMIN de changer la classe d’un apprenant sans perdre l’historique', async () => {
+    const { harness, http } = await setupAsAdmin();
+    http.expectOne(PROFILE_URL).flush(PROFILE);
+    harness.detectChanges();
+    http.expectOne(IDENTITY_URL).flush({ publicId: 'u-1', email: 'x@y.z', firstName: 'A', lastName: 'B' });
+    http.expectOne((r) => r.url === ENROLLMENTS_URL).flush({
+      content: [ENROLLMENT],
+      page: 0,
+      size: 100,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    http.expectOne(REMOTE_URL).flush([]);
+    harness.detectChanges();
+
+    const startButton = [...(harness.routeNativeElement?.querySelectorAll('button') ?? [])].find((b) =>
+      b.textContent?.includes('Changer de classe'),
+    ) as HTMLButtonElement;
+    expect(startButton).toBeTruthy();
+    startButton.click();
+    harness.detectChanges();
+
+    http.expectOne((r) => r.url === '/api/v1/class-groups').flush({
+      content: [{ publicId: 'c-2', code: 'BTS-SIO-2-A' }],
+      page: 0,
+      size: 200,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    harness.detectChanges();
+
+    const component = harness.routeDebugElement?.componentInstance as unknown as {
+      transferForm: { patchValue: (v: Record<string, unknown>) => void };
+      submitTransfer: () => void;
+    };
+    component.transferForm.patchValue({ classGroupPublicId: 'c-2', reason: 'Passage en année supérieure' });
+    component.submitTransfer();
+
+    const req = http.expectOne(`/api/v1/enrollments/${ENROLLMENT.publicId}/transfer`);
+    expect(req.request.body).toEqual({
+      classGroupPublicId: 'c-2',
+      reason: 'Passage en année supérieure',
+      effectiveDate: null,
+    });
+    req.flush({ ...ENROLLMENT, publicId: 'e-2', classGroupPublicId: 'c-2', classGroupCode: 'BTS-SIO-2-A' });
+    harness.detectChanges();
+
+    http.expectOne((r) => r.url === ENROLLMENTS_URL).flush({
+      content: [{ ...ENROLLMENT, status: 'TRANSFERRED', endDate: '2026-09-10' }],
+      page: 0,
+      size: 100,
+      totalElements: 1,
+      totalPages: 1,
+    });
     http.verify();
   });
 });
