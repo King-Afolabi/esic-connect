@@ -1,5 +1,6 @@
 package com.esic.connect.identity.internal;
 
+import com.esic.connect.identity.AdminPasswordResetDirectory;
 import com.esic.connect.identity.PasswordChangedEvent;
 import com.esic.connect.identity.PasswordResetRequestedEvent;
 import com.esic.connect.identity.SessionsRevokedEvent;
@@ -20,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Parcours « mot de passe oublié » (EF-AUTH-005,
@@ -43,7 +45,7 @@ import java.util.Optional;
  * il a prouvé qu'il contrôle l'adresse.
  */
 @Service
-public class PasswordResetService {
+public class PasswordResetService implements AdminPasswordResetDirectory {
 
     private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
 
@@ -206,6 +208,39 @@ public class PasswordResetService {
         eventPublisher.publishEvent(new SessionsRevokedEvent(
                 account.getId(), account.getPublicId(), displaySnapshot(account),
                 SessionsRevokedEvent.REASON_PASSWORD_RESET));
+    }
+
+    /**
+     * Implémentation d'{@link AdminPasswordResetDirectory} — déclenchement
+     * par un tiers habilité (module {@code passwordadmin}), et non par la
+     * personne elle-même. Même mécanique que {@link #requestReset} (jeton,
+     * révocation des demandes en attente, événement de notification) mais
+     * ciblage par identifiant public déjà résolu, et réponse franche : le
+     * contrôle d'autorisation a déjà eu lieu chez l'appelant.
+     */
+    @Override
+    @Transactional
+    public Outcome triggerReset(UUID targetUserPublicId) {
+        Optional<UserAccount> maybeAccount = userAccountRepository.findByPublicId(targetUserPublicId);
+        if (maybeAccount.isEmpty()) {
+            return Outcome.USER_NOT_FOUND;
+        }
+        UserAccount account = maybeAccount.get();
+        if (!isResettable(account)) {
+            return Outcome.NOT_ELIGIBLE;
+        }
+
+        Instant now = clock.instant();
+        revokePendingTokens(account, now);
+        tokenRepository.flush();
+
+        String rawToken = tokenService.generateRawToken();
+        Instant expiresAt = now.plus(tokenTtl);
+        tokenRepository.save(new PasswordResetToken(account, tokenService.hash(rawToken), expiresAt));
+
+        eventPublisher.publishEvent(new PasswordResetRequestedEvent(
+                account.getEmail(), account.getFirstName(), rawToken, expiresAt));
+        return Outcome.RESET_SENT;
     }
 
     /**

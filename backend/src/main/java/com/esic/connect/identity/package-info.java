@@ -18,7 +18,11 @@
  * invitation <em>dans la transaction unique</em> de la confirmation
  * d'import — propagation {@code REQUIRED}, publie
  * {@code AccountInvitationIssuedEvent} mais jamais
- * {@code AccountLifecycleEvent}).
+ * {@code AccountLifecycleEvent}) et
+ * {@link com.esic.connect.identity.AdminPasswordResetDirectory} (consommé
+ * par {@code passwordadmin} : déclenche pour un compte désigné le même
+ * parcours que « mot de passe oublié », l'autorisation — hiérarchie de
+ * rôles, périmètre pédagogique — étant décidée chez l'appelant).
  *
  * <p>{@link com.esic.connect.identity.DuplicateDependencyContributor} est
  * un port <em>entrant</em> : {@code identity} le déclare, d'autres
