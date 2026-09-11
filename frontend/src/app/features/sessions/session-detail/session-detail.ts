@@ -21,6 +21,9 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, interval } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
+import { AcademicApiService } from '../../academic/academic-api.service';
+import { OrganizationApiService } from '../../organization/organization-api.service';
+import { RoomResponse } from '../../organization/organization.models';
 import { EarlyDeparturePanel } from '../../attendance/early-departure/early-departure-panel';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
@@ -109,6 +112,8 @@ type AttendanceState =
 })
 export class SessionDetail {
   private readonly api = inject(SessionsApiService);
+  private readonly academic = inject(AcademicApiService);
+  private readonly organizationApi = inject(OrganizationApiService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
@@ -136,9 +141,18 @@ export class SessionDetail {
 
   protected readonly state = signal<DetailState>({ kind: 'loading' });
   protected readonly attendance = signal<AttendanceState>({ kind: 'idle' });
-  protected readonly pendingAction = signal<'open' | 'close' | 'cancel' | null>(null);
+  protected readonly pendingAction = signal<'open' | 'close' | 'cancel' | 'room' | null>(null);
   protected readonly submitting = signal(false);
   protected readonly actionError = signal<string | null>(null);
+
+  /**
+   * Salle (V35) : facultative à la création, souvent décidée au dernier
+   * moment — d'où cette action dédiée, indépendante du cycle de vie de la
+   * séance. Les options sont celles du site déduit de la première classe
+   * de la séance (les salles sont rattachées à un site).
+   */
+  protected readonly roomOptions = signal<RoomResponse[]>([]);
+  protected readonly roomOptionsLoading = signal(false);
 
   protected readonly attendanceToken = signal<AttendanceTokenResponse | null>(null);
   protected readonly tokenError = signal<string | null>(null);
@@ -177,6 +191,10 @@ export class SessionDetail {
   /** G1-C — motif obligatoire d'annulation de la séance. */
   protected readonly sessionCancelForm = this.fb.nonNullable.group({
     reason: ['', [Validators.required, Validators.maxLength(500)]],
+  });
+  /** V35 — affectation ou changement de salle. */
+  protected readonly roomForm = this.fb.nonNullable.group({
+    roomPublicId: ['', [Validators.required]],
   });
   /** Motif d'annulation d'une **présence** — jamais partagé (§4). */
   protected readonly attendanceCancelForm = this.fb.nonNullable.group({
@@ -362,6 +380,7 @@ export class SessionDetail {
         this.checkpointForm.reset({ label: '', type: 'CUSTOM', required: true });
         this.checkpointCancelForm.reset({ reason: '' });
         this.sessionCancelForm.reset({ reason: '' });
+        this.roomForm.reset({ roomPublicId: '' });
         this.showSubstitutionForm.set(false);
         this.substitutionForm.reset({
           substituteTeacherPublicId: '',
@@ -430,6 +449,77 @@ export class SessionDetail {
     this.pendingAction.set(null);
     this.actionError.set(null);
     this.sessionCancelForm.reset({ reason: '' });
+    this.roomForm.reset({ roomPublicId: '' });
+  }
+
+  /**
+   * Affecte ou change la salle (V35) — action indépendante du cycle de
+   * vie : disponible tant que la séance n'est ni close, ni annulée
+   * (mêmes rôles que {@link canManageCheckpoint}, la décision de salle
+   * étant souvent prise après la création).
+   */
+  protected readonly canAssignRoom = computed(
+    () => this.canManageCheckpoint() && (this.isPlanned() || this.isOpen()),
+  );
+
+  protected startAssignRoom(): void {
+    if (!this.canAssignRoom()) {
+      return;
+    }
+    this.actionError.set(null);
+    const current = this.session();
+    this.roomForm.reset({ roomPublicId: '' });
+    this.pendingAction.set('room');
+    if (current && this.roomOptions().length === 0 && current.classes.length > 0) {
+      this.loadRoomOptions(current.classes[0].publicId);
+    }
+  }
+
+  private loadRoomOptions(anyClassPublicId: string): void {
+    this.roomOptionsLoading.set(true);
+    this.academic.getClassGroup(anyClassPublicId).subscribe({
+      next: (classGroup) => {
+        if (!classGroup.sitePublicId) {
+          this.roomOptionsLoading.set(false);
+          return;
+        }
+        this.organizationApi
+          .listRooms(classGroup.sitePublicId, { status: 'ACTIVE', size: 200, sort: 'code,asc' })
+          .subscribe({
+            next: (page) => {
+              this.roomOptionsLoading.set(false);
+              this.roomOptions.set(page.content);
+            },
+            error: () => this.roomOptionsLoading.set(false),
+          });
+      },
+      error: () => this.roomOptionsLoading.set(false),
+    });
+  }
+
+  protected confirmAssignRoom(): void {
+    if (this.roomForm.invalid || this.submitting()) {
+      this.roomForm.markAllAsTouched();
+      return;
+    }
+    this.submitting.set(true);
+    this.actionError.set(null);
+    const roomPublicId = this.roomForm.getRawValue().roomPublicId;
+    this.api.assignRoom(this.publicId, { roomPublicId }).subscribe({
+      next: (updated) => {
+        this.submitting.set(false);
+        this.pendingAction.set(null);
+        if (!this.canAssignRoom()) {
+          return;
+        }
+        this.state.set({ kind: 'ready', session: updated });
+        this.notifications.info('Salle affectée.');
+      },
+      error: (error: unknown) => {
+        this.submitting.set(false);
+        this.actionError.set(toSessionError(error).message);
+      },
+    });
   }
   protected confirmOpen(): void {
     this.runLifecycle(() => this.api.openSession(this.publicId), 'Séance ouverte.');

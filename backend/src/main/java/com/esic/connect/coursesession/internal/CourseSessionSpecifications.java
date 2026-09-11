@@ -21,6 +21,16 @@ final class CourseSessionSpecifications {
         return (root, query, cb) -> cb.equal(root.get("teacherUserId"), teacherUserId);
     }
 
+    /** Séances affectées à la salle {@code roomCode} — contrôle anti-double-réservation (V35). */
+    static Specification<CourseSession> hasRoomCode(String roomCode) {
+        return (root, query, cb) -> cb.equal(root.get("roomCode"), roomCode);
+    }
+
+    /** Exclut une séance précise par sa clé primaire — pour un contrôle « les autres séances ». */
+    static Specification<CourseSession> excludingId(long sessionId) {
+        return (root, query, cb) -> cb.notEqual(root.get("id"), sessionId);
+    }
+
     /**
      * Séances dont la clé primaire figure dans {@code internalIds} (G1-C.3) —
      * combinée en {@code OR} avec {@link #taughtBy} pour qu'un formateur

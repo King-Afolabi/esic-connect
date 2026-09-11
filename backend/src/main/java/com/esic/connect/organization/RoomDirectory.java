@@ -28,6 +28,19 @@ public interface RoomDirectory {
     Optional<RoomRef> findActiveByStaticQrReference(String staticQrReference);
 
     /**
+     * Résout une salle par son identifiant public — sélection explicite
+     * (ex. à la création ou à l'affectation tardive d'une salle sur une
+     * séance, {@code coursesession}), par opposition à
+     * {@link #findActiveByStaticQrReference} qui identifie une ressource
+     * physique à partir d'un jeton scanné.
+     *
+     * @param roomPublicId identifiant public de la salle ; peut être {@code null}
+     * @return la référence si une salle <strong>active</strong> correspond,
+     *         {@link Optional#empty()} sinon (salle inconnue ou archivée)
+     */
+    Optional<RoomRef> findByPublicId(UUID roomPublicId);
+
+    /**
      * L'adresse est-elle dans une plage réseau active du site ?
      *
      * <p>L'adresse est utilisée <strong>pendant la décision uniquement</strong>

@@ -367,8 +367,10 @@ class DashboardIntegrationTests {
             classCodes.add(classCode);
         }
         for (int i = 0; i < sessionCount; i++) {
+            // Écart de 3h (> les 2h de durée d'une séance, RG-105) : même
+            // formateur, jamais deux séances qui se chevauchent.
             openSession(admin, teacher, classIds.get(i % classIds.size()),
-                    Instant.now().plusSeconds(3600L + i * 60L));
+                    Instant.now().plusSeconds(3600L + i * 3 * 3600L));
         }
         Account manager = account(RoleCode.PEDAGOGICAL_MANAGER);
         assertThat(post(admin, "/api/v1/pedagogical-assignments", Map.of(

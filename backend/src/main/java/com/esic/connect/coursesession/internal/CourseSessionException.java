@@ -82,7 +82,23 @@ class CourseSessionException extends RuntimeException {
         /** Aucune demande d'annulation pour cet identifiant. */
         CANCELLATION_REQUEST_NOT_FOUND,
         /** Impossible d'ajouter / ouvrir un point de contrôle : la séance n'est pas ouverte. */
-        CHECKPOINT_SESSION_NOT_OPEN
+        CHECKPOINT_SESSION_NOT_OPEN,
+        // --- Matière et salle (V35) ---
+        /** La matière visée est inconnue. */
+        SUBJECT_NOT_FOUND,
+        /** La matière visée est archivée : elle ne peut plus être rattachée à une nouvelle séance. */
+        SUBJECT_INACTIVE,
+        /** La salle visée est inconnue ou archivée. */
+        ROOM_NOT_FOUND,
+        /**
+         * Le formateur enseigne déjà une autre séance sur un horaire qui
+         * chevauche celui demandé (RG-105) — physiquement impossible,
+         * sauf lorsque les classes suivent la même séance : dans ce cas
+         * elles se déclarent ensemble sur une seule séance, pas sur deux.
+         */
+        TEACHER_DOUBLE_BOOKING,
+        /** La salle est déjà occupée par une autre séance sur un horaire qui chevauche celui demandé. */
+        ROOM_DOUBLE_BOOKING
     }
 
     private final Kind kind;

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
+  AssignRoomRequest,
   AttendanceCandidate,
   AttendanceCorrectionEntry,
   AttendanceRecordResponse,
@@ -92,6 +93,18 @@ export class SessionsApiService {
     return this.http.post<void>(
       `${this.base}/sessions/${encodeURIComponent(publicId)}/cancel`,
       { reason },
+    );
+  }
+
+  /**
+   * `POST /api/v1/sessions/{publicId}/room` (V35) — affecte ou change la
+   * salle d'une séance déjà créée : la décision est fréquemment prise au
+   * dernier moment, bien après la création.
+   */
+  assignRoom(publicId: string, body: AssignRoomRequest): Observable<CourseSessionResponse> {
+    return this.http.post<CourseSessionResponse>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}/room`,
+      body,
     );
   }
 

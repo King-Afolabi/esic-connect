@@ -20,6 +20,7 @@ interface FormInternals {
 
 const TEACHERS_URL = '/api/v1/sessions/teachers';
 const CLASSES_URL = '/api/v1/class-groups';
+const SUBJECTS_URL = '/api/v1/subjects';
 const CREATE_URL = '/api/v1/sessions';
 
 function setup(roles: Role[] = ['ADMIN']) {
@@ -61,11 +62,16 @@ function loadReady(http: HttpTestingController): void {
       totalElements: 1,
       totalPages: 1,
     });
+  http
+    .expectOne((r) => r.url === SUBJECTS_URL)
+    .flush({ content: [], page: 0, size: 200, totalElements: 0, totalPages: 0 });
 }
 
 function fillValid(internals: FormInternals): void {
   internals.form.setValue({
     teacherPublicId: 't-1',
+    subjectPublicId: '',
+    roomPublicId: '',
     classPublicIds: ['c-1'],
     date: '2026-09-10',
     startTime: '08:00',
@@ -126,6 +132,8 @@ describe('SessionForm', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
       teacherPublicId: 't-1',
+      subjectPublicId: null,
+      roomPublicId: null,
       classPublicIds: ['c-1'],
       startsAt: '2026-09-10T06:00:00.000Z',
       endsAt: '2026-09-10T10:00:00.000Z',
@@ -168,6 +176,7 @@ describe('SessionForm', () => {
     // `forkJoin` propage la première erreur et annule l'autre source :
     // on ne flush que la requête qui échoue.
     http.expectOne((r) => r.url === CLASSES_URL); // consommée puis annulée
+    http.expectOne((r) => r.url === SUBJECTS_URL); // consommée puis annulée
     http.expectOne(TEACHERS_URL).flush(
       { timestamp: 't', status: 403, code: 'ACCESS_DENIED', message: 'x', path: '/', correlationId: null, details: [] },
       { status: 403, statusText: 'Forbidden' },

@@ -89,6 +89,20 @@ class CourseSessionController {
     }
 
     /**
+     * Affecte ou change la salle d'une séance déjà créée (V35) : la
+     * décision de salle est fréquemment prise au dernier moment, bien
+     * après la création de la séance — ce n'est jamais obligatoire à la
+     * création.
+     */
+    @PostMapping("/{publicId}/room")
+    @PreAuthorize(CourseSessionWeb.MANAGE_ROLES)
+    CourseSessionResponse assignRoom(@PathVariable String publicId,
+                                     @Valid @RequestBody CourseSessionRequests.AssignRoom request,
+                                     @AuthenticationPrincipal Jwt caller) {
+        return service.assignRoom(publicId, request, CourseSessionWeb.subject(caller));
+    }
+
+    /**
      * Annule une séance {@code PLANNED} / {@code OPEN} avec un motif
      * obligatoire (G1-C ; EF-SES-004 ; CDC §15.4). {@code 204}.
      * {@code CLOSED} / déjà {@code CANCELLED} → {@code 409}.

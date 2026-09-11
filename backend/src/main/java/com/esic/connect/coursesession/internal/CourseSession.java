@@ -38,6 +38,17 @@ class CourseSession extends BaseEntity {
     @Column(name = "teacher_user_id", nullable = false)
     private Long teacherUserId;
 
+    /**
+     * Matière enseignée durant la séance (V35). Nullable : une séance
+     * d'origine planning antérieure à ce lot, ou une séance dont la
+     * matière n'a pas encore été précisée, reste valide. Valeur technique
+     * (clé étrangère SQL vers {@code subject}) — aucune relation JPA vers
+     * {@code academic}, la référence passe par
+     * {@link com.esic.connect.academic.SubjectDirectory}.
+     */
+    @Column(name = "subject_id")
+    private Long subjectId;
+
     @Column(name = "title")
     private String title;
 
@@ -212,6 +223,10 @@ class CourseSession extends BaseEntity {
         this.updatedById = actorId;
     }
 
+    void markUpdatedBy(Long actorId) {
+        this.updatedById = actorId;
+    }
+
     /**
      * Met à jour les propriétés modifiables d'une séance d'origine
      * planning encore {@code PLANNED} (DEC-G1-004 règle 5). Ne touche ni
@@ -335,6 +350,19 @@ class CourseSession extends BaseEntity {
 
     Long getTeacherUserId() {
         return teacherUserId;
+    }
+
+    Long getSubjectId() {
+        return subjectId;
+    }
+
+    void assignSubject(Long subjectId) {
+        this.subjectId = subjectId;
+    }
+
+    /** Assigne une salle à une séance manuelle (jusqu'ici réservé au flux planning). */
+    void assignRoom(String roomCode) {
+        this.roomCode = roomCode;
     }
 
     String getTitle() {

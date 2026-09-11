@@ -57,6 +57,11 @@
                 Annuler la séance
               </button>
             }
+            @if (canAssignRoom()) {
+              <button mat-stroked-button type="button" (click)="startAssignRoom()">
+                {{ current.roomCode ? 'Changer la salle' : 'Affecter une salle' }}
+              </button>
+            }
           </div>
         }
       </header>
@@ -67,6 +72,8 @@
             <div><dt>Statut</dt><dd>{{ statusLabel(current.status) }}</dd></div>
             <div><dt>Motif</dt><dd>{{ current.exceptionReason }}</dd></div>
             <div><dt>Formateur</dt><dd>{{ teacherName(current.teacher) }}</dd></div>
+            <div><dt>Matière</dt><dd>{{ current.subject?.name || '—' }}</dd></div>
+            <div><dt>Salle</dt><dd>{{ current.roomCode || '—' }}</dd></div>
             <div><dt>Classes</dt><dd>{{ classCodes(current) }}</dd></div>
             <div><dt>Début</dt><dd>{{ formatInstantUtc(current.startsAt) }}</dd></div>
             <div><dt>Fin</dt><dd>{{ formatInstantUtc(current.endsAt) }}</dd></div>
@@ -124,6 +131,41 @@
               [disabled]="submitting() || sessionCancelForm.invalid"
             >
               Confirmer l'annulation
+            </button>
+            <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+              Revenir
+            </button>
+          </div>
+          @if (actionError()) { <p class="sessions__inline-error" role="alert">{{ actionError() }}</p> }
+        </form>
+      }
+      @if (pendingAction() === 'room') {
+        <form
+          class="sessions__reveal"
+          role="group"
+          aria-label="Affecter une salle"
+          [formGroup]="roomForm"
+          (ngSubmit)="confirmAssignRoom()"
+        >
+          <p>La salle se décide souvent au dernier moment : elle peut être affectée ou changée à tout
+            moment tant que la séance n'est ni close ni annulée.</p>
+          <mat-form-field appearance="outline">
+            <mat-label>Salle</mat-label>
+            <mat-select formControlName="roomPublicId">
+              @if (roomOptionsLoading()) {
+                <mat-option disabled>Chargement…</mat-option>
+              }
+              @for (room of roomOptions(); track room.publicId) {
+                <mat-option [value]="room.publicId">{{ room.name }}</mat-option>
+              }
+            </mat-select>
+            @if (roomForm.controls.roomPublicId.touched && roomForm.controls.roomPublicId.invalid) {
+              <mat-error>Sélectionnez une salle.</mat-error>
+            }
+          </mat-form-field>
+          <div class="sessions__form-actions">
+            <button mat-flat-button type="submit" [disabled]="submitting() || roomForm.invalid">
+              Confirmer
             </button>
             <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
               Revenir

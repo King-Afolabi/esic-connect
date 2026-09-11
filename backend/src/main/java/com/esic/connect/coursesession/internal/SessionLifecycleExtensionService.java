@@ -1,5 +1,6 @@
 package com.esic.connect.coursesession.internal;
 
+import com.esic.connect.academic.SubjectDirectory;
 import com.esic.connect.coursesession.CourseSessionChangeAction;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
 import com.esic.connect.identity.CurrentUserResolver;
@@ -35,6 +36,7 @@ public class SessionLifecycleExtensionService {
     private final CourseSessionService sessionService;
     private final CourseSessionChangePublisher changePublisher;
     private final CurrentUserResolver currentUserResolver;
+    private final SubjectDirectory subjectDirectory;
     private final Clock clock;
 
     SessionLifecycleExtensionService(CourseSessionRepository sessionRepository,
@@ -42,12 +44,14 @@ public class SessionLifecycleExtensionService {
                                      CourseSessionService sessionService,
                                      CourseSessionChangePublisher changePublisher,
                                      CurrentUserResolver currentUserResolver,
+                                     SubjectDirectory subjectDirectory,
                                      Clock clock) {
         this.sessionRepository = sessionRepository;
         this.requestRepository = requestRepository;
         this.sessionService = sessionService;
         this.changePublisher = changePublisher;
         this.currentUserResolver = currentUserResolver;
+        this.subjectDirectory = subjectDirectory;
         this.clock = clock;
     }
 
@@ -88,8 +92,17 @@ public class SessionLifecycleExtensionService {
                 ? originalClassPublicIds(original)
                 : request.classPublicIds();
 
+        // La matière de l'originale est conservée (même contenu, nouvelle
+        // date) ; la salle ne l'est jamais — elle est fréquemment décidée
+        // au dernier moment et celle de l'originale peut ne plus être
+        // libre au nouveau créneau.
+        String subjectPublicId = original.getSubjectId() == null ? null
+                : subjectDirectory.findByInternalId(original.getSubjectId())
+                        .map(ref -> ref.publicId().toString())
+                        .orElse(null);
+
         CourseSessionResponse replacement = sessionService.create(new CourseSessionRequests.Create(
-                teacher, classes, request.startsAt(), request.endsAt(), request.timeZoneId(),
+                teacher, subjectPublicId, null, classes, request.startsAt(), request.endsAt(), request.timeZoneId(),
                 request.reason(),
                 request.title() != null && !request.title().isBlank()
                         ? request.title()

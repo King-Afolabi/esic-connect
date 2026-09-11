@@ -20,5 +20,7 @@ public enum CourseSessionChangeAction {
     /** Demande d'annulation déposée par un formateur (EF-SES-008). */
     CANCELLATION_REQUESTED,
     /** Décision rendue sur une demande d'annulation (EF-SES-008). */
-    CANCELLATION_DECIDED
+    CANCELLATION_DECIDED,
+    /** Salle affectée ou changée a posteriori (V35) — décidée souvent au dernier moment. */
+    ROOM_ASSIGNED
 }
