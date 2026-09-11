@@ -19,7 +19,7 @@ describe('PedagogicalAssignmentList — accessibilité (axe-core)', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: NotificationService, useValue: { info: () => {}, error: () => {} } },
+        { provide: NotificationService, useValue: { info: vi.fn(), error: vi.fn() } },
       ],
     });
 
