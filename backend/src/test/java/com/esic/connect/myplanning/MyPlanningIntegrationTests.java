@@ -82,9 +82,6 @@ class MyPlanningIntegrationTests {
         Account otherTeacher = accountWithRoles(RoleCode.TEACHER);
         Account student = accountWithRoles(RoleCode.STUDENT);
 
-        created("/api/v1/student-profiles", Map.of(
-                "userPublicId", student.publicId(), "studentNumber", "ESIC-" + code()), admin)
-                .get("publicId");
         created("/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", chain.classA(), "startDate", "2026-09-01"), admin);
 

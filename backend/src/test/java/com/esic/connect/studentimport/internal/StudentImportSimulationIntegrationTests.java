@@ -46,8 +46,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * T1 ; IMP-STU-01 / TI-001 / TI-008) : un fichier de 100 apprenants
  * valides produit un job {@code SIMULATED} confirmable dont le bilan
  * annonce 100 créations, <strong>sans aucune écriture métier</strong>
- * ({@code user_account} / {@code student_profile} / {@code enrollment} /
- * {@code account_invitation} inchangés). Colonne obligatoire absente →
+ * ({@code user_account} / {@code enrollment} / {@code account_invitation}
+ * inchangés). Colonne obligatoire absente →
  * rejet avant toute création de job. Filtre de périmètre pour un appelant
  * non global → refusé.
  */
@@ -97,7 +97,6 @@ class StudentImportSimulationIntegrationTests {
         Chain chain = academicChain(admin);
 
         long users0 = count("user_account");
-        long profiles0 = count("student_profile");
         long enrollments0 = count("enrollment");
         long invitations0 = count("account_invitation");
         long jobs0 = count("student_import_job");
@@ -128,8 +127,9 @@ class StudentImportSimulationIntegrationTests {
                 .isEqualTo(100L);
 
         // Invariant T1 : aucune écriture métier pendant la simulation.
+        // Refonte 2026-09 : le numéro étudiant est une colonne de
+        // user_account, plus une ligne student_profile séparée à vérifier.
         assertThat(count("user_account")).isEqualTo(users0);
-        assertThat(count("student_profile")).isEqualTo(profiles0);
         assertThat(count("enrollment")).isEqualTo(enrollments0);
         assertThat(count("account_invitation")).isEqualTo(invitations0);
     }

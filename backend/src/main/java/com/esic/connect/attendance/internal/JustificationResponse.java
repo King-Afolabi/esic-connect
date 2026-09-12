@@ -23,7 +23,7 @@ import java.util.UUID;
  * @param checkpointPublicId    point de contrôle de l'absence
  * @param checkpointLabel       libellé du point de contrôle
  * @param classCode             code de la classe de l'inscription
- * @param studentProfilePublicId profil apprenant (renseigné côté gestion uniquement)
+ * @param studentUserPublicId   compte apprenant (renseigné côté gestion uniquement)
  * @param studentNumber         numéro étudiant (renseigné côté gestion uniquement)
  * @param firstName             prénom (renseigné côté gestion uniquement)
  * @param lastName              nom (renseigné côté gestion uniquement)
@@ -44,7 +44,7 @@ record JustificationResponse(
         UUID checkpointPublicId,
         String checkpointLabel,
         String classCode,
-        UUID studentProfilePublicId,
+        UUID studentUserPublicId,
         String studentNumber,
         String firstName,
         String lastName,

@@ -25,18 +25,26 @@ class StudentImportProvisionerContractTests {
         assertRequired(impl, "prepareStudentAccountAndInvitation",
                 Class.forName("com.esic.connect.identity.StudentAccountProvisioner$NewStudentAccount"), Long.class);
         assertRequired(impl, "updateStudentPhone", java.util.UUID.class, String.class, Long.class);
+        // Refonte 2026-09 : numéro étudiant / date de naissance sont
+        // désormais attribués via ce port (plus de student_profile), sur
+        // le même chemin transactionnel que les autres écritures.
+        assertRequired(impl, "assignStudentIdentity", java.util.UUID.class, String.class,
+                java.time.LocalDate.class, Long.class);
     }
 
     @Test
     void enrollmentProvisionerWriteMethodsUseRequiredPropagation() throws Exception {
+        // Refonte 2026-09 : plus de `provisionProfile` / `ProvisionProfile`
+        // — une inscription rattache directement un compte (UUID), jamais
+        // un profil intermédiaire ; `updateProfileAlternation` est devenu
+        // `updateEnrollmentAlternation`.
         Class<?> impl = Class.forName("com.esic.connect.enrollment.internal.DefaultStudentEnrollmentProvisioner");
-        Class<?> command = Class.forName("com.esic.connect.enrollment.StudentEnrollmentProvisioner$ProvisionProfile");
-        assertRequired(impl, "provisionProfile", command);
         assertRequired(impl, "provisionEnrollment", java.util.UUID.class, java.util.UUID.class,
-                java.time.LocalDate.class, Long.class);
+                java.time.LocalDate.class, boolean.class, String.class, Long.class);
         assertRequired(impl, "provisionTransfer", java.util.UUID.class, java.util.UUID.class,
-                java.time.LocalDate.class, String.class, Long.class);
-        assertRequired(impl, "updateProfileAlternation", java.util.UUID.class, boolean.class, String.class, Long.class);
+                java.time.LocalDate.class, String.class, boolean.class, String.class, Long.class);
+        assertRequired(impl, "updateEnrollmentAlternation", java.util.UUID.class, boolean.class, String.class,
+                Long.class);
     }
 
     @Test

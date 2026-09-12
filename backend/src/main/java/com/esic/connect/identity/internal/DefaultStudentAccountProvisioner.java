@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,18 +67,31 @@ class DefaultStudentAccountProvisioner implements StudentAccountProvisioner {
         if (email == null || email.isEmpty()) {
             return Optional.empty();
         }
-        return userAccountRepository.findByEmail(email).map(account -> {
-            boolean hasStudentRole = userRoleRepository.findByUserId(account.getId()).stream()
-                    .anyMatch(ur -> ur.isActive() && ur.getRole().getCode() == RoleCode.STUDENT);
-            return new ExistingAccountView(
-                    account.getPublicId(),
-                    account.getId(),
-                    toStatusView(account.getStatus()),
-                    account.getFirstName(),
-                    account.getLastName(),
-                    account.getPhone(),
-                    hasStudentRole);
-        });
+        return userAccountRepository.findByEmail(email).map(this::toExistingView);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ExistingAccountView> findByUserPublicId(UUID userPublicId) {
+        if (userPublicId == null) {
+            return Optional.empty();
+        }
+        return userAccountRepository.findByPublicId(userPublicId).map(this::toExistingView);
+    }
+
+    private ExistingAccountView toExistingView(UserAccount account) {
+        boolean hasStudentRole = userRoleRepository.findByUserId(account.getId()).stream()
+                .anyMatch(ur -> ur.isActive() && ur.getRole().getCode() == RoleCode.STUDENT);
+        return new ExistingAccountView(
+                account.getPublicId(),
+                account.getId(),
+                toStatusView(account.getStatus()),
+                account.getFirstName(),
+                account.getLastName(),
+                account.getPhone(),
+                hasStudentRole,
+                account.getStudentNumber(),
+                account.getBirthDate());
     }
 
     @Override
@@ -129,6 +143,27 @@ class DefaultStudentAccountProvisioner implements StudentAccountProvisioner {
         }
         userAccountRepository.findByPublicId(userPublicId)
                 .ifPresent(account -> account.updatePhone(phone, actorUserInternalId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean studentNumberTaken(String studentNumber) {
+        return studentNumber != null && !studentNumber.isBlank()
+                && userAccountRepository.existsByStudentNumberIgnoreCase(studentNumber.trim());
+    }
+
+    @Override
+    @Transactional
+    public void assignStudentIdentity(UUID userPublicId, String studentNumber, LocalDate birthDate,
+                                      Long actorUserInternalId) {
+        if (userPublicId == null) {
+            return;
+        }
+        userAccountRepository.findByPublicId(userPublicId).ifPresent(account -> {
+            if (account.getStudentNumber() == null) {
+                account.assignStudentNumber(studentNumber, birthDate, actorUserInternalId);
+            }
+        });
     }
 
     private void assignStudentRoleIfAbsent(UserAccount account, Long issuerId, Instant now) {

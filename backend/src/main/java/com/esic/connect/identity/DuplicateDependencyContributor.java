@@ -41,8 +41,11 @@ public interface DuplicateDependencyContributor {
 
     /**
      * Attributs descriptifs — non numériques — que le module rattache au
-     * compte et qui aident la revue humaine (par exemple
-     * {@code "studentNumber"}). Facultatif : par défaut, aucun. Soumis au
+     * compte et qui aident la revue humaine. Facultatif : par défaut,
+     * aucun (le numéro étudiant, par exemple, est désormais porté
+     * directement par {@code user_account} — refonte 2026-09 — et lu par
+     * {@code identity} lui-même, sans passer par ce point d'extension).
+     * Soumis au
      * même contrat de lecture seule que {@link #countsFor(long)} et à la
      * même règle de minimisation — jamais de secret, jamais de contenu
      * sensible, seulement ce qu'un {@code ADMIN} voit déjà sur la fiche du

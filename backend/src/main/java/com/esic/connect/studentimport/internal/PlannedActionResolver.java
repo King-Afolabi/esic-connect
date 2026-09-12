@@ -4,6 +4,7 @@ import com.esic.connect.academic.AcademicScopeDirectory;
 import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.academic.ClassGroupDirectory.ClassGroupResolution;
 import com.esic.connect.enrollment.StudentEnrollmentProvisioner;
+import com.esic.connect.enrollment.StudentEnrollmentProvisioner.Situation;
 import com.esic.connect.identity.StudentAccountProvisioner;
 import com.esic.connect.studentimport.internal.StudentImportIssueDrafts.RowIssueDraft;
 import org.springframework.stereotype.Component;
@@ -97,15 +98,15 @@ class PlannedActionResolver {
             return none(classRef, account.publicId(), null, issues, startYear);
         }
 
-        Optional<StudentEnrollmentProvisioner.StudentProfileView> profile =
-                enrollmentProvisioner.findProfileByUser(account.publicId());
-
-        if (profile.isEmpty()) {
+        // Le numéro étudiant vit sur le COMPTE (user_account, refonte
+        // 2026-09) : déjà résolu par ExistingAccountView, aucune requête
+        // supplémentaire (contrairement à l'ancien student_profile).
+        if (account.studentNumber() == null) {
             boolean generated = flagStudentNumberForNewProfile(row, issues);
             if (hasError(issues)) {
                 return none(classRef, account.publicId(), null, issues, startYear);
             }
-            // Compte PENDING sans profil : (ré)émission d'invitation à la confirmation.
+            // Compte PENDING sans numéro : (ré)émission d'invitation à la confirmation.
             StudentImportPlannedAction action =
                     account.status() == StudentAccountProvisioner.StatusView.PENDING_ACTIVATION
                             ? StudentImportPlannedAction.CREATE_ACCOUNT_AND_ENROLL
@@ -114,19 +115,16 @@ class PlannedActionResolver {
                     startYear, issues);
         }
 
-        StudentEnrollmentProvisioner.StudentProfileView existingProfile = profile.get();
-        if (row.studentNumber() != null && !row.studentNumber().equalsIgnoreCase(existingProfile.studentNumber())) {
+        if (row.studentNumber() != null && !row.studentNumber().equalsIgnoreCase(account.studentNumber())) {
             issues.add(RowIssueDraft.warning(StudentImportIssueCodes.STUDENT_NUMBER_TAKEN,
-                    "Le profil existant conserve son numéro étudiant ; celui du fichier est ignoré.",
+                    "Le compte conserve son numéro étudiant existant ; celui du fichier est ignoré.",
                     "student_number", CsvValueNormalizer.truncateReceivedValue(row.studentNumber())));
         }
-        boolean divergent = contactDivergent(row, account, existingProfile);
 
-        // La situation d'inscription se lit sur le COMPTE, pas sur le
-        // profil (refonte 2026-09) : une inscription ne suppose plus
-        // l'existence d'un student_profile.
-        StudentEnrollmentProvisioner.Situation situation =
-                enrollmentProvisioner.describeSituation(account.publicId(), classRef.publicId());
+        // La situation d'inscription (et l'alternance courante, portée par
+        // l'inscription depuis la refonte 2026-09) se lit sur le COMPTE.
+        Situation situation = enrollmentProvisioner.describeSituation(account.publicId(), classRef.publicId());
+        boolean divergent = contactDivergent(row, account, situation);
         return switch (situation.kind()) {
             case OTHER_CLASS_SAME_YEAR -> new RowResolution(StudentImportPlannedAction.TRANSFER_CLASS,
                     classRef.publicId(), account.publicId(), situation.currentEnrollmentPublicId(), false,
@@ -135,7 +133,8 @@ class PlannedActionResolver {
                     classRef.publicId(), account.publicId(), null, false, divergent, startYear, issues);
             case SAME_CLASS -> new RowResolution(
                     divergent ? StudentImportPlannedAction.UPDATE_PROFILE : StudentImportPlannedAction.NONE,
-                    classRef.publicId(), account.publicId(), null, false, divergent, startYear, issues);
+                    classRef.publicId(), account.publicId(), situation.currentEnrollmentPublicId(), false,
+                    divergent, startYear, issues);
         };
     }
 
@@ -145,7 +144,7 @@ class PlannedActionResolver {
                     "Un numéro étudiant sera attribué automatiquement à la confirmation.", "student_number"));
             return true;
         }
-        if (enrollmentProvisioner.studentNumberTaken(row.studentNumber())) {
+        if (accountProvisioner.studentNumberTaken(row.studentNumber())) {
             issues.add(RowIssueDraft.error(StudentImportIssueCodes.STUDENT_NUMBER_TAKEN,
                     "Ce numéro étudiant est déjà attribué à un autre compte.", "student_number",
                     CsvValueNormalizer.truncateReceivedValue(row.studentNumber())));
@@ -153,12 +152,22 @@ class PlannedActionResolver {
         return false;
     }
 
+    /**
+     * Divergence entre le fichier et l'état actuel : téléphone (compte),
+     * alternance / entreprise (inscription courante — refonte 2026-09).
+     * {@code situation.kind() == NONE} (aucune inscription courante) ne
+     * peut jamais être « divergent » sur l'alternance : il n'y a rien à
+     * corriger, il y aura une création.
+     */
     private static boolean contactDivergent(NormalizedRow row, StudentAccountProvisioner.ExistingAccountView account,
-                                            StudentEnrollmentProvisioner.StudentProfileView profile) {
+                                            Situation situation) {
         boolean phoneDiff = row.phonePresent() && row.phone() != null && !row.phone().equals(account.phone());
+        if (situation.kind() == Situation.Kind.NONE) {
+            return phoneDiff;
+        }
         boolean workStudyDiff = row.workStudyPresent() && row.workStudy() != null
-                && row.workStudy() != profile.workStudy();
-        boolean companyDiff = row.companyName() != null && !row.companyName().equals(profile.companyName());
+                && !row.workStudy().equals(situation.currentWorkStudy());
+        boolean companyDiff = row.companyName() != null && !row.companyName().equals(situation.currentCompanyName());
         return phoneDiff || workStudyDiff || companyDiff;
     }
 
@@ -194,9 +203,11 @@ class PlannedActionResolver {
      * @param plannedAction               action calculée
      * @param resolvedClassPublicId       classe résolue ({@code null} si non résolue)
      * @param resolvedUserPublicId        compte rapproché ({@code null} si aucun)
-     * @param resolvedEnrollmentPublicId  inscription courante (pour {@code TRANSFER_CLASS})
+     * @param resolvedEnrollmentPublicId  inscription courante (pour {@code TRANSFER_CLASS}
+     *                                    et {@code UPDATE_PROFILE}, afin d'y répercuter une
+     *                                    alternance divergente)
      * @param studentNumberGenerated      {@code true} si le numéro sera généré à la confirmation
-     * @param contactDivergent            téléphone / alternance / entreprise divergents d'un profil existant
+     * @param contactDivergent            téléphone (compte) / alternance / entreprise (inscription) divergents
      * @param academicYearStartYear       année civile de début (pour la génération de numéro)
      * @param issues                      anomalies produites par la résolution
      */

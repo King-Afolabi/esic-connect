@@ -26,25 +26,24 @@ interface ClassOption {
  * Refonte 2026-09 : le rôle {@code STUDENT} est l'unique source de vérité
  * du statut apprenant. Dès la première étape (création du compte), la
  * personne est un apprenant pleinement visible dans {@code /students} —
- * le profil et l'inscription qui suivent sont des enrichissements
- * facultatifs, pas des conditions. Ce parcours enchaîne **trois routes
- * existantes**, chacune contrôlée côté serveur :
+ * l'inscription qui suit est un enrichissement facultatif, pas une
+ * condition. Ce parcours enchaîne **deux routes existantes**, chacune
+ * contrôlée côté serveur :
  *
  *   1. `POST /api/v1/users` — compte `PENDING_ACTIVATION` + invitation
- *      (rôle `STUDENT`, aucun mot de passe) — apprenant visible dès cette
- *      étape ;
- *   2. `POST /api/v1/student-profiles` — profil facultatif (numéro
- *      étudiant, etc.) ;
- *   3. `POST /api/v1/enrollments` — inscription initiale dans une classe,
- *      rattachée directement au compte créé à l'étape 1 (jamais au
- *      profil de l'étape 2).
+ *      (rôle `STUDENT`, aucun mot de passe), numéro étudiant / date de
+ *      naissance facultatifs inclus directement (il n'existe plus de
+ *      `student-profiles` séparé) — apprenant visible dès cette étape ;
+ *   2. `POST /api/v1/enrollments` — inscription initiale dans une classe,
+ *      rattachée directement au compte créé à l'étape 1, avec sa
+ *      situation d'alternance éventuelle.
  *
- * L'enchaînement **n'est pas atomique** (trois transactions, deux
- * modules). Ce n'est pas masqué : si une étape échoue, l'écran conserve
- * ce qui a réussi (identifiants du compte / du profil) et **reprend à
- * l'étape fautive** sans rien recréer, en expliquant l'état exact. Une
- * atomicité stricte demanderait un endpoint d'orchestration back-end
- * dédié — signalé comme évolution, pas simulé ici.
+ * L'enchaînement **n'est pas atomique** (deux transactions, deux
+ * modules). Ce n'est pas masqué : si l'inscription échoue, l'écran
+ * conserve le compte déjà créé et **reprend à cette étape** sans le
+ * recréer, en expliquant l'état exact. Une atomicité stricte demanderait
+ * un endpoint d'orchestration back-end dédié — signalé comme évolution,
+ * pas simulé ici.
  *
  * L'autorisation réelle reste côté Spring Security : `POST /users` exige
  * `ADMIN` / `SUPER_ADMIN`, d'où le garde de route homonyme. Un `403` de
@@ -76,15 +75,14 @@ export class StudentCreate {
 
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<string | null>(null);
-  /** Rappel de l'état après un échec partiel (compte ou profil déjà créé). */
+  /** Rappel de l'état après un échec partiel (compte déjà créé). */
   protected readonly partialNotice = signal<string | null>(null);
 
   protected readonly classOptions = signal<ClassOption[]>([]);
   protected readonly classesState = signal<'loading' | 'ready' | 'error'>('loading');
 
-  /** Identifiants acquis : une reprise ne recrée pas ces objets. */
+  /** Identifiant acquis : une reprise ne recrée pas le compte. */
   private readonly createdUserPublicId = signal<string | null>(null);
-  private readonly createdProfilePublicId = signal<string | null>(null);
 
   protected readonly form = this.fb.group({
     firstName: this.fb.control('', [Validators.required, Validators.maxLength(120)]),
@@ -128,14 +126,13 @@ export class StudentCreate {
     this.accountStep(raw)
       .pipe(
         switchMap((userPublicId) =>
-          this.profileStep(userPublicId, raw).pipe(map(() => userPublicId)),
-        ),
-        switchMap((userPublicId) =>
           this.api
             .enrollStudent({
               studentUserPublicId: userPublicId,
               classGroupPublicId: raw.classGroupPublicId,
               startDate: null,
+              workStudy: raw.workStudy,
+              companyName: raw.companyName.trim() || null,
             })
             .pipe(map(() => userPublicId)),
         ),
@@ -163,32 +160,12 @@ export class StudentCreate {
         firstName: raw.firstName.trim(),
         lastName: raw.lastName.trim(),
         role: 'STUDENT',
+        studentNumber: raw.studentNumber.trim() || null,
+        birthDate: raw.birthDate || null,
       })
       .pipe(
         tap((user) => this.createdUserPublicId.set(user.publicId)),
         map((user) => user.publicId),
-      );
-  }
-
-  private profileStep(
-    userPublicId: string,
-    raw: ReturnType<typeof this.form.getRawValue>,
-  ): Observable<string> {
-    const existing = this.createdProfilePublicId();
-    if (existing) {
-      return of(existing);
-    }
-    return this.api
-      .createStudentProfile({
-        userPublicId,
-        studentNumber: raw.studentNumber.trim() || null,
-        birthDate: raw.birthDate || null,
-        workStudy: raw.workStudy,
-        companyName: raw.companyName.trim() || null,
-      })
-      .pipe(
-        tap((profile) => this.createdProfilePublicId.set(profile.publicId)),
-        map((profile) => profile.publicId),
       );
   }
 
@@ -199,8 +176,12 @@ export class StudentCreate {
     if (!this.createdUserPublicId()) {
       // Étape 1 : rien n'a été créé.
       if (view.status === 409) {
-        this.form.controls.email.setErrors({ server: 'Cette adresse est déjà utilisée.' });
-        this.submitError.set('Cette adresse électronique correspond déjà à un compte.');
+        if (view.code === 'USER_DUPLICATE_STUDENT_NUMBER') {
+          this.form.controls.studentNumber.setErrors({ server: 'Ce numéro étudiant est déjà pris.' });
+        } else {
+          this.form.controls.email.setErrors({ server: 'Cette adresse est déjà utilisée.' });
+        }
+        this.submitError.set(view.message);
       } else if (view.status === 403) {
         this.submitError.set(
           "Vous n'êtes pas autorisé à créer un compte. Cette action est réservée à l'administration.",
@@ -211,22 +192,9 @@ export class StudentCreate {
       return;
     }
 
-    if (!this.createdProfilePublicId()) {
-      // Étape 2 : le compte existe et a été invité.
-      this.partialNotice.set(
-        "Le compte a été créé et l'invitation envoyée, mais le profil apprenant a échoué. " +
-          'Corrigez les champs concernés puis relancez : le compte ne sera pas recréé.',
-      );
-      if (view.status === 409 || view.code === 'ENR_STUDENT_NUMBER_TAKEN') {
-        this.form.controls.studentNumber.setErrors({ server: 'Ce numéro étudiant est déjà pris.' });
-      }
-      this.submitError.set(view.message);
-      return;
-    }
-
-    // Étape 3 : compte et profil créés, l'inscription a échoué.
+    // Étape 2 : le compte existe et a été invité, l'inscription a échoué.
     this.partialNotice.set(
-      "Le compte et le profil apprenant ont été créés. L'inscription en classe a échoué : " +
+      "Le compte a été créé et l'invitation envoyée. L'inscription en classe a échoué : " +
         "relancez, ou inscrivez l'apprenant depuis sa fiche.",
     );
     this.submitError.set(view.message);

@@ -58,6 +58,13 @@ class DemoDataInitializerTests {
         // Les six comptes partagent la même valeur locale d'ESIC_DEMO_PASSWORD,
         // jamais journalisée par l'initialiseur.
         assertThat(provisioner.passwords).containsOnly("demo-password-1234");
+        // Refonte 2026-09 : seul l'apprenant COMPLET reçoit un numéro
+        // étudiant ici (colonne de user_account, plus de student_profile) ;
+        // l'apprenant MINIMAL et les autres rôles n'en reçoivent aucun.
+        assertThat(provisioner.studentNumberByEmail.get("apprenant1@example.test")).isEqualTo("ESIC-DEMO-001");
+        assertThat(provisioner.studentNumberByEmail.get("apprenant2@example.test")).isNull();
+        assertThat(provisioner.studentNumberByEmail.values().stream().filter(java.util.Objects::nonNull).count())
+                .isEqualTo(1);
     }
 
     @Test
@@ -96,15 +103,18 @@ class DemoDataInitializerTests {
         final java.util.Set<String> roles = new java.util.HashSet<>();
         final java.util.Set<String> passwords = new java.util.HashSet<>();
         final java.util.Map<String, java.util.Set<String>> rolesByEmail = new java.util.HashMap<>();
+        final java.util.Map<String, String> studentNumberByEmail = new java.util.HashMap<>();
 
         @Override
         public UUID ensureActiveAccount(String email, String firstName, String lastName,
-                                        String rawPassword, java.util.Set<String> roleCodes) {
+                                        String rawPassword, java.util.Set<String> roleCodes,
+                                        String studentNumber) {
             calls.incrementAndGet();
             emails.add(email);
             roles.addAll(roleCodes);
             rolesByEmail.put(email, new java.util.HashSet<>(roleCodes));
             passwords.add(rawPassword);
+            studentNumberByEmail.put(email, studentNumber);
             return UUID.randomUUID();
         }
     }

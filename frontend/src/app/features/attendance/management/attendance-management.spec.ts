@@ -333,7 +333,7 @@ describe('JustificationQueue', () => {
     checkpointPublicId: 'cp-1',
     checkpointLabel: 'Arrivée',
     classCode: 'C1',
-    studentProfilePublicId: 'p-1',
+    studentUserPublicId: 'u-1',
     studentNumber: 'ESIC-1',
     firstName: 'Bob',
     lastName: 'Durand',

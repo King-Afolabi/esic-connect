@@ -13,8 +13,8 @@
         <form class="attest__form esic-form" [formGroup]="issueForm" (ngSubmit)="issue()">
           <div class="esic-form__grid">
             <mat-form-field appearance="outline" class="attest__field esic-form__row">
-              <mat-label>Identifiant du profil apprenant</mat-label>
-              <input matInput formControlName="studentProfile" autocomplete="off" required />
+              <mat-label>Identifiant de l'apprenant</mat-label>
+              <input matInput formControlName="student" autocomplete="off" required />
               <mat-hint>Identifiant public visible sur la fiche de l'apprenant.</mat-hint>
             </mat-form-field>
             <mat-form-field appearance="outline">
@@ -87,29 +87,31 @@
         @if (loadingRegistry()) {
           <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
         } @else if (registry().length) {
-          <table class="attest__table">
-            <caption class="attest__caption">Registre des attestations émises</caption>
-            <thead>
-              <tr>
-                <th scope="col">Identifiant</th>
-                <th scope="col">Apprenant</th>
-                <th scope="col">Émis le</th>
-                <th scope="col">Émis par</th>
-                <th scope="col">État</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of registry(); track row.publicId) {
+          <div class="esic-table-wrap">
+            <table class="attest__table">
+              <caption class="attest__caption">Registre des attestations émises</caption>
+              <thead>
                 <tr>
-                  <th scope="row">{{ row.documentId }}</th>
-                  <td>{{ row.subject || '—' }}</td>
-                  <td>{{ row.issuedAt }}</td>
-                  <td>{{ row.issuedBy }}</td>
-                  <td>{{ row.revoked ? 'Révoqué' : 'Valide' }}</td>
+                  <th scope="col">Identifiant</th>
+                  <th scope="col">Apprenant</th>
+                  <th scope="col">Émis le</th>
+                  <th scope="col">Émis par</th>
+                  <th scope="col">État</th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (row of registry(); track row.publicId) {
+                  <tr>
+                    <th scope="row">{{ row.documentId }}</th>
+                    <td>{{ row.subject || '—' }}</td>
+                    <td>{{ row.issuedAt }}</td>
+                    <td>{{ row.issuedBy }}</td>
+                    <td>{{ row.revoked ? 'Révoqué' : 'Valide' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         } @else {
           <p class="attest__note">Aucune attestation émise pour le moment.</p>
         }

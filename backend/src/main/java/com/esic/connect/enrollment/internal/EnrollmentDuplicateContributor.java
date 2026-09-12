@@ -9,43 +9,34 @@ import java.util.Map;
 
 /**
  * Remonte à {@code identity}, <strong>en lecture seule</strong>, le volume
- * de données que {@code enrollment} rattache à un compte : profil
- * apprenant, inscriptions, inscription active, numéro étudiant
- * (ANO-USER-001 — comparaison de doublons).
+ * de données que {@code enrollment} rattache à un compte : inscriptions,
+ * inscription active (ANO-USER-001 — comparaison de doublons).
  *
- * <p>Trois décomptes bornés et un attribut. Aucune écriture, aucun effet
- * de bord : le contrat de {@link DuplicateDependencyContributor} l'exige.
+ * <p>Refonte 2026-09 : le numéro étudiant et l'existence d'un profil
+ * apprenant ne sont plus des attributs remontés par ce contributeur — ils
+ * sont désormais portés directement par {@code user_account}, qu'
+ * {@code identity} lit lui-même sans passer par ce point d'extension.
+ *
+ * <p>Deux décomptes bornés. Aucune écriture, aucun effet de bord : le
+ * contrat de {@link DuplicateDependencyContributor} l'exige.
  */
 @Component
 class EnrollmentDuplicateContributor implements DuplicateDependencyContributor {
 
     private final EnrollmentRepository enrollmentRepository;
-    private final StudentProfileRepository studentProfileRepository;
 
-    EnrollmentDuplicateContributor(EnrollmentRepository enrollmentRepository,
-                                   StudentProfileRepository studentProfileRepository) {
+    EnrollmentDuplicateContributor(EnrollmentRepository enrollmentRepository) {
         this.enrollmentRepository = enrollmentRepository;
-        this.studentProfileRepository = studentProfileRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Map<String, Long> countsFor(long userInternalId) {
         Map<String, Long> counts = new LinkedHashMap<>();
-        counts.put("studentProfile",
-                studentProfileRepository.existsByUserId(userInternalId) ? 1L : 0L);
         counts.put("enrollments",
                 enrollmentRepository.countByUserId(userInternalId));
         counts.put("activeEnrollments",
                 enrollmentRepository.countByUserIdAndStatus(userInternalId, EnrollmentStatus.ACTIVE));
         return counts;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, String> attributesFor(long userInternalId) {
-        return studentProfileRepository.findByUserId(userInternalId)
-                .map(profile -> Map.of("studentNumber", profile.getStudentNumber()))
-                .orElseGet(Map::of);
     }
 }

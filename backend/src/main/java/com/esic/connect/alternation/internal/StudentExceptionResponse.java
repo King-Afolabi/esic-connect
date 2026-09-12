@@ -14,7 +14,7 @@ import java.util.UUID;
 record StudentExceptionResponse(
         UUID publicId,
         UUID enrollmentPublicId,
-        UUID studentProfilePublicId,
+        UUID studentUserPublicId,
         UUID classGroupPublicId,
         ScheduleExceptionType type,
         Instant startAt,
@@ -31,7 +31,7 @@ record StudentExceptionResponse(
         return new StudentExceptionResponse(
                 exception.getPublicId(),
                 enrollmentRef != null ? enrollmentRef.publicId() : null,
-                enrollmentRef != null ? enrollmentRef.studentProfilePublicId() : null,
+                enrollmentRef != null ? enrollmentRef.studentUserPublicId() : null,
                 enrollmentRef != null ? enrollmentRef.classGroupPublicId() : null,
                 exception.getExceptionType(),
                 exception.getStartAt(),

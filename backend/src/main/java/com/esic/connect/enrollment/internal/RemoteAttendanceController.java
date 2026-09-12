@@ -63,6 +63,6 @@ class RemoteAttendanceController {
     @PreAuthorize(DECIDE_ROLES)
     List<RemoteAttendanceResponse> listForStudent(@PathVariable String studentUserPublicId) {
         return service.listForStudent(EnrollmentWeb.parseUuid(studentUserPublicId,
-                EnrollmentException.Kind.STUDENT_PROFILE_NOT_FOUND));
+                EnrollmentException.Kind.STUDENT_NOT_FOUND));
     }
 }

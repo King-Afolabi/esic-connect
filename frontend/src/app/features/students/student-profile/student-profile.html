@@ -70,22 +70,14 @@
 
       <mat-card appearance="outlined" class="profile__card">
         <mat-card-header>
-          <mat-card-title>Profil apprenant</mat-card-title>
+          <mat-card-title>Informations complémentaires</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          @if (s.studentProfilePublicId) {
+          @if (s.studentNumber) {
             <dl class="profile__facts">
               <div>
                 <dt>Numéro étudiant</dt>
                 <dd>{{ s.studentNumber }}</dd>
-              </div>
-              <div>
-                <dt>Alternance</dt>
-                <dd>{{ s.workStudy ? 'Oui' : 'Non' }}</dd>
-              </div>
-              <div>
-                <dt>Entreprise d'accueil</dt>
-                <dd>{{ s.companyName || '—' }}</dd>
               </div>
               <div>
                 <dt>Date de naissance</dt>
@@ -94,8 +86,8 @@
             </dl>
           } @else {
             <p class="profile__status" role="status">
-              Aucun profil apprenant renseigné pour ce compte — il reste un apprenant à part
-              entière (numéro étudiant, alternance, etc. facultatifs).
+              Aucune information complémentaire renseignée pour ce compte — il reste un
+              apprenant à part entière (numéro étudiant, date de naissance facultatifs).
             </p>
           }
         </mat-card-content>
@@ -132,10 +124,12 @@
                   </dd>
                   <dt>Depuis le</dt>
                   <dd>{{ e.startDate | date: 'dd/MM/yyyy' }}</dd>
+                  <dt>Alternance</dt>
+                  <dd>{{ e.workStudy ? 'Oui' : 'Non' }}</dd>
+                  <dt>Entreprise d'accueil</dt>
+                  <dd>{{ e.companyName || '—' }}</dd>
                 </dl>
-                <p class="profile__hint">
-                  Niveau, promotion et rythme d'alternance ne sont pas exposés par cette fiche.
-                </p>
+                <p class="profile__hint">Niveau et promotion ne sont pas exposés par cette fiche.</p>
                 @if (canManageEnrollment() && !transferOpen()) {
                   <button mat-stroked-button type="button" (click)="startTransfer()">
                     <mat-icon aria-hidden="true">swap_horiz</mat-icon>

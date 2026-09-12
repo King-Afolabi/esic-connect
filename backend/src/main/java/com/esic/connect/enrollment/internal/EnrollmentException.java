@@ -8,14 +8,13 @@ package com.esic.connect.enrollment.internal;
 class EnrollmentException extends RuntimeException {
 
     enum Kind {
-        /** Aucun profil apprenant pour ce {@code public_id}. */
-        STUDENT_PROFILE_NOT_FOUND,
         /**
          * Aucun <strong>apprenant</strong> (compte porteur d'un rôle actif
          * {@code STUDENT}, non archivé) pour ce {@code public_id} — écran
-         * « Apprenants » ({@code GET /api/v1/students/{userPublicId}}).
-         * Distinct de {@link #STUDENT_PROFILE_NOT_FOUND} : un compte
-         * {@code STUDENT} sans profil n'est jamais ce cas (refonte 2026-09).
+         * « Apprenants » ({@code GET /api/v1/students/{userPublicId}}) et
+         * toute autre route désignant un apprenant par son compte (suivi à
+         * distance individuel compris). Il n'existe plus de
+         * {@code student_profile} distinct depuis la refonte 2026-09.
          */
         STUDENT_NOT_FOUND,
         /** Aucune inscription pour ce {@code public_id}. */
@@ -43,17 +42,6 @@ class EnrollmentException extends RuntimeException {
          * {@code STUDENT} ({@code ENR_USER_NOT_ELIGIBLE}).
          */
         USER_NOT_ELIGIBLE,
-        /** Un profil apprenant existe déjà pour ce compte ({@code ENR_PROFILE_EXISTS}). */
-        PROFILE_ALREADY_EXISTS,
-        /** Numéro étudiant déjà attribué ({@code ENR_DUPLICATE_STUDENT_NUMBER}). */
-        DUPLICATE_STUDENT_NUMBER,
-        /**
-         * La séquence de numéros étudiants de l'année est épuisée (borne de
-         * largeur atteinte) — {@code ENR_STUDENT_NUMBER_EXHAUSTED}.
-         */
-        STUDENT_NUMBER_EXHAUSTED,
-        /** Le profil apprenant visé est archivé. */
-        STUDENT_PROFILE_ARCHIVED,
         /**
          * Inscription refusée : la classe ou un maillon de sa chaîne de
          * rattachement (promotion, formation, année scolaire) est archivé

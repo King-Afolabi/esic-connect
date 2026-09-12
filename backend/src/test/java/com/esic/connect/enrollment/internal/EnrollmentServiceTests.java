@@ -50,8 +50,6 @@ class EnrollmentServiceTests {
     @Mock
     private EnrollmentRepository enrollmentRepository;
     @Mock
-    private StudentProfileRepository profileRepository;
-    @Mock
     private EnrollmentPersister persister;
     @Mock
     private ClassGroupDirectory classGroupDirectory;
@@ -63,7 +61,7 @@ class EnrollmentServiceTests {
     private RosterScopeResolver rosterScope;
 
     private EnrollmentService service() {
-        return new EnrollmentService(enrollmentRepository, profileRepository, persister, classGroupDirectory,
+        return new EnrollmentService(enrollmentRepository, persister, classGroupDirectory,
                 userDirectory, changePublisher, rosterScope, FIXED_CLOCK);
     }
 
@@ -88,7 +86,7 @@ class EnrollmentServiceTests {
     }
 
     private static EnrollmentRequests.Enroll enrollRequest(UUID userPublicId, UUID classPublicId, LocalDate start) {
-        return new EnrollmentRequests.Enroll(userPublicId.toString(), classPublicId.toString(), start);
+        return new EnrollmentRequests.Enroll(userPublicId.toString(), classPublicId.toString(), start, null, null);
     }
 
     // ------------------------------------------------------------------
@@ -181,7 +179,6 @@ class EnrollmentServiceTests {
         assertThat(captor.getValue().getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
         assertThat(response.status()).isEqualTo(EnrollmentStatus.ACTIVE);
         assertThat(response.studentUserPublicId()).isEqualTo(userId);
-        assertThat(response.studentProfilePublicId()).isNull();
         assertThat(response.previousEnrollmentPublicId()).isNull();
         verify(changePublisher).publish(eq(EnrollmentResourceType.ENROLLMENT), any(),
                 eq(EnrollmentChangeAction.CREATED), eq(42L), any());

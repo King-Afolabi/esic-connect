@@ -3,7 +3,6 @@ package com.esic.connect.studentimport.internal;
 import com.esic.connect.academic.AcademicScopeDirectory;
 import com.esic.connect.enrollment.StudentEnrollmentProvisioner;
 import com.esic.connect.enrollment.StudentEnrollmentProvisioner.Situation;
-import com.esic.connect.enrollment.StudentEnrollmentProvisioner.StudentProfileView;
 import com.esic.connect.identity.CurrentUserResolver;
 import com.esic.connect.identity.StudentAccountProvisioner;
 import com.esic.connect.identity.StudentAccountProvisioner.NewStudentAccount;
@@ -280,39 +279,40 @@ class StudentImportConfirmationService {
         }
         handledEmailToUser.put(email, userPublicId);
 
-        UUID profilePublicId = ensureProfile(row, resolution, userPublicId, actorId);
+        // Refonte 2026-09 : le numéro étudiant / la date de naissance sont
+        // des colonnes de user_account (identity), plus un student_profile.
+        ensureStudentNumber(row, resolution, userPublicId, actorId);
 
-        if (resolution.contactDivergent()) {
-            enrollmentProvisioner.updateProfileAlternation(profilePublicId,
-                    Boolean.TRUE.equals(row.getInputWorkStudy()), row.getInputCompanyName(), actorId);
-            if (row.getInputPhone() != null) {
-                accountProvisioner.updateStudentPhone(userPublicId, row.getInputPhone(), actorId);
-            }
+        if (resolution.contactDivergent() && row.getInputPhone() != null) {
+            accountProvisioner.updateStudentPhone(userPublicId, row.getInputPhone(), actorId);
         }
 
-        // L'inscription se rattache directement au COMPTE (userPublicId),
-        // jamais au profil (refonte 2026-09) : elle ne suppose plus
-        // l'existence d'un student_profile, même si l'import continue par
-        // ailleurs de provisionner ce dernier (numéro étudiant).
+        // L'inscription se rattache directement au COMPTE (userPublicId) :
+        // il n'existe plus de student_profile intermédiaire. L'alternance
+        // (work_study / company_name) est appliquée par applyEnrollment,
+        // soit à la création/au transfert, soit par mise à jour explicite
+        // de l'inscription courante (UPDATE_PROFILE).
         StudentImportRowOutcome outcome = applyEnrollment(row, resolution, userPublicId, actorId, today);
         row.setAppliedOutcome(outcome);
         tally(totals, outcome, invited);
     }
 
-    private UUID ensureProfile(StudentImportRow row, RowResolution resolution, UUID userPublicId, Long actorId) {
-        Optional<StudentProfileView> existing = enrollmentProvisioner.findProfileByUser(userPublicId);
-        if (existing.isPresent()) {
-            return existing.get().publicId();
+    /**
+     * Attribue le numéro étudiant / la date de naissance au compte s'il
+     * n'en a pas encore — immuable une fois posé, exactement comme
+     * l'ancien {@code student_profile}.
+     */
+    private void ensureStudentNumber(StudentImportRow row, RowResolution resolution, UUID userPublicId,
+                                     Long actorId) {
+        Optional<StudentAccountProvisioner.ExistingAccountView> existing =
+                accountProvisioner.findByUserPublicId(userPublicId);
+        if (existing.isPresent() && existing.get().studentNumber() != null) {
+            return;
         }
-        return provisionProfileWithRetry(row, resolution, userPublicId, actorId);
-    }
-
-    private UUID provisionProfileWithRetry(StudentImportRow row, RowResolution resolution, UUID userPublicId,
-                                           Long actorId) {
         String number = row.getInputStudentNumber();
         boolean generated = number == null;
         if (generated) {
-            // Le numéro est PRÉ-ALLOUÉ puis testé libre AVANT l'INSERT : une collision au flush
+            // Le numéro est PRÉ-ALLOUÉ puis testé libre AVANT l'écriture : une collision au flush
             // marquerait la transaction unique rollback-only et interdirait toute nouvelle
             // tentative (invariant T2 : jamais de REQUIRES_NEW sur ce chemin). La nouvelle
             // tentative bornée (§3.2) est donc faite ici, hors persistance.
@@ -322,33 +322,41 @@ class StudentImportConfirmationService {
                     throw new StudentImportException(StudentImportException.Kind.STUDENT_NUMBER_ALLOC_FAILED);
                 }
                 number = numberAllocator.allocate(resolution.academicYearStartYear());
-            } while (enrollmentProvisioner.studentNumberTaken(number));
+            } while (accountProvisioner.studentNumberTaken(number));
         }
-        StudentProfileView profile = enrollmentProvisioner.provisionProfile(
-                new StudentEnrollmentProvisioner.ProvisionProfile(userPublicId, number,
-                        row.getInputBirthDate(), Boolean.TRUE.equals(row.getInputWorkStudy()),
-                        row.getInputCompanyName(), generated, actorId));
+        accountProvisioner.assignStudentIdentity(userPublicId, number, row.getInputBirthDate(), actorId);
         row.setStudentNumberGenerated(generated);
-        return profile.publicId();
     }
 
     private StudentImportRowOutcome applyEnrollment(StudentImportRow row, RowResolution resolution,
                                                    UUID userPublicId, Long actorId, LocalDate today) {
         UUID classPublicId = resolution.resolvedClassPublicId();
+        boolean workStudy = Boolean.TRUE.equals(row.getInputWorkStudy());
+        String companyName = row.getInputCompanyName();
         if (resolution.plannedAction() == StudentImportPlannedAction.UPDATE_PROFILE) {
+            if (resolution.resolvedEnrollmentPublicId() != null) {
+                enrollmentProvisioner.updateEnrollmentAlternation(resolution.resolvedEnrollmentPublicId(),
+                        workStudy, companyName, actorId);
+            }
             return StudentImportRowOutcome.UPDATED;
         }
         Situation situation = enrollmentProvisioner.describeSituation(userPublicId, classPublicId);
         return switch (situation.kind()) {
-            case SAME_CLASS -> resolution.contactDivergent()
-                    ? StudentImportRowOutcome.UPDATED : StudentImportRowOutcome.NOOP;
+            case SAME_CLASS -> {
+                if (resolution.contactDivergent() && situation.currentEnrollmentPublicId() != null) {
+                    enrollmentProvisioner.updateEnrollmentAlternation(situation.currentEnrollmentPublicId(),
+                            workStudy, companyName, actorId);
+                }
+                yield resolution.contactDivergent() ? StudentImportRowOutcome.UPDATED : StudentImportRowOutcome.NOOP;
+            }
             case OTHER_CLASS_SAME_YEAR -> {
                 enrollmentProvisioner.provisionTransfer(situation.currentEnrollmentPublicId(), classPublicId,
-                        today, "import CSV apprenants", actorId);
+                        today, "import CSV apprenants", workStudy, companyName, actorId);
                 yield StudentImportRowOutcome.TRANSFERRED;
             }
             case NONE -> {
-                enrollmentProvisioner.provisionEnrollment(userPublicId, classPublicId, today, actorId);
+                enrollmentProvisioner.provisionEnrollment(userPublicId, classPublicId, today, workStudy,
+                        companyName, actorId);
                 yield resolution.plannedAction() == StudentImportPlannedAction.CREATE_ACCOUNT_AND_ENROLL
                         ? StudentImportRowOutcome.CREATED : StudentImportRowOutcome.ENROLLED;
             }

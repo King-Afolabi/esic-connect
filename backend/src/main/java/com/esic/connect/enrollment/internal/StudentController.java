@@ -12,11 +12,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Écran « Apprenants » (refonte 2026-09). Liste et détail de tous les
  * comptes porteurs d'un rôle actif {@code STUDENT} — le rôle est l'unique
- * source de vérité du statut apprenant, jamais l'existence d'un
- * {@code student_profile} ni d'une {@code enrollment} (voir
- * {@link StudentDirectoryService}). Mêmes rôles et même périmètre que
- * {@code GET /api/v1/student-profiles} / {@code GET /api/v1/enrollments}
- * ({@link EnrollmentWeb#READ_ROLES}).
+ * source de vérité du statut apprenant, jamais l'existence d'une
+ * {@code enrollment} (voir {@link StudentDirectoryService}). Il n'existe
+ * plus de {@code student_profile} ni de route associée. Même périmètre que
+ * {@code GET /api/v1/enrollments} ({@link EnrollmentWeb#READ_ROLES}).
  */
 @RestController
 @RequestMapping("/api/v1/students")

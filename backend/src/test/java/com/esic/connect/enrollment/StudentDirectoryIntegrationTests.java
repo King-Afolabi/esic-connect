@@ -48,17 +48,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Couvre les cinq scénarios exigés par le cahier des charges de la
  * refonte :
  * <ol>
- *   <li>{@code STUDENT} sans {@code student_profile} → visible ;</li>
- *   <li>{@code STUDENT} avec {@code student_profile} → visible ;</li>
+ *   <li>{@code STUDENT} sans numéro étudiant → visible ;</li>
+ *   <li>{@code STUDENT} avec numéro étudiant et inscription → visible et
+ *       décoré ;</li>
  *   <li>{@code STUDENT} sans {@code enrollment} → visible ;</li>
  *   <li>non-{@code STUDENT} → non visible ;</li>
  *   <li>{@code STUDENT} avec plusieurs {@code enrollment} → une seule
  *       ligne (pas de doublon).</li>
  * </ol>
  * ainsi que le scénario bout en bout de vérification finale : créer un
- * compte {@code STUDENT} sans rien d'autre → visible ; lui ajouter un
- * profil → reste visible ; lui ajouter une inscription → reste visible,
- * une seule fois.
+ * compte {@code STUDENT} sans rien d'autre → visible ; lui poser un
+ * numéro étudiant → reste visible ; lui ajouter une inscription → reste
+ * visible, une seule fois.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -104,9 +105,9 @@ class StudentDirectoryIntegrationTests {
         Account student = accountWithRoles(RoleCode.STUDENT);
 
         Map<String, Object> row = findRow(student.publicId());
-        assertThat(row).as("un compte STUDENT sans profil doit apparaître dans /api/v1/students").isNotNull();
+        assertThat(row).as("un compte STUDENT sans numéro ni inscription doit apparaître dans /api/v1/students")
+                .isNotNull();
         assertThat(row.get("userPublicId")).isEqualTo(student.publicId());
-        assertThat(row.get("studentProfilePublicId")).isNull();
         assertThat(row.get("studentNumber")).isNull();
         assertThat(row.get("currentEnrollmentPublicId")).isNull();
 
@@ -115,26 +116,31 @@ class StudentDirectoryIntegrationTests {
     }
 
     // ------------------------------------------------------------------
-    // 2. STUDENT avec student_profile → visible
+    // 2. STUDENT avec numéro étudiant + alternance (ex-student_profile) → visible
     // ------------------------------------------------------------------
 
     @Test
-    void studentWithProfileIsVisibleAndDecoratedWithProfileData() {
+    void studentWithNumberAndEnrollmentIsVisibleAndDecorated() {
+        // Refonte 2026-09 : il n'existe plus de student_profile ni de route
+        // dédiée. Le numéro étudiant est une colonne de user_account
+        // (posée ici directement, comme le ferait POST /api/v1/users) ;
+        // l'alternance (workStudy / companyName) est portée par l'inscription.
         Account student = accountWithRoles(RoleCode.STUDENT);
         String number = "ESIC-2026-" + shortCode();
-        String profileId = (String) created("/api/v1/student-profiles", Map.of(
-                "userPublicId", student.publicId(), "studentNumber", number,
-                "workStudy", true, "companyName", "ACME"), admin).get("publicId");
+        assignStudentNumber(student.publicId(), number);
+        Chain chain = academicChain();
+        created("/api/v1/enrollments", Map.of(
+                "studentUserPublicId", student.publicId(), "classGroupPublicId", chain.classA(),
+                "workStudy", true, "companyName", "ACME"), admin);
 
         Map<String, Object> row = findRow(student.publicId());
         assertThat(row).isNotNull();
-        assertThat(row.get("studentProfilePublicId")).isEqualTo(profileId);
         assertThat(row.get("studentNumber")).isEqualTo(number);
         assertThat(row.get("workStudy")).isEqualTo(true);
         assertThat(row.get("companyName")).isEqualTo("ACME");
 
         Map<String, Object> detail = getMap("/api/v1/students/" + student.publicId());
-        assertThat(detail.get("studentProfilePublicId")).isEqualTo(profileId);
+        assertThat(detail.get("studentNumber")).isEqualTo(number);
     }
 
     // ------------------------------------------------------------------
@@ -144,8 +150,7 @@ class StudentDirectoryIntegrationTests {
     @Test
     void studentWithoutEnrollmentIsVisible() {
         Account student = accountWithRoles(RoleCode.STUDENT);
-        created("/api/v1/student-profiles", Map.of(
-                "userPublicId", student.publicId(), "studentNumber", "ESIC-2026-" + shortCode()), admin);
+        assignStudentNumber(student.publicId(), "ESIC-2026-" + shortCode());
 
         Map<String, Object> row = findRow(student.publicId());
         assertThat(row).isNotNull();
@@ -219,12 +224,12 @@ class StudentDirectoryIntegrationTests {
         assertThat(status(HttpMethod.GET, "/api/v1/students/" + userPublicId)).isEqualTo(HttpStatus.OK);
         assertThat(findRow(userPublicId)).isNotNull();
 
-        // 2) Ajouter un profil → reste visible.
-        created("/api/v1/student-profiles", Map.of(
-                "userPublicId", userPublicId, "studentNumber", "ESIC-2026-" + shortCode()), admin);
+        // 2) Ajouter un numéro étudiant (ex-student_profile, refonte 2026-09 :
+        // colonne de user_account, plus de route dédiée) → reste visible.
+        assignStudentNumber(userPublicId, "ESIC-2026-" + shortCode());
         Map<String, Object> afterProfile = findRow(userPublicId);
         assertThat(afterProfile).isNotNull();
-        assertThat(afterProfile.get("studentProfilePublicId")).isNotNull();
+        assertThat(afterProfile.get("studentNumber")).isNotNull();
 
         // 3) Ajouter une inscription → reste visible, une seule fois.
         Chain chain = academicChain();
@@ -263,6 +268,17 @@ class StudentDirectoryIntegrationTests {
                 "programLevelPublicId", level, "sitePublicId", site, "code", "C-" + suffix, "name", "Classe"), admin)
                 .get("publicId");
         return new Chain(classA);
+    }
+
+    /**
+     * Pose le numéro étudiant directement sur le compte (refonte 2026-09 :
+     * colonne de {@code user_account}, plus de {@code student_profile} ni
+     * de route dédiée pour l'attribuer après coup).
+     */
+    private void assignStudentNumber(String userPublicId, String number) {
+        UserAccount account = userAccountRepository.findByPublicId(UUID.fromString(userPublicId)).orElseThrow();
+        account.assignStudentNumber(number, null, null);
+        userAccountRepository.saveAndFlush(account);
     }
 
     /** Cherche la ligne d'un compte dans {@code GET /api/v1/students} (page large), ou {@code null}. */

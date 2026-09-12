@@ -51,7 +51,7 @@ class StudentScheduleExceptionServiceTests {
 
     private EnrollmentDirectory.EnrollmentRef enrollmentRef(boolean usable) {
         return new EnrollmentDirectory.EnrollmentRef(11L, enrollmentPublicId, UUID.randomUUID(),
-                UUID.randomUUID(), classPublicId, "C1", UUID.randomUUID(), "2026-2027", usable);
+                classPublicId, "C1", UUID.randomUUID(), "2026-2027", usable);
     }
 
     private StudentExceptionRequests.Create create(String type, String zone, Instant start, Instant end) {

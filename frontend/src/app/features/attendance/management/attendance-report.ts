@@ -97,7 +97,7 @@ export class AttendanceReport {
     from: [''],
     to: [''],
     classGroup: [''],
-    studentProfile: [''],
+    student: [''],
     sort: [''],
   });
 
@@ -150,7 +150,7 @@ export class AttendanceReport {
     this.load();
   }
   protected reset(): void {
-    this.filters.reset({ from: '', to: '', classGroup: '', studentProfile: '', sort: '' });
+    this.filters.reset({ from: '', to: '', classGroup: '', student: '', sort: '' });
     this.page.set(0);
     this.load();
   }
@@ -206,7 +206,7 @@ export class AttendanceReport {
       from: isoStart(raw.from),
       to: isoStart(raw.to),
       classGroup: raw.classGroup.trim() || null,
-      studentProfile: this.kind === 'students' ? raw.studentProfile.trim() || null : null,
+      student: this.kind === 'students' ? raw.student.trim() || null : null,
       sort,
       ...(paged ? { page: this.page(), size: this.size } : {}),
     };

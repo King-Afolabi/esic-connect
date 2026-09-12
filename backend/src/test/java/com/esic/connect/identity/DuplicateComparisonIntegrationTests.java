@@ -209,11 +209,19 @@ class DuplicateComparisonIntegrationTests {
         String admin = tokenFor(RoleCode.ADMIN);
         UserAccount a = persistNamed("Awa", "Diallo");
         UserAccount b = persistNamed("Awa", "Diallo");
-        // Le module enrollment « remonte » : profil, inscription active, numéro.
-        COUNTS.put(a.getId(), Map.of("studentProfile", 1L, "activeEnrollments", 1L, "enrollments", 3L));
-        COUNTS.put(b.getId(), Map.of("studentProfile", 1L, "activeEnrollments", 1L, "enrollments", 2L));
-        ATTRS.put(a.getId(), Map.of("studentNumber", "ESIC-2026-00001"));
-        ATTRS.put(b.getId(), Map.of("studentNumber", "ESIC-2026-09999"));
+        // Refonte 2026-09 : le numéro étudiant est porté directement par
+        // user_account (identity le lit lui-même, plus via un contributeur
+        // inter-module) ; seule l'inscription active reste remontée par le
+        // module enrollment.
+        COUNTS.put(a.getId(), Map.of("activeEnrollments", 1L, "enrollments", 3L));
+        COUNTS.put(b.getId(), Map.of("activeEnrollments", 1L, "enrollments", 2L));
+        // Suffixes aléatoires : uq_user_account_student_number est une
+        // contrainte réelle sur une base de test persistante d'une
+        // exécution à l'autre — une valeur fixe entrerait en collision.
+        a.assignStudentNumber("ESIC-2026-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(), null, null);
+        b.assignStudentNumber("ESIC-2026-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(), null, null);
+        userAccountRepository.saveAndFlush(a);
+        userAccountRepository.saveAndFlush(b);
 
         Map<String, Object> body = compare(admin, a.getPublicId(), b.getPublicId()).getBody();
 

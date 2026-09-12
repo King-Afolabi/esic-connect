@@ -196,7 +196,7 @@ export interface CancelAttendanceRequest {
  * lecture des présences.
  */
 export interface AttendanceCandidate {
-  studentProfilePublicId: string | null;
+  studentUserPublicId: string | null;
   enrollmentPublicId: string;
   studentNumber: string | null;
   firstName: string | null;
@@ -365,7 +365,7 @@ export interface AttendanceRecordResponse {
 /** `SessionAttendanceResponse.Row`. */
 export interface SessionAttendanceRow {
   attendancePublicId: string | null;
-  studentProfilePublicId: string | null;
+  studentUserPublicId: string | null;
   enrollmentPublicId: string | null;
   studentNumber: string | null;
   firstName: string | null;

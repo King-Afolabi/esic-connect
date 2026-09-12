@@ -89,12 +89,12 @@ describe('Attestations', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 
-    component().issueForm.setValue({ studentProfile: 'sp-1', from: '2026-09-01', to: '2026-09-30' });
+    component().issueForm.setValue({ student: 'u-1', from: '2026-09-01', to: '2026-09-30' });
     component().issue();
     fixture.detectChanges();
 
     expect(api.issueAttestation).toHaveBeenCalledWith(
-      'sp-1',
+      'u-1',
       '2026-09-01T00:00:00.000Z',
       '2026-09-30T23:59:59.999Z',
     );
@@ -109,7 +109,7 @@ describe('Attestations', () => {
    * pour ce qui est un champ non rempli.
    */
   it.each(['', '   '])('never issues on a blank student identifier (%j)', (value) => {
-    component().issueForm.setValue({ studentProfile: value, from: '', to: '' });
+    component().issueForm.setValue({ student: value, from: '', to: '' });
     component().issue();
     expect(api.issueAttestation).not.toHaveBeenCalled();
   });

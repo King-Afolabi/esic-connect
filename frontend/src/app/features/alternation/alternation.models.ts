@@ -281,7 +281,7 @@ export interface ClassAssignmentResponse {
 export interface StudentExceptionResponse {
   publicId: string;
   enrollmentPublicId: string | null;
-  studentProfilePublicId: string | null;
+  studentUserPublicId: string | null;
   classGroupPublicId: string | null;
   type: ScheduleExceptionType;
   /** `Instant` ISO-8601 (avec fuseau / `Z`). */

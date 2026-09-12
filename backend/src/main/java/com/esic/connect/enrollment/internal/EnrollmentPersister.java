@@ -5,17 +5,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Frontière transactionnelle dédiée aux <em>insertions</em> de profil
- * apprenant et d'inscription qui ne dépendent d'aucune écriture
- * antérieure dans la même transaction.
+ * Frontière transactionnelle dédiée aux <em>insertions</em> d'inscription
+ * qui ne dépendent d'aucune écriture antérieure dans la même transaction.
  *
  * <p>{@code saveAndFlush} est isolé dans une transaction
- * {@link Propagation#REQUIRES_NEW} : si une contrainte d'unicité connue
- * est violée par une course entre deux requêtes
- * ({@code uq_student_profile_user}, {@code uq_student_profile_student_number},
- * {@code uq_enrollment_active_per_year}), <em>cette</em> transaction est
- * marquée rollback-only et annulée sans contaminer l'appelant. Le service
- * reçoit alors la
+ * {@link Propagation#REQUIRES_NEW} : si la contrainte d'unicité
+ * {@code uq_enrollment_active_per_year} est violée par une course entre
+ * deux requêtes, <em>cette</em> transaction est marquée rollback-only et
+ * annulée sans contaminer l'appelant. Le service reçoit alors la
  * {@link org.springframework.dao.DataIntegrityViolationException}
  * <em>hors</em> de toute transaction en échec : il peut l'inspecter et la
  * retraduire en 409, ou la relancer telle quelle si elle vise une autre
@@ -29,18 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 class EnrollmentPersister {
 
-    private final StudentProfileRepository profileRepository;
     private final EnrollmentRepository enrollmentRepository;
 
-    EnrollmentPersister(StudentProfileRepository profileRepository,
-                        EnrollmentRepository enrollmentRepository) {
-        this.profileRepository = profileRepository;
+    EnrollmentPersister(EnrollmentRepository enrollmentRepository) {
         this.enrollmentRepository = enrollmentRepository;
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    StudentProfile persist(StudentProfile profile) {
-        return profileRepository.saveAndFlush(profile);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

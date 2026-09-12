@@ -66,6 +66,23 @@ class UserAccountConstraintsTests {
     }
 
     @Test
+    void studentNumberMustBeUnique() {
+        // Refonte 2026-09 : `student_number` est une colonne de
+        // `user_account` (plus de `student_profile`) ; son unicité doit
+        // être garantie au même niveau.
+        String number = "ESIC-2026-" + UUID.randomUUID().toString().substring(0, 8);
+        UserAccount first = newUser(uniqueEmail());
+        first.assignStudentNumber(number, null, null);
+        userAccountRepository.saveAndFlush(first);
+
+        UserAccount second = newUser(uniqueEmail());
+        second.assignStudentNumber(number, null, null);
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> userAccountRepository.saveAndFlush(second));
+    }
+
+    @Test
     void deletingUserReferencedByUserRoleIsRejected() {
         UserAccount user = userAccountRepository.saveAndFlush(newUser(uniqueEmail()));
         Role role = roleRepository.findByCode(RoleCode.STUDENT).orElseThrow();

@@ -125,7 +125,7 @@ class RemoteAttendanceService {
     List<RemoteAttendanceResponse> listForStudent(UUID studentUserPublicId) {
         UserDirectory.UserRef student = userDirectory.findByPublicId(studentUserPublicId)
                 .orElseThrow(() -> new EnrollmentException(
-                        EnrollmentException.Kind.STUDENT_PROFILE_NOT_FOUND));
+                        EnrollmentException.Kind.STUDENT_NOT_FOUND));
         return repository.findByStudentUserIdOrderByValidFromDesc(student.internalId()).stream()
                 .filter(this::inScope)
                 .map(authorization -> toResponse(authorization, studentUserPublicId,

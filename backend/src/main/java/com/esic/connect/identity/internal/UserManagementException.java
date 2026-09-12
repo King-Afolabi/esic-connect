@@ -33,6 +33,11 @@ class UserManagementException extends RuntimeException {
         INVALID_FILTER,
         /** Adresse électronique déjà utilisée par un compte (RG-001). */
         EMAIL_ALREADY_USED,
+        /**
+         * Numéro étudiant déjà attribué à un autre compte (refonte 2026-09,
+         * ex-{@code ENR_DUPLICATE_STUDENT_NUMBER}).
+         */
+        DUPLICATE_STUDENT_NUMBER,
         /** Comparaison de doublons demandée avec deux fois le même compte (ANO-USER-001). */
         SAME_USER
     }

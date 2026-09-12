@@ -23,19 +23,26 @@ import java.time.LocalDate;
  * {@link com.esic.connect.identity.UserDirectory} — exactement comme
  * {@code classGroupId} / {@code academicYearId} le sont via
  * {@link com.esic.connect.academic.ClassGroupDirectory}. Une inscription
- * ne porte <strong>aucune</strong> relation vers {@link StudentProfile} :
- * le profil apprenant est une donnée facultative et indépendante du même
- * compte (refonte 2026-09) — son absence ne rend jamais une inscription
- * impossible ni invisible. {@code classGroupId} et {@code academicYearId}
- * sont de simples valeurs techniques (clés étrangères SQL), résolues via
- * le port {@link com.esic.connect.academic.ClassGroupDirectory}.
+ * ne dépend d'aucun autre objet que le compte lui-même : il n'existe plus
+ * de {@code student_profile} (refonte 2026-09, supprimé) — le rôle
+ * {@code STUDENT} est l'unique source de vérité du statut apprenant.
+ * {@code classGroupId} et {@code academicYearId} sont de simples valeurs
+ * techniques (clés étrangères SQL), résolues via le port
+ * {@link com.esic.connect.academic.ClassGroupDirectory}.
  * {@code previousEnrollmentId} référence l'inscription clôturée dont
  * celle-ci prend la suite lors d'un changement de classe (docs/04 §13.2).
  *
+ * <p>{@code workStudy} / {@code companyName} décrivent la situation
+ * d'alternance de l'apprenant <strong>pendant cette inscription</strong>
+ * (ex-{@code student_profile.work_study} / {@code company_name},
+ * déplacées ici car elles sont propres à une période d'inscription, pas à
+ * la personne en général) ; modifiables via {@link #updateAlternation}.
+ *
  * <p>Rattachements, {@code startDate}, {@code enrollmentSource} et
- * {@code previousEnrollmentId} sont immuables ; seule la clôture
- * ({@link #close}) fait évoluer l'entité. Aucune suppression physique
- * (docs/04 §13.4).
+ * {@code previousEnrollmentId} sont immuables ; seules la clôture
+ * ({@link #close}) et la mise à jour de l'alternance
+ * ({@link #updateAlternation}) font évoluer l'entité. Aucune suppression
+ * physique (docs/04 §13.4).
  */
 @Entity
 @Table(name = "enrollment")
@@ -71,6 +78,12 @@ class Enrollment extends BaseEntity {
     @Column(name = "previous_enrollment_id", updatable = false)
     private Long previousEnrollmentId;
 
+    @Column(name = "work_study", nullable = false)
+    private boolean workStudy;
+
+    @Column(name = "company_name")
+    private String companyName;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -91,6 +104,13 @@ class Enrollment extends BaseEntity {
 
     Enrollment(Long userId, Long classGroupId, Long academicYearId, LocalDate startDate,
                EnrollmentSource enrollmentSource, String changeReason, Long previousEnrollmentId) {
+        this(userId, classGroupId, academicYearId, startDate, enrollmentSource, changeReason,
+                previousEnrollmentId, false, null);
+    }
+
+    Enrollment(Long userId, Long classGroupId, Long academicYearId, LocalDate startDate,
+               EnrollmentSource enrollmentSource, String changeReason, Long previousEnrollmentId,
+               boolean workStudy, String companyName) {
         this.userId = userId;
         this.classGroupId = classGroupId;
         this.academicYearId = academicYearId;
@@ -98,11 +118,25 @@ class Enrollment extends BaseEntity {
         this.enrollmentSource = enrollmentSource;
         this.changeReason = changeReason;
         this.previousEnrollmentId = previousEnrollmentId;
+        this.workStudy = workStudy;
+        this.companyName = companyName;
         this.status = EnrollmentStatus.ACTIVE;
     }
 
     void markCreatedBy(Long actorId) {
         this.createdById = actorId;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Met à jour la situation d'alternance de cette inscription
+     * (ex-{@code StudentProfile.updateAlternation}). N'affecte ni
+     * l'identité civile, ni le numéro étudiant, ni la date de naissance
+     * (portés par {@code user_account}, hors de portée de l'inscription).
+     */
+    void updateAlternation(boolean workStudy, String companyName, Long actorId) {
+        this.workStudy = workStudy;
+        this.companyName = companyName;
         this.updatedById = actorId;
     }
 
@@ -157,6 +191,14 @@ class Enrollment extends BaseEntity {
 
     Long getPreviousEnrollmentId() {
         return previousEnrollmentId;
+    }
+
+    boolean isWorkStudy() {
+        return workStudy;
+    }
+
+    String getCompanyName() {
+        return companyName;
     }
 
     Instant getCreatedAt() {

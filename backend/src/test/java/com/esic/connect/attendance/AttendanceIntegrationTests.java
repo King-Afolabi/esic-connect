@@ -299,9 +299,8 @@ class AttendanceIntegrationTests {
         Map<String, Object> issued = post("/api/v1/sessions/" + fx.sessionId() + "/attendance-token",
                 null, admin, HttpStatus.OK);
 
-        // Apprenant avec un profil mais aucune inscription dans une classe de la séance.
+        // Apprenant sans aucune inscription dans une classe de la séance.
         Account outsider = accountWithRoles(RoleCode.STUDENT);
-        createProfile(admin, outsider.publicId());
         ResponseEntity<Map<String, Object>> denied = exchange(HttpMethod.POST, "/api/v1/attendance/validate",
                 Map.of("shortCode", issued.get("shortCode")), tokenFor(outsider));
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -1307,7 +1306,6 @@ class AttendanceIntegrationTests {
      */
     private String enrollExtraStudentInFixtureClass(String admin, Fixture fx, String startDate) {
         Account student = accountWithRoles(RoleCode.STUDENT);
-        createProfile(admin, student.publicId());
         Map<String, Object> body = new java.util.HashMap<>();
         body.put("studentUserPublicId", student.publicId());
         body.put("classGroupPublicId", fx.classA());
@@ -1344,7 +1342,11 @@ class AttendanceIntegrationTests {
         java.util.ArrayList<String> enrollments = new java.util.ArrayList<>();
         for (int i = 0; i < studentCount; i++) {
             Account student = accountWithRoles(RoleCode.STUDENT);
-            createProfile(admin, student.publicId());
+            // Numéro étudiant posé directement sur le compte (refonte
+            // 2026-09 : colonne de user_account, plus de student_profile) —
+            // certains tests de ce fichier vérifient sa présence dans la
+            // vue de présence (roster).
+            assignStudentNumber(student.publicId(), "ESIC-2026-" + code());
             // startDate explicite antérieure à toutes les dates de séance des
             // fixtures (la plus ancienne = 2026-08-01) : la couverture de
             // l'inscription à la date de la séance ne doit jamais dépendre de
@@ -1370,17 +1372,11 @@ class AttendanceIntegrationTests {
         post("/api/v1/sessions/" + sessionId + "/open", null, admin, HttpStatus.NO_CONTENT);
 
         Account student = accountWithRoles(RoleCode.STUDENT);
-        createProfile(admin, student.publicId());
         String enrollment = (String) created("/api/v1/enrollments", Map.of(
                 "studentUserPublicId", student.publicId(), "classGroupPublicId", chain.classA(),
                 "startDate", "2026-08-01"), admin).get("publicId");
         return new Fixture(sessionId, List.of(student), List.of(enrollment), chain.classA(),
                 chain.program(), teacher);
-    }
-
-    private String createProfile(String admin, String userPublicId) {
-        return (String) created("/api/v1/student-profiles", Map.of("userPublicId", userPublicId,
-                "studentNumber", "ESIC-2026-" + code()), admin).get("publicId");
     }
 
     private Map<String, Object> sessionBody(String teacherPublicId, List<String> classPublicIds) {
@@ -1488,6 +1484,17 @@ class AttendanceIntegrationTests {
     }
 
     private record Account(String publicId, String email) {
+    }
+
+    /**
+     * Pose le numéro étudiant directement sur le compte (refonte 2026-09 :
+     * colonne de {@code user_account}, plus de {@code student_profile} ni
+     * de route dédiée pour l'attribuer après coup).
+     */
+    private void assignStudentNumber(String userPublicId, String number) {
+        UserAccount account = userAccountRepository.findByPublicId(UUID.fromString(userPublicId)).orElseThrow();
+        account.assignStudentNumber(number, null, null);
+        userAccountRepository.saveAndFlush(account);
     }
 
     private Account accountWithRoles(RoleCode... roles) {

@@ -46,8 +46,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Parcours de bout en bout des inscriptions historiques (T-J1-032 /
- * US-053 ; AC-006) : création d'un profil apprenant, inscription,
- * changement de classe conservant l'ancienne inscription consultable
+ * US-053 ; AC-006) : inscription d'un compte STUDENT, changement de
+ * classe conservant l'ancienne inscription consultable
  * ({@code TRANSFERRED}) et créant la nouvelle liée
  * ({@code previous_enrollment_id}), clôture, audit, unicité d'une
  * inscription active par année (dont une course concurrente traduite en
@@ -92,31 +92,29 @@ class EnrollmentIntegrationTests {
     void profileEnrollTransferCloseLifecycleIsAuditedAndHidesInternalIds() {
         String admin = adminToken();
         String studentUser = studentAccountPublicId();
-
-        Map<String, Object> profile = created("/api/v1/student-profiles", Map.of(
-                "userPublicId", studentUser, "studentNumber", "ESIC-2026-" + shortCode(),
-                "workStudy", true, "companyName", "ACME"), admin);
-        String profileId = (String) profile.get("publicId");
-        assertThat(profile.get("userPublicId")).isEqualTo(studentUser);
-        assertThat(profile.get("status")).isEqualTo("ACTIVE");
-        assertThat(profile).doesNotContainKeys("id", "userId");
-        assertThat(auditActions(profileId)).contains("STUDENT_PROFILE_CREATED");
+        // Refonte 2026-09 : le numéro étudiant est une colonne de
+        // user_account, plus de student_profile ni d'événement
+        // STUDENT_PROFILE_CREATED dédié. Posé directement en base, comme
+        // le ferait POST /api/v1/users à la création.
+        String studentNumber = "ESIC-2026-" + shortCode();
+        assignStudentNumber(studentUser, studentNumber);
 
         Chain chain = academicChain(admin);
 
-        // L'inscription rattache directement le COMPTE (refonte 2026-09) —
-        // jamais le profil créé ci-dessus, qui reste une décoration
-        // facultative et indépendante.
+        // L'inscription rattache directement le COMPTE — le numéro
+        // étudiant posé ci-dessus reste une décoration facultative et
+        // indépendante, portée par user_account, pas par l'inscription.
         Map<String, Object> first = created("/api/v1/enrollments", Map.of(
-                "studentUserPublicId", studentUser, "classGroupPublicId", chain.classA()), admin);
+                "studentUserPublicId", studentUser, "classGroupPublicId", chain.classA(),
+                "workStudy", true, "companyName", "ACME"), admin);
         String firstId = (String) first.get("publicId");
         assertThat(first.get("status")).isEqualTo("ACTIVE");
         assertThat(first.get("enrollmentSource")).isEqualTo("MANUAL");
         assertThat(first.get("startDate")).isNotNull();
         assertThat(first.get("studentUserPublicId")).isEqualTo(studentUser);
-        // Le profil créé plus haut est bien résolu comme décoration
-        // facultative de la réponse (numéro étudiant, id de profil).
-        assertThat(first.get("studentProfilePublicId")).isEqualTo(profileId);
+        assertThat(first.get("studentNumber")).isEqualTo(studentNumber);
+        assertThat(first.get("workStudy")).isEqualTo(true);
+        assertThat(first.get("companyName")).isEqualTo("ACME");
         assertThat(first.get("classGroupPublicId")).isEqualTo(chain.classA());
         assertThat(first.get("academicYearCode")).isEqualTo(chain.yearCode());
         assertThat(first.get("previousEnrollmentPublicId")).isNull();
@@ -210,26 +208,21 @@ class EnrollmentIntegrationTests {
     }
 
     @Test
-    void studentProfileForNonStudentAccountIsRejectedWith422() {
-        String admin = adminToken();
-        String teacherUser = accountWithRoles(RoleCode.TEACHER).publicId();
-        ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST, "/api/v1/student-profiles",
-                Map.of("userPublicId", teacherUser, "studentNumber", "ESIC-2026-" + shortCode()), admin);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(response.getBody().get("code")).isEqualTo("ENR_USER_NOT_ELIGIBLE");
-    }
-
-    @Test
-    void duplicateStudentNumberIsRejectedWith409() {
+    void duplicateStudentNumberAtAccountCreationIsRejectedWith409() {
+        // Refonte 2026-09 : le numéro étudiant est soumis directement à
+        // POST /api/v1/users (plus de POST /api/v1/student-profiles) ; son
+        // unicité — et le rejet du doublon — sont désormais portés par le
+        // module identity, quel que soit le rôle du compte.
         String admin = adminToken();
         String number = "ESIC-2026-" + shortCode();
-        created("/api/v1/student-profiles", Map.of("userPublicId", studentAccountPublicId(),
-                "studentNumber", number), admin);
+        created("/api/v1/users", Map.of("email", "dup1-" + UUID.randomUUID() + "@esic-connect.test",
+                "firstName", "Dup", "lastName", "One", "role", "STUDENT", "studentNumber", number), admin);
 
-        ResponseEntity<Map<String, Object>> second = exchange(HttpMethod.POST, "/api/v1/student-profiles",
-                Map.of("userPublicId", studentAccountPublicId(), "studentNumber", number), admin);
+        ResponseEntity<Map<String, Object>> second = exchange(HttpMethod.POST, "/api/v1/users",
+                Map.of("email", "dup2-" + UUID.randomUUID() + "@esic-connect.test",
+                        "firstName", "Dup", "lastName", "Two", "role", "STUDENT", "studentNumber", number), admin);
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(second.getBody().get("code")).isEqualTo("ENR_DUPLICATE_STUDENT_NUMBER");
+        assertThat(second.getBody().get("code")).isEqualTo("USER_DUPLICATE_STUDENT_NUMBER");
     }
 
     @Test
@@ -250,8 +243,7 @@ class EnrollmentIntegrationTests {
     void enrollRejectsUnknownStudentUserWith422() {
         // Refonte 2026-09 : une inscription vise directement un compte —
         // un compte inconnu, comme un compte non éligible (archivé, sans
-        // rôle STUDENT), est ENR_USER_NOT_ELIGIBLE (même règle que la
-        // création d'un profil apprenant).
+        // rôle STUDENT), est ENR_USER_NOT_ELIGIBLE.
         String admin = adminToken();
         Chain chain = academicChain(admin);
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST, "/api/v1/enrollments",
@@ -270,34 +262,20 @@ class EnrollmentIntegrationTests {
     }
 
     @Test
-    void blankStudentNumberIsGeneratedInTheNormalisedEsicFormat() {
-        String admin = adminToken();
-        // Aucun champ studentNumber -> le serveur alloue ESIC-{année}-{séquence}.
-        Map<String, Object> created = created("/api/v1/student-profiles",
-                Map.of("userPublicId", studentAccountPublicId()), admin);
-        assertThat((String) created.get("studentNumber"))
-                .as("numéro généré au format normalisé")
-                .matches("ESIC-\\d{4}-\\d{5}");
-
-        // Deux créations successives -> deux numéros distincts (séquence).
-        Map<String, Object> second = created("/api/v1/student-profiles",
-                Map.of("userPublicId", studentAccountPublicId()), admin);
-        assertThat((String) second.get("studentNumber")).isNotEqualTo(created.get("studentNumber"));
-    }
-
-    @Test
     @SuppressWarnings("unchecked")
-    void studentProfileListSearchesByNameAndCarriesTheCivilName() {
+    void studentsListSearchesByNameAndCarriesTheStudentNumber() {
+        // Refonte 2026-09 : la recherche par nom / numéro étudiant vit
+        // désormais sur GET /api/v1/students (rôle STUDENT), plus sur une
+        // route /student-profiles distincte.
         String admin = adminToken();
         String unique = "Zeldapratt" + shortCode().substring(0, 6);
         String studentUser = accountWithName("Camille", unique, RoleCode.STUDENT).publicId();
         String number = "ESIC-2026-" + shortCode();
-        created("/api/v1/student-profiles",
-                Map.of("userPublicId", studentUser, "studentNumber", number), admin);
+        assignStudentNumber(studentUser, number);
 
         // Recherche par NOM (pas seulement par numéro) — et la ligne porte
         // le prénom / nom résolus depuis le module identity.
-        Map<String, Object> byName = getMap("/api/v1/student-profiles?q=" + unique, admin);
+        Map<String, Object> byName = getMap("/api/v1/students?q=" + unique, admin);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) byName.get("content");
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("lastName")).isEqualTo(unique);
@@ -305,23 +283,24 @@ class EnrollmentIntegrationTests {
         assertThat(rows.get(0).get("studentNumber")).isEqualTo(number);
 
         // Recherche par NUMÉRO — toujours possible.
-        Map<String, Object> byNumber = getMap("/api/v1/student-profiles?q="
+        Map<String, Object> byNumber = getMap("/api/v1/students?q="
                 + number.substring(number.length() - 6), admin);
         assertThat((List<Map<String, Object>>) byNumber.get("content"))
                 .anySatisfy(r -> assertThat(r.get("lastName")).isEqualTo(unique));
 
         // Un apprenant encore EN ATTENTE D'ACTIVATION est aussi trouvé par
-        // son nom (la recherche globale, elle, ne verrait que les actifs).
+        // son nom (la recherche globale, elle, ne verrait que les actifs) —
+        // et sans numéro étudiant du tout, puisque le rôle seul l'établit.
         String pendingLast = "Pendingsearch" + shortCode().substring(0, 6);
         String pendingUser = accountWithName("Noé", pendingLast,
                 AccountStatus.PENDING_ACTIVATION, RoleCode.STUDENT).publicId();
-        created("/api/v1/student-profiles", Map.of("userPublicId", pendingUser), admin);
-        Map<String, Object> pendingHit = getMap("/api/v1/student-profiles?q=" + pendingLast, admin);
+        Map<String, Object> pendingHit = getMap("/api/v1/students?q=" + pendingLast, admin);
         assertThat((List<Map<String, Object>>) pendingHit.get("content"))
                 .singleElement()
                 .satisfies(r -> {
                     assertThat(r.get("lastName")).isEqualTo(pendingLast);
-                    assertThat((String) r.get("studentNumber")).matches("ESIC-\\d{4}-\\d{5}");
+                    assertThat(r.get("userPublicId")).isEqualTo(pendingUser);
+                    assertThat(r.get("studentNumber")).isNull();
                 });
     }
 
@@ -408,6 +387,17 @@ class EnrollmentIntegrationTests {
     }
 
     private record Account(String publicId, String email) {
+    }
+
+    /**
+     * Pose le numéro étudiant directement sur le compte (refonte 2026-09 :
+     * colonne de {@code user_account}, plus de {@code student_profile} ni
+     * de route dédiée pour l'attribuer après coup).
+     */
+    private void assignStudentNumber(String userPublicId, String number) {
+        UserAccount account = userAccountRepository.findByPublicId(UUID.fromString(userPublicId)).orElseThrow();
+        account.assignStudentNumber(number, null, null);
+        userAccountRepository.saveAndFlush(account);
     }
 
     private Account accountWithRoles(RoleCode... roles) {

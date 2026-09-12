@@ -5,7 +5,6 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   CreateStudentAccountRequest,
-  CreateStudentProfileRequest,
   CreatedUserResponse,
   EnrollStudentRequest,
   EnrollmentListQuery,
@@ -15,7 +14,6 @@ import {
   RemoteAttendanceAuthorizationResponse,
   RemoteAttendanceAuthorizeRequest,
   StudentListQuery,
-  StudentProfileResponse,
   StudentResponse,
   TransferEnrollmentRequest,
 } from './students.models';
@@ -28,9 +26,10 @@ import {
  *
  * Refonte 2026-09 : l'écran « Apprenants » repose sur
  * `GET /api/v1/students` — tous les comptes porteurs du rôle `STUDENT`,
- * avec ou sans profil, avec ou sans inscription. `student-profiles` et
- * `enrollments` restent des routes de gestion de données facultatives,
- * plus la source de la liste elle-même.
+ * avec ou sans numéro étudiant, avec ou sans inscription. Il n'existe
+ * plus de `student-profiles` séparé : `enrollments` reste la seule route
+ * de gestion de données facultatives, en plus de la source de la liste
+ * elle-même.
  *
  * Ce service ne consomme que des routes déjà exposées par le back-end ;
  * aucune n'est inventée. Les appels sont authentifiés par le jeton
@@ -87,29 +86,23 @@ export class StudentsApiService {
   /**
    * `POST /api/v1/users` — crée le compte `PENDING_ACTIVATION` avec le
    * rôle `STUDENT` et lui émet son invitation (aucun mot de passe n'est
-   * transmis : la personne le choisit via le lien). `409` si l'adresse
-   * est déjà utilisée. Réservé à `ADMIN` / `SUPER_ADMIN` côté serveur.
-   * L'apprenant est immédiatement visible dans `/api/v1/students`, sans
-   * qu'aucune autre étape ne soit requise.
+   * transmis : la personne le choisit via le lien). Le numéro étudiant et
+   * la date de naissance, facultatifs, sont portés directement par ce
+   * même appel (refonte 2026-09 : plus de `student-profiles` séparé).
+   * `409` si l'adresse est déjà utilisée. Réservé à `ADMIN` / `SUPER_ADMIN`
+   * côté serveur. L'apprenant est immédiatement visible dans
+   * `/api/v1/students`, sans qu'aucune autre étape ne soit requise.
    */
   createStudentAccount(body: CreateStudentAccountRequest): Observable<CreatedUserResponse> {
     return this.http.post<CreatedUserResponse>(`${this.base}/users`, body);
   }
 
   /**
-   * `POST /api/v1/student-profiles` — données facultatives (numéro
-   * étudiant, alternance…) pour un compte `STUDENT` existant. Ni requis
-   * ni suffisant pour être un apprenant : c'est le rôle qui l'établit.
-   */
-  createStudentProfile(body: CreateStudentProfileRequest): Observable<StudentProfileResponse> {
-    return this.http.post<StudentProfileResponse>(`${this.base}/student-profiles`, body);
-  }
-
-  /**
    * `POST /api/v1/enrollments` — inscription initiale dans une classe,
-   * pour le **compte** apprenant désigné (`studentUserPublicId`). Opération
-   * distincte et non obligatoire : un compte `STUDENT` sans inscription
-   * reste un apprenant pleinement visible.
+   * pour le **compte** apprenant désigné (`studentUserPublicId`), avec sa
+   * situation d'alternance éventuelle. Opération distincte et non
+   * obligatoire : un compte `STUDENT` sans inscription reste un apprenant
+   * pleinement visible.
    */
   enrollStudent(body: EnrollStudentRequest): Observable<EnrollmentResponse> {
     return this.http.post<EnrollmentResponse>(`${this.base}/enrollments`, body);

@@ -72,7 +72,7 @@ class DailyAttendanceService {
     /** Une ligne par apprenant de la classe pour la journée demandée. */
     record DailyRow(
             UUID enrollmentPublicId,
-            UUID studentProfilePublicId,
+            UUID studentUserPublicId,
             String studentNumber,
             String firstName,
             String lastName,
@@ -171,7 +171,7 @@ class DailyAttendanceService {
             DailyAttendanceResult result = applyEarlyDeparture(
                     classify(expected.keySet(), validated, excused, axis),
                     departureByEnrollment.get(entry.enrollmentInternalId()));
-            rows.add(new DailyRow(entry.enrollmentPublicId(), entry.studentProfilePublicId(),
+            rows.add(new DailyRow(entry.enrollmentPublicId(), entry.studentUserPublicId(),
                     entry.studentNumber(), entry.firstName(), entry.lastName(), result,
                     halfDayValidated(expected.keySet(), validated, true),
                     halfDayValidated(expected.keySet(), validated, false),

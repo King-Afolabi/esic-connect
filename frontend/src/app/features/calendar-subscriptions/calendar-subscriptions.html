@@ -39,38 +39,40 @@
       @if (loading()) {
         <mat-progress-bar mode="indeterminate" aria-label="Chargement"></mat-progress-bar>
       } @else if (subscriptions().length) {
-        <table class="cal__table">
-          <caption class="cal__caption">Abonnements iCalendar</caption>
-          <thead>
-            <tr>
-              <th scope="col">Nom</th>
-              <th scope="col">Créé le</th>
-              <th scope="col">Dernier accès</th>
-              <th scope="col">État</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of subscriptions(); track row.publicId) {
+        <div class="esic-table-wrap">
+          <table class="cal__table">
+            <caption class="cal__caption">Abonnements iCalendar</caption>
+            <thead>
               <tr>
-                <th scope="row">{{ row.label || 'Sans nom' }}</th>
-                <td>{{ row.createdAt }}</td>
-                <td>{{ row.lastUsedAt || 'Jamais' }}</td>
-                <td>{{ row.revokedAt ? 'Révoqué' : 'Actif' }}</td>
-                <td>
-                  @if (!row.revokedAt) {
-                    <button mat-button type="button" (click)="revoke(row)" [disabled]="working()"
-                            [attr.aria-label]="'Révoquer l\'abonnement ' + (row.label || 'sans nom')">
-                      Révoquer
-                    </button>
-                  } @else {
-                    —
-                  }
-                </td>
+                <th scope="col">Nom</th>
+                <th scope="col">Créé le</th>
+                <th scope="col">Dernier accès</th>
+                <th scope="col">État</th>
+                <th scope="col">Action</th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (row of subscriptions(); track row.publicId) {
+                <tr>
+                  <th scope="row">{{ row.label || 'Sans nom' }}</th>
+                  <td>{{ row.createdAt }}</td>
+                  <td>{{ row.lastUsedAt || 'Jamais' }}</td>
+                  <td>{{ row.revokedAt ? 'Révoqué' : 'Actif' }}</td>
+                  <td>
+                    @if (!row.revokedAt) {
+                      <button mat-button type="button" (click)="revoke(row)" [disabled]="working()"
+                              [attr.aria-label]="'Révoquer l\'abonnement ' + (row.label || 'sans nom')">
+                        Révoquer
+                      </button>
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
         <p class="cal__note">
           Un abonnement révoqué reste listé : son lien répond « révoqué » aux agendas
           qui continueraient de l'appeler.

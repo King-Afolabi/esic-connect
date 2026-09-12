@@ -130,12 +130,14 @@ class DuplicateComparisonService {
     private record Snapshot(UserAccount account, List<String> roles, Map<String, Long> dependencyCounts,
                             Map<String, String> attributes, boolean mfaConfigured) {
 
+        /** Refonte 2026-09 : porté directement par {@code user_account}, plus par un {@code student_profile}. */
         String studentNumber() {
-            return attributes.get("studentNumber");
+            return account.getStudentNumber();
         }
 
-        boolean hasStudentProfile() {
-            return count("studentProfile") > 0 || studentNumber() != null;
+        /** Le rôle {@code STUDENT} est l'unique source de vérité du statut apprenant (refonte 2026-09). */
+        boolean isStudent() {
+            return roles.contains("STUDENT");
         }
 
         boolean hasActiveEnrollment() {
@@ -166,7 +168,7 @@ class DuplicateComparisonService {
                     account.getPhone(),
                     account.getStatus().name(),
                     roles,
-                    hasStudentProfile(),
+                    isStudent(),
                     studentNumber(),
                     hasActiveEnrollment(),
                     hasLoginCredential(),
@@ -223,8 +225,8 @@ class DuplicateComparisonService {
         if (!a.roles.equals(b.roles)) {
             fields.add("roles");
         }
-        if (a.hasStudentProfile() != b.hasStudentProfile()) {
-            fields.add("studentProfile");
+        if (a.isStudent() != b.isStudent()) {
+            fields.add("isStudent");
         }
         if (!java.util.Objects.equals(nullSafe(a.studentNumber()), nullSafe(b.studentNumber()))) {
             fields.add("studentNumber");
@@ -258,12 +260,12 @@ class DuplicateComparisonService {
                             + "rien n'indique qu'il s'agisse de la même personne."));
         }
         boolean studentVsTeacher =
-                (a.hasStudentProfile() && b.isTeacherLike() && !b.hasStudentProfile())
-                        || (b.hasStudentProfile() && a.isTeacherLike() && !a.hasStudentProfile());
+                (a.isStudent() && b.isTeacherLike() && !b.isStudent())
+                        || (b.isStudent() && a.isTeacherLike() && !a.isStudent());
         if (studentVsTeacher) {
             notes.add(new DuplicateComparisonWeb.Note("INCOMPATIBLE_PROFILES",
-                    "Un compte est un profil apprenant, l'autre un intervenant pédagogique : "
-                            + "profils non rattachables automatiquement."));
+                    "Un compte porte le rôle apprenant, l'autre un rôle d'intervenant pédagogique : "
+                            + "comptes non rattachables automatiquement."));
         }
         return notes;
     }

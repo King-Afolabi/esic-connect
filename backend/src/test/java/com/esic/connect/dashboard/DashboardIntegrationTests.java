@@ -512,8 +512,6 @@ class DashboardIntegrationTests {
 
     private Account enrolledStudent(String admin, String classPublicId) {
         Account student = account(RoleCode.STUDENT);
-        created(admin, "/api/v1/student-profiles", Map.of("userPublicId", student.publicId(),
-                "studentNumber", "ESIC-2026-" + code())).get("publicId").toString();
         created(admin, "/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", classPublicId, "startDate", "2026-08-01"));
         return student;

@@ -12,12 +12,20 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 /**
  * Compte utilisateur (docs/04-modele-donnees.md §10.1).
  *
  * Ne porte aucune logique métier (activation, connexion, MFA...) : ce
  * socle ne persiste que la structure de données.
+ *
+ * <p>{@code studentNumber} / {@code birthDate} (refonte 2026-09) : données
+ * personnelles générales et facultatives, sans lien avec un quelconque
+ * {@code student_profile} (supprimé) — le rôle {@code STUDENT}
+ * ({@code user_role}) reste l'unique source de vérité du statut apprenant.
+ * {@code studentNumber} est immuable une fois posé (voir
+ * {@link #assignStudentNumber}).
  */
 @Entity
 @Table(name = "user_account")
@@ -47,6 +55,12 @@ public class UserAccount extends BaseEntity {
 
     @Column(name = "preferred_time_zone")
     private String preferredTimeZone;
+
+    @Column(name = "student_number")
+    private String studentNumber;
+
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -148,6 +162,29 @@ public class UserAccount extends BaseEntity {
      */
     public void updatePhone(String phone, Long actorId) {
         this.phone = phone;
+        this.updatedById = actorId;
+    }
+
+    public String getStudentNumber() {
+        return studentNumber;
+    }
+
+    public LocalDate getBirthDate() {
+        return birthDate;
+    }
+
+    /**
+     * Attribue le numéro étudiant et la date de naissance — jamais
+     * réécrits une fois posés (immuables, comme l'ancien
+     * {@code student_profile.student_number}). Appelée à la création
+     * manuelle d'un compte ({@code UserManagementService.createUser}) ou
+     * par l'import CSV ({@code studentimport}, via le port
+     * {@code identity.StudentAccountProvisioner}) pour un compte qui n'en
+     * a pas encore.
+     */
+    public void assignStudentNumber(String studentNumber, LocalDate birthDate, Long actorId) {
+        this.studentNumber = studentNumber;
+        this.birthDate = birthDate;
         this.updatedById = actorId;
     }
 

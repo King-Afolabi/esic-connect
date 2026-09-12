@@ -84,7 +84,7 @@ class AttestationIntegrationTests {
         fx.validateAttendance(admin, fx.tokenFor(student.account()), sessionId, checkpoint);
 
         ResponseEntity<byte[]> response = fx.bytes(HttpMethod.POST,
-                "/api/v1/attendance/reports/attestation?studentProfile=" + student.profilePublicId(),
+                "/api/v1/attendance/reports/attestation?student=" + student.account().publicId(),
                 admin);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -119,7 +119,7 @@ class AttestationIntegrationTests {
         fx.openCheckpoint(admin, sessionId, "MORNING_ARRIVAL");
 
         ResponseEntity<byte[]> issued = fx.bytes(HttpMethod.POST,
-                "/api/v1/attendance/reports/attestation?studentProfile=" + student.profilePublicId(),
+                "/api/v1/attendance/reports/attestation?student=" + student.account().publicId(),
                 admin);
         assertThat(issued.getStatusCode()).isEqualTo(HttpStatus.OK);
         String documentId = issued.getHeaders().getFirst("X-Document-Id");
@@ -148,7 +148,7 @@ class AttestationIntegrationTests {
     void anUnknownStudentProducesNoAttestation() {
         String admin = fx.tokenFor(fx.account(RoleCode.ADMIN));
         ResponseEntity<Map<String, Object>> response = fx.exchange(HttpMethod.POST,
-                "/api/v1/attendance/reports/attestation?studentProfile=" + UUID.randomUUID(), null, admin);
+                "/api/v1/attendance/reports/attestation?student=" + UUID.randomUUID(), null, admin);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody().get("code")).isEqualTo("ATT_ATTESTATION_SUBJECT_NOT_FOUND");
     }
@@ -160,11 +160,11 @@ class AttestationIntegrationTests {
         S11TestFixture.Student student = fx.enrolledStudent(admin, chain.classA());
 
         assertThat(fx.exchange(HttpMethod.POST,
-                "/api/v1/attendance/reports/attestation?studentProfile=" + student.profilePublicId(),
+                "/api/v1/attendance/reports/attestation?student=" + student.account().publicId(),
                 null, fx.tokenFor(student.account())).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(fx.exchange(HttpMethod.POST,
-                "/api/v1/attendance/reports/attestation?studentProfile=" + student.profilePublicId(),
+                "/api/v1/attendance/reports/attestation?student=" + student.account().publicId(),
                 null, null).getStatusCode())
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
@@ -185,7 +185,7 @@ class AttestationIntegrationTests {
         // 404 et non 403 : hors périmètre et inexistant se répondent de la
         // même façon (docs/02 §18.2).
         ResponseEntity<Map<String, Object>> response = fx.exchange(HttpMethod.POST,
-                "/api/v1/attendance/reports/attestation?studentProfile=" + outsider.profilePublicId(),
+                "/api/v1/attendance/reports/attestation?student=" + outsider.account().publicId(),
                 null, fx.tokenFor(manager));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }

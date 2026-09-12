@@ -15,17 +15,16 @@ import java.util.UUID;
  *
  * <p>{@code studentUserPublicId} est <strong>l'identifiant du compte
  * apprenant</strong> — toujours renseigné, une inscription rattachant
- * directement un compte (refonte 2026-09). {@code studentProfilePublicId}
- * et {@code studentNumber} restent exposés à titre de confort d'affichage
- * (numéro étudiant, lien vers le profil), mais sont
- * <strong>facultatifs</strong> : {@code null} lorsque le compte apprenant
- * n'a pas (encore) de {@code student_profile} — ce qui ne remet jamais en
- * cause la validité de l'inscription elle-même.
+ * directement un compte (refonte 2026-09, plus de {@code student_profile}
+ * intermédiaire). {@code studentNumber} (porté par {@code user_account})
+ * reste exposé à titre de confort d'affichage, mais facultatif :
+ * {@code null} tant que le compte n'a pas de numéro. {@code workStudy} /
+ * {@code companyName} décrivent la situation d'alternance
+ * <strong>pendant cette inscription</strong> (ex-{@code student_profile}).
  */
 record EnrollmentResponse(
         UUID publicId,
         UUID studentUserPublicId,
-        UUID studentProfilePublicId,
         String studentNumber,
         UUID classGroupPublicId,
         String classGroupCode,
@@ -38,17 +37,18 @@ record EnrollmentResponse(
         EnrollmentStatus status,
         EnrollmentSource enrollmentSource,
         String changeReason,
+        boolean workStudy,
+        String companyName,
         UUID previousEnrollmentPublicId,
         Instant createdAt,
         Instant updatedAt) {
 
-    static EnrollmentResponse from(Enrollment enrollment, UUID studentUserPublicId, StudentProfile profile,
+    static EnrollmentResponse from(Enrollment enrollment, UUID studentUserPublicId, String studentNumber,
                                    ClassGroupDirectory.ClassGroupRef classRef, UUID previousEnrollmentPublicId) {
         return new EnrollmentResponse(
                 enrollment.getPublicId(),
                 studentUserPublicId,
-                profile != null ? profile.getPublicId() : null,
-                profile != null ? profile.getStudentNumber() : null,
+                studentNumber,
                 classRef.publicId(),
                 classRef.code(),
                 classRef.programPublicId(),
@@ -60,6 +60,8 @@ record EnrollmentResponse(
                 enrollment.getStatus(),
                 enrollment.getEnrollmentSource(),
                 enrollment.getChangeReason(),
+                enrollment.isWorkStudy(),
+                enrollment.getCompanyName(),
                 previousEnrollmentPublicId,
                 enrollment.getCreatedAt(),
                 enrollment.getUpdatedAt());

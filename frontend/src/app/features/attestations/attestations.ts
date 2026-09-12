@@ -53,7 +53,7 @@ export class Attestations {
   protected readonly verificationFailed = signal(false);
 
   protected readonly issueForm = this.fb.nonNullable.group({
-    studentProfile: ['', [Validators.required]],
+    student: ['', [Validators.required]],
     from: '',
     to: '',
   });
@@ -68,18 +68,18 @@ export class Attestations {
 
   protected issue(): void {
     const raw = this.issueForm.getRawValue();
-    const studentProfile = raw.studentProfile.trim();
+    const student = raw.student.trim();
     // `Validators.required` accepte une chaîne d'espaces : sans ce
     // contrôle, un identifiant vide partirait au serveur, qui répondrait
     // « aucun apprenant ne correspond » — un message trompeur pour ce
     // qui est en réalité un champ non rempli.
-    if (!studentProfile || this.issuing()) {
+    if (!student || this.issuing()) {
       this.issueForm.markAllAsTouched();
       return;
     }
     this.issuing.set(true);
     this.api
-      .issueAttestation(studentProfile, isoStart(raw.from), isoEnd(raw.to))
+      .issueAttestation(student, isoStart(raw.from), isoEnd(raw.to))
       .subscribe({
         next: (response) => {
           this.issuing.set(false);

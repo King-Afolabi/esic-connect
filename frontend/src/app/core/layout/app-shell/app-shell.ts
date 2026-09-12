@@ -5,6 +5,7 @@ import {
   ElementRef,
   OnDestroy,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -79,6 +80,16 @@ export class AppShell implements OnDestroy {
     // pour armer l'expiration glissante (Lot A), et sa destruction — au
     // retour vers `/login` — pour la désarmer.
     this.sessionActivity.start();
+
+    // Quelle que soit la manière dont on arrive sur une page (clic dans le
+    // menu, lien externe, rechargement sur une URL profonde, navigation
+    // arrière), l'entrée active du menu doit rester visible : on la fait
+    // défiler dans le rail desktop (liste parfois plus haute que l'écran)
+    // et dans le panneau mobile (déjà ouvert ou qui le sera plus tard).
+    effect(() => {
+      this.activeNavPath();
+      requestAnimationFrame(() => this.scrollActiveNavItemIntoView());
+    });
   }
 
   ngOnDestroy(): void {
@@ -160,17 +171,21 @@ export class AppShell implements OnDestroy {
   }
 
   // -------------------------------------------------------------------
-  // Position de défilement du menu latéral (mobile)
+  // Position de défilement du menu latéral
   // -------------------------------------------------------------------
-  // En mode « over » (mobile), Angular Material ne détruit jamais le
-  // contenu du `mat-sidenav` : il l'anime hors champ. Le défilement de la
-  // liste n'est donc normalement pas perdu — mais le navigateur peut le
-  // réinitialiser pendant l'animation de fermeture (mise en page recalculée
-  // hors viewport). Résultat perçu : on rouvre le menu après avoir cliqué
-  // tout en bas, et l'entrée qu'on visait est repassée hors écran, en haut.
-  // On fige donc nous-mêmes la position au moment où le panneau se ferme,
-  // et on la restitue explicitement à la réouverture, plutôt que de
-  // dépendre du comportement du CDK.
+  // Règle générale : quand le menu est visible (rail desktop ou panneau
+  // mobile), l'entrée active doit être visible, sans jamais dépendre de
+  // l'historique de défilement de l'utilisateur. `scrollIntoView({block:
+  // 'nearest'})` ne bouge rien si l'entrée est déjà dans le cadre — donc
+  // aucun à-coup sur les navigations qui ne changent pas la position.
+  //
+  // Sur mobile (mode « over »), Angular Material ne détruit jamais le
+  // contenu du `mat-sidenav` : il l'anime hors champ, sans jamais réduire
+  // sa hauteur (voir `.shell__rail` en SCSS) — le défilement interne
+  // survit donc naturellement à une fermeture/réouverture. Le seul cas
+  // que le repositionnement actif ne couvre pas nativement est une
+  // première ouverture sans entrée active déterminée : `lastNavScrollTop`
+  // sert alors de filet, capturé à la fermeture.
   private readonly navScrollRef = viewChild<ElementRef<HTMLElement>>('navScroll');
   private lastNavScrollTop = 0;
 
@@ -180,13 +195,24 @@ export class AppShell implements OnDestroy {
       return;
     }
     if (opened) {
-      // La restauration doit attendre que le panneau soit effectivement
-      // visible et mesurable (fin d'animation) avant d'imposer un scrollTop.
-      requestAnimationFrame(() => {
-        el.scrollTop = this.lastNavScrollTop;
-      });
+      // Attendre que le panneau soit effectivement visible et mesurable
+      // (fin d'animation) avant d'imposer une position de défilement.
+      requestAnimationFrame(() => this.scrollActiveNavItemIntoView());
     } else {
       this.lastNavScrollTop = el.scrollTop;
+    }
+  }
+
+  private scrollActiveNavItemIntoView(): void {
+    const el = this.navScrollRef()?.nativeElement;
+    if (!el) {
+      return;
+    }
+    const active = el.querySelector<HTMLElement>('a.active');
+    if (active) {
+      active.scrollIntoView({ block: 'nearest' });
+    } else {
+      el.scrollTop = this.lastNavScrollTop;
     }
   }
 

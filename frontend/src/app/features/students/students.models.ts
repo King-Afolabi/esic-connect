@@ -6,15 +6,16 @@
  * - `GET /api/v1/students/{userPublicId}` → `StudentResponse`
  * - `GET /api/v1/enrollments` → `PageResponse<EnrollmentResponse>`
  * - `GET /api/v1/enrollments/{publicId}` → `EnrollmentResponse`
- * - `POST /api/v1/student-profiles` → `StudentProfileResponse`
  *
  * Refonte 2026-09 : le rôle `STUDENT` (module `identity`) est l'unique
  * source de vérité du statut apprenant. `GET /api/v1/students` liste
- * **tous** les comptes porteurs de ce rôle — avec ou sans
- * `student_profile`, avec ou sans `enrollment` — et ne les liste jamais
- * deux fois, même en cas d'inscriptions multiples. `student_profile` et
- * `enrollment` restent des données facultatives, exposées comme
- * décorations optionnelles de `StudentResponse` (champs nullables).
+ * **tous** les comptes porteurs de ce rôle — avec ou sans numéro
+ * étudiant, avec ou sans `enrollment` — et ne les liste jamais deux fois,
+ * même en cas d'inscriptions multiples. Il n'existe plus de
+ * `student_profile` : le numéro étudiant / la date de naissance sont des
+ * colonnes facultatives de `user_account` (exposées directement par
+ * `StudentResponse`) ; l'alternance (`workStudy` / `companyName`) est une
+ * situation propre à l'inscription courante (`EnrollmentResponse`).
  *
  * Aucun champ n'est inventé : chaque propriété correspond à un composant
  * du `record` Java associé. Ces routes sont réservées côté serveur à
@@ -33,10 +34,6 @@ export const STUDENT_ACCOUNT_STATUSES = [
 ] as const;
 export type StudentAccountStatus = (typeof STUDENT_ACCOUNT_STATUSES)[number];
 
-/** `StudentProfileStatus` (docs/04 §11.1) — statut du profil facultatif. */
-export const STUDENT_PROFILE_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
-export type StudentProfileStatus = (typeof STUDENT_PROFILE_STATUSES)[number];
-
 /** `EnrollmentStatus` (docs/04 §13.1). */
 export const ENROLLMENT_STATUSES = [
   'PENDING',
@@ -54,11 +51,12 @@ export type EnrollmentSource = 'MANUAL' | 'CLASS_TRANSFER';
 
 /**
  * Vue API d'un apprenant — `StudentResponse`. Un compte porteur du rôle
- * `STUDENT`, décoré (jamais conditionné) par son profil facultatif et son
- * inscription courante (`ACTIVE`, sinon la plus récente).
+ * `STUDENT`, décoré (jamais conditionné) par ses données facultatives et
+ * son inscription courante (`ACTIVE`, sinon la plus récente).
  *
- * Les champs `studentProfilePublicId` à `profileStatus` sont `null`
- * lorsque le compte n'a pas de `student_profile` ; les champs
+ * Les champs `studentNumber` / `birthDate` sont `null` tant qu'ils ne
+ * sont pas renseignés sur le compte (`user_account`, refonte 2026-09 —
+ * il n'existe plus de `student_profile` séparé) ; les champs
  * `currentEnrollmentPublicId` à `enrollmentStatus` sont `null` lorsque le
  * compte n'a aucune inscription. Aucun des deux groupes n'est requis pour
  * qu'un apprenant figure dans la liste.
@@ -73,17 +71,15 @@ export interface StudentResponse {
   createdAt: string;
   lastLoginAt: string | null;
 
-  // Décoration facultative : student_profile.
-  studentProfilePublicId: string | null;
+  // Décoration facultative : portée directement par user_account.
   studentNumber: string | null;
   /** `LocalDate` (`yyyy-MM-dd`) ou `null`. */
   birthDate: string | null;
+
+  // Décoration facultative : inscription courante (alternance incluse).
+  currentEnrollmentPublicId: string | null;
   workStudy: boolean | null;
   companyName: string | null;
-  profileStatus: StudentProfileStatus | null;
-
-  // Décoration facultative : inscription courante.
-  currentEnrollmentPublicId: string | null;
   classGroupPublicId: string | null;
   classGroupCode: string | null;
   academicYearPublicId: string | null;
@@ -92,35 +88,16 @@ export interface StudentResponse {
 }
 
 /**
- * Vue API d'un profil apprenant — `StudentProfileResponse`
- * (`POST /api/v1/student-profiles`, ajout de données facultatives à un
- * compte `STUDENT` existant).
- */
-export interface StudentProfileResponse {
-  publicId: string;
-  userPublicId: string;
-  /** Identité civile du compte lié — `null` si non résolue. */
-  firstName: string | null;
-  lastName: string | null;
-  studentNumber: string;
-  birthDate: string | null;
-  workStudy: boolean;
-  companyName: string | null;
-  status: StudentProfileStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * Vue API d'une inscription — `EnrollmentResponse`. Rattache directement
- * un **compte** (`studentUserPublicId`, toujours renseigné) ; le profil
- * apprenant (`studentProfilePublicId` / `studentNumber`) reste une
- * décoration facultative, `null` si le compte n'a pas de profil.
+ * un **compte** (`studentUserPublicId`, toujours renseigné) ; il n'existe
+ * plus de profil intermédiaire. `studentNumber` (porté par `user_account`)
+ * reste exposé à titre de confort d'affichage, `null` si le compte n'en a
+ * pas. `workStudy` / `companyName` décrivent l'alternance **pendant cette
+ * inscription précise**.
  */
 export interface EnrollmentResponse {
   publicId: string;
   studentUserPublicId: string;
-  studentProfilePublicId: string | null;
   studentNumber: string | null;
   classGroupPublicId: string;
   classGroupCode: string;
@@ -133,6 +110,8 @@ export interface EnrollmentResponse {
   status: EnrollmentStatus;
   enrollmentSource: EnrollmentSource;
   changeReason: string | null;
+  workStudy: boolean;
+  companyName: string | null;
   previousEnrollmentPublicId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -152,21 +131,30 @@ export interface PageResponse<T> {
 }
 
 // -------------------------------------------------------------------
-// Création manuelle d'un apprenant (Lot H) — enchaîne trois routes
+// Création manuelle d'un apprenant (Lot H) — enchaîne deux routes
 // existantes, chacune contrôlée côté serveur :
-//   1. POST /api/v1/users            (ADMIN / SUPER_ADMIN)  — compte + invitation
-//   2. POST /api/v1/student-profiles (EnrollmentWeb.MANAGE_ROLES) — profil (facultatif)
-//   3. POST /api/v1/enrollments      (EnrollmentWeb.MANAGE_ROLES) — inscription (facultative)
-// Aucun champ inventé : ils reprennent CreateUserRequest,
-// StudentProfileRequests.Create et EnrollmentRequests.Enroll.
+//   1. POST /api/v1/users       (ADMIN / SUPER_ADMIN) — compte + invitation,
+//      numéro étudiant / date de naissance facultatifs inclus directement
+//      (refonte 2026-09 : il n'existe plus de student-profiles séparé)
+//   2. POST /api/v1/enrollments (EnrollmentWeb.MANAGE_ROLES) — inscription
+//      (facultative)
+// Aucun champ inventé : ils reprennent CreateUserRequest et
+// EnrollmentRequests.Enroll.
 // -------------------------------------------------------------------
 
-/** Corps de `POST /api/v1/users` — `role` fixé à `STUDENT` par l'écran. */
+/**
+ * Corps de `POST /api/v1/users` — `role` fixé à `STUDENT` par l'écran.
+ * `studentNumber` / `birthDate` sont facultatifs, portés directement par
+ * le compte (`user_account`, refonte 2026-09).
+ */
 export interface CreateStudentAccountRequest {
   email: string;
   firstName: string;
   lastName: string;
   role: 'STUDENT';
+  /** Vide / `null` : le serveur n'en génère pas — laissé sans numéro. */
+  studentNumber?: string | null;
+  birthDate?: string | null;
 }
 
 /** Réponse `UserDetailResponse` — seul `publicId` est consommé ici. */
@@ -174,25 +162,18 @@ export interface CreatedUserResponse {
   publicId: string;
 }
 
-/** Corps de `POST /api/v1/student-profiles`. */
-export interface CreateStudentProfileRequest {
-  userPublicId: string;
-  /** Vide / `null` : le serveur génère `ESIC-AAAA-NNNNN`. */
-  studentNumber: string | null;
-  birthDate?: string | null;
-  workStudy?: boolean;
-  companyName?: string | null;
-}
-
 /**
  * Corps de `POST /api/v1/enrollments` (`EnrollmentRequests.Enroll`) —
- * vise directement le **compte** apprenant, jamais un profil (refonte
- * 2026-09) : l'inscription ne suppose l'existence d'aucun profil.
+ * vise directement le **compte** apprenant (refonte 2026-09) :
+ * l'inscription ne suppose l'existence d'aucun profil. `workStudy` /
+ * `companyName` décrivent l'alternance pendant cette inscription précise.
  */
 export interface EnrollStudentRequest {
   studentUserPublicId: string;
   classGroupPublicId: string;
   startDate?: string | null;
+  workStudy?: boolean;
+  companyName?: string | null;
 }
 
 /**
@@ -257,11 +238,6 @@ export const STUDENT_ACCOUNT_STATUS_LABELS: Record<StudentAccountStatus, string>
   ARCHIVED: 'Archivé',
 };
 
-export const STUDENT_PROFILE_STATUS_LABELS: Record<StudentProfileStatus, string> = {
-  ACTIVE: 'Actif',
-  ARCHIVED: 'Archivé',
-};
-
 export const ENROLLMENT_STATUS_LABELS: Record<EnrollmentStatus, string> = {
   PENDING: 'En attente',
   ACTIVE: 'Active',
@@ -279,10 +255,6 @@ export const ENROLLMENT_SOURCE_LABELS: Record<EnrollmentSource, string> = {
 
 export function studentAccountStatusLabel(status: string): string {
   return (STUDENT_ACCOUNT_STATUS_LABELS as Record<string, string>)[status] ?? status;
-}
-
-export function studentProfileStatusLabel(status: string): string {
-  return (STUDENT_PROFILE_STATUS_LABELS as Record<string, string>)[status] ?? status;
 }
 
 export function enrollmentStatusLabel(status: string): string {

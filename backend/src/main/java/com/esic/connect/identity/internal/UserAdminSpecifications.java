@@ -35,13 +35,20 @@ final class UserAdminSpecifications {
         };
     }
 
-    /** Recherche insensible à la casse sur l'email, le prénom ou le nom. */
+    /**
+     * Recherche insensible à la casse sur l'email, le prénom, le nom ou le
+     * numéro étudiant (refonte 2026-09, ex-{@code student_profile.student_number} —
+     * l'écran « Apprenants » doit rester cherchable par ce numéro).
+     * {@code LOWER(NULL) LIKE …} vaut {@code NULL} (donc jamais vrai) : un
+     * compte sans numéro n'est simplement jamais retenu par cette clause.
+     */
     static Specification<UserAccount> matchesText(String normalizedQuery) {
         String pattern = "%" + escapeLike(normalizedQuery) + "%";
         return (root, query, cb) -> cb.or(
                 cb.like(cb.lower(root.get("email")), pattern, ESCAPE),
                 cb.like(cb.lower(root.get("firstName")), pattern, ESCAPE),
-                cb.like(cb.lower(root.get("lastName")), pattern, ESCAPE));
+                cb.like(cb.lower(root.get("lastName")), pattern, ESCAPE),
+                cb.like(cb.lower(root.get("studentNumber")), pattern, ESCAPE));
     }
 
     /**

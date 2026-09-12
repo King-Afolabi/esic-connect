@@ -299,7 +299,7 @@ class AttendanceService {
                 .describeAttendee(record.getEnrollmentId()).orElse(null);
         return new SessionAttendanceResponse.Row(
                 record.getPublicId(),
-                attendee != null ? attendee.studentProfilePublicId() : null,
+                attendee != null ? attendee.studentUserPublicId() : null,
                 attendee != null ? attendee.enrollmentPublicId() : null,
                 attendee != null ? attendee.studentNumber() : null,
                 attendee != null ? attendee.firstName() : null,

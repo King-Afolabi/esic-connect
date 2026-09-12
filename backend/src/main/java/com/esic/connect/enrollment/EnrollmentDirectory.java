@@ -125,11 +125,8 @@ public interface EnrollmentDirectory {
      * @param studentUserPublicId    identifiant public du <strong>compte</strong>
      *                               apprenant — toujours renseigné, une inscription
      *                               rattachant directement un compte (refonte 2026-09)
-     * @param studentProfilePublicId identifiant public du profil apprenant ;
-     *                               {@code null} si ce compte n'a pas de
-     *                               {@code student_profile} (donnée facultative :
-     *                               son absence ne remet jamais en cause l'inscription)
-     * @param studentNumber          numéro étudiant ; {@code null} si aucun profil
+     * @param studentNumber          numéro étudiant (porté par {@code user_account},
+     *                               refonte 2026-09) ; {@code null} si aucun numéro attribué
      * @param firstName              prénom ({@code null} si non résolu)
      * @param lastName               nom ({@code null} si non résolu)
      * @param classGroupPublicId     classe de l'inscription
@@ -139,7 +136,6 @@ public interface EnrollmentDirectory {
             long enrollmentInternalId,
             UUID enrollmentPublicId,
             UUID studentUserPublicId,
-            UUID studentProfilePublicId,
             String studentNumber,
             String firstName,
             String lastName,
@@ -218,16 +214,14 @@ public interface EnrollmentDirectory {
      *
      * @param studentUserPublicId    identifiant public du compte apprenant —
      *                               toujours renseigné
-     * @param studentProfilePublicId identifiant public du profil apprenant ;
-     *                               {@code null} si ce compte n'a pas de profil
      * @param enrollmentPublicId     identifiant public de l'inscription
-     * @param studentNumber          numéro étudiant ; {@code null} si aucun profil
+     * @param studentNumber          numéro étudiant (porté par {@code user_account},
+     *                               refonte 2026-09) ; {@code null} si aucun numéro attribué
      * @param firstName              prénom ({@code null} si non résolu)
      * @param lastName               nom ({@code null} si non résolu)
      */
     record AttendeeRef(
             UUID studentUserPublicId,
-            UUID studentProfilePublicId,
             UUID enrollmentPublicId,
             String studentNumber,
             String firstName,
@@ -244,9 +238,6 @@ public interface EnrollmentDirectory {
      *
      * @param internalId              clé primaire SQL de l'inscription
      * @param publicId                identifiant public de l'inscription
-     * @param studentProfilePublicId  identifiant public du profil apprenant ;
-     *                                {@code null} si ce compte n'a pas de profil
-     *                                (donnée facultative, refonte 2026-09)
      * @param studentUserPublicId     identifiant public du compte apprenant —
      *                                toujours renseigné
      * @param classGroupPublicId      identifiant public de la classe de
@@ -263,7 +254,6 @@ public interface EnrollmentDirectory {
     record EnrollmentRef(
             long internalId,
             UUID publicId,
-            UUID studentProfilePublicId,
             UUID studentUserPublicId,
             UUID classGroupPublicId,
             String classGroupCode,

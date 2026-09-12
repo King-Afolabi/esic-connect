@@ -490,7 +490,7 @@ export const routes: Routes = [
       },
       {
         // Périmètre de rôles aligné sur `EnrollmentWeb.READ_ROLES`
-        // (`GET /api/v1/student-profiles`, `GET /api/v1/enrollments`) : les
+        // (`GET /api/v1/students`, `GET /api/v1/enrollments`) : les
         // trois rôles d'administration + `PEDAGOGICAL_MANAGER` + `TEACHER`,
         // ces deux derniers restreints à leur périmètre côté serveur
         // (`RosterScopeResolver`). Le garde ne fait que masquer la

@@ -40,7 +40,7 @@ class DefaultDemoAccountProvisioner implements DemoAccountProvisioner {
     @Override
     @Transactional
     public UUID ensureActiveAccount(String email, String firstName, String lastName, String rawPassword,
-                                    Set<String> roleCodes) {
+                                    Set<String> roleCodes, String studentNumber) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         Set<RoleCode> requestedRoles = roleCodes.stream()
                 .map(code -> RoleCode.valueOf(code.trim().toUpperCase(Locale.ROOT)))
@@ -76,6 +76,13 @@ class DefaultDemoAccountProvisioner implements DemoAccountProvisioner {
                 Role role = roleRepository.findByCode(roleCode).orElseThrow();
                 userRoleRepository.saveAndFlush(new UserRole(account, role, Instant.now(), true));
             }
+        }
+
+        // Refonte 2026-09 : numéro étudiant porté par user_account, posé
+        // une seule fois — immuable ensuite, comme pour un compte réel.
+        if (studentNumber != null && account.getStudentNumber() == null) {
+            account.assignStudentNumber(studentNumber, null, null);
+            userAccountRepository.saveAndFlush(account);
         }
         return account.getPublicId();
     }

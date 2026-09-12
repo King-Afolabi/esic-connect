@@ -35,8 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Contrôles d'autorisation du module {@code enrollment} :
  * <ul>
- *   <li><strong>écriture</strong> (création de profil, inscription,
- *       transfert, clôture) réservée à
+ *   <li><strong>écriture</strong> (inscription, transfert, clôture)
+ *       réservée à
  *       {@code ADMIN}/{@code SUPER_ADMIN}/{@code SCHOOL_ADMINISTRATION} ;</li>
  *   <li><strong>consultation</strong> (liste + fiche) ouverte en plus au
  *       {@code PEDAGOGICAL_MANAGER} et au {@code TEACHER}, mais restreinte
@@ -75,7 +75,6 @@ class EnrollmentSecurityTests {
     @Test
     void anonymousRequestsAreRejectedWith401() {
         assertThat(anonymous("/api/v1/enrollments")).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(anonymous("/api/v1/student-profiles")).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(anonymous("/api/v1/students")).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
@@ -84,15 +83,10 @@ class EnrollmentSecurityTests {
         String token = tokenFor(RoleCode.STUDENT);
         assertThat(get("/api/v1/enrollments", token)).as("GET enrollments as STUDENT")
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(get("/api/v1/student-profiles", token)).as("GET student-profiles as STUDENT")
-                .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(get("/api/v1/students", token)).as("GET students as STUDENT")
                 .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(post("/api/v1/enrollments", Map.of("studentUserPublicId", UUID.randomUUID().toString(),
                 "classGroupPublicId", UUID.randomUUID().toString()), token)).as("POST enrollments as STUDENT")
-                .isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(post("/api/v1/student-profiles", Map.of("userPublicId", UUID.randomUUID().toString(),
-                "studentNumber", "ESIC-2026-0001"), token)).as("POST student-profiles as STUDENT")
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
@@ -105,15 +99,10 @@ class EnrollmentSecurityTests {
             String token = tokenFor(role);
             assertThat(get("/api/v1/enrollments", token)).as("GET enrollments as " + role)
                     .isEqualTo(HttpStatus.OK);
-            assertThat(get("/api/v1/student-profiles", token)).as("GET student-profiles as " + role)
-                    .isEqualTo(HttpStatus.OK);
             assertThat(get("/api/v1/students", token)).as("GET students as " + role)
                     .isEqualTo(HttpStatus.OK);
             assertThat(post("/api/v1/enrollments", Map.of("studentUserPublicId", UUID.randomUUID().toString(),
                     "classGroupPublicId", UUID.randomUUID().toString()), token)).as("POST enrollments as " + role)
-                    .isEqualTo(HttpStatus.FORBIDDEN);
-            assertThat(post("/api/v1/student-profiles", Map.of("userPublicId", UUID.randomUUID().toString(),
-                    "studentNumber", "ESIC-2026-0001"), token)).as("POST student-profiles as " + role)
                     .isEqualTo(HttpStatus.FORBIDDEN);
         }
     }
@@ -123,8 +112,6 @@ class EnrollmentSecurityTests {
         for (RoleCode role : List.of(RoleCode.ADMIN, RoleCode.SUPER_ADMIN, RoleCode.SCHOOL_ADMINISTRATION)) {
             String token = tokenFor(role);
             assertThat(get("/api/v1/enrollments", token)).as("GET enrollments as " + role)
-                    .isEqualTo(HttpStatus.OK);
-            assertThat(get("/api/v1/student-profiles", token)).as("GET student-profiles as " + role)
                     .isEqualTo(HttpStatus.OK);
             assertThat(get("/api/v1/students", token)).as("GET students as " + role)
                     .isEqualTo(HttpStatus.OK);

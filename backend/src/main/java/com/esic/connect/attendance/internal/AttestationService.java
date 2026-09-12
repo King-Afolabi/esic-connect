@@ -81,17 +81,17 @@ class AttestationService {
      * @return le PDF et l'identifiant du document
      */
     @Transactional
-    Attestation issue(UUID studentProfilePublicId, Instant from, Instant to, String callerSubject) {
-        if (studentProfilePublicId == null) {
+    Attestation issue(UUID studentUserPublicId, Instant from, Instant to, String callerSubject) {
+        if (studentUserPublicId == null) {
             throw new AttendanceException(AttendanceException.Kind.INVALID_SUBMISSION);
         }
         // Périmètre : `studentReport` applique déjà le filtre du rôle
         // appelant. Un apprenant hors périmètre ne produit simplement
         // aucune ligne — l'attestation est alors refusée, jamais émise vide.
         List<AttendanceReports.StudentRow> rows = reportService.studentReport(
-                from, to, null, studentProfilePublicId.toString(), null);
+                from, to, null, studentUserPublicId.toString(), null);
         AttendanceReports.StudentRow row = rows.stream()
-                .filter(r -> studentProfilePublicId.equals(r.studentProfilePublicId()))
+                .filter(r -> studentUserPublicId.equals(r.studentUserPublicId()))
                 .findFirst()
                 .orElseThrow(() -> new AttendanceException(AttendanceException.Kind.ATTESTATION_SUBJECT_NOT_FOUND));
 
@@ -108,7 +108,7 @@ class AttestationService {
         byte[] pdf = renderer.toPdf(content, identity);
 
         repository.save(new ReportDocument(documentId, ReportDocumentType.ATTENDANCE_CERTIFICATE,
-                studentProfilePublicId, snapshot(row), null,
+                studentUserPublicId, snapshot(row), null,
                 toLocalDate(from), toLocalDate(to), actorId, author, now, sha256(pdf)));
 
         // Auditée comme un export : l'événement porte le type de document et

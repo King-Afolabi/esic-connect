@@ -8,7 +8,6 @@ import { StudentCreate } from './student-create';
 
 const CLASSES_URL = '/api/v1/class-groups';
 const USERS_URL = '/api/v1/users';
-const PROFILES_URL = '/api/v1/student-profiles';
 const ENROLLMENTS_URL = '/api/v1/enrollments';
 
 interface Internals {
@@ -83,7 +82,7 @@ describe('StudentCreate (Lot H)', () => {
     http.expectNone(USERS_URL);
   });
 
-  it('chains user → profile → enrollment in order and navigates to the new profile', () => {
+  it('chains user → enrollment in order and navigates to the new account (refonte 2026-09: no separate profile step)', () => {
     fillValid(internals);
     internals.submit();
 
@@ -93,28 +92,21 @@ describe('StudentCreate (Lot H)', () => {
       firstName: 'Jane',
       lastName: 'Doe',
       role: 'STUDENT',
-    });
-    userReq.flush({ publicId: 'user-1' });
-
-    const profileReq = http.expectOne((r) => r.url === PROFILES_URL && r.method === 'POST');
-    expect(profileReq.request.body).toEqual({
-      userPublicId: 'user-1',
       studentNumber: 'ESIC-2026-0999',
       birthDate: null,
-      workStudy: false,
-      companyName: null,
     });
-    profileReq.flush({ publicId: 'profile-1' });
+    userReq.flush({ publicId: 'user-1' });
 
     const enrollReq = http.expectOne((r) => r.url === ENROLLMENTS_URL && r.method === 'POST');
     expect(enrollReq.request.body).toEqual({
       studentUserPublicId: 'user-1',
       classGroupPublicId: 'class-1',
       startDate: null,
+      workStudy: false,
+      companyName: null,
     });
     enrollReq.flush({ publicId: 'enr-1' });
 
-    // Navigue vers la fiche du COMPTE (refonte 2026-09), pas du profil.
     expect(navigate).toHaveBeenCalledWith(['/students', 'user-1']);
   });
 
@@ -127,24 +119,26 @@ describe('StudentCreate (Lot H)', () => {
       { status: 409, statusText: 'Conflict' },
     );
 
-    http.expectNone(PROFILES_URL);
+    http.expectNone(ENROLLMENTS_URL);
     expect(internals.submitError()).toContain('déjà');
   });
 
-  it('keeps the created account on a step-2 failure and does not recreate it on retry', () => {
+  it('surfaces a duplicate student number at step 1 and stops (no account created)', () => {
+    // Refonte 2026-09 : le numéro étudiant est porté par user_account et
+    // soumis dans le même appel que la création du compte — il n'existe
+    // plus d'étape « profil » séparée où cette collision pouvait survenir.
     fillValid(internals);
     internals.submit();
 
-    http.expectOne(USERS_URL).flush({ publicId: 'user-1' });
-    http.expectOne(PROFILES_URL).flush(
-      { timestamp: 't', status: 409, code: 'ENR_STUDENT_NUMBER_TAKEN', message: 'numéro pris', path: PROFILES_URL, correlationId: null, details: [] },
+    http.expectOne(USERS_URL).flush(
+      { timestamp: 't', status: 409, code: 'USER_DUPLICATE_STUDENT_NUMBER', message: 'numéro pris', path: USERS_URL, correlationId: null, details: [] },
       { status: 409, statusText: 'Conflict' },
     );
 
-    expect(internals.partialNotice()).toContain('compte a été créé');
+    http.expectNone(ENROLLMENTS_URL);
+    expect(internals.submitError()).toContain('numéro pris');
 
-    // L'utilisateur corrige le numéro étudiant fautif, puis relance :
-    // le POST /users N'EST PAS rejoué ; on repart du profil.
+    // Rien n'a été créé : la reprise rejoue bien POST /users.
     internals.form.setValue({
       firstName: 'Jane',
       lastName: 'Doe',
@@ -156,20 +150,18 @@ describe('StudentCreate (Lot H)', () => {
       companyName: '',
     });
     internals.submit();
-    http.expectNone(USERS_URL);
-    const retry = http.expectOne((r) => r.url === PROFILES_URL && r.method === 'POST');
-    expect(retry.request.body).toMatchObject({ userPublicId: 'user-1', studentNumber: 'ESIC-2026-1000' });
-    retry.flush({ publicId: 'profile-1' });
+    const retry = http.expectOne((r) => r.url === USERS_URL && r.method === 'POST');
+    expect(retry.request.body).toMatchObject({ studentNumber: 'ESIC-2026-1000' });
+    retry.flush({ publicId: 'user-1' });
     http.expectOne(ENROLLMENTS_URL).flush({ publicId: 'enr-1' });
     expect(navigate).toHaveBeenCalledWith(['/students', 'user-1']);
   });
 
-  it('explains a step-3 (enrollment) failure without losing the account or profile', () => {
+  it('explains a step-2 (enrollment) failure without losing the account, and does not recreate it on retry', () => {
     fillValid(internals);
     internals.submit();
 
     http.expectOne(USERS_URL).flush({ publicId: 'user-1' });
-    http.expectOne(PROFILES_URL).flush({ publicId: 'profile-1' });
     http.expectOne(ENROLLMENTS_URL).flush(
       { timestamp: 't', status: 422, code: 'ENR_CLASS_FULL', message: 'classe pleine', path: ENROLLMENTS_URL, correlationId: null, details: [] },
       { status: 422, statusText: 'Unprocessable Entity' },
@@ -177,10 +169,9 @@ describe('StudentCreate (Lot H)', () => {
 
     expect(internals.partialNotice()).toContain("L'inscription en classe a échoué");
 
-    // Reprise : ni le compte ni le profil ne sont recréés.
+    // Reprise : le compte n'est pas recréé.
     internals.submit();
     http.expectNone(USERS_URL);
-    http.expectNone(PROFILES_URL);
     http.expectOne(ENROLLMENTS_URL).flush({ publicId: 'enr-1' });
     expect(navigate).toHaveBeenCalledWith(['/students', 'user-1']);
   });

@@ -72,7 +72,8 @@ class DefaultUserDirectory implements UserDirectory {
     private AccountSummary toAccountSummary(UserAccount account) {
         return new AccountSummary(account.getId(), account.getPublicId(), account.getEmail(),
                 account.getFirstName(), account.getLastName(), account.getStatus().name(),
-                account.getCreatedAt(), account.getLastLoginAt());
+                account.getCreatedAt(), account.getLastLoginAt(),
+                account.getStudentNumber(), account.getBirthDate());
     }
 
     private static int normalizePageSize(int size) {
@@ -159,6 +160,23 @@ class DefaultUserDirectory implements UserDirectory {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<NamedUserRef> searchByStudentNumber(String query, String roleCode, int limit) {
+        String pattern = com.esic.connect.shared.SearchPattern.of(query);
+        RoleCode role = parseRole(roleCode);
+        if (pattern == null || role == null) {
+            return java.util.List.of();
+        }
+        return userAccountRepository.searchByStudentNumber(pattern, role, AccountStatus.ACTIVE,
+                        org.springframework.data.domain.PageRequest.of(0,
+                                com.esic.connect.shared.SearchPattern.bound(limit)))
+                .stream()
+                .map(account -> new NamedUserRef(account.getId(), account.getPublicId(),
+                        account.getFirstName(), account.getLastName()))
+                .toList();
+    }
+
     /** Code de rôle inconnu : aucun résultat, jamais une exception. */
     private static RoleCode parseRole(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {
@@ -198,6 +216,22 @@ class DefaultUserDirectory implements UserDirectory {
                     account.getFirstName(), account.getLastName()));
         }
         return refs;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, String> findStudentNumbers(java.util.Collection<Long> userInternalIds) {
+        if (userInternalIds == null || userInternalIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, String> numbers = new java.util.HashMap<>();
+        for (UserAccount account : userAccountRepository.findAllById(
+                userInternalIds.stream().filter(java.util.Objects::nonNull).distinct().toList())) {
+            if (account.getStudentNumber() != null) {
+                numbers.put(account.getId(), account.getStudentNumber());
+            }
+        }
+        return numbers;
     }
 
     @Override

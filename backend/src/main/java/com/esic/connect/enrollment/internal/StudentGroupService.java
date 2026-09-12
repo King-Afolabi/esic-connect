@@ -52,7 +52,6 @@ class StudentGroupService {
     private final StudentGroupRepository groupRepository;
     private final StudentGroupMemberRepository memberRepository;
     private final EnrollmentRepository enrollmentRepository;
-    private final StudentProfileRepository profileRepository;
     private final AcademicReferenceDirectory academicReferences;
     private final AcademicScopeDirectory academicScope;
     private final ClassGroupDirectory classGroups;
@@ -64,7 +63,6 @@ class StudentGroupService {
     StudentGroupService(StudentGroupRepository groupRepository,
                         StudentGroupMemberRepository memberRepository,
                         EnrollmentRepository enrollmentRepository,
-                        StudentProfileRepository profileRepository,
                         AcademicReferenceDirectory academicReferences,
                         AcademicScopeDirectory academicScope,
                         ClassGroupDirectory classGroups,
@@ -75,7 +73,6 @@ class StudentGroupService {
         this.groupRepository = groupRepository;
         this.memberRepository = memberRepository;
         this.enrollmentRepository = enrollmentRepository;
-        this.profileRepository = profileRepository;
         this.academicReferences = academicReferences;
         this.academicScope = academicScope;
         this.classGroups = classGroups;
@@ -197,14 +194,13 @@ class StudentGroupService {
                 .findAllById(members.stream().map(StudentGroupMember::getEnrollmentId).toList())
                 .stream()
                 .collect(Collectors.toMap(Enrollment::getId, Function.identity()));
-        // Résolution en lot (anti-N+1) du compte et du profil facultatif
-        // de chaque apprenant du groupe.
+        // Résolution en lot (anti-N+1) du compte et du numéro étudiant
+        // facultatif de chaque apprenant du groupe.
         List<Long> userIds = enrollments.values().stream().map(Enrollment::getUserId).distinct().toList();
         Map<Long, UserDirectory.NamedUserRef> userRefs = userDirectory.findNamedRefs(userIds);
-        Map<Long, StudentProfile> profiles = profileRepository.findByUserIdIn(userIds).stream()
-                .collect(Collectors.toMap(StudentProfile::getUserId, p -> p));
+        Map<Long, String> studentNumbers = userDirectory.findStudentNumbers(userIds);
         return members.stream()
-                .map(member -> toMember(member, enrollments.get(member.getEnrollmentId()), userRefs, profiles))
+                .map(member -> toMember(member, enrollments.get(member.getEnrollmentId()), userRefs, studentNumbers))
                 .filter(java.util.Objects::nonNull)
                 .sorted(Comparator.comparing(StudentGroupResponse.Member::studentNumber,
                         Comparator.nullsLast(String::compareToIgnoreCase)))
@@ -335,20 +331,18 @@ class StudentGroupService {
 
     private StudentGroupResponse.Member toMember(StudentGroupMember member, Enrollment enrollment,
                                                  Map<Long, UserDirectory.NamedUserRef> userRefs,
-                                                 Map<Long, StudentProfile> profiles) {
+                                                 Map<Long, String> studentNumbers) {
         if (enrollment == null) {
             return null;
         }
         Optional<ClassGroupDirectory.ClassGroupRef> classRef =
                 classGroups.findByInternalId(enrollment.getClassGroupId());
         UserDirectory.NamedUserRef userRef = userRefs.get(enrollment.getUserId());
-        StudentProfile profile = profiles.get(enrollment.getUserId());
         return new StudentGroupResponse.Member(
                 member.getPublicId(),
                 enrollment.getPublicId(),
                 userRef != null ? userRef.publicId() : null,
-                profile != null ? profile.getPublicId() : null,
-                profile != null ? profile.getStudentNumber() : null,
+                studentNumbers.get(enrollment.getUserId()),
                 classRef.map(ClassGroupDirectory.ClassGroupRef::publicId).orElse(null),
                 classRef.map(ClassGroupDirectory.ClassGroupRef::code).orElse(null),
                 member.getJoinedAt());

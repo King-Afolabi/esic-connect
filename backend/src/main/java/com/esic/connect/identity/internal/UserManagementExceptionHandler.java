@@ -75,6 +75,11 @@ class UserManagementExceptionHandler {
                 code = "USER_EMAIL_ALREADY_USED";
                 message = "Un compte existe déjà pour cette adresse électronique.";
             }
+            case DUPLICATE_STUDENT_NUMBER -> {
+                status = HttpStatus.CONFLICT;
+                code = "USER_DUPLICATE_STUDENT_NUMBER";
+                message = "Ce numéro étudiant est déjà attribué à un autre compte.";
+            }
             case INVALID_SORT -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "USER_INVALID_SORT";

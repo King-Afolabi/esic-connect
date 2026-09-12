@@ -12,30 +12,20 @@ import java.util.Locale;
  * <p>{@link #matchesConstraint} n'est vrai que si la violation d'intégrité
  * concerne précisément la contrainte nommée — jamais une autre FK,
  * {@code CHECK}, {@code NOT NULL} ou unicité (dont
- * {@code uq_enrollment_public_id} / {@code uq_student_profile_public_id}).
- * Recherche à la fois le nom de contrainte structuré (Hibernate) et le
- * message SQL brut, en exigeant une sémantique de doublon. Même approche
- * que {@code PedagogicalAssignmentService.isActivePrimaryUniqueViolation}.
+ * {@code uq_enrollment_public_id}). Recherche à la fois le nom de
+ * contrainte structuré (Hibernate) et le message SQL brut, en exigeant une
+ * sémantique de doublon. Même approche que
+ * {@code PedagogicalAssignmentService.isActivePrimaryUniqueViolation}.
  */
 final class EnrollmentPersistence {
 
     static final String ACTIVE_ENROLLMENT_CONSTRAINT = "uq_enrollment_active_per_year";
-    static final String PROFILE_USER_CONSTRAINT = "uq_student_profile_user";
-    static final String PROFILE_STUDENT_NUMBER_CONSTRAINT = "uq_student_profile_student_number";
 
     private EnrollmentPersistence() {
     }
 
     static boolean isActiveEnrollmentUniqueViolation(DataIntegrityViolationException violation) {
         return matchesConstraint(violation, ACTIVE_ENROLLMENT_CONSTRAINT);
-    }
-
-    static boolean isProfileUserUniqueViolation(DataIntegrityViolationException violation) {
-        return matchesConstraint(violation, PROFILE_USER_CONSTRAINT);
-    }
-
-    static boolean isProfileStudentNumberUniqueViolation(DataIntegrityViolationException violation) {
-        return matchesConstraint(violation, PROFILE_STUDENT_NUMBER_CONSTRAINT);
     }
 
     static boolean matchesConstraint(DataIntegrityViolationException violation, String constraintLowercase) {

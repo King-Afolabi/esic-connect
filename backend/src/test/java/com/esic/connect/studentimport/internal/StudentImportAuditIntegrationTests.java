@@ -179,15 +179,16 @@ class StudentImportAuditIntegrationTests {
                 String.class, action, jobId.toString());
     }
 
+    /**
+     * Refonte 2026-09 : le numéro étudiant est une colonne de
+     * {@code user_account} — plus de {@code student_profile} à insérer
+     * séparément.
+     */
     private void insertForeignProfileWithNumber(String studentNumber) {
         String email = "audforeign." + UUID.randomUUID() + "@esic-connect.test";
-        jdbc.update("INSERT INTO user_account (public_id, email, first_name, last_name, status, created_at, "
-                + "updated_at, version) VALUES (UNHEX(REPLACE(UUID(), '-', '')), ?, 'For', 'Eign', 'ACTIVE', "
-                + "UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)", email);
-        Long userId = jdbc.queryForObject("SELECT id FROM user_account WHERE email = ?", Long.class, email);
-        jdbc.update("INSERT INTO student_profile (public_id, user_id, student_number, work_study, status, "
-                + "created_at, updated_at, version) VALUES (UNHEX(REPLACE(UUID(), '-', '')), ?, ?, 0, 'ACTIVE', "
-                + "UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)", userId, studentNumber);
+        jdbc.update("INSERT INTO user_account (public_id, email, first_name, last_name, status, student_number, "
+                + "created_at, updated_at, version) VALUES (UNHEX(REPLACE(UUID(), '-', '')), ?, 'For', 'Eign', "
+                + "'ACTIVE', ?, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)", email, studentNumber);
     }
 
     private static String header() {

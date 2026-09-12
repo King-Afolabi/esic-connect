@@ -293,7 +293,7 @@ export class AttendanceApiService {
    * — le client l'affiche sans avoir à ouvrir le PDF.
    */
   issueAttestation(
-    studentProfilePublicId: string,
+    studentUserPublicId: string,
     from: string | null,
     to: string | null,
   ): Observable<HttpResponseBlob> {
@@ -301,7 +301,7 @@ export class AttendanceApiService {
       `${this.base}/attendance/reports/attestation`,
       null,
       {
-        params: toParams({ studentProfile: studentProfilePublicId, from, to }),
+        params: toParams({ student: studentUserPublicId, from, to }),
         responseType: 'blob',
         observe: 'response',
       },
@@ -331,7 +331,7 @@ function reportParams(query: ReportQuery): HttpParams {
     from: query.from,
     to: query.to,
     classGroup: query.classGroup,
-    studentProfile: query.studentProfile,
+    student: query.student,
     sort: query.sort,
     page: query.page,
     size: query.size,

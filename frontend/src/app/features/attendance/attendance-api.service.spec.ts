@@ -64,9 +64,9 @@ describe('AttendanceApiService', () => {
     expect(s.request.params.get('classGroup')).toBe('c-1');
     s.flush({});
 
-    service.studentsReport({ classGroup: 'c-1', studentProfile: 'p-1', page: 0, size: 20 }).subscribe();
+    service.studentsReport({ classGroup: 'c-1', student: 'u-1', page: 0, size: 20 }).subscribe();
     const st = http.expectOne((r) => r.url === `${BASE}/attendance/reports/students`);
-    expect(st.request.params.get('studentProfile')).toBe('p-1');
+    expect(st.request.params.get('student')).toBe('u-1');
     st.flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
   });
 

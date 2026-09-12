@@ -11,7 +11,7 @@ import java.util.UUID;
  * <p>Jamais d'adresse électronique ni d'identifiant SQL — uniquement des
  * identifiants publics, le numéro étudiant, le nom et le code de classe.
  *
- * @param studentProfilePublicId identifiant public du profil apprenant
+ * @param studentUserPublicId    identifiant public du compte apprenant
  * @param enrollmentPublicId     identifiant public de l'inscription (valeur
  *                               à renvoyer dans {@code enrollmentPublicId}
  *                               d'une saisie manuelle)
@@ -21,7 +21,7 @@ import java.util.UUID;
  * @param classCode              code fonctionnel de la classe de l'inscription
  */
 record AttendanceCandidateResponse(
-        UUID studentProfilePublicId,
+        UUID studentUserPublicId,
         UUID enrollmentPublicId,
         String studentNumber,
         String firstName,

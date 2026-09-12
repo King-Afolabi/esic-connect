@@ -67,7 +67,7 @@ class DefaultDemoAccountProvisionerTests {
         String email = "demo-" + UUID.randomUUID() + "@example.test";
 
         UUID first = provisioner.ensureActiveAccount(email, "Awa", "Diallo", "demo-password-1234",
-                Set.of("ADMIN"));
+                Set.of("ADMIN"), null);
 
         UserAccount account = userAccountRepository.findByEmail(email).orElseThrow();
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
@@ -80,7 +80,7 @@ class DefaultDemoAccountProvisionerTests {
         // Deuxième démarrage, MÊME mot de passe : aucun doublon de rôle,
         // hachage stocké inchangé octet pour octet (pas de réhachage).
         UUID second = provisioner.ensureActiveAccount(email, "Awa", "Diallo", "demo-password-1234",
-                Set.of("ADMIN"));
+                Set.of("ADMIN"), null);
         assertThat(second).isEqualTo(first);
         UserAccount reloaded = userAccountRepository.findByEmail(email).orElseThrow();
         assertThat(reloaded.getPasswordHash()).isEqualTo(hashAfterFirst);
@@ -90,13 +90,13 @@ class DefaultDemoAccountProvisionerTests {
     @Test
     void normalizesEmailAndAddsAMissingRoleOnASubsequentCall() {
         String email = "demo-" + UUID.randomUUID() + "@EXAMPLE.TEST";
-        provisioner.ensureActiveAccount(email, "Karim", "Benali", "demo-password-1234", Set.of("TEACHER"));
+        provisioner.ensureActiveAccount(email, "Karim", "Benali", "demo-password-1234", Set.of("TEACHER"), null);
 
         UserAccount account = userAccountRepository.findByEmail(email.toLowerCase()).orElseThrow();
         assertThat(activeRoleCodes(account.getId())).containsExactly(RoleCode.TEACHER);
 
         provisioner.ensureActiveAccount(email.toLowerCase(), "Karim", "Benali", "demo-password-1234",
-                Set.of("TEACHER", "PEDAGOGICAL_MANAGER"));
+                Set.of("TEACHER", "PEDAGOGICAL_MANAGER"), null);
         assertThat(activeRoleCodes(account.getId()))
                 .containsExactlyInAnyOrder(RoleCode.TEACHER, RoleCode.PEDAGOGICAL_MANAGER);
     }
@@ -106,14 +106,14 @@ class DefaultDemoAccountProvisionerTests {
         String email = "demo-" + UUID.randomUUID() + "@example.test";
 
         UUID publicId = provisioner.ensureActiveAccount(email, "Lina", "Sow", "old-demo-password-1",
-                Set.of("STUDENT"));
+                Set.of("STUDENT"), null);
         UserAccount before = userAccountRepository.findByEmail(email).orElseThrow();
         Long internalId = before.getId();
         String staleHash = before.getPasswordHash();
 
         // Le back-end est relancé avec une NOUVELLE valeur de ESIC_DEMO_PASSWORD.
         UUID samePublicId = provisioner.ensureActiveAccount(email, "Lina", "Sow", "new-demo-password-2",
-                Set.of("STUDENT"));
+                Set.of("STUDENT"), null);
 
         assertThat(samePublicId).isEqualTo(publicId);
         UserAccount after = userAccountRepository.findByEmail(email).orElseThrow();
@@ -128,13 +128,13 @@ class DefaultDemoAccountProvisionerTests {
     @Test
     void bringsASuspendedDemoAccountBackToALoginableStateWithTheCurrentPassword() {
         String email = "demo-" + UUID.randomUUID() + "@example.test";
-        provisioner.ensureActiveAccount(email, "Noah", "Mercier", "demo-password-1234", Set.of("STUDENT"));
+        provisioner.ensureActiveAccount(email, "Noah", "Mercier", "demo-password-1234", Set.of("STUDENT"), null);
 
         UserAccount account = userAccountRepository.findByEmail(email).orElseThrow();
         account.suspend("intervention manuelle pendant la validation", null, Instant.now());
         userAccountRepository.saveAndFlush(account);
 
-        provisioner.ensureActiveAccount(email, "Noah", "Mercier", "demo-password-1234", Set.of("STUDENT"));
+        provisioner.ensureActiveAccount(email, "Noah", "Mercier", "demo-password-1234", Set.of("STUDENT"), null);
 
         UserAccount restored = userAccountRepository.findByEmail(email).orElseThrow();
         assertThat(restored.getStatus()).isEqualTo(AccountStatus.ACTIVE);
@@ -142,6 +142,38 @@ class DefaultDemoAccountProvisionerTests {
         assertThat(restored.getSuspensionReason()).isNull();
         assertThat(passwordEncoder.matches("demo-password-1234", restored.getPasswordHash())).isTrue();
         assertThat(activeRoleCodes(restored.getId())).containsExactly(RoleCode.STUDENT);
+    }
+
+    @Test
+    void assignsTheStudentNumberOnceAndNeverOverwritesItOnASubsequentRestart() {
+        // Refonte 2026-09 : le numéro étudiant est une colonne de
+        // user_account (plus de student_profile) ; posé une seule fois,
+        // il ne doit jamais être réécrit par un redémarrage ultérieur.
+        // Suffixe aléatoire : uq_user_account_student_number est une
+        // contrainte réelle sur une base de test persistante d'une
+        // exécution à l'autre — une valeur fixe entrerait en collision.
+        String email = "demo-" + UUID.randomUUID() + "@example.test";
+        String firstNumber = "ESIC-DEMO-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String otherNumber = "ESIC-DEMO-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        provisioner.ensureActiveAccount(email, "Yasmine", "Cheikh", "demo-password-1234",
+                Set.of("STUDENT"), firstNumber);
+
+        UserAccount account = userAccountRepository.findByEmail(email).orElseThrow();
+        assertThat(account.getStudentNumber()).isEqualTo(firstNumber);
+
+        provisioner.ensureActiveAccount(email, "Yasmine", "Cheikh", "demo-password-1234",
+                Set.of("STUDENT"), otherNumber);
+        UserAccount reloaded = userAccountRepository.findByEmail(email).orElseThrow();
+        assertThat(reloaded.getStudentNumber()).isEqualTo(firstNumber);
+    }
+
+    @Test
+    void leavesTheStudentNumberNullWhenNoneIsProvided() {
+        String email = "demo-" + UUID.randomUUID() + "@example.test";
+        provisioner.ensureActiveAccount(email, "Sami", "Rahal", "demo-password-1234", Set.of("STUDENT"), null);
+
+        UserAccount account = userAccountRepository.findByEmail(email).orElseThrow();
+        assertThat(account.getStudentNumber()).isNull();
     }
 
     @Test

@@ -78,7 +78,7 @@ export interface JustificationResponse {
   checkpointPublicId: string | null;
   checkpointLabel: string | null;
   classCode: string | null;
-  studentProfilePublicId: string | null;
+  studentUserPublicId: string | null;
   studentNumber: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -277,7 +277,7 @@ export interface ClassReportRow {
 
 /** `AttendanceReports.StudentRow`. */
 export interface StudentReportRow {
-  studentProfilePublicId: string;
+  studentUserPublicId: string;
   enrollmentPublicId: string;
   studentNumber: string | null;
   firstName: string | null;
@@ -301,7 +301,7 @@ export interface ReportQuery {
   from?: string | null;
   to?: string | null;
   classGroup?: string | null;
-  studentProfile?: string | null;
+  student?: string | null;
   /** `field,asc` | `field,desc` — cf. {@link REPORT_SORT_FIELDS}. */
   sort?: string | null;
   page?: number;

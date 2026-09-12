@@ -28,7 +28,7 @@ import java.util.List;
  * {@code ADMIN}/{@code SUPER_ADMIN}/{@code SCHOOL_ADMINISTRATION}/
  * {@code PEDAGOGICAL_MANAGER} (périmètre appliqué par
  * {@link AttendanceReportService}). Filtres {@code from}/{@code to}
- * (instants sur le début de séance), {@code classGroup}, {@code studentProfile}.
+ * (instants sur le début de séance), {@code classGroup}, {@code student}.
  * Pagination bornée (≤ 100). Les exports neutralisent l'injection de
  * formule — au classeur comme au CSV : le vecteur est le tableur qui
  * ouvre le fichier, pas son extension (AC-032).
@@ -130,11 +130,11 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
-            @RequestParam(required = false) String studentProfile,
+            @RequestParam(required = false) String student,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.ofList(service.studentReport(from, to, classGroup, studentProfile, sort), page, size);
+        return PageResponse.ofList(service.studentReport(from, to, classGroup, student, sort), page, size);
     }
 
     @GetMapping("/summary")
@@ -195,13 +195,13 @@ class AttendanceReportController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) String classGroup,
-            @RequestParam(required = false) String studentProfile,
+            @RequestParam(required = false) String student,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String format,
             @AuthenticationPrincipal Jwt caller) {
         ReportExportFormat target = ReportExportFormat.parse(format);
         List<AttendanceReports.StudentRow> rows =
-                service.studentReport(from, to, classGroup, studentProfile, sort);
+                service.studentReport(from, to, classGroup, student, sort);
         service.auditExport("students." + target.extension(), from, to, rows.size(),
                 AttendanceManagementWeb.subject(caller));
         return render("attendance-students", from, to, target,
@@ -220,13 +220,13 @@ class AttendanceReportController {
     @PostMapping("/attestation")
     @PreAuthorize(AttendanceManagementWeb.REPORT_ROLES)
     ResponseEntity<byte[]> attestation(
-            @RequestParam String studentProfile,
+            @RequestParam String student,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @AuthenticationPrincipal Jwt caller) {
         java.util.UUID studentId;
         try {
-            studentId = java.util.UUID.fromString(studentProfile);
+            studentId = java.util.UUID.fromString(student);
         } catch (IllegalArgumentException notAUuid) {
             throw new AttendanceException(AttendanceException.Kind.INVALID_SUBMISSION);
         }

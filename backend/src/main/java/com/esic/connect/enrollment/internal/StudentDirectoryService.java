@@ -22,16 +22,16 @@ import java.util.UUID;
  * indépendantes que sont le profil apprenant ({@code student_profile}) et
  * l'inscription courante ({@code enrollment}).
  *
- * <p>Contrairement à {@link StudentProfileService} (qui liste des
- * <em>profils</em>, {@code GET /api/v1/student-profiles}), ce service
- * part du <strong>compte</strong> : un {@code STUDENT} sans profil ni
+ * <p>Ce service part du <strong>compte</strong> : un {@code STUDENT} sans
  * inscription y apparaît, une seule fois même s'il cumule plusieurs
  * inscriptions historiques (la pagination porte sur les comptes, jamais
- * sur les inscriptions).
+ * sur les inscriptions). Il n'existe plus de {@code student_profile}
+ * distinct (refonte 2026-09) : le numéro étudiant et la date de naissance
+ * sont désormais de simples colonnes de {@code user_account}, déjà portées
+ * par {@link UserDirectory.AccountSummary}.
  *
- * <p>Le périmètre de consultation ({@link RosterScopeResolver}) est
- * identique à celui de {@link StudentProfileService} : accès global pour
- * {@code ADMIN}/{@code SUPER_ADMIN}/{@code SCHOOL_ADMINISTRATION} ;
+ * <p>Le périmètre de consultation ({@link RosterScopeResolver}) : accès
+ * global pour {@code ADMIN}/{@code SUPER_ADMIN}/{@code SCHOOL_ADMINISTRATION} ;
  * {@code PEDAGOGICAL_MANAGER}/{@code TEACHER} restreints aux comptes ayant
  * une inscription {@code ACTIVE} dans l'une de leurs classes — un
  * apprenant qui n'a jamais été inscrit dans leur périmètre ne leur est pas
@@ -50,18 +50,15 @@ class StudentDirectoryService {
             Set.of("PENDING_ACTIVATION", "ACTIVE", "SUSPENDED", "LOCKED", "ARCHIVED");
 
     private final UserDirectory userDirectory;
-    private final StudentProfileRepository profileRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final ClassGroupDirectory classGroupDirectory;
     private final RosterScopeResolver rosterScope;
 
     StudentDirectoryService(UserDirectory userDirectory,
-                            StudentProfileRepository profileRepository,
                             EnrollmentRepository enrollmentRepository,
                             ClassGroupDirectory classGroupDirectory,
                             RosterScopeResolver rosterScope) {
         this.userDirectory = userDirectory;
-        this.profileRepository = profileRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.classGroupDirectory = classGroupDirectory;
         this.rosterScope = rosterScope;
@@ -75,10 +72,10 @@ class StudentDirectoryService {
         int effectivePage = Math.max(page, 0);
         int effectiveSize = normalizeSize(size);
 
-        // Périmètre de consultation : identique à StudentProfileService —
-        // accès global (aucun filtre) pour l'administration ; un
-        // PEDAGOGICAL_MANAGER / TEACHER ne voit que les comptes ayant une
-        // inscription ACTIVE dans l'une de ses classes.
+        // Périmètre de consultation : accès global (aucun filtre) pour
+        // l'administration ; un PEDAGOGICAL_MANAGER / TEACHER ne voit que
+        // les comptes ayant une inscription ACTIVE dans l'une de ses
+        // classes.
         Optional<Set<Long>> visibleClasses = rosterScope.visibleClassGroupInternalIds(callerSubject);
         List<Long> restrictToUserIds = null;
         if (visibleClasses.isPresent()) {
@@ -99,13 +96,11 @@ class StudentDirectoryService {
 
         List<UserDirectory.AccountSummary> accounts = accountPage.content();
         List<Long> userIds = accounts.stream().map(UserDirectory.AccountSummary::internalId).toList();
-        Map<Long, StudentProfile> profiles = profileRepository.findByUserIdIn(userIds).stream()
-                .collect(java.util.stream.Collectors.toMap(StudentProfile::getUserId, p -> p));
         Map<Long, Enrollment> currentEnrollments = resolveCurrentEnrollments(userIds);
         Map<Long, ClassGroupDirectory.ClassGroupRef> classRefs = resolveClassRefs(currentEnrollments.values());
 
         List<StudentResponse> content = accounts.stream()
-                .map(account -> StudentResponse.of(account, profiles.get(account.internalId()),
+                .map(account -> StudentResponse.of(account,
                         currentEnrollments.get(account.internalId()),
                         classRefOf(currentEnrollments.get(account.internalId()), classRefs)))
                 .toList();
@@ -121,7 +116,7 @@ class StudentDirectoryService {
 
         // Périmètre de consultation : hors périmètre ⇒ 404 (cahier §18.2),
         // pas 403 — l'existence même de la fiche est une information à
-        // protéger, identique à StudentProfileService.get.
+        // protéger.
         rosterScope.visibleClassGroupInternalIds(callerSubject).ifPresent(visible -> {
             List<Enrollment> active = enrollmentRepository.findByUserIdAndStatus(ref.internalId(),
                     EnrollmentStatus.ACTIVE);
@@ -136,11 +131,10 @@ class StudentDirectoryService {
         UserDirectory.AccountSummary account = single.content().stream().findFirst()
                 .orElseThrow(() -> new EnrollmentException(EnrollmentException.Kind.STUDENT_NOT_FOUND));
 
-        StudentProfile profile = profileRepository.findByUserId(ref.internalId()).orElse(null);
         Enrollment current = currentEnrollmentOf(ref.internalId());
         ClassGroupDirectory.ClassGroupRef classRef = current == null ? null
                 : classGroupDirectory.findByInternalId(current.getClassGroupId()).orElse(null);
-        return StudentResponse.of(account, profile, current, classRef);
+        return StudentResponse.of(account, current, classRef);
     }
 
     // ------------------------------------------------------------------
@@ -148,7 +142,7 @@ class StudentDirectoryService {
     /**
      * Exige un compte existant, non archivé, porteur d'un rôle actif
      * {@code STUDENT} — exactement la même règle d'éligibilité que
-     * {@link StudentProfileService#create} et {@link EnrollmentService#enroll}.
+     * {@link EnrollmentService#enroll}.
      */
     private UserDirectory.UserRef requireStudent(UUID userPublicId) {
         UserDirectory.UserRef ref = userDirectory.findByPublicId(userPublicId)

@@ -214,9 +214,20 @@ public class UserManagementService {
                 .filter(Role::isActive)
                 .orElseThrow(() -> new UserManagementException(UserManagementException.Kind.ROLE_UNKNOWN));
 
-        UserAccount account = userAccountRepository.saveAndFlush(new UserAccount(email,
-                request.firstName().trim(), request.lastName().trim(),
-                AccountStatus.PENDING_ACTIVATION));
+        UserAccount account = new UserAccount(email, request.firstName().trim(), request.lastName().trim(),
+                AccountStatus.PENDING_ACTIVATION);
+        String studentNumber = trimToNull(request.studentNumber());
+        if (studentNumber != null || request.birthDate() != null) {
+            // Refonte 2026-09 : numéro étudiant / date de naissance vivent
+            // directement sur le compte (plus de `student_profile`) —
+            // facultatifs, jamais générés automatiquement sur ce chemin
+            // (contrairement à l'import CSV).
+            if (studentNumber != null && userAccountRepository.existsByStudentNumberIgnoreCase(studentNumber)) {
+                throw new UserManagementException(UserManagementException.Kind.DUPLICATE_STUDENT_NUMBER);
+            }
+            account.assignStudentNumber(studentNumber, request.birthDate(), null);
+        }
+        account = userAccountRepository.saveAndFlush(account);
         UserRole assignment = new UserRole(account, role, Instant.now(), true);
         assignment.recordAssignment(caller.internalId(), "Attribue a la creation du compte");
         userRoleRepository.saveAndFlush(assignment);
@@ -436,6 +447,14 @@ public class UserManagementService {
             }
         }
         return new CallerContext(publicId, internalId, roles);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /** Contexte de l'appelant, reconstruit depuis le JWT (identifiant public + rôles). */

@@ -12,8 +12,8 @@ import java.util.UUID;
 
 /**
  * Résout le périmètre de <strong>consultation</strong> des apprenants
- * pour l'appelant courant, sur la liste des profils apprenants
- * ({@code GET /api/v1/student-profiles}) et des inscriptions
+ * pour l'appelant courant, sur la liste des apprenants
+ * ({@code GET /api/v1/students}) et des inscriptions
  * ({@code GET /api/v1/enrollments}).
  *
  * <p>La décision n'est jamais prise à partir d'un paramètre client :

@@ -110,21 +110,21 @@ class StudentImportConfirmationRollbackTests {
         UUID jobId = simulate(admin, "rollback.csv", csv);
 
         long users0 = count("user_account");
-        long profiles0 = count("student_profile");
         long enrollments0 = count("enrollment");
         long invitations0 = count("account_invitation");
         Integer sequence0 = jdbc.queryForObject(
                 "SELECT next_value FROM student_number_sequence WHERE start_year = 2026", Integer.class);
 
-        // La 2ᵉ ligne devient invalide : son numéro est désormais attribué à un autre profil.
+        // La 2ᵉ ligne devient invalide : son numéro est désormais attribué à un autre compte.
         insertForeignProfileWithNumber(clashingNumber);
 
         assertThat(confirmError(admin, jobId)).isEqualTo(StudentImportException.Kind.STALE_SIMULATION);
 
-        // + 1 = compte / profil « étrangers » insérés en SQL natif ; la ligne 1 de l'import,
-        // elle, n'a créé AUCUN compte / profil / inscription / invitation (rollback total).
+        // + 1 = compte « étranger » inséré en SQL natif (numéro étudiant
+        // porté directement par user_account, refonte 2026-09) ; la
+        // ligne 1 de l'import, elle, n'a créé AUCUN compte / inscription /
+        // invitation (rollback total).
         assertThat(count("user_account")).isEqualTo(users0 + 1);
-        assertThat(count("student_profile")).isEqualTo(profiles0 + 1);
         assertThat(count("enrollment")).isEqualTo(enrollments0);
         assertThat(count("account_invitation")).isEqualTo(invitations0);
         assertThat(jdbc.queryForObject(
@@ -184,15 +184,16 @@ class StudentImportConfirmationRollbackTests {
 
     // ------------------------------------------------------------------
 
+    /**
+     * Refonte 2026-09 : le numéro étudiant est une colonne de
+     * {@code user_account} — plus de {@code student_profile} à insérer
+     * séparément.
+     */
     private void insertForeignProfileWithNumber(String studentNumber) {
         String email = "foreign." + UUID.randomUUID() + "@esic-connect.test";
-        jdbc.update("INSERT INTO user_account (public_id, email, first_name, last_name, status, created_at, "
-                + "updated_at, version) VALUES (UNHEX(REPLACE(UUID(), '-', '')), ?, 'For', 'Eign', 'ACTIVE', "
-                + "UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)", email);
-        Long userId = jdbc.queryForObject("SELECT id FROM user_account WHERE email = ?", Long.class, email);
-        jdbc.update("INSERT INTO student_profile (public_id, user_id, student_number, work_study, status, "
-                + "created_at, updated_at, version) VALUES (UNHEX(REPLACE(UUID(), '-', '')), ?, ?, 0, 'ACTIVE', "
-                + "UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)", userId, studentNumber);
+        jdbc.update("INSERT INTO user_account (public_id, email, first_name, last_name, status, student_number, "
+                + "created_at, updated_at, version) VALUES (UNHEX(REPLACE(UUID(), '-', '')), ?, 'For', 'Eign', "
+                + "'ACTIVE', ?, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)", email, studentNumber);
     }
 
     private UUID simulate(Actor actor, String fileName, String csv) {

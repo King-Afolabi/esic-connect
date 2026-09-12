@@ -148,7 +148,7 @@ class DefaultDemoMfaProvisionerTests {
     private String provisionAccount() {
         String email = "demo-mfa-" + UUID.randomUUID() + "@example.test";
         accountProvisioner.ensureActiveAccount(email, "Awa", "Diallo", "demo-password-1234",
-                java.util.Set.of("ADMIN"));
+                java.util.Set.of("ADMIN"), null);
         return email;
     }
 }

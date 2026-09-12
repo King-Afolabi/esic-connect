@@ -25,7 +25,7 @@ public interface DemoAccountProvisioner {
      *
      * <p>Idempotent : un second appel ne crée jamais de doublon (compte
      * ou rôle) et ne supprime aucune dépendance (rôles déjà présents,
-     * profil apprenant, inscriptions, audit...).
+     * numéro étudiant, inscriptions, audit...).
      *
      * <p><strong>Profil {@code demo} :</strong> comme la base MySQL est
      * persistante d'un démarrage à l'autre, l'implémentation
@@ -42,8 +42,12 @@ public interface DemoAccountProvisioner {
      * @param lastName      nom fictif
      * @param rawPassword   mot de passe de démonstration en clair (haché ensuite)
      * @param roleCodes     codes de rôle ({@code "ADMIN"}, {@code "TEACHER"}, {@code "STUDENT"}...)
+     * @param studentNumber numéro étudiant facultatif ({@code null} = aucun) — refonte
+     *                      2026-09 : colonne de {@code user_account}, posée seulement si
+     *                      le compte n'en a pas déjà un (immuable une fois attribué,
+     *                      idempotence d'un redémarrage à l'autre)
      * @return l'identifiant public du compte (existant ou créé)
      */
     UUID ensureActiveAccount(String email, String firstName, String lastName, String rawPassword,
-                             Set<String> roleCodes);
+                             Set<String> roleCodes, String studentNumber);
 }

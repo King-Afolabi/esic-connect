@@ -115,7 +115,7 @@ class AttendanceServiceSessionDateTests {
     }
 
     private static EnrollmentDirectory.EnrollmentRef enrollment() {
-        return new EnrollmentDirectory.EnrollmentRef(99L, ENROLLMENT_PUBLIC_ID, UUID.randomUUID(), STUDENT_ID,
+        return new EnrollmentDirectory.EnrollmentRef(99L, ENROLLMENT_PUBLIC_ID, STUDENT_ID,
                 CLASS_ID, "C1", UUID.randomUUID(), "2025-2026", true);
     }
 

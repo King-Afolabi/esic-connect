@@ -1,11 +1,12 @@
 package com.esic.connect.identity;
 
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Port public du module {@code identity} pour l'import CSV des apprenants
- * (rapport §4.1). Deux usages disjoints :
+ * (rapport §4.1). Usages :
  *
  * <ul>
  *   <li>{@link #findByEmail(String)} — <strong>lecture seule</strong>,
@@ -21,6 +22,12 @@ import java.util.UUID;
  *       {@link AccountLifecycleEvent} : aucun audit synchrone sur le
  *       chemin d'import (invariant T5). Le jeton brut ne sort jamais du
  *       module {@code identity}.</li>
+ *   <li>{@link #studentNumberTaken(String)} / {@link #assignStudentIdentity} —
+ *       numéro étudiant / date de naissance (refonte 2026-09) : données
+ *       personnelles générales portées directement par {@code user_account}
+ *       (plus de {@code student_profile}). {@code identity} en reste seul
+ *       propriétaire ; {@code studentimport} ne fait que lire/écrire via ce
+ *       port, jamais directement en base.</li>
  * </ul>
  *
  * <p>Un compte {@code ACTIVE} / {@code SUSPENDED} / {@code LOCKED} /
@@ -32,6 +39,14 @@ public interface StudentAccountProvisioner {
 
     /** Lecture seule (simulation). N'ouvre aucune écriture. */
     Optional<ExistingAccountView> findByEmail(String rawEmail);
+
+    /**
+     * Lecture seule — compte déjà résolu (par e-mail ou réutilisé dans le
+     * même import) dont on veut relire l'état courant, par exemple avant
+     * {@link #assignStudentIdentity} pour vérifier qu'un numéro étudiant
+     * n'est pas déjà posé. N'ouvre aucune écriture.
+     */
+    Optional<ExistingAccountView> findByUserPublicId(UUID userPublicId);
 
     /**
      * Application (confirmation) — dans la transaction de l'appelant.
@@ -55,6 +70,24 @@ public interface StudentAccountProvisioner {
      */
     void updateStudentPhone(UUID userPublicId, String phone, Long actorUserInternalId);
 
+    /** Lecture seule. {@code true} si ce numéro étudiant est déjà attribué à un compte. */
+    boolean studentNumberTaken(String studentNumber);
+
+    /**
+     * Attribue le numéro étudiant / la date de naissance à un compte qui
+     * n'en a pas encore (refonte 2026-09, ex-{@code StudentProfileView}
+     * création). Sans effet si le compte porte déjà un numéro — immuable
+     * une fois posé, exactement comme l'ancien {@code student_profile}.
+     * Dans la transaction de l'appelant.
+     *
+     * @param userPublicId         compte cible
+     * @param studentNumber        numéro étudiant déjà déterminé (jamais {@code null})
+     * @param birthDate            date de naissance ({@code null} accepté)
+     * @param actorUserInternalId  auteur ({@code null} accepté)
+     */
+    void assignStudentIdentity(UUID userPublicId, String studentNumber, LocalDate birthDate,
+                               Long actorUserInternalId);
+
     /** Statut d'un compte, exposé sans révéler l'entité interne. */
     enum StatusView { PENDING_ACTIVATION, ACTIVE, SUSPENDED, LOCKED, ARCHIVED }
 
@@ -66,6 +99,9 @@ public interface StudentAccountProvisioner {
      * @param lastName             nom
      * @param phone                téléphone courant ({@code null} si absent)
      * @param hasActiveStudentRole {@code true} si le rôle {@code STUDENT} est actif
+     * @param studentNumber        numéro étudiant déjà attribué ({@code null} si aucun) —
+     *                             refonte 2026-09, ex-{@code student_profile.student_number}
+     * @param birthDate            date de naissance déjà renseignée ({@code null} si aucune)
      */
     record ExistingAccountView(
             UUID publicId,
@@ -74,7 +110,9 @@ public interface StudentAccountProvisioner {
             String firstName,
             String lastName,
             String phone,
-            boolean hasActiveStudentRole) {
+            boolean hasActiveStudentRole,
+            String studentNumber,
+            LocalDate birthDate) {
     }
 
     /**

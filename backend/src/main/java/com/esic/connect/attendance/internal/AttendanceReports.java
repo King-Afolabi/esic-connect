@@ -75,7 +75,7 @@ final class AttendanceReports {
 
     /** Ligne d'un rapport par apprenant. */
     record StudentRow(
-            UUID studentProfilePublicId,
+            UUID studentUserPublicId,
             UUID enrollmentPublicId,
             String studentNumber,
             String firstName,

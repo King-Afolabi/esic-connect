@@ -18,11 +18,13 @@ import java.util.Set;
  * touche à aucune donnée métier réelle et ne s'exécute jamais sous
  * {@code local}, {@code test} ou en production.
  *
- * <p>Le référentiel académique, les profils apprenants, les inscriptions,
- * une séance {@code PLANNED} et l'affectation du responsable pédagogique
- * à la formation de démonstration sont créés séparément par
+ * <p>Le référentiel académique, les inscriptions, une séance
+ * {@code PLANNED} et l'affectation du responsable pédagogique à la
+ * formation de démonstration sont créés séparément par
  * {@code scripts/seed-demo.sh} via les API REST réelles (avec le compte
- * {@code ADMIN} ci-dessous).
+ * {@code ADMIN} ci-dessous). Le numéro étudiant de {@code apprenant1},
+ * lui, est posé ici (refonte 2026-09 : colonne de {@code user_account},
+ * sans route dédiée pour l'attribuer après coup).
  *
  * <p>Le compte {@code superadmin@example.test} rend démontrables les
  * routes réservées à {@code SUPER_ADMIN} — notamment les plages réseau
@@ -63,19 +65,21 @@ class DemoDataInitializer implements ApplicationRunner {
      */
     private static final DemoAccount SUPER_ADMIN =
             new DemoAccount("superadmin@example.test", "Super Administrateur", "Démo",
-                    Set.of("SUPER_ADMIN"));
+                    Set.of("SUPER_ADMIN"), null);
     private static final DemoAccount ADMIN =
-            new DemoAccount("admin@example.test", "Administrateur", "Démo", Set.of("ADMIN"));
+            new DemoAccount("admin@example.test", "Administrateur", "Démo", Set.of("ADMIN"), null);
     private static final DemoAccount TEACHER =
-            new DemoAccount("formateur@example.test", "Formateur", "Démo", Set.of("TEACHER"));
+            new DemoAccount("formateur@example.test", "Formateur", "Démo", Set.of("TEACHER"), null);
+    /** Apprenant COMPLET : numéro étudiant posé ici (refonte 2026-09 : plus de student_profile ni de route dédiée). */
     private static final DemoAccount STUDENT_ONE =
-            new DemoAccount("apprenant1@example.test", "Alice", "Martin", Set.of("STUDENT"));
+            new DemoAccount("apprenant1@example.test", "Alice", "Martin", Set.of("STUDENT"), "ESIC-DEMO-001");
+    /** Apprenant MINIMAL : rôle STUDENT seul, aucun numéro — reste pleinement visible dans Apprenants. */
     private static final DemoAccount STUDENT_TWO =
-            new DemoAccount("apprenant2@example.test", "Karim", "Diallo", Set.of("STUDENT"));
+            new DemoAccount("apprenant2@example.test", "Karim", "Diallo", Set.of("STUDENT"), null);
     /** Compte multi-rôles : démontre le sélecteur de contexte de rôle (EF-AUTH-003). */
     private static final DemoAccount RESPONSIBLE =
             new DemoAccount("responsable@example.test", "Responsable Pédagogique", "Démo",
-                    Set.of("PEDAGOGICAL_MANAGER", "TEACHER"));
+                    Set.of("PEDAGOGICAL_MANAGER", "TEACHER"), null);
 
     private final DemoAccountProvisioner provisioner;
     private final DemoMfaProvisioner mfaProvisioner;
@@ -102,7 +106,7 @@ class DemoDataInitializer implements ApplicationRunner {
         for (DemoAccount account :
                 Set.of(SUPER_ADMIN, ADMIN, TEACHER, STUDENT_ONE, STUDENT_TWO, RESPONSIBLE)) {
             provisioner.ensureActiveAccount(account.email(), account.firstName(), account.lastName(),
-                    demoPassword, account.roles());
+                    demoPassword, account.roles(), account.studentNumber());
         }
         // Le mot de passe n'est jamais journalisé.
         log.info("Amorçage demo : 6 comptes fictifs synchronisés "
@@ -119,6 +123,7 @@ class DemoDataInitializer implements ApplicationRunner {
         }
     }
 
-    private record DemoAccount(String email, String firstName, String lastName, Set<String> roles) {
+    private record DemoAccount(String email, String firstName, String lastName, Set<String> roles,
+                               String studentNumber) {
     }
 }

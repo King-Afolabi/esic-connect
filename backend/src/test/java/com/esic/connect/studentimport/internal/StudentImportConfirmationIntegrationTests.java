@@ -95,7 +95,9 @@ class StudentImportConfirmationIntegrationTests {
         Chain chain = academicChain(admin.token());
 
         long users0 = count("user_account");
-        long profiles0 = count("student_profile");
+        // Refonte 2026-09 : le numéro étudiant est une colonne de
+        // user_account, plus une ligne student_profile séparée à compter.
+        long numberedAccounts0 = countAccountsWithStudentNumber();
         long enrollments0 = count("enrollment");
         long invitations0 = count("account_invitation");
 
@@ -114,7 +116,7 @@ class StudentImportConfirmationIntegrationTests {
         assertThat(result.invited()).isEqualTo(100);
 
         assertThat(count("user_account")).isEqualTo(users0 + 100);
-        assertThat(count("student_profile")).isEqualTo(profiles0 + 100);
+        assertThat(countAccountsWithStudentNumber()).isEqualTo(numberedAccounts0 + 100);
         assertThat(count("enrollment")).isEqualTo(enrollments0 + 100);
         assertThat(count("account_invitation")).isEqualTo(invitations0 + 100);
         assertThat(jdbc.queryForObject(
@@ -126,7 +128,7 @@ class StudentImportConfirmationIntegrationTests {
         assertThat(jdbc.queryForObject("SELECT next_value FROM student_number_sequence WHERE start_year = 2026",
                 Integer.class)).isGreaterThanOrEqualTo(101);
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM student_profile WHERE student_number LIKE 'ESIC-2026-%'", Long.class))
+                "SELECT COUNT(*) FROM user_account WHERE student_number LIKE 'ESIC-2026-%'", Long.class))
                 .isGreaterThanOrEqualTo(100L);
         assertThat(SENT_EMAILS).hasSize(100);
     }
@@ -232,9 +234,14 @@ class StudentImportConfirmationIntegrationTests {
         // Apprenant déjà inscrit en classe B.
         String studentEmail = "mover." + UUID.randomUUID() + "@esic-connect.test";
         Actor mover = actorWith(studentEmail, RoleCode.STUDENT);
+        // Refonte 2026-09 : le numéro étudiant est une colonne de
+        // user_account (plus de student_profile) — l'assigner ici garantit
+        // que la résolution de l'import passe bien par describeSituation
+        // (compte déjà numéroté) plutôt que par la branche « premier numéro ».
         String studentNumber = "ESIC-TR-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
-        created("/api/v1/student-profiles", Map.of(
-                "userPublicId", mover.publicId(), "studentNumber", studentNumber), admin.token()).get("publicId");
+        UserAccount moverAccount = userAccountRepository.findById(mover.internalId()).orElseThrow();
+        moverAccount.assignStudentNumber(studentNumber, null, null);
+        userAccountRepository.saveAndFlush(moverAccount);
         created("/api/v1/enrollments", Map.of(
                 "studentUserPublicId", mover.publicId(), "classGroupPublicId", chain.classBPublicId()),
                 admin.token());
@@ -304,6 +311,10 @@ class StudentImportConfirmationIntegrationTests {
 
     private long count(String table) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
+    }
+
+    private long countAccountsWithStudentNumber() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM user_account WHERE student_number IS NOT NULL", Long.class);
     }
 
     private long countAccounts(String email) {

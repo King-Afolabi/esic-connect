@@ -84,7 +84,6 @@ describe('EnrollmentPicker', () => {
         {
           publicId: 'e-1',
           studentUserPublicId: 'u-1',
-          studentProfilePublicId: 'sp-1',
           studentNumber: 'ESIC-2026-0001',
           classGroupPublicId: 'c-1',
           classGroupCode: 'BTS-SIO-1-A',
@@ -97,6 +96,8 @@ describe('EnrollmentPicker', () => {
           status: 'ACTIVE',
           enrollmentSource: 'MANUAL',
           changeReason: null,
+          workStudy: false,
+          companyName: null,
           previousEnrollmentPublicId: null,
           createdAt: '2026-09-02T08:00:00Z',
           updatedAt: '2026-09-02T08:00:00Z',

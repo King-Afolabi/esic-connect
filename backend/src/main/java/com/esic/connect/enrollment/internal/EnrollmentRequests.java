@@ -16,14 +16,20 @@ final class EnrollmentRequests {
      * Inscription initiale d'un apprenant dans une classe.
      * {@code studentUserPublicId} désigne directement le
      * <strong>compte</strong> apprenant (rôle {@code STUDENT} actif, non
-     * archivé) — jamais un profil apprenant : l'inscription ne suppose
-     * l'existence d'aucun {@code student_profile} (refonte 2026-09).
-     * {@code startDate} par défaut = aujourd'hui (horloge injectée).
+     * archivé) — il n'existe plus de {@code student_profile} intermédiaire
+     * (refonte 2026-09). {@code startDate} par défaut = aujourd'hui
+     * (horloge injectée). {@code workStudy} / {@code companyName}
+     * décrivent la situation d'alternance pendant cette inscription
+     * (ex-{@code student_profile.work_study} / {@code company_name}) —
+     * {@code workStudy} par défaut {@code false}, {@code companyName}
+     * facultative.
      */
     record Enroll(
             @NotBlank @Size(max = 40) String studentUserPublicId,
             @NotBlank @Size(max = 40) String classGroupPublicId,
-            LocalDate startDate) {
+            LocalDate startDate,
+            Boolean workStudy,
+            @Size(max = 191) String companyName) {
     }
 
     /**

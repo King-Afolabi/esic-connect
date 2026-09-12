@@ -63,7 +63,7 @@ public final class DuplicateComparisonWeb {
             String phone,
             String status,
             List<String> roles,
-            boolean hasStudentProfile,
+            boolean isStudent,
             String studentNumber,
             boolean hasActiveEnrollment,
             boolean hasLoginCredential,

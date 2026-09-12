@@ -269,9 +269,6 @@ class DailyAttendanceIntegrationTests {
         fx.afternoonSessionId = openSession(admin, teacher, fx.classId, AFTERNOON_START, AFTERNOON_END);
 
         fx.student = accountWithRoles(RoleCode.STUDENT);
-        String profile = (String) created("/api/v1/student-profiles", Map.of(
-                "userPublicId", fx.student.publicId(),
-                "studentNumber", "ESIC-2026-" + suffix), admin).get("publicId");
         fx.enrollmentId = (String) created("/api/v1/enrollments", Map.of(
                 "studentUserPublicId", fx.student.publicId(), "classGroupPublicId", fx.classId,
                 "startDate", "2026-09-01"), admin).get("publicId");

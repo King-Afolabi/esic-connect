@@ -27,7 +27,7 @@ const TOKEN_URL = '/api/v1/sessions/s-1/checkpoints/cp-1/attendance-token';
 
 const CANDIDATES = [
   {
-    studentProfilePublicId: 'sp-1',
+    studentUserPublicId: 'u-1',
     enrollmentPublicId: 'e-1',
     studentNumber: 'ESIC-2026-001',
     firstName: 'Bob',
@@ -553,7 +553,7 @@ describe('SessionDetail', () => {
           records: [
             {
               attendancePublicId: 'a-1',
-              studentProfilePublicId: 'sp',
+              studentUserPublicId: 'u-1',
               enrollmentPublicId: 'e',
               studentNumber: 'ESIC-1',
               firstName: 'Bob',

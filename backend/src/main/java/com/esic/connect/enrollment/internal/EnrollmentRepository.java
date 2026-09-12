@@ -50,25 +50,11 @@ interface EnrollmentRepository
     boolean existsByUserIdAndAcademicYearIdAndStatus(Long userId, Long academicYearId, EnrollmentStatus status);
 
     /**
-     * Inscriptions <strong>actives</strong> dont l'apprenant porte le
-     * numéro étudiant recherché (EF-USER-009).
-     *
-     * <p>Le numéro étudiant vit dans {@code student_profile}, une table
-     * indépendante — sans relation JPA depuis {@link Enrollment} (refonte
-     * 2026-09 : une inscription ne présuppose plus de profil). Le
-     * rapprochement se fait ici par égalité de {@code user_id}, dans une
-     * requête JPQL à deux racines (pas de jointure d'objet-graphe), ce qui
-     * reste une requête SQL unique.
+     * Inscriptions actives des comptes indiqués — utilisée notamment pour
+     * la recherche d'apprenants par nom ou numéro étudiant (EF-USER-009),
+     * les deux étant résolus par le port {@code identity.UserDirectory}
+     * (numéro étudiant et nom vivent tous deux sur {@code user_account},
+     * refonte 2026-09) avant ce simple filtrage par compte.
      */
-    @Query("""
-            SELECT e FROM Enrollment e, StudentProfile p
-            WHERE e.status = :status AND e.userId = p.userId AND LOWER(p.studentNumber) LIKE :pattern
-            ORDER BY p.studentNumber ASC
-            """)
-    List<Enrollment> searchByStudentNumber(@Param("pattern") String pattern,
-                                           @Param("status") EnrollmentStatus status,
-                                           org.springframework.data.domain.Pageable pageable);
-
-    /** Inscriptions actives des comptes indiqués. */
     List<Enrollment> findByUserIdInAndStatus(java.util.Collection<Long> userIds, EnrollmentStatus status);
 }

@@ -29,12 +29,11 @@ import java.util.UUID;
  * {@code ADMIN}/{@code SUPER_ADMIN}/{@code SCHOOL_ADMINISTRATION}.
  *
  * <p>Une inscription rattache directement un <strong>compte</strong>
- * apprenant ({@code user_id}, résolu via {@link UserDirectory}), jamais un
- * profil apprenant ({@code student_profile} est une donnée facultative et
- * indépendante, refonte 2026-09) : la cible d'une inscription doit exister,
- * ne pas être archivée et porter un rôle actif {@code STUDENT}
- * ({@code ENR_USER_NOT_ELIGIBLE} sinon) — exactement la même règle
- * d'éligibilité que {@link StudentProfileService#create}.
+ * apprenant ({@code user_id}, résolu via {@link UserDirectory}) : il
+ * n'existe plus de {@code student_profile} intermédiaire (refonte
+ * 2026-09) : la cible d'une inscription doit exister, ne pas être
+ * archivée et porter un rôle actif {@code STUDENT}
+ * ({@code ENR_USER_NOT_ELIGIBLE} sinon).
  *
  * <p>Règle centrale : un apprenant possède au maximum une inscription
  * {@code ACTIVE} par année scolaire (docs/04 §13.3) — pré-contrôle
@@ -76,7 +75,6 @@ class EnrollmentService {
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "startDate");
 
     private final EnrollmentRepository enrollmentRepository;
-    private final StudentProfileRepository profileRepository;
     private final EnrollmentPersister persister;
     private final ClassGroupDirectory classGroupDirectory;
     private final UserDirectory userDirectory;
@@ -85,7 +83,6 @@ class EnrollmentService {
     private final Clock clock;
 
     EnrollmentService(EnrollmentRepository enrollmentRepository,
-                      StudentProfileRepository profileRepository,
                       EnrollmentPersister persister,
                       ClassGroupDirectory classGroupDirectory,
                       UserDirectory userDirectory,
@@ -93,7 +90,6 @@ class EnrollmentService {
                       RosterScopeResolver rosterScope,
                       Clock clock) {
         this.enrollmentRepository = enrollmentRepository;
-        this.profileRepository = profileRepository;
         this.persister = persister;
         this.classGroupDirectory = classGroupDirectory;
         this.userDirectory = userDirectory;
@@ -115,7 +111,8 @@ class EnrollmentService {
 
         Long actorId = changePublisher.actorId(callerSubject);
         Enrollment enrollment = new Enrollment(target.internalId(), classRef.internalId(),
-                classRef.academicYearInternalId(), startDate, EnrollmentSource.MANUAL, null, null);
+                classRef.academicYearInternalId(), startDate, EnrollmentSource.MANUAL, null, null,
+                Boolean.TRUE.equals(request.workStudy()), EnrollmentQuerySupport.trimToNull(request.companyName()));
         enrollment.markCreatedBy(actorId);
 
         Enrollment saved;
@@ -169,9 +166,13 @@ class EnrollmentService {
         // de `start_date` ; la non-superposition découle des bornes
         // inclusives et de l'unicité d'une inscription active — §13.3).
         LocalDate newStartDate = effectiveDate.plusDays(1);
+        // La situation d'alternance est reprise telle quelle depuis
+        // l'inscription clôturée : un changement de classe n'est pas, en
+        // soi, un changement d'alternance (celle-ci se corrige séparément,
+        // ex. via l'import CSV — action UPDATE_PROFILE).
         Enrollment next = new Enrollment(current.getUserId(), targetRef.internalId(),
                 targetRef.academicYearInternalId(), newStartDate, EnrollmentSource.CLASS_TRANSFER, reason,
-                current.getId());
+                current.getId(), current.isWorkStudy(), current.getCompanyName());
         next.markCreatedBy(actorId);
         Enrollment saved = enrollmentRepository.saveAndFlush(next);
 
@@ -261,19 +262,17 @@ class EnrollmentService {
         List<Enrollment> content = result.getContent();
 
         // Résolution en lot (anti-N+1, NFR-PERF-08) : identifiants de
-        // compte, profils facultatifs et classes, chacun en une requête
-        // pour toute la page plutôt qu'une par ligne.
-        Map<Long, UserDirectory.NamedUserRef> userRefs = userDirectory.findNamedRefs(
-                content.stream().map(Enrollment::getUserId).toList());
-        Map<Long, StudentProfile> profiles = profileRepository
-                .findByUserIdIn(content.stream().map(Enrollment::getUserId).toList()).stream()
-                .collect(java.util.stream.Collectors.toMap(StudentProfile::getUserId, p -> p));
+        // compte, numéro étudiant facultatif et classes, chacun en une
+        // requête pour toute la page plutôt qu'une par ligne.
+        List<Long> userIds = content.stream().map(Enrollment::getUserId).toList();
+        Map<Long, UserDirectory.NamedUserRef> userRefs = userDirectory.findNamedRefs(userIds);
+        Map<Long, String> studentNumbers = userDirectory.findStudentNumbers(userIds);
         Map<Long, ClassGroupDirectory.ClassGroupRef> classRefs = new HashMap<>();
 
         return PageResponse.of(result, enrollment -> {
             UserDirectory.NamedUserRef userRef = userRefs.get(enrollment.getUserId());
             return EnrollmentResponse.from(enrollment, userRef != null ? userRef.publicId() : null,
-                    profiles.get(enrollment.getUserId()),
+                    studentNumbers.get(enrollment.getUserId()),
                     classRefs.computeIfAbsent(enrollment.getClassGroupId(), this::classRefOf),
                     resolvePreviousPublicId(enrollment));
         });
@@ -283,22 +282,21 @@ class EnrollmentService {
 
     /**
      * Construit la réponse d'une inscription unitaire (création,
-     * transfert, clôture, détail) : résout le profil facultatif du compte
-     * — une requête de plus, sans conséquence hors d'une boucle de page.
+     * transfert, clôture, détail) : résout le numéro étudiant facultatif
+     * du compte — une requête de plus, sans conséquence hors d'une boucle
+     * de page.
      */
     private EnrollmentResponse toResponse(Enrollment enrollment, UUID studentUserPublicId,
                                           ClassGroupDirectory.ClassGroupRef classRef, UUID previousPublicId) {
-        StudentProfile profile = profileRepository.findByUserId(enrollment.getUserId()).orElse(null);
-        return EnrollmentResponse.from(enrollment, studentUserPublicId, profile, classRef, previousPublicId);
+        String studentNumber = userDirectory.findStudentNumbers(List.of(enrollment.getUserId()))
+                .get(enrollment.getUserId());
+        return EnrollmentResponse.from(enrollment, studentUserPublicId, studentNumber, classRef, previousPublicId);
     }
 
     /**
      * Valide la cible d'une inscription : le compte doit exister, ne pas
      * être archivé et porter un rôle actif {@code STUDENT}
-     * ({@code ENR_USER_NOT_ELIGIBLE} sinon) — même règle que
-     * {@link StudentProfileService#create}. Aucune exigence sur
-     * {@code student_profile} : son absence n'empêche jamais l'inscription
-     * (refonte 2026-09).
+     * ({@code ENR_USER_NOT_ELIGIBLE} sinon).
      */
     private UserDirectory.UserRef requireEligibleStudent(String rawUserPublicId) {
         UserDirectory.UserRef target = userDirectory.findByPublicId(

@@ -439,7 +439,7 @@ class AttendanceJustificationService {
                 checkpoint != null ? checkpoint.publicId() : null,
                 checkpoint != null ? checkpoint.label() : null,
                 enrollment != null ? enrollment.classGroupCode() : null,
-                staff && attendee != null ? attendee.studentProfilePublicId() : null,
+                staff && attendee != null ? attendee.studentUserPublicId() : null,
                 staff && attendee != null ? attendee.studentNumber() : null,
                 staff && attendee != null ? attendee.firstName() : null,
                 staff && attendee != null ? attendee.lastName() : null,

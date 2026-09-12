@@ -51,12 +51,10 @@ const STUDENT: StudentResponse = {
   accountStatus: 'ACTIVE',
   createdAt: '2026-08-01T10:00:00Z',
   lastLoginAt: null,
-  studentProfilePublicId: 'profile-1',
   studentNumber: 'ESIC-2026-0007',
   birthDate: null,
   workStudy: false,
   companyName: null,
-  profileStatus: 'ACTIVE',
   currentEnrollmentPublicId: null,
   classGroupPublicId: null,
   classGroupCode: null,
@@ -65,21 +63,18 @@ const STUDENT: StudentResponse = {
   enrollmentStatus: null,
 };
 
-/** Même compte, sans aucun profil apprenant — refonte 2026-09. */
+/** Même compte, sans numéro étudiant ni date de naissance — refonte 2026-09. */
 const STUDENT_WITHOUT_PROFILE: StudentResponse = {
   ...STUDENT,
-  studentProfilePublicId: null,
   studentNumber: null,
   birthDate: null,
   workStudy: null,
   companyName: null,
-  profileStatus: null,
 };
 
 const ENROLLMENT: EnrollmentResponse = {
   publicId: 'e-1',
   studentUserPublicId: ID,
-  studentProfilePublicId: 'profile-1',
   studentNumber: 'ESIC-2026-0007',
   classGroupPublicId: 'c-1',
   classGroupCode: 'BTS-SIO-1-A',
@@ -92,6 +87,8 @@ const ENROLLMENT: EnrollmentResponse = {
   status: 'ACTIVE',
   enrollmentSource: 'CLASS_TRANSFER',
   changeReason: 'Réorientation',
+  workStudy: false,
+  companyName: null,
   previousEnrollmentPublicId: 'e-0',
   createdAt: '2026-09-02T08:00:00Z',
   updatedAt: '2026-09-02T08:00:00Z',
@@ -161,7 +158,7 @@ describe('StudentProfile', () => {
     harness.detectChanges();
 
     expect(text()).toContain('Martin Léa');
-    expect(text()).toContain('Aucun profil apprenant renseigné');
+    expect(text()).toContain('Aucune information complémentaire renseignée');
   });
 
   it('requests the enrollment history for this student account, newest first, and renders it', async () => {

@@ -20,7 +20,7 @@ const CONTEXT_URL = `/api/v1/alternation/enrollments/${EID}/context`;
 const EXCEPTION: StudentExceptionResponse = {
   publicId: 'x-1',
   enrollmentPublicId: EID,
-  studentProfilePublicId: 'sp-1',
+  studentUserPublicId: 'u-1',
   classGroupPublicId: 'c-1',
   type: 'COMPANY_PERIOD',
   startAt: '2026-09-07T06:00:00.000Z',

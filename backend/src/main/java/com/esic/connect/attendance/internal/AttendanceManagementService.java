@@ -234,7 +234,7 @@ class AttendanceManagementService {
                 continue;
             }
             byEnrollment.putIfAbsent(entry.enrollmentPublicId(), new AttendanceCandidateResponse(
-                    entry.studentProfilePublicId(), entry.enrollmentPublicId(), entry.studentNumber(),
+                    entry.studentUserPublicId(), entry.enrollmentPublicId(), entry.studentNumber(),
                     entry.firstName(), entry.lastName(), entry.classGroupCode()));
         }
         Comparator<AttendanceCandidateResponse> byName = Comparator

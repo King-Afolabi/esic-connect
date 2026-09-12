@@ -41,8 +41,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class EnrollmentConstraintsTests {
 
     @Autowired
-    private StudentProfileRepository profileRepository;
-    @Autowired
     private EnrollmentRepository enrollmentRepository;
     @Autowired
     private TestEntityManager entityManager;
@@ -102,32 +100,11 @@ class EnrollmentConstraintsTests {
 
     @Test
     void enrollmentDoesNotRequireAnyStudentProfileToExist() {
-        // Refonte 2026-09 : `enrollment` ne référence plus `student_profile`
-        // — une inscription est parfaitement valide pour un compte qui n'a
-        // jamais eu de profil apprenant.
+        // Refonte 2026-09 : `student_profile` n'existe plus du tout — une
+        // inscription est parfaitement valide pour un simple compte STUDENT,
+        // sans aucune donnée de profil à créer au préalable.
         Chain chain = insertChain();
-        assertThat(profileRepository.existsByUserId(chain.userId())).isFalse();
         assertDoesNotThrow(() -> enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year())));
-    }
-
-    @Test
-    void studentProfileUserIdIsUnique() {
-        Chain chain = insertChain();
-        newProfile(chain.userId());
-        assertThrows(DataIntegrityViolationException.class, () -> {
-            profileRepository.saveAndFlush(new StudentProfile(chain.userId(), "ESIC-2026-" + shortCode(),
-                    null, false, null));
-        });
-    }
-
-    @Test
-    void studentNumberIsUnique() {
-        Chain chain = insertChain();
-        long secondUser = insertUser();
-        String number = "ESIC-2026-" + shortCode();
-        profileRepository.saveAndFlush(new StudentProfile(chain.userId(), number, null, false, null));
-        assertThrows(DataIntegrityViolationException.class, () ->
-                profileRepository.saveAndFlush(new StudentProfile(secondUser, number, null, false, null)));
     }
 
     @Test
@@ -201,11 +178,6 @@ class EnrollmentConstraintsTests {
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
-
-    private StudentProfile newProfile(long userId) {
-        return profileRepository.saveAndFlush(
-                new StudentProfile(userId, "ESIC-2026-" + shortCode(), null, false, null));
-    }
 
     private static Enrollment active(long userId, long classGroupId, long academicYearId) {
         return new Enrollment(userId, classGroupId, academicYearId, LocalDate.of(2026, 9, 1),

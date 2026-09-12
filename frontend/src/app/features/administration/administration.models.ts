@@ -324,7 +324,8 @@ export interface DuplicateComparisonSide {
   phone: string | null;
   status: AccountStatus;
   roles: string[];
-  hasStudentProfile: boolean;
+  /** Refonte 2026-09 : le rôle STUDENT est l'unique source de vérité du statut apprenant. */
+  isStudent: boolean;
   studentNumber: string | null;
   hasActiveEnrollment: boolean;
   hasLoginCredential: boolean;
@@ -368,7 +369,6 @@ export const DUPLICATE_FIELD_LABELS: Record<string, string> = {
   phone: 'Téléphone',
   status: 'Statut',
   roles: 'Rôles',
-  studentProfile: 'Profil apprenant',
   studentNumber: 'Numéro étudiant',
   activeEnrollment: 'Inscription active',
 };
@@ -379,7 +379,6 @@ export function duplicateFieldLabel(key: string): string {
 
 /** Libellés lisibles des clés du résumé des dépendances. */
 export const DUPLICATE_DEPENDENCY_LABELS: Record<string, string> = {
-  studentProfile: 'Profil apprenant',
   enrollments: 'Inscriptions',
   activeEnrollments: 'Inscriptions actives',
   attendanceRecords: 'Présences enregistrées',

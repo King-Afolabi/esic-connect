@@ -185,9 +185,6 @@ class NotificationAudienceIntegrationTests {
 
     private Account enrolled(String admin, String classGroupPublicId) {
         Account student = account(RoleCode.STUDENT);
-        created(admin, "/api/v1/student-profiles",
-                Map.of("userPublicId", student.publicId(), "studentNumber", "ESIC-2026-" + code()))
-                .get("publicId");
         created(admin, "/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", classGroupPublicId, "startDate", "2026-08-01"));
         return student;

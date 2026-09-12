@@ -291,25 +291,6 @@ ensure_primary_manager() {
 ensure_primary_manager
 say "responsable pédagogique affecté à PRG-DEMO"
 
-# Profil apprenant (numéro étudiant = code fixe).
-ensure_profile() {
-  local user="$1" number="$2" out id rc
-  out="$(http_post /student-profiles "{\"userPublicId\":\"$user\",\"studentNumber\":\"$number\"}" --allow-conflict)" && rc=0 || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    id="$(printf '%s' "$out" | jq -r '.publicId // empty')"
-  elif [ "$rc" -eq 9 ]; then
-    id=""
-  else
-    exit "$rc"
-  fi
-  if [ -z "$id" ]; then
-    id="$(http_get_q /student-profiles q "$number" | jq -r --arg n "$number" \
-      '[.content[]? | select(.studentNumber==$n) | .publicId][0] // empty')"
-  fi
-  [ -n "$id" ] || { echo "Conflit sur le profil $number mais profil introuvable : abandon." >&2; exit 1; }
-  printf '%s' "$id"
-}
-
 # Inscription (rattachée directement au COMPTE apprenant — refonte
 # 2026-09 — jamais à un profil : `student` désigne ici le
 # `user_account.public_id`).
@@ -324,16 +305,19 @@ ensure_enrollment() {
 
 # Trois profils d'apprenant délibérément distincts (refonte 2026-09 : le
 # rôle STUDENT est l'unique source de vérité du statut apprenant — ni le
-# profil ni l'inscription ne le sont) :
-#   - apprenant1@example.test : apprenant COMPLET (profil + inscription) ;
+# numéro étudiant ni l'inscription ne le sont) :
+#   - apprenant1@example.test : apprenant COMPLET (numéro étudiant posé par
+#     DemoDataInitializer au démarrage du back-end + inscription ici) ;
 #   - apprenant2@example.test : apprenant MINIMAL (rôle STUDENT seul,
-#     aucun profil, aucune inscription — reste pleinement visible dans
+#     aucun numéro, aucune inscription — reste pleinement visible dans
 #     Apprenants) ;
 #   - formateur@example.test (et les comptes d'administration) : non-apprenants.
-PROFILE1_ID="$(ensure_profile "$STUDENT1_ID" 'ESIC-DEMO-001')"
+# Le numéro étudiant n'est plus posé ici : il n'existe plus de route dédiée
+# pour l'attribuer après coup (colonne de user_account, refonte 2026-09) ;
+# DemoDataInitializer le pose directement à la création du compte.
 ensure_enrollment "$STUDENT1_ID"
-say "apprenant complet   apprenant1@example.test (profil $PROFILE1_ID, inscrit dans C-DEMO)"
-say "apprenant minimal   apprenant2@example.test (rôle STUDENT seul, aucun profil ni inscription)"
+say "apprenant complet   apprenant1@example.test (numéro ESIC-DEMO-001, inscrit dans C-DEMO)"
+say "apprenant minimal   apprenant2@example.test (rôle STUDENT seul, aucun numéro ni inscription)"
 
 # Séance PLANNED de démonstration. Créée UNIQUEMENT si aucune séance
 # PLANNED de ce formateur n'existe déjà (pas de contrainte d'unicité

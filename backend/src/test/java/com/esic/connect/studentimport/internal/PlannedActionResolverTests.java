@@ -6,7 +6,6 @@ import com.esic.connect.academic.ClassGroupDirectory.ClassGroupRef;
 import com.esic.connect.academic.ClassGroupDirectory.ClassGroupResolution;
 import com.esic.connect.enrollment.StudentEnrollmentProvisioner;
 import com.esic.connect.enrollment.StudentEnrollmentProvisioner.Situation;
-import com.esic.connect.enrollment.StudentEnrollmentProvisioner.StudentProfileView;
 import com.esic.connect.identity.StudentAccountProvisioner;
 import com.esic.connect.identity.StudentAccountProvisioner.ExistingAccountView;
 import com.esic.connect.identity.StudentAccountProvisioner.StatusView;
@@ -68,7 +67,7 @@ class PlannedActionResolverTests {
     @Test
     void aProvidedStudentNumberAlreadyTakenIsAnError() {
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.empty());
-        when(enrollmentProvisioner.studentNumberTaken("ESIC-9")).thenReturn(true);
+        when(accountProvisioner.studentNumberTaken("ESIC-9")).thenReturn(true);
         RowResolution resolution = resolver.resolve(row(",student_number", ",ESIC-9"), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.NONE);
         assertThat(resolution.issues()).extracting(StudentImportIssueDrafts.RowIssueDraft::code)
@@ -78,7 +77,7 @@ class PlannedActionResolverTests {
     @Test
     void anArchivedAccountIsNotUsable() {
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.of(new ExistingAccountView(
-                UUID.randomUUID(), 5L, StatusView.ARCHIVED, "Jane", "Doe", null, true)));
+                UUID.randomUUID(), 5L, StatusView.ARCHIVED, "Jane", "Doe", null, true, null, null)));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.NONE);
         assertThat(resolution.issues()).extracting(StudentImportIssueDrafts.RowIssueDraft::code)
@@ -86,11 +85,13 @@ class PlannedActionResolverTests {
     }
 
     @Test
-    void anActiveAccountWithoutProfilePlansEnrollExisting() {
+    void anActiveAccountWithoutStudentNumberPlansEnrollExisting() {
+        // Refonte 2026-09 : le numéro étudiant vit sur le compte
+        // (`ExistingAccountView.studentNumber`) — plus de student_profile
+        // séparé à consulter.
         UUID userId = UUID.randomUUID();
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.of(new ExistingAccountView(
-                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
-        when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.empty());
+                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true, null, null)));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.ENROLL_EXISTING);
         assertThat(resolution.studentNumberGenerated()).isTrue();
@@ -100,14 +101,11 @@ class PlannedActionResolverTests {
     @Test
     void anActiveEnrollmentInAnotherClassSameYearPlansTransfer() {
         UUID userId = UUID.randomUUID();
-        UUID profileId = UUID.randomUUID();
         UUID currentEnrollmentId = UUID.randomUUID();
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.of(new ExistingAccountView(
-                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
-        when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.of(new StudentProfileView(
-                profileId, userId, "ESIC-1", false, null, false)));
+                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true, "ESIC-1", null)));
         when(enrollmentProvisioner.describeSituation(userId, classPublicId))
-                .thenReturn(new Situation(Situation.Kind.OTHER_CLASS_SAME_YEAR, currentEnrollmentId));
+                .thenReturn(new Situation(Situation.Kind.OTHER_CLASS_SAME_YEAR, currentEnrollmentId, false, null));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.TRANSFER_CLASS);
         assertThat(resolution.resolvedEnrollmentPublicId()).isEqualTo(currentEnrollmentId);
@@ -116,13 +114,10 @@ class PlannedActionResolverTests {
     @Test
     void anActiveEnrollmentInTheTargetClassWithoutDivergenceIsNoop() {
         UUID userId = UUID.randomUUID();
-        UUID profileId = UUID.randomUUID();
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.of(new ExistingAccountView(
-                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
-        when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.of(new StudentProfileView(
-                profileId, userId, "ESIC-1", false, null, false)));
+                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true, "ESIC-1", null)));
         when(enrollmentProvisioner.describeSituation(userId, classPublicId))
-                .thenReturn(new Situation(Situation.Kind.SAME_CLASS, null));
+                .thenReturn(new Situation(Situation.Kind.SAME_CLASS, null, false, null));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.NONE);
     }
@@ -130,13 +125,10 @@ class PlannedActionResolverTests {
     @Test
     void anActiveEnrollmentInTheTargetClassWithDivergentAlternationPlansUpdate() {
         UUID userId = UUID.randomUUID();
-        UUID profileId = UUID.randomUUID();
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.of(new ExistingAccountView(
-                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
-        when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.of(new StudentProfileView(
-                profileId, userId, "ESIC-1", false, null, false)));
+                userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true, "ESIC-1", null)));
         when(enrollmentProvisioner.describeSituation(userId, classPublicId))
-                .thenReturn(new Situation(Situation.Kind.SAME_CLASS, null));
+                .thenReturn(new Situation(Situation.Kind.SAME_CLASS, null, false, null));
         RowResolution resolution = resolver.resolve(row(",work_study,company_name", ",oui,ACME"), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.UPDATE_PROFILE);
     }

@@ -165,9 +165,9 @@ class AttendanceReportService {
 
     @Transactional(readOnly = true)
     List<AttendanceReports.StudentRow> studentReport(Instant from, Instant to, String classGroupFilter,
-                                                     String studentProfileFilter, String sort) {
+                                                     String studentFilterParam, String sort) {
         UUID classFilter = parseOptionalUuid(classGroupFilter);
-        UUID studentFilter = parseOptionalUuid(studentProfileFilter);
+        UUID studentFilter = parseOptionalUuid(studentFilterParam);
         Optional<Set<UUID>> scope = visibleClassPublicIds();
         List<SessionRef> sessions = scopedSessions(from, to, classFilter, scope);
         Set<UUID> classes = scopedClasses(sessions, classFilter, scope);
@@ -182,13 +182,13 @@ class AttendanceReportService {
                     .filter(s -> s.classGroupPublicIds().contains(classPublicId))
                     .toList();
             for (RosterEntry entry : rosterByClass.getOrDefault(classPublicId, List.of())) {
-                if (studentFilter != null && !studentFilter.equals(entry.studentProfilePublicId())) {
+                if (studentFilter != null && !studentFilter.equals(entry.studentUserPublicId())) {
                     continue;
                 }
                 Accrual acc = new Accrual();
                 accrueEnrollment(acc, entry.enrollmentInternalId(), entry.enrollmentPublicId(),
                         classSessions, recordIndex, alternationMemo);
-                rows.add(new AttendanceReports.StudentRow(entry.studentProfilePublicId(),
+                rows.add(new AttendanceReports.StudentRow(entry.studentUserPublicId(),
                         entry.enrollmentPublicId(), entry.studentNumber(), entry.firstName(), entry.lastName(),
                         entry.classGroupCode(), acc.toTotals()));
             }

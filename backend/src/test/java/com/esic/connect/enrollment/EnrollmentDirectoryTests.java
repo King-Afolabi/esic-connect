@@ -40,13 +40,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Port {@link EnrollmentDirectory} : résolution d'une inscription par
  * identifiant public / interne, exposition des identifiants publics
- * compte / profil / classe / année, drapeau {@code usable} (vrai tant que
+ * compte / classe / année, drapeau {@code usable} (vrai tant que
  * l'inscription est {@code ACTIVE}), identifiant inconnu / {@code null}.
  *
- * <p>Refonte 2026-09 : {@code studentUserPublicId} (le compte) est
- * toujours renseigné ; {@code studentProfilePublicId} est {@code null}
- * lorsque le compte n'a pas de {@code student_profile} — l'inscription
- * reste pleinement valable.
+ * <p>Refonte 2026-09 : il n'existe plus de {@code student_profile} —
+ * {@code studentUserPublicId} (le compte) est le seul identifiant
+ * d'apprenant exposé par une inscription.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -86,14 +85,13 @@ class EnrollmentDirectoryTests {
     void resolvesEnrollmentWithPublicIdsAndUsableFlag() {
         String admin = adminToken();
         String classId = chain(admin);
-        StudentSetup student = studentWithProfile(admin);
-        String enrollmentId = post("/api/v1/enrollments", Map.of("studentUserPublicId", student.userPublicId(),
+        String studentUser = studentAccountPublicId();
+        String enrollmentId = post("/api/v1/enrollments", Map.of("studentUserPublicId", studentUser,
                 "classGroupPublicId", classId), admin);
 
         EnrollmentRef ref = enrollmentDirectory.findByPublicId(UUID.fromString(enrollmentId)).orElseThrow();
         assertThat(ref.publicId()).isEqualTo(UUID.fromString(enrollmentId));
-        assertThat(ref.studentUserPublicId()).isEqualTo(UUID.fromString(student.userPublicId()));
-        assertThat(ref.studentProfilePublicId()).isEqualTo(UUID.fromString(student.profilePublicId()));
+        assertThat(ref.studentUserPublicId()).isEqualTo(UUID.fromString(studentUser));
         assertThat(ref.classGroupPublicId()).isEqualTo(UUID.fromString(classId));
         assertThat(ref.classGroupCode()).isEqualTo("C1");
         assertThat(ref.academicYearCode()).isNotBlank();
@@ -103,28 +101,11 @@ class EnrollmentDirectoryTests {
     }
 
     @Test
-    void studentProfilePublicIdIsNullWhenAccountHasNoProfile() {
-        // Refonte 2026-09 : un compte STUDENT sans student_profile a une
-        // inscription parfaitement valable ; seul le champ facultatif est
-        // absent.
+    void usableIsFalseOnceEnrollmentIsClosed() {
         String admin = adminToken();
         String classId = chain(admin);
         String studentUser = studentAccountPublicId();
         String enrollmentId = post("/api/v1/enrollments", Map.of("studentUserPublicId", studentUser,
-                "classGroupPublicId", classId), admin);
-
-        EnrollmentRef ref = enrollmentDirectory.findByPublicId(UUID.fromString(enrollmentId)).orElseThrow();
-        assertThat(ref.studentUserPublicId()).isEqualTo(UUID.fromString(studentUser));
-        assertThat(ref.studentProfilePublicId()).isNull();
-        assertThat(ref.usable()).isTrue();
-    }
-
-    @Test
-    void usableIsFalseOnceEnrollmentIsClosed() {
-        String admin = adminToken();
-        String classId = chain(admin);
-        StudentSetup student = studentWithProfile(admin);
-        String enrollmentId = post("/api/v1/enrollments", Map.of("studentUserPublicId", student.userPublicId(),
                 "classGroupPublicId", classId), admin);
         ResponseEntity<Map<String, Object>> closed = restTemplate.exchange(
                 RequestEntity.method(HttpMethod.POST, URI.create("/api/v1/enrollments/" + enrollmentId + "/close"))
@@ -161,16 +142,6 @@ class EnrollmentDirectoryTests {
                 "code", "P26", "name", "Promotion 2026"), admin);
         return post("/api/v1/class-groups", Map.of("promotionPublicId", promo, "programLevelPublicId", level,
                 "sitePublicId", site, "code", "C1", "name", "Classe 1"), admin);
-    }
-
-    private record StudentSetup(String userPublicId, String profilePublicId) {
-    }
-
-    private StudentSetup studentWithProfile(String admin) {
-        String studentUser = studentAccountPublicId();
-        String profileId = post("/api/v1/student-profiles", Map.of("userPublicId", studentUser,
-                "studentNumber", "ESIC-2026-" + shortCode()), admin);
-        return new StudentSetup(studentUser, profileId);
     }
 
     private String studentAccountPublicId() {

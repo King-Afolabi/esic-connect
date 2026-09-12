@@ -52,31 +52,33 @@
           </div>
 
           @if (s.data.results.length) {
-            <table class="search__table">
-              <caption class="search__caption">Résultats de la recherche globale</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Type</th>
-                  <th scope="col">Libellé</th>
-                  <th scope="col">Complément</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (hit of s.data.results; track trackHit($index, hit)) {
+            <div class="esic-table-wrap">
+              <table class="search__table">
+                <caption class="search__caption">Résultats de la recherche globale</caption>
+                <thead>
                   <tr>
-                    <td>{{ hitTypeLabel(hit.type) }}</td>
-                    <td>
-                      @if (hitRoute(hit); as route) {
-                        <a [routerLink]="route">{{ hit.label }}</a>
-                      } @else {
-                        {{ hit.label }}
-                      }
-                    </td>
-                    <td>{{ hit.secondary || '—' }}</td>
+                    <th scope="col">Type</th>
+                    <th scope="col">Libellé</th>
+                    <th scope="col">Complément</th>
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  @for (hit of s.data.results; track trackHit($index, hit)) {
+                    <tr>
+                      <td>{{ hitTypeLabel(hit.type) }}</td>
+                      <td>
+                        @if (hitRoute(hit); as route) {
+                          <a [routerLink]="route">{{ hit.label }}</a>
+                        } @else {
+                          {{ hit.label }}
+                        }
+                      </td>
+                      <td>{{ hit.secondary || '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           } @else {
             <p class="search__empty">Aucun résultat.</p>
           }

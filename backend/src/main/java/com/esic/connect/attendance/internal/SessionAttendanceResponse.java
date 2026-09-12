@@ -54,7 +54,7 @@ record SessionAttendanceResponse(
      */
     record Row(
             UUID attendancePublicId,
-            UUID studentProfilePublicId,
+            UUID studentUserPublicId,
             UUID enrollmentPublicId,
             String studentNumber,
             String firstName,

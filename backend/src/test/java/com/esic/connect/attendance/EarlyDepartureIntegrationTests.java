@@ -411,10 +411,6 @@ class EarlyDepartureIntegrationTests {
         // Un autre apprenant, inscrit dans la même classe, n'hérite de rien :
         // le journal est bâti depuis le seul JWT (AC-017).
         Account other = accountWithRoles(RoleCode.STUDENT);
-        String suffix = UUID.randomUUID().toString().substring(0, 8);
-        String profile = (String) created("/api/v1/student-profiles", Map.of(
-                "userPublicId", other.publicId(),
-                "studentNumber", "ESIC-2026-" + suffix), admin).get("publicId");
         created("/api/v1/enrollments", Map.of("studentUserPublicId", other.publicId(),
                 "classGroupPublicId", fx.classId, "startDate", "2026-09-01"), admin);
 
@@ -479,9 +475,6 @@ class EarlyDepartureIntegrationTests {
                 AFTERNOON_START, AFTERNOON_END);
 
         fx.student = accountWithRoles(RoleCode.STUDENT);
-        String profile = (String) created("/api/v1/student-profiles", Map.of(
-                "userPublicId", fx.student.publicId(),
-                "studentNumber", "ESIC-2026-" + suffix), admin).get("publicId");
         created("/api/v1/enrollments", Map.of(
                 "studentUserPublicId", fx.student.publicId(), "classGroupPublicId", fx.classId,
                 "startDate", "2026-09-01"), admin);

@@ -38,15 +38,13 @@ public record StudentGroupResponse(
      * droit (docs/02 §33, minimisation).
      *
      * @param studentUserId  identifiant public du compte apprenant — toujours renseigné
-     * @param studentProfileId identifiant public du profil apprenant ; {@code null}
-     *                         si ce compte n'a pas de profil (donnée facultative)
-     * @param studentNumber  numéro étudiant ; {@code null} si aucun profil
+     * @param studentNumber  numéro étudiant (porté par {@code user_account},
+     *                       refonte 2026-09) ; {@code null} si aucun numéro attribué
      */
     public record Member(
             UUID id,
             UUID enrollmentId,
             UUID studentUserId,
-            UUID studentProfileId,
             String studentNumber,
             UUID classGroupId,
             String classGroupCode,

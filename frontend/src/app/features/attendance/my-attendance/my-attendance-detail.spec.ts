@@ -47,7 +47,7 @@ const DETAIL = {
     checkpointPublicId: 'cp-1',
     checkpointLabel: 'Arrivée',
     classCode: 'C1',
-    studentProfilePublicId: null,
+    studentUserPublicId: null,
     studentNumber: null,
     firstName: null,
     lastName: null,

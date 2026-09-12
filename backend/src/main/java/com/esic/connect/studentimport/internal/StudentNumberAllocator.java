@@ -12,8 +12,9 @@ import java.util.Locale;
  * séquence est allouée <strong>dans la transaction de la confirmation</strong>
  * (propagation {@code REQUIRED}, jamais {@code REQUIRES_NEW}) : verrou de
  * ligne sur {@code student_number_sequence(start_year)}, annulé au
- * rollback. L'unicité SQL {@code uq_student_profile_student_number} reste
- * la seule autorité — la génération n'est qu'un pré-remplissage ; la
+ * rollback. L'unicité SQL {@code uq_user_account_student_number} (colonne
+ * portée par {@code user_account}, refonte 2026-09) reste la seule
+ * autorité — la génération n'est qu'un pré-remplissage ; la
  * nouvelle tentative sur collision est gérée par l'orchestrateur.
  */
 @Component

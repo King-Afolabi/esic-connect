@@ -5,7 +5,17 @@
 -- public UUID (BINARY(16)), suppression RESTRICT par défaut, horodatage
 -- UTC, verrouillage optimiste (`version`). Seule exception au RESTRICT :
 -- `audit_event.actor_user_id` (ON DELETE SET NULL, cf. §24.2).
-
+--
+-- `student_number` / `birth_date` (refonte 2026-09 du modèle apprenant) :
+-- données personnelles générales, facultatives, portées directement par
+-- le compte plutôt que par une table `student_profile` distincte — le
+-- rôle `STUDENT` (`user_role`) reste l'unique source de vérité du statut
+-- apprenant, ces deux colonnes ne conditionnent jamais ce statut et n'ont
+-- de sens que pour un compte qui porte ce rôle (non contraint en base,
+-- comme le reste de l'identité civile). `student_number` est renseigné
+-- soit manuellement (`POST /users`), soit par l'import CSV
+-- (`studentimport`, génération `ESIC-{année}-{séquence}` si absent) ;
+-- immuable une fois posé (le service ne le réécrit jamais).
 CREATE TABLE user_account (
     id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     public_id           BINARY(16)      NOT NULL,
@@ -17,6 +27,8 @@ CREATE TABLE user_account (
     last_name           VARCHAR(100)    NOT NULL,
     phone               VARCHAR(30)     NULL,
     preferred_time_zone VARCHAR(64)     NULL,
+    student_number      VARCHAR(50)     NULL,
+    birth_date          DATE            NULL,
     status              VARCHAR(30)     NOT NULL,
     email_verified_at   TIMESTAMP(6)    NULL,
     last_login_at       TIMESTAMP(6)    NULL,
@@ -34,6 +46,11 @@ CREATE TABLE user_account (
     CONSTRAINT uq_user_account_public_id UNIQUE (public_id),
     CONSTRAINT uq_user_account_email UNIQUE (email),
     CONSTRAINT uq_user_account_external UNIQUE (external_source, external_id),
+    -- Numéro étudiant unique lorsqu'il est attribué (docs/04 §3.5) ; MySQL
+    -- autorise plusieurs NULL dans un index UNIQUE, donc les comptes sans
+    -- numéro (tout compte non-STUDENT, ou un STUDENT qui n'en a pas encore)
+    -- ne s'excluent jamais mutuellement.
+    CONSTRAINT uq_user_account_student_number UNIQUE (student_number),
 
     CONSTRAINT fk_user_account_suspended_by FOREIGN KEY (suspended_by_id) REFERENCES user_account (id) ON DELETE RESTRICT,
     CONSTRAINT fk_user_account_created_by FOREIGN KEY (created_by_id) REFERENCES user_account (id) ON DELETE RESTRICT,

@@ -102,18 +102,9 @@ class RosterScopeIntegrationTests {
         Student otherClassSameProgram = fx.enrolledStudent(adminToken, mine.classB());
         Student outOfScope = fx.enrolledStudent(adminToken, other.classA());
 
-        List<String> visible = profileIds(managerToken);
-        assertThat(visible).contains(inScope.profilePublicId(), otherClassSameProgram.profilePublicId());
-        assertThat(visible).doesNotContain(outOfScope.profilePublicId());
-
-        // Fiche : dans le périmètre → 200 ; hors périmètre → 404 (l'existence
-        // même est une information à protéger — cahier §18.2), jamais 403.
-        assertThat(status(managerToken, "/api/v1/student-profiles/" + inScope.profilePublicId()))
-                .isEqualTo(HttpStatus.OK);
-        assertThat(status(managerToken, "/api/v1/student-profiles/" + outOfScope.profilePublicId()))
-                .isEqualTo(HttpStatus.NOT_FOUND);
-
-        // Écran « Apprenants » (rôle STUDENT) : même périmètre.
+        // Écran « Apprenants » (rôle STUDENT) : fiche dans le périmètre →
+        // 200 ; hors périmètre → 404 (l'existence même est une information
+        // à protéger — cahier §18.2), jamais 403.
         List<String> visibleStudents = studentUserIds(managerToken);
         assertThat(visibleStudents).contains(inScope.account().publicId(), otherClassSameProgram.account().publicId());
         assertThat(visibleStudents).doesNotContain(outOfScope.account().publicId());
@@ -143,13 +134,6 @@ class RosterScopeIntegrationTests {
         fx.openSession(adminToken, teacher, chain.classA(),
                 Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.HOURS));
 
-        List<String> visible = profileIds(teacherToken);
-        assertThat(visible).contains(taught.profilePublicId());
-        assertThat(visible).doesNotContain(notTaught.profilePublicId());
-
-        assertThat(status(teacherToken, "/api/v1/student-profiles/" + notTaught.profilePublicId()))
-                .isEqualTo(HttpStatus.NOT_FOUND);
-
         List<String> visibleStudents = studentUserIds(teacherToken);
         assertThat(visibleStudents).contains(taught.account().publicId());
         assertThat(visibleStudents).doesNotContain(notTaught.account().publicId());
@@ -163,11 +147,7 @@ class RosterScopeIntegrationTests {
         fx.enrolledStudent(adminToken, chain.classA());
         String teacherToken = fx.tokenFor(fx.account(RoleCode.TEACHER));
 
-        ResponseEntity<Map<String, Object>> page = get(teacherToken, "/api/v1/student-profiles");
-        assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(((Number) page.getBody().get("totalElements")).intValue()).isZero();
-
-        // Périmètre vide ⇒ page vide sur l'écran « Apprenants » aussi,
+        // Périmètre vide ⇒ page vide sur l'écran « Apprenants »,
         // jamais tous les comptes STUDENT.
         ResponseEntity<Map<String, Object>> studentsPage = get(teacherToken, "/api/v1/students");
         assertThat(studentsPage.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -181,25 +161,13 @@ class RosterScopeIntegrationTests {
         Student s1 = fx.enrolledStudent(adminToken, a.classA());
         Student s2 = fx.enrolledStudent(adminToken, b.classA());
 
-        List<String> visible = profileIds(adminToken);
-        assertThat(visible).contains(s1.profilePublicId(), s2.profilePublicId());
-
         List<String> visibleStudents = studentUserIds(adminToken);
         assertThat(visibleStudents).contains(s1.account().publicId(), s2.account().publicId());
     }
 
     // ------------------------------------------------------------------
 
-    private List<String> profileIds(String token) {
-        ResponseEntity<Map<String, Object>> page = get(token, "/api/v1/student-profiles?size=100");
-        assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> content =
-                (List<Map<String, Object>>) page.getBody().get("content");
-        return content.stream().map(row -> String.valueOf(row.get("publicId"))).toList();
-    }
-
-    /** Écran « Apprenants » (rôle STUDENT) — mêmes règles de périmètre que {@link #profileIds}. */
+    /** Écran « Apprenants » (rôle STUDENT) — pagination limitée au périmètre de l'appelant. */
     private List<String> studentUserIds(String token) {
         ResponseEntity<Map<String, Object>> page = get(token, "/api/v1/students?size=100");
         assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);

@@ -1,7 +1,6 @@
 package com.esic.connect.enrollment;
 
 import java.time.LocalDate;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -13,59 +12,40 @@ import java.util.UUID;
  * ({@code REQUIRES_NEW}) et <strong>sans</strong>
  * {@link EnrollmentChangeEvent} — l'audit d'un import passe par un unique
  * {@code StudentImportChangeEvent} côté {@code studentimport}
- * (invariants T2, T5). Les endpoints HTTP existants
- * ({@code POST /student-profiles}, {@code /enrollments}) conservent leur
- * chemin actuel : la duplication de chemin d'écriture est assumée
- * (garantie transactionnelle stricte de l'import).
+ * (invariants T2, T5).
  *
- * <p><strong>Numéro étudiant</strong> : la table
- * {@code student_number_sequence} appartient au module {@code studentimport}
- * (migration V11). L'allocation atomique d'un numéro est donc faite par
- * l'orchestrateur d'import <em>avant</em> l'appel : {@link #provisionProfile}
- * reçoit toujours un numéro déjà déterminé (écart assumé vs rapport §4.2,
- * qui plaçait la génération dans ce port — frontières Spring Modulith).
+ * <p>Refonte 2026-09 : il n'existe plus de {@code student_profile}. Le
+ * numéro étudiant et la date de naissance sont désormais des colonnes de
+ * {@code user_account} (module {@code identity}, port
+ * {@code identity.StudentAccountProvisioner}) ; {@code studentimport} les
+ * atteint par ce port-là, pas par celui-ci. {@code work_study} /
+ * {@code company_name} restent du ressort de {@code enrollment}, mais
+ * portés par {@code enrollment} elle-même (situation d'alternance
+ * <strong>pendant une inscription donnée</strong>, pas une donnée
+ * personnelle générale).
  */
 public interface StudentEnrollmentProvisioner {
 
     // --- Lecture seule (simulation) ---
 
-    Optional<StudentProfileView> findProfileByUser(UUID userPublicId);
-
-    Optional<StudentProfileView> findProfileByStudentNumber(String studentNumber);
-
-    boolean studentNumberTaken(String studentNumber);
-
     /**
      * Situation d'inscription d'un <strong>compte</strong> apprenant
-     * vis-à-vis d'une classe cible (rapport §3.3). Ne dépend d'aucun
-     * profil apprenant : une inscription rattache directement le compte
-     * (refonte 2026-09). {@link Situation#currentEnrollmentPublicId} est
-     * renseigné pour le seul cas {@link Situation.Kind#OTHER_CLASS_SAME_YEAR}
-     * (changement de classe).
+     * vis-à-vis d'une classe cible (rapport §3.3). Une inscription
+     * rattache directement le compte, jamais un profil (refonte 2026-09).
+     * {@link Situation#currentEnrollmentPublicId} est renseigné dès qu'une
+     * inscription active existe pour l'année de la classe cible (que ce
+     * soit la même classe ou une autre) ; {@code null} pour {@code NONE}.
      */
     Situation describeSituation(UUID userPublicId, UUID targetClassGroupPublicId);
 
     // --- Application (confirmation) — dans la transaction de l'appelant ---
 
     /**
-     * Crée un {@code student_profile}. Le numéro étudiant est fourni par
-     * l'appelant (jamais {@code null}). Une collision d'unicité
-     * ({@code uq_student_profile_user} / {@code uq_student_profile_student_number})
-     * remonte en {@link org.springframework.dao.DataIntegrityViolationException}
-     * dans la transaction unique — l'orchestrateur abandonne tout.
-     */
-    StudentProfileView provisionProfile(ProvisionProfile command);
-
-    /**
      * Nouvelle inscription {@code ACTIVE} dans la classe indiquée, pour le
-     * <strong>compte</strong> apprenant désigné — jamais un profil : une
-     * inscription ne suppose l'existence d'aucun {@code student_profile}
-     * (refonte 2026-09). L'import continue par ailleurs de provisionner un
-     * profil (numéro étudiant) en parallèle lorsque le métier l'exige,
-     * mais les deux écritures sont indépendantes.
+     * <strong>compte</strong> apprenant désigné.
      */
-    EnrollmentView provisionEnrollment(UUID userPublicId, UUID classGroupPublicId,
-                                       LocalDate startDate, Long actorUserInternalId);
+    EnrollmentView provisionEnrollment(UUID userPublicId, UUID classGroupPublicId, LocalDate startDate,
+                                       boolean workStudy, String companyName, Long actorUserInternalId);
 
     /**
      * Changement de classe conservant l'historique : l'inscription courante
@@ -76,27 +56,17 @@ public interface StudentEnrollmentProvisioner {
      * événement.
      */
     EnrollmentView provisionTransfer(UUID currentEnrollmentPublicId, UUID targetClassGroupPublicId,
-                                     LocalDate effectiveDate, String reason, Long actorUserInternalId);
+                                     LocalDate effectiveDate, String reason, boolean workStudy,
+                                     String companyName, Long actorUserInternalId);
 
     /**
-     * Met à jour {@code work_study} / {@code company_name} d'un profil
-     * existant — jamais l'identité, jamais le numéro étudiant, jamais la
-     * date de naissance (action {@code UPDATE_PROFILE} de l'import).
+     * Met à jour {@code work_study} / {@code company_name} d'une
+     * inscription existante — jamais l'identité, jamais le numéro
+     * étudiant, jamais la date de naissance (action {@code UPDATE_PROFILE}
+     * de l'import ; ex-{@code updateProfileAlternation}).
      */
-    void updateProfileAlternation(UUID studentProfilePublicId, boolean workStudy, String companyName,
-                                  Long actorUserInternalId);
-
-    /**
-     * @param publicId        identifiant public du profil apprenant
-     * @param userPublicId    compte porteur
-     * @param studentNumber   numéro étudiant
-     * @param workStudy       apprenant en alternance
-     * @param companyName     entreprise ({@code null} si non renseignée)
-     * @param archived        {@code true} si le profil est archivé
-     */
-    record StudentProfileView(UUID publicId, UUID userPublicId, String studentNumber, boolean workStudy,
-                              String companyName, boolean archived) {
-    }
+    void updateEnrollmentAlternation(UUID enrollmentPublicId, boolean workStudy, String companyName,
+                                     Long actorUserInternalId);
 
     /**
      * @param publicId            identifiant public de l'inscription
@@ -108,23 +78,15 @@ public interface StudentEnrollmentProvisioner {
     }
 
     /**
-     * @param userPublicId  compte porteur du futur profil
-     * @param studentNumber numéro étudiant déjà déterminé (jamais {@code null})
-     * @param birthDate     date de naissance ({@code null} accepté)
-     * @param workStudy     alternance
-     * @param companyName   entreprise ({@code null} accepté)
-     * @param generated     {@code true} si le numéro a été généré par le serveur
-     * @param actorUserInternalId auteur ({@code null} accepté)
+     * @param kind                      situation vis-à-vis de la classe cible
+     * @param currentEnrollmentPublicId inscription active pour l'année de la classe cible
+     *                                  ({@code null} pour {@link Kind#NONE})
+     * @param currentWorkStudy          alternance de cette inscription ({@code null} pour {@link Kind#NONE})
+     * @param currentCompanyName        entreprise de cette inscription ({@code null} si non renseignée
+     *                                  ou pour {@link Kind#NONE})
      */
-    record ProvisionProfile(UUID userPublicId, String studentNumber, LocalDate birthDate, boolean workStudy,
-                            String companyName, boolean generated, Long actorUserInternalId) {
-    }
-
-    /**
-     * @param kind                     situation vis-à-vis de la classe cible
-     * @param currentEnrollmentPublicId inscription courante (uniquement pour {@code OTHER_CLASS_SAME_YEAR})
-     */
-    record Situation(Kind kind, UUID currentEnrollmentPublicId) {
+    record Situation(Kind kind, UUID currentEnrollmentPublicId, Boolean currentWorkStudy,
+                     String currentCompanyName) {
 
         /** Situations distinctes (rapport §3.3). */
         public enum Kind {
@@ -137,7 +99,7 @@ public interface StudentEnrollmentProvisioner {
         }
 
         public static Situation none() {
-            return new Situation(Kind.NONE, null);
+            return new Situation(Kind.NONE, null, null, null);
         }
     }
 }

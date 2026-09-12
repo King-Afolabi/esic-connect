@@ -164,6 +164,21 @@ table[mat-table] {
 .alt__facts dd {
   margin: 0;
   color: var(--esic-ink);
+  word-break: break-word;
+}
+
+// Motif/nom en texte libre : sur conteneur étroit (mobile), la colonne de
+// libellé fixe (`max-content`) ne laisse plus assez de place à la valeur —
+// on repasse en une colonne empilée, comme `.esic-kv` (_primitives.scss).
+@container (max-width: 26rem) {
+  .alt__facts {
+    grid-template-columns: 1fr;
+    gap: 0.15rem var(--esic-space-4);
+  }
+
+  .alt__facts dt {
+    margin-top: var(--esic-space-2);
+  }
 }
 
 .alt__reveal {

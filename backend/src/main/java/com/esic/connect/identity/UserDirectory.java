@@ -1,6 +1,7 @@
 package com.esic.connect.identity;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -70,6 +71,14 @@ public interface UserDirectory {
     java.util.Map<Long, NamedUserRef> findNamedRefs(java.util.Collection<Long> userInternalIds);
 
     /**
+     * Numéros étudiants (refonte 2026-09, ex-{@code student_profile.student_number})
+     * d'un lot de comptes, en une requête (anti-N+1, NFR-PERF-08). Un
+     * compte sans numéro — y compris un compte non-{@code STUDENT} — est
+     * simplement absent du résultat : ce n'est jamais une erreur.
+     */
+    java.util.Map<Long, String> findStudentNumbers(java.util.Collection<Long> userInternalIds);
+
+    /**
      * Comptes non archivés porteurs d'un rôle actif donné.
      *
      * <p>Sert à désigner un <strong>guichet</strong> plutôt qu'une
@@ -124,6 +133,20 @@ public interface UserDirectory {
     java.util.List<NamedUserRef> searchByNameIncludingInactive(String query, String roleCode, int limit);
 
     /**
+     * Comptes <strong>actifs</strong> porteurs du rôle donné dont le
+     * numéro étudiant (colonne {@code user_account.student_number},
+     * refonte 2026-09 — ex-{@code student_profile.student_number})
+     * contient {@code query}, insensible à la casse.
+     *
+     * <p>Complète {@link #searchByName} : un apprenant se retrouve aussi
+     * bien par son nom que par son numéro (EF-USER-009). Un compte sans
+     * numéro n'est jamais candidat.
+     *
+     * @param roleCode code du rôle, par exemple {@code "STUDENT"}
+     */
+    java.util.List<NamedUserRef> searchByStudentNumber(String query, String roleCode, int limit);
+
+    /**
      * Comptes porteurs d'un rôle actif donné, paginés / filtrés / triés —
      * pour construire un référentiel (par exemple l'écran « Apprenants »,
      * qui liste tous les comptes {@code STUDENT}) sans dupliquer la
@@ -149,7 +172,8 @@ public interface UserDirectory {
      * @param status                filtre optionnel sur le statut du compte (ex. {@code "ACTIVE"}) ;
      *                              {@code null}/vide = tous statuts
      * @param text                  filtre optionnel, sous-chaîne insensible à la casse de l'email,
-     *                              du prénom ou du nom ; {@code null}/vide = pas de filtre
+     *                              du prénom, du nom ou du numéro étudiant ({@code student_number},
+     *                              refonte 2026-09) ; {@code null}/vide = pas de filtre
      * @param restrictToInternalIds restreint le résultat à ces identifiants internes de compte ;
      *                              {@code null} = aucune restriction (périmètre global) ; une
      *                              collection <strong>vide</strong> (non {@code null}) ne renvoie
@@ -177,9 +201,16 @@ public interface UserDirectory {
      * Compte, tel qu'exposé pour bâtir un référentiel (ex. liste des
      * apprenants) — identité civile et statut, jamais un identifiant SQL
      * interne côté appelant.
+     *
+     * @param studentNumber numéro étudiant ({@code null} si absent) —
+     *                      refonte 2026-09, ex-{@code student_profile.student_number} ;
+     *                      sans lien avec le rôle porté par le compte
+     * @param birthDate     date de naissance ({@code null} si absente) —
+     *                      refonte 2026-09, ex-{@code student_profile.birth_date}
      */
     record AccountSummary(long internalId, UUID publicId, String email, String firstName, String lastName,
-                          String status, Instant createdAt, Instant lastLoginAt) {
+                          String status, Instant createdAt, Instant lastLoginAt,
+                          String studentNumber, LocalDate birthDate) {
     }
 
     /**

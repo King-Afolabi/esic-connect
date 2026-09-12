@@ -305,12 +305,13 @@ class StudentGroupIntegrationTests {
         return new Fixture(yearId, programId, firstClass, secondClass);
     }
 
-    /** Crée un compte apprenant, son profil et son inscription dans la classe indiquée. */
+    /** Crée un compte apprenant, son numéro étudiant et son inscription dans la classe indiquée. */
     private String enroll(String admin, Fixture fixture, String classId) {
         UserAccount student = persistUser(RoleCode.STUDENT);
-        created("/api/v1/student-profiles", body(
-                "userPublicId", student.getPublicId().toString(),
-                "studentNumber", "ESIC-" + shortId()), admin).get("publicId");
+        // Refonte 2026-09 : le numéro étudiant est une colonne de
+        // user_account, plus de student_profile ni de route dédiée.
+        student.assignStudentNumber("ESIC-" + shortId(), null, null);
+        userAccountRepository.saveAndFlush(student);
         return (String) created("/api/v1/enrollments", body(
                 "studentUserPublicId", student.getPublicId().toString(),
                 "classGroupPublicId", classId,

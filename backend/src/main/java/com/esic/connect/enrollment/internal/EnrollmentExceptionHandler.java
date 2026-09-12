@@ -20,7 +20,6 @@ import java.util.UUID;
  * sur {@code academic.internal.AcademicExceptionHandler}.
  */
 @RestControllerAdvice(assignableTypes = {
-        StudentProfileController.class,
         StudentController.class,
         EnrollmentController.class,
         StudentGroupController.class,
@@ -34,11 +33,6 @@ class EnrollmentExceptionHandler {
         String code;
         String message;
         switch (ex.kind()) {
-            case STUDENT_PROFILE_NOT_FOUND -> {
-                status = HttpStatus.NOT_FOUND;
-                code = "ENR_STUDENT_PROFILE_NOT_FOUND";
-                message = "Aucun profil apprenant ne correspond à cet identifiant.";
-            }
             case STUDENT_NOT_FOUND -> {
                 status = HttpStatus.NOT_FOUND;
                 code = "ENR_STUDENT_NOT_FOUND";
@@ -58,27 +52,6 @@ class EnrollmentExceptionHandler {
                 status = HttpStatus.UNPROCESSABLE_ENTITY;
                 code = "ENR_USER_NOT_ELIGIBLE";
                 message = "Le compte ciblé doit exister, être actif et porter le rôle apprenant.";
-            }
-            case PROFILE_ALREADY_EXISTS -> {
-                status = HttpStatus.CONFLICT;
-                code = "ENR_PROFILE_EXISTS";
-                message = "Ce compte possède déjà un profil apprenant.";
-            }
-            case DUPLICATE_STUDENT_NUMBER -> {
-                status = HttpStatus.CONFLICT;
-                code = "ENR_DUPLICATE_STUDENT_NUMBER";
-                message = "Ce numéro étudiant est déjà attribué.";
-            }
-            case STUDENT_NUMBER_EXHAUSTED -> {
-                status = HttpStatus.CONFLICT;
-                code = "ENR_STUDENT_NUMBER_EXHAUSTED";
-                message = "La série de numéros étudiants de l'année est épuisée. "
-                        + "Saisissez un numéro manuellement ou contactez l'administration technique.";
-            }
-            case STUDENT_PROFILE_ARCHIVED -> {
-                status = HttpStatus.CONFLICT;
-                code = "ENR_STUDENT_PROFILE_ARCHIVED";
-                message = "Ce profil apprenant est archivé.";
             }
             case ARCHIVED_PARENT -> {
                 status = HttpStatus.CONFLICT;
@@ -190,22 +163,17 @@ class EnrollmentExceptionHandler {
      * {@code @Transactional} a déjà annulé la transaction (contrainte
      * violée au {@code flush}).
      *
-     * <p>Les créations de profil et d'inscription
-     * ({@code StudentProfileService.create}, {@code EnrollmentService.enroll})
-     * ne dépendent pas de ce filet : elles isolent leur INSERT dans
-     * {@link EnrollmentPersister} ({@code REQUIRES_NEW}) et retraduisent la
+     * <p>La création d'inscription ({@code EnrollmentService.enroll}) ne
+     * dépend pas de ce filet : elle isole son INSERT dans
+     * {@link EnrollmentPersister} ({@code REQUIRES_NEW}) et retraduit la
      * collision sur place, hors de toute transaction en échec.
      *
-     * <p>Seules les collisions sur ces contraintes <em>exactes</em>
-     * deviennent un 409 ciblé ; toute autre violation d'intégrité est
-     * relancée telle quelle (500 via le gestionnaire global) :
+     * <p>Seule la collision sur cette contrainte <em>exacte</em> devient un
+     * 409 ciblé ; toute autre violation d'intégrité est relancée telle
+     * quelle (500 via le gestionnaire global) :
      * <ul>
      *   <li>{@code uq_enrollment_active_per_year} → une seconde inscription
-     *       {@code ACTIVE} sur le même couple (apprenant, année) ;</li>
-     *   <li>{@code uq_student_profile_user} → un second profil pour le même
-     *       compte ;</li>
-     *   <li>{@code uq_student_profile_student_number} → numéro étudiant
-     *       déjà attribué.</li>
+     *       {@code ACTIVE} sur le même couple (apprenant, année).</li>
      * </ul>
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -214,14 +182,6 @@ class EnrollmentExceptionHandler {
             return build(HttpStatus.CONFLICT, "ENR_ACTIVE_ENROLLMENT_EXISTS",
                     "Cet apprenant a déjà une inscription active pour cette année scolaire ; "
                             + "clôturez-la ou utilisez un changement de classe.", request);
-        }
-        if (EnrollmentPersistence.matchesConstraint(ex, EnrollmentPersistence.PROFILE_USER_CONSTRAINT)) {
-            return build(HttpStatus.CONFLICT, "ENR_PROFILE_EXISTS",
-                    "Ce compte possède déjà un profil apprenant.", request);
-        }
-        if (EnrollmentPersistence.matchesConstraint(ex, EnrollmentPersistence.PROFILE_STUDENT_NUMBER_CONSTRAINT)) {
-            return build(HttpStatus.CONFLICT, "ENR_DUPLICATE_STUDENT_NUMBER",
-                    "Ce numéro étudiant est déjà attribué.", request);
         }
         throw ex;
     }

@@ -17,6 +17,11 @@ public interface UserAccountRepository
 
     Optional<UserAccount> findByPublicId(UUID publicId);
 
+    /** Unicité du numéro étudiant (refonte 2026-09, ex-`student_profile.student_number`). */
+    boolean existsByStudentNumberIgnoreCase(String studentNumber);
+
+    Optional<UserAccount> findByStudentNumberIgnoreCase(String studentNumber);
+
     /** Décompte borné des comptes par statut (bloc G1-F). {@code [status, count]} par ligne. */
     @Query("select u.status, count(u) from UserAccount u group by u.status")
     List<Object[]> countByStatusGrouped();
@@ -82,4 +87,23 @@ public interface UserAccountRepository
                                                   @Param("roleCode") RoleCode roleCode,
                                                   @Param("excludedStatus") AccountStatus excludedStatus,
                                                   org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Comptes actifs porteurs du rôle donné dont le numéro étudiant
+     * contient {@code pattern} (refonte 2026-09,
+     * ex-{@code student_profile.student_number} — EF-USER-009).
+     */
+    @Query("""
+            SELECT DISTINCT u FROM UserRole ur JOIN ur.user u JOIN ur.role r
+            WHERE r.code = :roleCode
+              AND ur.active = true
+              AND u.status = :status
+              AND u.studentNumber IS NOT NULL
+              AND LOWER(u.studentNumber) LIKE :pattern
+            ORDER BY u.studentNumber ASC
+            """)
+    List<UserAccount> searchByStudentNumber(@Param("pattern") String pattern,
+                                            @Param("roleCode") RoleCode roleCode,
+                                            @Param("status") AccountStatus status,
+                                            org.springframework.data.domain.Pageable pageable);
 }

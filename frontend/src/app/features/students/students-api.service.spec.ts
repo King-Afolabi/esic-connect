@@ -75,14 +75,21 @@ describe('StudentsApiService', () => {
     req.flush({});
   });
 
-  it('createStudentProfile POSTs /api/v1/student-profiles', () => {
+  it('createStudentAccount POSTs /api/v1/users with the optional student number and birth date inline (refonte 2026-09: no separate profile route)', () => {
     service
-      .createStudentProfile({ userPublicId: 'user-42', studentNumber: null })
+      .createStudentAccount({
+        email: 'jane@example.test',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        role: 'STUDENT',
+        studentNumber: 'ESIC-2026-0999',
+        birthDate: null,
+      })
       .subscribe();
 
-    const req = http.expectOne('/api/v1/student-profiles');
+    const req = http.expectOne('/api/v1/users');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body.userPublicId).toBe('user-42');
-    req.flush({});
+    expect(req.request.body.studentNumber).toBe('ESIC-2026-0999');
+    req.flush({ publicId: 'user-42' });
   });
 });

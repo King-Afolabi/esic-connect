@@ -176,21 +176,29 @@ public final class S11TestFixture {
                 .as("émargement -> " + validated.getStatusCode() + " " + validated.getBody()).isTrue();
     }
 
-    /** Apprenant inscrit ; renvoie le compte et l'identifiant de profil. */
-    public record Student(Account account, String profilePublicId, String studentNumber) {
+    /** Apprenant inscrit ; renvoie le compte et son numéro étudiant. */
+    public record Student(Account account, String studentNumber) {
     }
 
     public Student enrolledStudent(String admin, String classPublicId) {
         return enrolledStudent(admin, classPublicId, account(RoleCode.STUDENT));
     }
 
+    /**
+     * Refonte 2026-09 : le numéro étudiant est une colonne de
+     * {@code user_account} — il n'existe plus de {@code student_profile}
+     * ni de route dédiée pour le poser après coup. Affecté ici directement
+     * en base (comme {@link #account}), avant l'inscription.
+     */
     public Student enrolledStudent(String admin, String classPublicId, Account student) {
         String number = "ESIC-2026-" + code();
-        String profile = created(admin, "/api/v1/student-profiles", Map.of(
-                "userPublicId", student.publicId(), "studentNumber", number)).get("publicId").toString();
+        UserAccount account = userAccountRepository.findByPublicId(UUID.fromString(student.publicId()))
+                .orElseThrow();
+        account.assignStudentNumber(number, null, null);
+        userAccountRepository.saveAndFlush(account);
         created(admin, "/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", classPublicId, "startDate", "2026-08-01"));
-        return new Student(student, profile, number);
+        return new Student(student, number);
     }
 
     /** Affecte un responsable pédagogique à une formation. */

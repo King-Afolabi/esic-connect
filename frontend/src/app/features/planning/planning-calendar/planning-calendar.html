@@ -137,50 +137,52 @@
         @if (draft().length === 0) {
           <p class="planning-calendar__empty">Aucun créneau en brouillon sur cette période.</p>
         } @else {
-          <table mat-table [dataSource]="draft()" class="planning-calendar__table">
-            <ng-container matColumnDef="day">
-              <th mat-header-cell *matHeaderCellDef scope="col">Jour</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.day }}</td>
-            </ng-container>
-            <ng-container matColumnDef="window">
-              <th mat-header-cell *matHeaderCellDef scope="col">Horaire</th>
-              <td mat-cell *matCellDef="let slot">{{ slotWindow(slot) }}</td>
-            </ng-container>
-            <ng-container matColumnDef="title">
-              <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.title ?? '—' }}</td>
-            </ng-container>
-            <ng-container matColumnDef="room">
-              <th mat-header-cell *matHeaderCellDef scope="col">Salle</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.roomCode ?? '—' }}</td>
-            </ng-container>
-            <ng-container matColumnDef="status">
-              <th mat-header-cell *matHeaderCellDef scope="col">État</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.rowStatus ?? '—' }}</td>
-            </ng-container>
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef scope="col">Actions</th>
-              <td mat-cell *matCellDef="let slot">
-                <button mat-icon-button type="button" [disabled]="busy()"
-                        [attr.aria-label]="'Modifier le créneau du ' + slot.day"
-                        (click)="editSlot(slot)">
-                  <mat-icon>edit</mat-icon>
-                </button>
-                <button mat-icon-button type="button" [disabled]="busy()"
-                        [attr.aria-label]="'Répéter le créneau du ' + slot.day"
-                        (click)="repeatSlot(slot)">
-                  <mat-icon>repeat</mat-icon>
-                </button>
-                <button mat-icon-button type="button" [disabled]="busy()"
-                        [attr.aria-label]="'Retirer le créneau du ' + slot.day"
-                        (click)="removeSlot(slot)">
-                  <mat-icon>delete</mat-icon>
-                </button>
-              </td>
-            </ng-container>
-            <tr mat-header-row *matHeaderRowDef="slotColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: slotColumns"></tr>
-          </table>
+          <div class="esic-table-wrap">
+            <table mat-table [dataSource]="draft()" class="planning-calendar__table">
+              <ng-container matColumnDef="day">
+                <th mat-header-cell *matHeaderCellDef scope="col">Jour</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.day }}</td>
+              </ng-container>
+              <ng-container matColumnDef="window">
+                <th mat-header-cell *matHeaderCellDef scope="col">Horaire</th>
+                <td mat-cell *matCellDef="let slot">{{ slotWindow(slot) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="title">
+                <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.title ?? '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="room">
+                <th mat-header-cell *matHeaderCellDef scope="col">Salle</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.roomCode ?? '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef scope="col">État</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.rowStatus ?? '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef scope="col">Actions</th>
+                <td mat-cell *matCellDef="let slot">
+                  <button mat-icon-button type="button" [disabled]="busy()"
+                          [attr.aria-label]="'Modifier le créneau du ' + slot.day"
+                          (click)="editSlot(slot)">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button type="button" [disabled]="busy()"
+                          [attr.aria-label]="'Répéter le créneau du ' + slot.day"
+                          (click)="repeatSlot(slot)">
+                    <mat-icon>repeat</mat-icon>
+                  </button>
+                  <button mat-icon-button type="button" [disabled]="busy()"
+                          [attr.aria-label]="'Retirer le créneau du ' + slot.day"
+                          (click)="removeSlot(slot)">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="slotColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: slotColumns"></tr>
+            </table>
+          </div>
 
           <form class="planning-calendar__week" [formGroup]="weekForm">
             <mat-form-field appearance="outline">
@@ -209,26 +211,28 @@
         @if (published().length === 0) {
           <p class="planning-calendar__empty">Aucun créneau publié sur cette période.</p>
         } @else {
-          <table mat-table [dataSource]="published()" class="planning-calendar__table">
-            <ng-container matColumnDef="day">
-              <th mat-header-cell *matHeaderCellDef scope="col">Jour</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.day }}</td>
-            </ng-container>
-            <ng-container matColumnDef="window">
-              <th mat-header-cell *matHeaderCellDef scope="col">Horaire</th>
-              <td mat-cell *matCellDef="let slot">{{ slotWindow(slot) }}</td>
-            </ng-container>
-            <ng-container matColumnDef="title">
-              <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.title ?? '—' }}</td>
-            </ng-container>
-            <ng-container matColumnDef="room">
-              <th mat-header-cell *matHeaderCellDef scope="col">Salle</th>
-              <td mat-cell *matCellDef="let slot">{{ slot.roomCode ?? '—' }}</td>
-            </ng-container>
-            <tr mat-header-row *matHeaderRowDef="publishedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: publishedColumns"></tr>
-          </table>
+          <div class="esic-table-wrap">
+            <table mat-table [dataSource]="published()" class="planning-calendar__table">
+              <ng-container matColumnDef="day">
+                <th mat-header-cell *matHeaderCellDef scope="col">Jour</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.day }}</td>
+              </ng-container>
+              <ng-container matColumnDef="window">
+                <th mat-header-cell *matHeaderCellDef scope="col">Horaire</th>
+                <td mat-cell *matCellDef="let slot">{{ slotWindow(slot) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="title">
+                <th mat-header-cell *matHeaderCellDef scope="col">Intitulé</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.title ?? '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="room">
+                <th mat-header-cell *matHeaderCellDef scope="col">Salle</th>
+                <td mat-cell *matCellDef="let slot">{{ slot.roomCode ?? '—' }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="publishedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: publishedColumns"></tr>
+            </table>
+          </div>
         }
       </mat-card-content>
     </mat-card>

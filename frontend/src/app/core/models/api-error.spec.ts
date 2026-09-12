@@ -9,9 +9,9 @@ describe('normalizeHttpError', () => {
       error: {
         timestamp: '2026-08-29T10:00:00Z',
         status: 409,
-        code: 'ENR_DUPLICATE_STUDENT_NUMBER',
+        code: 'USER_DUPLICATE_STUDENT_NUMBER',
         message: 'Numéro étudiant déjà utilisé.',
-        path: '/api/v1/student-profiles',
+        path: '/api/v1/users',
         correlationId: 'abc-123',
         details: ['studentNumber'],
       },
@@ -20,7 +20,7 @@ describe('normalizeHttpError', () => {
     const normalized = normalizeHttpError(error);
 
     expect(normalized.status).toBe(409);
-    expect(normalized.code).toBe('ENR_DUPLICATE_STUDENT_NUMBER');
+    expect(normalized.code).toBe('USER_DUPLICATE_STUDENT_NUMBER');
     expect(normalized.message).toBe('Numéro étudiant déjà utilisé.');
     expect(normalized.correlationId).toBe('abc-123');
     expect(normalized.details).toEqual(['studentNumber']);
