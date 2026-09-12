@@ -108,13 +108,14 @@ describe('StudentCreate (Lot H)', () => {
 
     const enrollReq = http.expectOne((r) => r.url === ENROLLMENTS_URL && r.method === 'POST');
     expect(enrollReq.request.body).toEqual({
-      studentProfilePublicId: 'profile-1',
+      studentUserPublicId: 'user-1',
       classGroupPublicId: 'class-1',
       startDate: null,
     });
     enrollReq.flush({ publicId: 'enr-1' });
 
-    expect(navigate).toHaveBeenCalledWith(['/students', 'profile-1']);
+    // Navigue vers la fiche du COMPTE (refonte 2026-09), pas du profil.
+    expect(navigate).toHaveBeenCalledWith(['/students', 'user-1']);
   });
 
   it('surfaces a duplicate email at step 1 and stops (no account created)', () => {
@@ -160,7 +161,7 @@ describe('StudentCreate (Lot H)', () => {
     expect(retry.request.body).toMatchObject({ userPublicId: 'user-1', studentNumber: 'ESIC-2026-1000' });
     retry.flush({ publicId: 'profile-1' });
     http.expectOne(ENROLLMENTS_URL).flush({ publicId: 'enr-1' });
-    expect(navigate).toHaveBeenCalledWith(['/students', 'profile-1']);
+    expect(navigate).toHaveBeenCalledWith(['/students', 'user-1']);
   });
 
   it('explains a step-3 (enrollment) failure without losing the account or profile', () => {
@@ -181,6 +182,6 @@ describe('StudentCreate (Lot H)', () => {
     http.expectNone(USERS_URL);
     http.expectNone(PROFILES_URL);
     http.expectOne(ENROLLMENTS_URL).flush({ publicId: 'enr-1' });
-    expect(navigate).toHaveBeenCalledWith(['/students', 'profile-1']);
+    expect(navigate).toHaveBeenCalledWith(['/students', 'user-1']);
   });
 });

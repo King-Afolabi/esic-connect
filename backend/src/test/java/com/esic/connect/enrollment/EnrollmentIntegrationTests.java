@@ -104,19 +104,26 @@ class EnrollmentIntegrationTests {
 
         Chain chain = academicChain(admin);
 
+        // L'inscription rattache directement le COMPTE (refonte 2026-09) —
+        // jamais le profil créé ci-dessus, qui reste une décoration
+        // facultative et indépendante.
         Map<String, Object> first = created("/api/v1/enrollments", Map.of(
-                "studentProfilePublicId", profileId, "classGroupPublicId", chain.classA()), admin);
+                "studentUserPublicId", studentUser, "classGroupPublicId", chain.classA()), admin);
         String firstId = (String) first.get("publicId");
         assertThat(first.get("status")).isEqualTo("ACTIVE");
         assertThat(first.get("enrollmentSource")).isEqualTo("MANUAL");
         assertThat(first.get("startDate")).isNotNull();
+        assertThat(first.get("studentUserPublicId")).isEqualTo(studentUser);
+        // Le profil créé plus haut est bien résolu comme décoration
+        // facultative de la réponse (numéro étudiant, id de profil).
+        assertThat(first.get("studentProfilePublicId")).isEqualTo(profileId);
         assertThat(first.get("classGroupPublicId")).isEqualTo(chain.classA());
         assertThat(first.get("academicYearCode")).isEqualTo(chain.yearCode());
         assertThat(first.get("previousEnrollmentPublicId")).isNull();
-        assertThat(first).doesNotContainKeys("id", "studentProfileId", "classGroupId", "academicYearId");
+        assertThat(first).doesNotContainKeys("id", "userId", "classGroupId", "academicYearId");
         assertThat(auditActions(firstId)).contains("ENROLLMENT_CREATED");
 
-        assertThat(count("/api/v1/enrollments?student=" + profileId, admin)).isEqualTo(1);
+        assertThat(count("/api/v1/enrollments?student=" + studentUser, admin)).isEqualTo(1);
 
         Map<String, Object> second = created("/api/v1/enrollments/" + firstId + "/transfer", Map.of(
                 "classGroupPublicId", chain.classB(), "reason", "réorientation"), admin);
@@ -134,7 +141,7 @@ class EnrollmentIntegrationTests {
         LocalDate newStart = LocalDate.parse((String) second.get("startDate"));
         assertThat(newStart).isEqualTo(previousEnd.plusDays(1));
         assertThat(newStart).isAfter(previousEnd);
-        assertThat(count("/api/v1/enrollments?student=" + profileId, admin)).isEqualTo(2);
+        assertThat(count("/api/v1/enrollments?student=" + studentUser, admin)).isEqualTo(2);
         assertThat(auditActions(firstId)).contains("ENROLLMENT_TRANSFERRED");
         assertThat(auditActions(secondId)).contains("ENROLLMENT_CREATED");
 
@@ -152,13 +159,13 @@ class EnrollmentIntegrationTests {
     @Test
     void duplicateActiveEnrollmentForTheYearIsRejectedWith409() {
         String admin = adminToken();
-        String profileId = profile(admin);
+        String studentUser = studentAccountPublicId();
         Chain chain = academicChain(admin);
-        created("/api/v1/enrollments", Map.of("studentProfilePublicId", profileId,
+        created("/api/v1/enrollments", Map.of("studentUserPublicId", studentUser,
                 "classGroupPublicId", chain.classA()), admin);
 
         ResponseEntity<Map<String, Object>> second = exchange(HttpMethod.POST, "/api/v1/enrollments",
-                Map.of("studentProfilePublicId", profileId, "classGroupPublicId", chain.classB()), admin);
+                Map.of("studentUserPublicId", studentUser, "classGroupPublicId", chain.classB()), admin);
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(second.getBody().get("code")).isEqualTo("ENR_ACTIVE_ENROLLMENT_EXISTS");
     }
@@ -166,9 +173,9 @@ class EnrollmentIntegrationTests {
     @Test
     void concurrentEnrollmentsYieldExactlyOneSuccessAndOne409() throws Exception {
         String admin = adminToken();
-        String profileId = profile(admin);
+        String studentUser = studentAccountPublicId();
         Chain chain = academicChain(admin);
-        Map<String, Object> body = Map.of("studentProfilePublicId", profileId,
+        Map<String, Object> body = Map.of("studentUserPublicId", studentUser,
                 "classGroupPublicId", chain.classA());
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -190,9 +197,9 @@ class EnrollmentIntegrationTests {
     @Test
     void transferToTheSameClassIsRejected() {
         String admin = adminToken();
-        String profileId = profile(admin);
+        String studentUser = studentAccountPublicId();
         Chain chain = academicChain(admin);
-        String id = (String) created("/api/v1/enrollments", Map.of("studentProfilePublicId", profileId,
+        String id = (String) created("/api/v1/enrollments", Map.of("studentUserPublicId", studentUser,
                 "classGroupPublicId", chain.classA()), admin).get("publicId");
 
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST,
@@ -228,26 +235,30 @@ class EnrollmentIntegrationTests {
     @Test
     void enrollmentUnderArchivedClassIsRejected() {
         String admin = adminToken();
-        String profileId = profile(admin);
+        String studentUser = studentAccountPublicId();
         Chain chain = academicChain(admin);
         assertThat(status(HttpMethod.POST, "/api/v1/class-groups/" + chain.classA() + "/archive",
                 Map.of("reason", "fermeture"), admin)).isEqualTo(HttpStatus.NO_CONTENT);
 
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST, "/api/v1/enrollments",
-                Map.of("studentProfilePublicId", profileId, "classGroupPublicId", chain.classA()), admin);
+                Map.of("studentUserPublicId", studentUser, "classGroupPublicId", chain.classA()), admin);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().get("code")).isEqualTo("ENR_ARCHIVED_PARENT");
     }
 
     @Test
-    void enrollRejectsUnknownStudentProfileWith404() {
+    void enrollRejectsUnknownStudentUserWith422() {
+        // Refonte 2026-09 : une inscription vise directement un compte —
+        // un compte inconnu, comme un compte non éligible (archivé, sans
+        // rôle STUDENT), est ENR_USER_NOT_ELIGIBLE (même règle que la
+        // création d'un profil apprenant).
         String admin = adminToken();
         Chain chain = academicChain(admin);
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.POST, "/api/v1/enrollments",
-                Map.of("studentProfilePublicId", UUID.randomUUID().toString(),
+                Map.of("studentUserPublicId", UUID.randomUUID().toString(),
                         "classGroupPublicId", chain.classA()), admin);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody().get("code")).isEqualTo("ENR_STUDENT_PROFILE_NOT_FOUND");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().get("code")).isEqualTo("ENR_USER_NOT_ELIGIBLE");
     }
 
     @Test
@@ -340,11 +351,6 @@ class EnrollmentIntegrationTests {
                 "programLevelPublicId", level, "sitePublicId", site, "code", "C2", "name", "Classe 2"), admin)
                 .get("publicId");
         return new Chain(classA, classB, yearCode);
-    }
-
-    private String profile(String admin) {
-        return (String) created("/api/v1/student-profiles", Map.of("userPublicId", studentAccountPublicId(),
-                "studentNumber", "ESIC-2026-" + shortCode()), admin).get("publicId");
     }
 
     private String studentAccountPublicId() {

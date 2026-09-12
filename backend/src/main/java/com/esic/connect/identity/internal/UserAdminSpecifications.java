@@ -44,6 +44,18 @@ final class UserAdminSpecifications {
                 cb.like(cb.lower(root.get("lastName")), pattern, ESCAPE));
     }
 
+    /**
+     * Restreint le résultat aux comptes dont l'identifiant interne figure
+     * dans {@code ids} — périmètre calculé par un autre module (par
+     * exemple {@code enrollment}, pour restreindre la liste des apprenants
+     * au périmètre pédagogique de l'appelant). {@code ids} vide ⇒
+     * prédicat toujours faux (aucune fuite) : l'absence de restriction se
+     * signale par {@code ids == null}, jamais par une collection vide.
+     */
+    static Specification<UserAccount> idIn(java.util.Collection<Long> ids) {
+        return (root, query, cb) -> (ids == null || ids.isEmpty()) ? cb.disjunction() : root.get("id").in(ids);
+    }
+
     private static String escapeLike(String value) {
         StringBuilder sb = new StringBuilder(value.length() + 8);
         for (char c : value.toCharArray()) {

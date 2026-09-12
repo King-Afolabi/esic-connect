@@ -11,13 +11,9 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { forkJoin, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
-import { AdministrationApiService } from '../../administration/administration-api.service';
-import { UserSummaryResponse } from '../../administration/administration.models';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { normalizeHttpError } from '../../../core/models/api-error';
@@ -25,13 +21,13 @@ import { NotificationService } from '../../../core/notifications/notification.se
 import { StudentsApiService } from '../students-api.service';
 import {
   PageResponse,
-  STUDENT_PROFILE_SORT_FIELDS,
-  STUDENT_PROFILE_STATUSES,
+  STUDENT_ACCOUNT_STATUSES,
+  STUDENT_SORT_FIELDS,
   SortDirection,
-  StudentProfileResponse,
-  StudentProfileSortField,
-  StudentProfileStatus,
-  studentProfileStatusLabel,
+  StudentAccountStatus,
+  StudentResponse,
+  StudentSortField,
+  studentAccountStatusLabel,
 } from '../students.models';
 
 /** État de la consultation de la liste. */
@@ -39,43 +35,30 @@ type ListState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'forbidden' }
-  | { kind: 'ready'; page: PageResponse<StudentProfileResponse> };
+  | { kind: 'ready'; page: PageResponse<StudentResponse> };
 
-const DEFAULT_SORT_FIELD: StudentProfileSortField = 'createdAt';
+const DEFAULT_SORT_FIELD: StudentSortField = 'createdAt';
 const DEFAULT_SORT_DIRECTION: SortDirection = 'desc';
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
-/** Une classe résolue pour l'affichage, ou l'absence de classe active. */
-interface ClassInfo {
-  classGroupCode: string | null;
-}
-
 /**
- * Liste des profils apprenants — `GET /api/v1/student-profiles`.
+ * Liste des apprenants — `GET /api/v1/students`.
  *
- * Recherche, filtre, tri et pagination reflètent **exactement** ce que
- * l'API accepte : recherche `q` sur le nom, le prénom **ou** le numéro
- * étudiant (l'adresse électronique n'est jamais un critère — énumération),
- * filtre `status`, tri sur `studentNumber` / `createdAt`, pagination
- * bornée à 100. Aucune capacité inventée.
+ * Refonte 2026-09 : le rôle {@code STUDENT} (module {@code identity}) est
+ * l'unique source de vérité du statut apprenant. Cette liste montre donc
+ * **tous** les comptes porteurs de ce rôle — avec ou sans profil
+ * apprenant, avec ou sans inscription — sans qu'aucun panneau séparé ni
+ * comparaison côté client ne soit nécessaire pour les « retrouver » : il
+ * n'existe plus de compte {@code STUDENT} invisible ici.
+ *
+ * Recherche, filtre, tri et pagination reflètent exactement ce que l'API
+ * accepte : recherche `q` sur le nom, le prénom ou l'e-mail, filtre
+ * `status` sur le **statut du compte**, tri sur `lastName` / `email` /
+ * `createdAt` / `lastLoginAt`, pagination bornée à 100.
  *
  * Le contrôle d'accès reste côté Spring Security : un `403` renvoyé par
  * l'API est rendu comme un état « accès refusé » explicite, même si le
  * `roleGuard` de la route a normalement déjà filtré l'utilisateur.
- *
- * <p><strong>« Un apprenant sans classe reste un apprenant » (retour
- * terrain).</strong> Un profil apprenant existant sans inscription active
- * n'est plus silencieux : chaque ligne affiche sa classe ou « Sans
- * classe », avec une action directe pour en attribuer une
- * (`POST /enrollments`). Pour {@code ADMIN}/{@code SUPER_ADMIN}/
- * {@code SCHOOL_ADMINISTRATION}, un second panneau relève en plus les
- * comptes portant le rôle {@code STUDENT} qui n'ont même pas encore de
- * profil apprenant (créés hors du parcours habituel, ou orphelins d'une
- * opération technique) — invisibles jusqu'ici, faute d'écran pour les
- * compléter. Limite assumée : cette diffusion compare l'intégralité des
- * profils et des comptes {@code STUDENT} (jusqu'à 500 de chaque), pas
- * seulement la page affichée — un volume bien supérieur nécessiterait un
- * filtre serveur dédié, qui n'existe pas encore.
  */
 @Component({
   selector: 'app-student-list',
@@ -101,7 +84,6 @@ interface ClassInfo {
 export class StudentList {
   private readonly api = inject(StudentsApiService);
   private readonly academic = inject(AcademicApiService);
-  private readonly administration = inject(AdministrationApiService);
   private readonly notifications = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
   private readonly roleContext = inject(RoleContextService);
@@ -137,23 +119,19 @@ export class StudentList {
       ),
   );
 
-  /**
-   * Repère les comptes `STUDENT` sans profil (`GET /api/v1/users` exige
-   * `ADMIN`/`SUPER_ADMIN`/`SCHOOL_ADMINISTRATION` — `UserAccountController
-   * .READ_ROLES`). Un `TEACHER`/`PEDAGOGICAL_MANAGER` n'y a pas accès :
-   * il continue de ne voir que son périmètre de profils, inchangé.
-   */
-  protected readonly canSeeOrphanAccounts = computed(() =>
+  /** Écriture sur les inscriptions (attribuer une classe) — `EnrollmentWeb.MANAGE_ROLES`. */
+  protected readonly canManageEnrollment = computed(() =>
     this.roleContext
       .effectiveRoles()
       .some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN' || r === 'SCHOOL_ADMINISTRATION'),
   );
 
-  protected readonly statuses = STUDENT_PROFILE_STATUSES;
+  protected readonly statuses = STUDENT_ACCOUNT_STATUSES;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
-  protected readonly statusLabel = studentProfileStatusLabel;
+  protected readonly statusLabel = studentAccountStatusLabel;
   protected readonly displayedColumns = [
     'name',
+    'email',
     'studentNumber',
     'classGroup',
     'workStudy',
@@ -163,42 +141,30 @@ export class StudentList {
     'actions',
   ] as const;
 
-  /** Filtres appliqués (numéro étudiant + statut). */
+  /** Filtres appliqués (nom / prénom / e-mail + statut du compte). */
   protected readonly filters = this.formBuilder.group({
     q: this.formBuilder.control(''),
-    status: this.formBuilder.control<StudentProfileStatus | ''>(''),
+    status: this.formBuilder.control<StudentAccountStatus | ''>(''),
   });
 
   protected readonly state = signal<ListState>({ kind: 'loading' });
 
-  protected readonly sortField = signal<StudentProfileSortField>(DEFAULT_SORT_FIELD);
+  protected readonly sortField = signal<StudentSortField>(DEFAULT_SORT_FIELD);
   protected readonly sortDirection = signal<SortDirection>(DEFAULT_SORT_DIRECTION);
   protected readonly pageIndex = signal(0);
   protected readonly pageSize = signal(20);
 
-  /** Classe active de chaque profil de la page courante — `null` = sans classe. */
-  protected readonly classByProfile = signal<Map<string, ClassInfo>>(new Map());
   protected readonly classGroups = signal<ClassGroupResponse[]>([]);
 
-  /** Ligne (profil) pour laquelle le formulaire « attribuer une classe » est ouvert. */
-  protected readonly assigningProfileId = signal<string | null>(null);
+  /** Ligne (compte) pour laquelle le formulaire « attribuer une classe » est ouvert. */
+  protected readonly assigningUserId = signal<string | null>(null);
   protected readonly assignForm = this.formBuilder.group({
     classGroupPublicId: this.formBuilder.control('', [Validators.required]),
   });
   protected readonly assignSubmitting = signal(false);
   protected readonly assignError = signal<string | null>(null);
 
-  /** Comptes `STUDENT` sans profil apprenant — voir le commentaire de classe. */
-  protected readonly orphanState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  protected readonly orphanAccounts = signal<UserSummaryResponse[]>([]);
-  protected readonly completingUserId = signal<string | null>(null);
-  protected readonly completeForm = this.formBuilder.group({
-    classGroupPublicId: this.formBuilder.control('', [Validators.required]),
-  });
-  protected readonly completeSubmitting = signal(false);
-  protected readonly completeError = signal<string | null>(null);
-
-  protected readonly rows = computed<StudentProfileResponse[]>(() => {
+  protected readonly rows = computed<StudentResponse[]>(() => {
     const current = this.state();
     return current.kind === 'ready' ? current.page.content : [];
   });
@@ -208,11 +174,7 @@ export class StudentList {
   });
   protected readonly isEmpty = computed(() => {
     const current = this.state();
-    return (
-      current.kind === 'ready' &&
-      current.page.content.length === 0 &&
-      this.orphanAccounts().length === 0
-    );
+    return current.kind === 'ready' && current.page.content.length === 0;
   });
   protected readonly errorMessage = computed(() => {
     const current = this.state();
@@ -225,19 +187,14 @@ export class StudentList {
     const params = new ListQueryReader(this.route);
     this.filters.patchValue({
       q: params.str('q'),
-      status: params.oneOf('status', [...STUDENT_PROFILE_STATUSES, ''] as const, ''),
+      status: params.oneOf('status', [...STUDENT_ACCOUNT_STATUSES, ''] as const, ''),
     });
-    this.sortField.set(
-      params.oneOf('sort', STUDENT_PROFILE_SORT_FIELDS, DEFAULT_SORT_FIELD),
-    );
+    this.sortField.set(params.oneOf('sort', STUDENT_SORT_FIELDS, DEFAULT_SORT_FIELD));
     this.sortDirection.set(params.direction('dir', DEFAULT_SORT_DIRECTION));
     this.pageIndex.set(params.int('page', 0));
     this.pageSize.set(params.int('size', 20));
     this.load();
     this.loadClassGroups();
-    if (this.canSeeOrphanAccounts()) {
-      this.loadOrphanAccounts();
-    }
   }
 
   protected applyFilters(): void {
@@ -252,8 +209,8 @@ export class StudentList {
   }
 
   protected onSortChange(sort: Sort): void {
-    const field = STUDENT_PROFILE_SORT_FIELDS.includes(sort.active as StudentProfileSortField)
-      ? (sort.active as StudentProfileSortField)
+    const field = STUDENT_SORT_FIELDS.includes(sort.active as StudentSortField)
+      ? (sort.active as StudentSortField)
       : DEFAULT_SORT_FIELD;
     this.sortField.set(field);
     this.sortDirection.set(sort.direction === 'asc' ? 'asc' : 'desc');
@@ -269,38 +226,30 @@ export class StudentList {
 
   protected retry(): void {
     this.load();
-    if (this.canSeeOrphanAccounts()) {
-      this.loadOrphanAccounts();
-    }
   }
 
-  protected classGroupLabel(row: StudentProfileResponse): string {
-    return this.classByProfile().get(row.publicId)?.classGroupCode ?? '…';
-  }
-
-  protected hasNoClass(row: StudentProfileResponse): boolean {
-    const info = this.classByProfile().get(row.publicId);
-    return info !== undefined && info.classGroupCode === null;
+  protected hasNoClass(row: StudentResponse): boolean {
+    return row.classGroupPublicId === null;
   }
 
   // -------------------------------------------------------------------
-  // Attribuer une classe à un profil existant sans inscription active
+  // Attribuer une classe à un apprenant sans inscription active
   // -------------------------------------------------------------------
 
-  protected startAssign(profilePublicId: string): void {
-    this.assigningProfileId.set(profilePublicId);
+  protected startAssign(userPublicId: string): void {
+    this.assigningUserId.set(userPublicId);
     this.assignError.set(null);
     this.assignForm.reset({ classGroupPublicId: '' });
   }
 
   protected cancelAssign(): void {
-    this.assigningProfileId.set(null);
+    this.assigningUserId.set(null);
     this.assignError.set(null);
   }
 
   protected confirmAssign(): void {
-    const profilePublicId = this.assigningProfileId();
-    if (!profilePublicId || this.assignForm.invalid || this.assignSubmitting()) {
+    const userPublicId = this.assigningUserId();
+    if (!userPublicId || this.assignForm.invalid || this.assignSubmitting()) {
       this.assignForm.markAllAsTouched();
       return;
     }
@@ -308,13 +257,13 @@ export class StudentList {
     this.assignError.set(null);
     this.api
       .enrollStudent({
-        studentProfilePublicId: profilePublicId,
+        studentUserPublicId: userPublicId,
         classGroupPublicId: this.assignForm.getRawValue().classGroupPublicId,
       })
       .subscribe({
         next: () => {
           this.assignSubmitting.set(false);
-          this.assigningProfileId.set(null);
+          this.assigningUserId.set(null);
           this.notifications.info('Classe attribuée.');
           this.load();
         },
@@ -325,87 +274,10 @@ export class StudentList {
       });
   }
 
-  // -------------------------------------------------------------------
-  // Comptes STUDENT sans profil apprenant
-  // -------------------------------------------------------------------
-
-  protected startComplete(userPublicId: string): void {
-    this.completingUserId.set(userPublicId);
-    this.completeError.set(null);
-    this.completeForm.reset({ classGroupPublicId: '' });
-  }
-
-  protected cancelComplete(): void {
-    this.completingUserId.set(null);
-    this.completeError.set(null);
-  }
-
-  protected confirmComplete(): void {
-    const userPublicId = this.completingUserId();
-    if (!userPublicId || this.completeForm.invalid || this.completeSubmitting()) {
-      this.completeForm.markAllAsTouched();
-      return;
-    }
-    const classGroupPublicId = this.completeForm.getRawValue().classGroupPublicId;
-    this.completeSubmitting.set(true);
-    this.completeError.set(null);
-    // Numéro étudiant laissé vide : le serveur en génère un
-    // (`ESIC-AAAA-NNNNN`) — cohérent avec l'écran « Nouvel apprenant ».
-    this.api.createStudentProfile({ userPublicId, studentNumber: null }).subscribe({
-      next: (profile) => {
-        this.api
-          .enrollStudent({ studentProfilePublicId: profile.publicId, classGroupPublicId })
-          .subscribe({
-            next: () => {
-              this.completeSubmitting.set(false);
-              this.completingUserId.set(null);
-              this.notifications.info('Profil créé et classe attribuée.');
-              this.load();
-              this.loadOrphanAccounts();
-            },
-            error: (error: unknown) => {
-              this.completeSubmitting.set(false);
-              // Le profil existe déjà : l'apprenant n'est plus « orphelin »,
-              // seule l'inscription a échoué. On recharge pour refléter
-              // l'état réel plutôt que de laisser croire à un double échec.
-              this.loadOrphanAccounts();
-              this.load();
-              this.completeError.set(normalizeHttpError(error).message);
-            },
-          });
-      },
-      error: (error: unknown) => {
-        this.completeSubmitting.set(false);
-        this.completeError.set(normalizeHttpError(error).message);
-      },
-    });
-  }
-
   private loadClassGroups(): void {
     this.academic.listClassGroups({ status: 'ACTIVE', size: 200, sort: 'code,asc' }).subscribe({
       next: (page) => this.classGroups.set(page.content),
       error: () => this.classGroups.set([]),
-    });
-  }
-
-  /**
-   * Compare les comptes `STUDENT` actifs à l'ensemble des profils
-   * apprenants existants pour isoler ceux qui n'en ont aucun. Voir la
-   * limite de volume documentée sur la classe.
-   */
-  private loadOrphanAccounts(): void {
-    this.orphanState.set('loading');
-    forkJoin({
-      users: this.administration.listUsers({ role: 'STUDENT', size: 500 }),
-      profiles: this.api.listProfiles({ size: 500, sort: 'createdAt,desc' }),
-    }).subscribe({
-      next: ({ users, profiles }) => {
-        const withProfile = new Set(profiles.content.map((p) => p.userPublicId));
-        const orphans = users.content.filter((u) => !withProfile.has(u.publicId));
-        this.orphanAccounts.set(orphans);
-        this.orphanState.set('ready');
-      },
-      error: () => this.orphanState.set('error'),
     });
   }
 
@@ -414,7 +286,7 @@ export class StudentList {
     const raw = this.filters.getRawValue();
     this.syncUrl(raw.q.trim(), raw.status);
     this.api
-      .listProfiles({
+      .listStudents({
         q: raw.q.trim() || null,
         status: raw.status || null,
         sort: `${this.sortField()},${this.sortDirection()}`,
@@ -422,10 +294,7 @@ export class StudentList {
         size: this.pageSize(),
       })
       .subscribe({
-        next: (page) => {
-          this.state.set({ kind: 'ready', page });
-          this.resolveClasses(page.content);
-        },
+        next: (page) => this.state.set({ kind: 'ready', page }),
         error: (error: unknown) => {
           const normalized = normalizeHttpError(error);
           if (normalized.status === 403) {
@@ -435,35 +304,6 @@ export class StudentList {
           this.state.set({ kind: 'error', message: normalized.message });
         },
       });
-  }
-
-  /**
-   * Résout la classe active de chaque profil affiché — `StudentProfileResponse`
-   * ne la porte pas (elle vient de l'inscription, une ressource distincte).
-   * Une requête par ligne de la page affichée (≤ 100) : acceptable pour un
-   * écran d'administration, pas pour un usage à fort trafic.
-   */
-  private resolveClasses(profiles: StudentProfileResponse[]): void {
-    if (profiles.length === 0) {
-      return;
-    }
-    forkJoin(
-      profiles.map((profile) =>
-        this.api
-          .listEnrollments({ student: profile.publicId, status: 'ACTIVE', size: 1, sort: 'startDate,desc' })
-          .pipe(
-            map((page): [string, ClassInfo] => [
-              profile.publicId,
-              { classGroupCode: page.content[0]?.classGroupCode ?? null },
-            ]),
-            catchError(() => of<[string, ClassInfo]>([profile.publicId, { classGroupCode: null }])),
-          ),
-      ),
-    ).subscribe((entries) => {
-      const next = new Map(this.classByProfile());
-      entries.forEach(([id, info]) => next.set(id, info));
-      this.classByProfile.set(next);
-    });
   }
 
   /** Lot G : reflète l'état courant dans l'URL (défauts non écrits). */

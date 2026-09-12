@@ -1,5 +1,8 @@
 package com.esic.connect.identity;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -119,6 +122,74 @@ public interface UserDirectory {
      * {@link #searchByName} (comptes actifs uniquement).
      */
     java.util.List<NamedUserRef> searchByNameIncludingInactive(String query, String roleCode, int limit);
+
+    /**
+     * Comptes porteurs d'un rôle actif donné, paginés / filtrés / triés —
+     * pour construire un référentiel (par exemple l'écran « Apprenants »,
+     * qui liste tous les comptes {@code STUDENT}) sans dupliquer la
+     * pagination et le filtrage déjà résolus par ce module
+     * ({@code UserManagementService.listUsers}).
+     *
+     * <p>Le rôle est ici l'unique source de vérité du statut correspondant :
+     * ce point d'entrée ne consulte aucune donnée d'un autre module pour
+     * décider qui porte le rôle {@code roleCode}. Un module appelant (par
+     * exemple {@code enrollment}) peut restreindre le résultat à un
+     * périmètre qu'il est seul à connaître (par exemple les comptes ayant
+     * une inscription active dans une classe visible par l'appelant) via
+     * {@link AccountRoleQuery#restrictToInternalIds()}, sans casser la
+     * pagination — le filtrage est appliqué dans la même requête SQL.
+     *
+     * @param query paramètres de la recherche
+     * @return la page de comptes correspondants
+     */
+    AccountPage listAccountsByActiveRole(AccountRoleQuery query);
+
+    /**
+     * @param roleCode              code du rôle actif requis, par exemple {@code "STUDENT"}
+     * @param status                filtre optionnel sur le statut du compte (ex. {@code "ACTIVE"}) ;
+     *                              {@code null}/vide = tous statuts
+     * @param text                  filtre optionnel, sous-chaîne insensible à la casse de l'email,
+     *                              du prénom ou du nom ; {@code null}/vide = pas de filtre
+     * @param restrictToInternalIds restreint le résultat à ces identifiants internes de compte ;
+     *                              {@code null} = aucune restriction (périmètre global) ; une
+     *                              collection <strong>vide</strong> (non {@code null}) ne renvoie
+     *                              donc aucun résultat, jamais un périmètre global par défaut
+     * @param page                  page demandée (0-based, négatif ramené à 0)
+     * @param size                  taille de page demandée (le port applique ses propres bornes)
+     * @param sort                  tri, forme {@code champ} ou {@code champ,asc|desc} ; liste
+     *                              blanche interne ({@code lastName}, {@code email},
+     *                              {@code createdAt}, {@code lastLoginAt}) — un champ hors liste
+     *                              retombe sur le tri par défaut, jamais une erreur SQL
+     */
+    record AccountRoleQuery(String roleCode, String status, String text,
+                            Collection<Long> restrictToInternalIds, int page, int size, String sort) {
+
+        public AccountRoleQuery {
+            page = Math.max(page, 0);
+        }
+
+        public static AccountRoleQuery of(String roleCode, int page, int size) {
+            return new AccountRoleQuery(roleCode, null, null, null, page, size, null);
+        }
+    }
+
+    /**
+     * Compte, tel qu'exposé pour bâtir un référentiel (ex. liste des
+     * apprenants) — identité civile et statut, jamais un identifiant SQL
+     * interne côté appelant.
+     */
+    record AccountSummary(long internalId, UUID publicId, String email, String firstName, String lastName,
+                          String status, Instant createdAt, Instant lastLoginAt) {
+    }
+
+    /**
+     * Page de comptes. Forme minimale volontairement indépendante de
+     * {@code org.springframework.data.domain.Page} : un port public ne
+     * transporte pas un type dont la sérialisation dépend de la version de
+     * Spring Data (docs/03 §6.4, frontières de module).
+     */
+    record AccountPage(List<AccountSummary> content, long totalElements) {
+    }
 
     /** Compte trouvé par recherche : identité civile, jamais d'adresse. */
     record NamedUserRef(long internalId, UUID publicId, String firstName, String lastName) {

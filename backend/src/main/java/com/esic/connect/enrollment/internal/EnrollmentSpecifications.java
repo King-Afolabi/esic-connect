@@ -61,8 +61,8 @@ final class EnrollmentSpecifications {
                 (ids == null || ids.isEmpty()) ? cb.disjunction() : root.get("id").in(ids);
     }
 
-    static Specification<Enrollment> enrollmentHasStudentProfile(long studentProfileId) {
-        return (root, query, cb) -> cb.equal(root.get("studentProfile").get("id"), studentProfileId);
+    static Specification<Enrollment> enrollmentHasUser(long userId) {
+        return (root, query, cb) -> cb.equal(root.get("userId"), userId);
     }
 
     static Specification<Enrollment> enrollmentHasClassGroup(long classGroupId) {

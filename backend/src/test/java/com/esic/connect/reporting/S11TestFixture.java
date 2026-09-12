@@ -188,7 +188,7 @@ public final class S11TestFixture {
         String number = "ESIC-2026-" + code();
         String profile = created(admin, "/api/v1/student-profiles", Map.of(
                 "userPublicId", student.publicId(), "studentNumber", number)).get("publicId").toString();
-        created(admin, "/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+        created(admin, "/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", classPublicId, "startDate", "2026-08-01"));
         return new Student(student, profile, number);
     }

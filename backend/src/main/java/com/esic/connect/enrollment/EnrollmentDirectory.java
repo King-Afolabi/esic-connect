@@ -122,8 +122,14 @@ public interface EnrollmentDirectory {
      *
      * @param enrollmentInternalId   clé primaire SQL de l'inscription
      * @param enrollmentPublicId     identifiant public de l'inscription
-     * @param studentProfilePublicId identifiant public du profil apprenant
-     * @param studentNumber          numéro étudiant
+     * @param studentUserPublicId    identifiant public du <strong>compte</strong>
+     *                               apprenant — toujours renseigné, une inscription
+     *                               rattachant directement un compte (refonte 2026-09)
+     * @param studentProfilePublicId identifiant public du profil apprenant ;
+     *                               {@code null} si ce compte n'a pas de
+     *                               {@code student_profile} (donnée facultative :
+     *                               son absence ne remet jamais en cause l'inscription)
+     * @param studentNumber          numéro étudiant ; {@code null} si aucun profil
      * @param firstName              prénom ({@code null} si non résolu)
      * @param lastName               nom ({@code null} si non résolu)
      * @param classGroupPublicId     classe de l'inscription
@@ -132,6 +138,7 @@ public interface EnrollmentDirectory {
     record RosterEntry(
             long enrollmentInternalId,
             UUID enrollmentPublicId,
+            UUID studentUserPublicId,
             UUID studentProfilePublicId,
             String studentNumber,
             String firstName,
@@ -148,6 +155,20 @@ public interface EnrollmentDirectory {
      * @return le descriptif si l'inscription existe, {@link Optional#empty()} sinon
      */
     Optional<AttendeeRef> describeAttendee(long enrollmentInternalId);
+
+    /**
+     * Identifiant public du <strong>compte</strong> apprenant rattaché à
+     * une inscription — toujours résoluble tant que l'inscription existe
+     * (une inscription rattache directement un compte, jamais un profil).
+     * Sert à faire pointer une ressource construite à partir d'un
+     * {@link RosterEntry}/{@link AttendeeRef} vers la fiche apprenant (qui
+     * s'affiche pour tout compte {@code STUDENT}, avec ou sans profil).
+     *
+     * @param enrollmentInternalId identifiant interne de l'inscription
+     * @return l'identifiant public du compte, {@link Optional#empty()} si
+     *         l'inscription est inconnue
+     */
+    Optional<UUID> findStudentUserPublicId(long enrollmentInternalId);
 
     /**
      * Identifiants de <strong>compte</strong> ({@code user_account.public_id})
@@ -195,13 +216,17 @@ public interface EnrollmentDirectory {
      * Identité minimale d'un apprenant pour l'affichage d'une ligne de
      * présence — jamais d'adresse électronique ni d'identifiant interne.
      *
-     * @param studentProfilePublicId identifiant public du profil apprenant
+     * @param studentUserPublicId    identifiant public du compte apprenant —
+     *                               toujours renseigné
+     * @param studentProfilePublicId identifiant public du profil apprenant ;
+     *                               {@code null} si ce compte n'a pas de profil
      * @param enrollmentPublicId     identifiant public de l'inscription
-     * @param studentNumber          numéro étudiant
+     * @param studentNumber          numéro étudiant ; {@code null} si aucun profil
      * @param firstName              prénom ({@code null} si non résolu)
      * @param lastName               nom ({@code null} si non résolu)
      */
     record AttendeeRef(
+            UUID studentUserPublicId,
             UUID studentProfilePublicId,
             UUID enrollmentPublicId,
             String studentNumber,
@@ -219,7 +244,11 @@ public interface EnrollmentDirectory {
      *
      * @param internalId              clé primaire SQL de l'inscription
      * @param publicId                identifiant public de l'inscription
-     * @param studentProfilePublicId  identifiant public du profil apprenant
+     * @param studentProfilePublicId  identifiant public du profil apprenant ;
+     *                                {@code null} si ce compte n'a pas de profil
+     *                                (donnée facultative, refonte 2026-09)
+     * @param studentUserPublicId     identifiant public du compte apprenant —
+     *                                toujours renseigné
      * @param classGroupPublicId      identifiant public de la classe de
      *                                l'inscription
      * @param classGroupCode          code fonctionnel de cette classe

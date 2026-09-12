@@ -10,6 +10,14 @@ class EnrollmentException extends RuntimeException {
     enum Kind {
         /** Aucun profil apprenant pour ce {@code public_id}. */
         STUDENT_PROFILE_NOT_FOUND,
+        /**
+         * Aucun <strong>apprenant</strong> (compte porteur d'un rôle actif
+         * {@code STUDENT}, non archivé) pour ce {@code public_id} — écran
+         * « Apprenants » ({@code GET /api/v1/students/{userPublicId}}).
+         * Distinct de {@link #STUDENT_PROFILE_NOT_FOUND} : un compte
+         * {@code STUDENT} sans profil n'est jamais ce cas (refonte 2026-09).
+         */
+        STUDENT_NOT_FOUND,
         /** Aucune inscription pour ce {@code public_id}. */
         ENROLLMENT_NOT_FOUND,
         /** Aucune classe/groupe pour ce {@code public_id}. */

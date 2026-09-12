@@ -50,43 +50,6 @@ table[mat-table] {
   width: 100%;
 }
 
-.students__orphans {
-  margin: var(--esic-space-4) 0;
-  padding: var(--esic-space-4) var(--esic-space-5);
-  border: 1px solid var(--esic-warning);
-  border-radius: var(--esic-radius-sm);
-  background: var(--esic-warning-tint);
-}
-
-.students__orphans-title {
-  display: flex;
-  align-items: center;
-  gap: var(--esic-space-2);
-  margin: 0 0 var(--esic-space-2);
-  font-size: 1rem;
-}
-
-.students__orphans-hint {
-  margin: 0 0 var(--esic-space-3);
-  color: var(--esic-ink-soft);
-}
-
-.students__orphans-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--esic-space-3);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.students__orphan-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--esic-space-3);
-}
-
 .students__reveal {
   display: flex;
   flex-wrap: wrap;

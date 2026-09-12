@@ -415,7 +415,7 @@ class EarlyDepartureIntegrationTests {
         String profile = (String) created("/api/v1/student-profiles", Map.of(
                 "userPublicId", other.publicId(),
                 "studentNumber", "ESIC-2026-" + suffix), admin).get("publicId");
-        created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+        created("/api/v1/enrollments", Map.of("studentUserPublicId", other.publicId(),
                 "classGroupPublicId", fx.classId, "startDate", "2026-09-01"), admin);
 
         assertThat(journal(tokenFor(other))).isEmpty();
@@ -483,7 +483,7 @@ class EarlyDepartureIntegrationTests {
                 "userPublicId", fx.student.publicId(),
                 "studentNumber", "ESIC-2026-" + suffix), admin).get("publicId");
         created("/api/v1/enrollments", Map.of(
-                "studentProfilePublicId", profile, "classGroupPublicId", fx.classId,
+                "studentUserPublicId", fx.student.publicId(), "classGroupPublicId", fx.classId,
                 "startDate", "2026-09-01"), admin);
         return fx;
     }

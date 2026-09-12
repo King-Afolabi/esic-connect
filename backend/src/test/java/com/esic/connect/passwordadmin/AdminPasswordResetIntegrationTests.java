@@ -213,10 +213,10 @@ class AdminPasswordResetIntegrationTests {
     }
 
     private void enroll(String admin, Account student, String classPublicId) {
-        String profile = (String) created("/api/v1/student-profiles", Map.of(
+        created("/api/v1/student-profiles", Map.of(
                 "userPublicId", student.publicId(), "studentNumber", "ESIC-" + code()), admin)
                 .get("publicId");
-        created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+        created("/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", classPublicId, "startDate", "2026-09-01"), admin);
     }
 

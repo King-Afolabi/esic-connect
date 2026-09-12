@@ -29,6 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * distincte autorisée, unicités {@code user_id} / {@code student_number} /
  * {@code public_id}, {@code CHECK} de période, clés étrangères
  * {@code RESTRICT} (dont l'auto-référence {@code previous_enrollment_id}).
+ *
+ * <p>Refonte 2026-09 : {@code enrollment.user_id} référence directement
+ * {@code user_account} — {@code enrollment} ne référence plus
+ * {@code student_profile} du tout (les deux tables sont indépendantes).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -46,30 +50,27 @@ class EnrollmentConstraintsTests {
     @Test
     void secondActiveEnrollmentSameYearIsRejected() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
 
-        enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
+        enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
         assertThrows(DataIntegrityViolationException.class,
-                () -> enrollmentRepository.saveAndFlush(active(profile, chain.classB(), chain.year())));
+                () -> enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classB(), chain.year())));
     }
 
     @Test
     void activeEnrollmentCollisionIsRecognisedByThePersistenceHelper() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
+        enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
 
         DataIntegrityViolationException collision = assertThrows(DataIntegrityViolationException.class,
-                () -> enrollmentRepository.saveAndFlush(active(profile, chain.classB(), chain.year())));
+                () -> enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classB(), chain.year())));
         assertThat(EnrollmentPersistence.isActiveEnrollmentUniqueViolation(collision)).isTrue();
     }
 
     @Test
     void unrelatedIntegrityViolationIsNotRecognisedAsActiveEnrollmentConflict() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        Enrollment first = enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
-        Enrollment duplicatePublicId = active(profile, chain.classB(), chain.year());
+        Enrollment first = enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
+        Enrollment duplicatePublicId = active(chain.userId(), chain.classB(), chain.year());
         ReflectionTestUtils.setField(duplicatePublicId, "status", EnrollmentStatus.COMPLETED);
         ReflectionTestUtils.setField(duplicatePublicId, "endDate", first.getStartDate());
         ReflectionTestUtils.setField(duplicatePublicId, "publicId", first.getPublicId());
@@ -82,22 +83,31 @@ class EnrollmentConstraintsTests {
     @Test
     void closingTheActiveEnrollmentFreesTheSlot() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        Enrollment first = enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
+        Enrollment first = enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
 
         first.close(EnrollmentStatus.TRANSFERRED, "mutation", first.getStartDate(), null);
         enrollmentRepository.saveAndFlush(first);
 
-        assertDoesNotThrow(() -> enrollmentRepository.saveAndFlush(active(profile, chain.classB(), chain.year())));
+        assertDoesNotThrow(
+                () -> enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classB(), chain.year())));
     }
 
     @Test
     void activeEnrollmentInADifferentYearIsAllowed() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
-        assertDoesNotThrow(() ->
-                enrollmentRepository.saveAndFlush(active(profile, chain.classOtherYear(), chain.otherYear())));
+        enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
+        assertDoesNotThrow(() -> enrollmentRepository
+                .saveAndFlush(active(chain.userId(), chain.classOtherYear(), chain.otherYear())));
+    }
+
+    @Test
+    void enrollmentDoesNotRequireAnyStudentProfileToExist() {
+        // Refonte 2026-09 : `enrollment` ne référence plus `student_profile`
+        // — une inscription est parfaitement valide pour un compte qui n'a
+        // jamais eu de profil apprenant.
+        Chain chain = insertChain();
+        assertThat(profileRepository.existsByUserId(chain.userId())).isFalse();
+        assertDoesNotThrow(() -> enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year())));
     }
 
     @Test
@@ -123,9 +133,8 @@ class EnrollmentConstraintsTests {
     @Test
     void enrollmentPublicIdIsUnique() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        Enrollment first = enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
-        Enrollment second = active(profile, chain.classOtherYear(), chain.otherYear());
+        Enrollment first = enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
+        Enrollment second = active(chain.userId(), chain.classOtherYear(), chain.otherYear());
         ReflectionTestUtils.setField(second, "publicId", first.getPublicId());
         assertThrows(DataIntegrityViolationException.class, () -> enrollmentRepository.saveAndFlush(second));
     }
@@ -133,23 +142,24 @@ class EnrollmentConstraintsTests {
     @Test
     void periodCheckRejectsEndDateBeforeStartDate() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        Enrollment enrollment = active(profile, chain.classA(), chain.year());
+        Enrollment enrollment = active(chain.userId(), chain.classA(), chain.year());
         ReflectionTestUtils.setField(enrollment, "status", EnrollmentStatus.WITHDRAWN);
         ReflectionTestUtils.setField(enrollment, "endDate", enrollment.getStartDate().minusDays(1));
         assertThrows(DataAccessException.class, () -> enrollmentRepository.saveAndFlush(enrollment));
     }
 
     @Test
-    void studentProfileForeignKeyIsRestrict() {
+    void enrollmentUserForeignKeyIsRestrict() {
+        // Refonte 2026-09 : `enrollment.user_id` référence directement
+        // `user_account` (plus `student_profile`) — un compte référencé par
+        // une inscription ne peut pas être supprimé.
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
+        enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
 
         assertThrows(ConstraintViolationException.class, () -> {
             entityManager.getEntityManager()
-                    .createNativeQuery("DELETE FROM student_profile WHERE id = :id")
-                    .setParameter("id", profile.getId())
+                    .createNativeQuery("DELETE FROM user_account WHERE id = :id")
+                    .setParameter("id", chain.userId())
                     .executeUpdate();
             entityManager.flush();
         });
@@ -158,8 +168,7 @@ class EnrollmentConstraintsTests {
     @Test
     void classGroupForeignKeyIsRestrict() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
+        enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
 
         assertThrows(ConstraintViolationException.class, () -> {
             entityManager.getEntityManager()
@@ -173,11 +182,10 @@ class EnrollmentConstraintsTests {
     @Test
     void previousEnrollmentForeignKeyIsRestrict() {
         Chain chain = insertChain();
-        StudentProfile profile = newProfile(chain.userId());
-        Enrollment first = enrollmentRepository.saveAndFlush(active(profile, chain.classA(), chain.year()));
+        Enrollment first = enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
         first.close(EnrollmentStatus.TRANSFERRED, "mutation", first.getStartDate(), null);
         enrollmentRepository.saveAndFlush(first);
-        Enrollment next = new Enrollment(profile, chain.classB(), chain.year(), first.getStartDate(),
+        Enrollment next = new Enrollment(chain.userId(), chain.classB(), chain.year(), first.getStartDate(),
                 EnrollmentSource.CLASS_TRANSFER, "mutation", first.getId());
         enrollmentRepository.saveAndFlush(next);
 
@@ -199,8 +207,8 @@ class EnrollmentConstraintsTests {
                 new StudentProfile(userId, "ESIC-2026-" + shortCode(), null, false, null));
     }
 
-    private static Enrollment active(StudentProfile profile, long classGroupId, long academicYearId) {
-        return new Enrollment(profile, classGroupId, academicYearId, LocalDate.of(2026, 9, 1),
+    private static Enrollment active(long userId, long classGroupId, long academicYearId) {
+        return new Enrollment(userId, classGroupId, academicYearId, LocalDate.of(2026, 9, 1),
                 EnrollmentSource.MANUAL, null, null);
     }
 

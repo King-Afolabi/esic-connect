@@ -416,10 +416,10 @@ class ClaimIntegrationTests {
         String classId = (String) created("/api/v1/class-groups", Map.of("promotionPublicId", promo,
                 "programLevelPublicId", level, "sitePublicId", site, "code", "C-" + suffix,
                 "name", "Classe"), admin).get("publicId");
-        String profile = (String) created("/api/v1/student-profiles", Map.of(
+        created("/api/v1/student-profiles", Map.of(
                 "userPublicId", student.publicId(),
                 "studentNumber", "ESIC-2026-" + suffix), admin).get("publicId");
-        created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+        created("/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId(),
                 "classGroupPublicId", classId,
                 "startDate", java.time.LocalDate.now().minusDays(30).toString()), admin);
 

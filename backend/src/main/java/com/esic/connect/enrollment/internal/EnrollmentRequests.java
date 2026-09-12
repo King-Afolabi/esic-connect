@@ -14,10 +14,14 @@ final class EnrollmentRequests {
 
     /**
      * Inscription initiale d'un apprenant dans une classe.
+     * {@code studentUserPublicId} désigne directement le
+     * <strong>compte</strong> apprenant (rôle {@code STUDENT} actif, non
+     * archivé) — jamais un profil apprenant : l'inscription ne suppose
+     * l'existence d'aucun {@code student_profile} (refonte 2026-09).
      * {@code startDate} par défaut = aujourd'hui (horloge injectée).
      */
     record Enroll(
-            @NotBlank @Size(max = 40) String studentProfilePublicId,
+            @NotBlank @Size(max = 40) String studentUserPublicId,
             @NotBlank @Size(max = 40) String classGroupPublicId,
             LocalDate startDate) {
     }

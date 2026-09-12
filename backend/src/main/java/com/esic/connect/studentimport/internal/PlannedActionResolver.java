@@ -122,8 +122,11 @@ class PlannedActionResolver {
         }
         boolean divergent = contactDivergent(row, account, existingProfile);
 
+        // La situation d'inscription se lit sur le COMPTE, pas sur le
+        // profil (refonte 2026-09) : une inscription ne suppose plus
+        // l'existence d'un student_profile.
         StudentEnrollmentProvisioner.Situation situation =
-                enrollmentProvisioner.describeSituation(existingProfile.publicId(), classRef.publicId());
+                enrollmentProvisioner.describeSituation(account.publicId(), classRef.publicId());
         return switch (situation.kind()) {
             case OTHER_CLASS_SAME_YEAR -> new RowResolution(StudentImportPlannedAction.TRANSFER_CLASS,
                     classRef.publicId(), account.publicId(), situation.currentEnrollmentPublicId(), false,

@@ -586,7 +586,7 @@ class JustificationAttachmentIntegrationTests {
         Account student = account(RoleCode.STUDENT);
         String profile = created(admin, "/api/v1/student-profiles", Map.of("userPublicId", student.publicId,
                 "studentNumber", "ESIC-2026-" + code())).get("publicId").toString();
-        created(admin, "/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+        created(admin, "/api/v1/enrollments", Map.of("studentUserPublicId", student.publicId,
                 "classGroupPublicId", classA, "startDate", "2026-08-01"));
 
         String studentToken = tokenFor(student);

@@ -76,6 +76,7 @@ class EnrollmentSecurityTests {
     void anonymousRequestsAreRejectedWith401() {
         assertThat(anonymous("/api/v1/enrollments")).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(anonymous("/api/v1/student-profiles")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(anonymous("/api/v1/students")).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -85,7 +86,9 @@ class EnrollmentSecurityTests {
                 .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(get("/api/v1/student-profiles", token)).as("GET student-profiles as STUDENT")
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(post("/api/v1/enrollments", Map.of("studentProfilePublicId", UUID.randomUUID().toString(),
+        assertThat(get("/api/v1/students", token)).as("GET students as STUDENT")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(post("/api/v1/enrollments", Map.of("studentUserPublicId", UUID.randomUUID().toString(),
                 "classGroupPublicId", UUID.randomUUID().toString()), token)).as("POST enrollments as STUDENT")
                 .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(post("/api/v1/student-profiles", Map.of("userPublicId", UUID.randomUUID().toString(),
@@ -104,7 +107,9 @@ class EnrollmentSecurityTests {
                     .isEqualTo(HttpStatus.OK);
             assertThat(get("/api/v1/student-profiles", token)).as("GET student-profiles as " + role)
                     .isEqualTo(HttpStatus.OK);
-            assertThat(post("/api/v1/enrollments", Map.of("studentProfilePublicId", UUID.randomUUID().toString(),
+            assertThat(get("/api/v1/students", token)).as("GET students as " + role)
+                    .isEqualTo(HttpStatus.OK);
+            assertThat(post("/api/v1/enrollments", Map.of("studentUserPublicId", UUID.randomUUID().toString(),
                     "classGroupPublicId", UUID.randomUUID().toString()), token)).as("POST enrollments as " + role)
                     .isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(post("/api/v1/student-profiles", Map.of("userPublicId", UUID.randomUUID().toString(),
@@ -120,6 +125,8 @@ class EnrollmentSecurityTests {
             assertThat(get("/api/v1/enrollments", token)).as("GET enrollments as " + role)
                     .isEqualTo(HttpStatus.OK);
             assertThat(get("/api/v1/student-profiles", token)).as("GET student-profiles as " + role)
+                    .isEqualTo(HttpStatus.OK);
+            assertThat(get("/api/v1/students", token)).as("GET students as " + role)
                     .isEqualTo(HttpStatus.OK);
         }
     }

@@ -58,8 +58,9 @@ class AttendanceManagementConstraintsTests {
         long yearId = insertAcademicYear();
         long promotionId = insertPromotion(programId, yearId);
         long classId = insertClassGroup(promotionId, levelId, siteId);
-        long profileId = insertStudentProfile(studentUserId);
-        enrollmentId = insertEnrollment(profileId, classId, yearId);
+        // Refonte 2026-09 : l'inscription rattache directement le compte —
+        // aucun student_profile n'est nécessaire pour ces tests.
+        enrollmentId = insertEnrollment(studentUserId, classId, yearId);
         long sessionId = insertCourseSession(studentUserId);
         checkpointId = insertCheckpoint(sessionId);
     }
@@ -283,23 +284,13 @@ class AttendanceManagementConstraintsTests {
         return lastId();
     }
 
-    private long insertStudentProfile(long userId) {
+    private long insertEnrollment(long userId, long classId, long yearId) {
         entityManager.getEntityManager().createNativeQuery("""
-                INSERT INTO student_profile (public_id, user_id, student_number, work_study, status,
-                                             created_at, updated_at, version)
-                VALUES (UNHEX(REPLACE(UUID(), '-', '')), :userId, :number, FALSE, 'ACTIVE',
-                        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)
-                """).setParameter("userId", userId).setParameter("number", "STU-" + shortCode()).executeUpdate();
-        return lastId();
-    }
-
-    private long insertEnrollment(long profileId, long classId, long yearId) {
-        entityManager.getEntityManager().createNativeQuery("""
-                INSERT INTO enrollment (public_id, student_profile_id, class_group_id, academic_year_id,
+                INSERT INTO enrollment (public_id, user_id, class_group_id, academic_year_id,
                                         start_date, status, enrollment_source, created_at, updated_at, version)
-                VALUES (UNHEX(REPLACE(UUID(), '-', '')), :profileId, :classId, :yearId, '2026-09-01',
+                VALUES (UNHEX(REPLACE(UUID(), '-', '')), :userId, :classId, :yearId, '2026-09-01',
                         'ACTIVE', 'MANUAL', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)
-                """).setParameter("profileId", profileId).setParameter("classId", classId)
+                """).setParameter("userId", userId).setParameter("classId", classId)
                 .setParameter("yearId", yearId).executeUpdate();
         return lastId();
     }

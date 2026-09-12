@@ -113,10 +113,19 @@ class RosterScopeIntegrationTests {
         assertThat(status(managerToken, "/api/v1/student-profiles/" + outOfScope.profilePublicId()))
                 .isEqualTo(HttpStatus.NOT_FOUND);
 
+        // Écran « Apprenants » (rôle STUDENT) : même périmètre.
+        List<String> visibleStudents = studentUserIds(managerToken);
+        assertThat(visibleStudents).contains(inScope.account().publicId(), otherClassSameProgram.account().publicId());
+        assertThat(visibleStudents).doesNotContain(outOfScope.account().publicId());
+        assertThat(status(managerToken, "/api/v1/students/" + inScope.account().publicId()))
+                .isEqualTo(HttpStatus.OK);
+        assertThat(status(managerToken, "/api/v1/students/" + outOfScope.account().publicId()))
+                .isEqualTo(HttpStatus.NOT_FOUND);
+
         // Inscriptions : la liste ne remonte que le périmètre ; cibler
         // explicitement un apprenant hors périmètre ne fuite rien.
         ResponseEntity<Map<String, Object>> scopedEnrollments = get(managerToken,
-                "/api/v1/enrollments?student=" + outOfScope.profilePublicId());
+                "/api/v1/enrollments?student=" + outOfScope.account().publicId());
         assertThat(scopedEnrollments.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(((Number) scopedEnrollments.getBody().get("totalElements")).intValue()).isZero();
     }
@@ -140,6 +149,12 @@ class RosterScopeIntegrationTests {
 
         assertThat(status(teacherToken, "/api/v1/student-profiles/" + notTaught.profilePublicId()))
                 .isEqualTo(HttpStatus.NOT_FOUND);
+
+        List<String> visibleStudents = studentUserIds(teacherToken);
+        assertThat(visibleStudents).contains(taught.account().publicId());
+        assertThat(visibleStudents).doesNotContain(notTaught.account().publicId());
+        assertThat(status(teacherToken, "/api/v1/students/" + notTaught.account().publicId()))
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -151,6 +166,12 @@ class RosterScopeIntegrationTests {
         ResponseEntity<Map<String, Object>> page = get(teacherToken, "/api/v1/student-profiles");
         assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(((Number) page.getBody().get("totalElements")).intValue()).isZero();
+
+        // Périmètre vide ⇒ page vide sur l'écran « Apprenants » aussi,
+        // jamais tous les comptes STUDENT.
+        ResponseEntity<Map<String, Object>> studentsPage = get(teacherToken, "/api/v1/students");
+        assertThat(studentsPage.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(((Number) studentsPage.getBody().get("totalElements")).intValue()).isZero();
     }
 
     @Test
@@ -162,6 +183,9 @@ class RosterScopeIntegrationTests {
 
         List<String> visible = profileIds(adminToken);
         assertThat(visible).contains(s1.profilePublicId(), s2.profilePublicId());
+
+        List<String> visibleStudents = studentUserIds(adminToken);
+        assertThat(visibleStudents).contains(s1.account().publicId(), s2.account().publicId());
     }
 
     // ------------------------------------------------------------------
@@ -173,6 +197,16 @@ class RosterScopeIntegrationTests {
         List<Map<String, Object>> content =
                 (List<Map<String, Object>>) page.getBody().get("content");
         return content.stream().map(row -> String.valueOf(row.get("publicId"))).toList();
+    }
+
+    /** Écran « Apprenants » (rôle STUDENT) — mêmes règles de périmètre que {@link #profileIds}. */
+    private List<String> studentUserIds(String token) {
+        ResponseEntity<Map<String, Object>> page = get(token, "/api/v1/students?size=100");
+        assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content =
+                (List<Map<String, Object>>) page.getBody().get("content");
+        return content.stream().map(row -> String.valueOf(row.get("userPublicId"))).toList();
     }
 
     private ResponseEntity<Map<String, Object>> get(String token, String path) {

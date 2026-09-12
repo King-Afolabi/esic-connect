@@ -12,7 +12,7 @@
   @case ('not-found') {
     <div class="profile__panel" role="alert">
       <mat-icon aria-hidden="true">person_off</mat-icon>
-      <p>Aucun profil apprenant ne correspond à cet identifiant.</p>
+      <p>Aucun apprenant ne correspond à cet identifiant.</p>
       <a mat-stroked-button routerLink="/students">Retour à la liste</a>
     </div>
   }
@@ -34,62 +34,70 @@
   }
 
   @case ('ready') {
-    @if (profile(); as currentProfile) {
+    @if (student(); as s) {
       <header class="esic-page-header">
         <div class="esic-page-header__text">
-          <h1 class="esic-page-header__title">
-            @if (identity(); as civil) {
-              {{ civil.firstName }} {{ civil.lastName }}
-            } @else {
-              Apprenant {{ currentProfile.studentNumber }}
-            }
-          </h1>
+          <h1 class="esic-page-header__title">{{ s.lastName }} {{ s.firstName }}</h1>
+          <p class="esic-page-header__description">{{ s.email }}</p>
         </div>
       </header>
 
       <mat-card appearance="outlined" class="profile__card">
         <mat-card-header>
-          <mat-card-title>Profil</mat-card-title>
+          <mat-card-title>Compte</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           <dl class="profile__facts">
             <div>
-              <dt>Numéro étudiant</dt>
-              <dd>{{ currentProfile.studentNumber }}</dd>
-            </div>
-            @if (identity(); as civil) {
-              <div>
-                <dt>Adresse électronique</dt>
-                <dd>{{ civil.email }}</dd>
-              </div>
-            }
-            <div>
-              <dt>Statut</dt>
+              <dt>Statut du compte</dt>
               <dd>
-                <span class="esic-badge" [attr.data-status]="currentProfile.status">
-                  {{ statusLabel(currentProfile.status) }}
+                <span class="esic-badge" [attr.data-status]="s.accountStatus">
+                  {{ accountStatusLabel(s.accountStatus) }}
                 </span>
               </dd>
             </div>
             <div>
-              <dt>Alternance</dt>
-              <dd>{{ currentProfile.workStudy ? 'Oui' : 'Non' }}</dd>
-            </div>
-            <div>
-              <dt>Entreprise d'accueil</dt>
-              <dd>{{ currentProfile.companyName || '—' }}</dd>
-            </div>
-            <div>
-              <dt>Date de naissance</dt>
-              <dd>
-                {{ currentProfile.birthDate ? (currentProfile.birthDate | date: 'dd/MM/yyyy') : '—' }}
-              </dd>
-            </div>
-            <div>
               <dt>Créé le</dt>
-              <dd>{{ currentProfile.createdAt | date: 'dd/MM/yyyy' }}</dd>
+              <dd>{{ s.createdAt | date: 'dd/MM/yyyy' }}</dd>
+            </div>
+            <div>
+              <dt>Dernière connexion</dt>
+              <dd>{{ s.lastLoginAt ? (s.lastLoginAt | date: 'dd/MM/yyyy HH:mm') : 'jamais connecté' }}</dd>
             </div>
           </dl>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined" class="profile__card">
+        <mat-card-header>
+          <mat-card-title>Profil apprenant</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @if (s.studentProfilePublicId) {
+            <dl class="profile__facts">
+              <div>
+                <dt>Numéro étudiant</dt>
+                <dd>{{ s.studentNumber }}</dd>
+              </div>
+              <div>
+                <dt>Alternance</dt>
+                <dd>{{ s.workStudy ? 'Oui' : 'Non' }}</dd>
+              </div>
+              <div>
+                <dt>Entreprise d'accueil</dt>
+                <dd>{{ s.companyName || '—' }}</dd>
+              </div>
+              <div>
+                <dt>Date de naissance</dt>
+                <dd>{{ s.birthDate ? (s.birthDate | date: 'dd/MM/yyyy') : '—' }}</dd>
+              </div>
+            </dl>
+          } @else {
+            <p class="profile__status" role="status">
+              Aucun profil apprenant renseigné pour ce compte — il reste un apprenant à part
+              entière (numéro étudiant, alternance, etc. facultatifs).
+            </p>
+          }
         </mat-card-content>
       </mat-card>
 
@@ -136,7 +144,7 @@
                 }
               } @else {
                 <p class="profile__status" role="status">
-                  Aucune inscription active. Voir l'historique ci-dessous.
+                  Aucune inscription pour cet apprenant. Voir l'historique ci-dessous.
                 </p>
               }
 

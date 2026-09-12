@@ -6,6 +6,7 @@ import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.academic.SubjectDirectory;
 import com.esic.connect.enrollment.EnrollmentChangeAction;
 import com.esic.connect.enrollment.EnrollmentResourceType;
+import com.esic.connect.identity.UserDirectory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -51,29 +52,35 @@ class StudentGroupService {
     private final StudentGroupRepository groupRepository;
     private final StudentGroupMemberRepository memberRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final StudentProfileRepository profileRepository;
     private final AcademicReferenceDirectory academicReferences;
     private final AcademicScopeDirectory academicScope;
     private final ClassGroupDirectory classGroups;
     private final SubjectDirectory subjects;
+    private final UserDirectory userDirectory;
     private final EnrollmentChangePublisher changePublisher;
     private final Clock clock;
 
     StudentGroupService(StudentGroupRepository groupRepository,
                         StudentGroupMemberRepository memberRepository,
                         EnrollmentRepository enrollmentRepository,
+                        StudentProfileRepository profileRepository,
                         AcademicReferenceDirectory academicReferences,
                         AcademicScopeDirectory academicScope,
                         ClassGroupDirectory classGroups,
                         SubjectDirectory subjects,
+                        UserDirectory userDirectory,
                         EnrollmentChangePublisher changePublisher,
                         Clock clock) {
         this.groupRepository = groupRepository;
         this.memberRepository = memberRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.profileRepository = profileRepository;
         this.academicReferences = academicReferences;
         this.academicScope = academicScope;
         this.classGroups = classGroups;
         this.subjects = subjects;
+        this.userDirectory = userDirectory;
         this.changePublisher = changePublisher;
         this.clock = clock;
     }
@@ -190,8 +197,14 @@ class StudentGroupService {
                 .findAllById(members.stream().map(StudentGroupMember::getEnrollmentId).toList())
                 .stream()
                 .collect(Collectors.toMap(Enrollment::getId, Function.identity()));
+        // Résolution en lot (anti-N+1) du compte et du profil facultatif
+        // de chaque apprenant du groupe.
+        List<Long> userIds = enrollments.values().stream().map(Enrollment::getUserId).distinct().toList();
+        Map<Long, UserDirectory.NamedUserRef> userRefs = userDirectory.findNamedRefs(userIds);
+        Map<Long, StudentProfile> profiles = profileRepository.findByUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(StudentProfile::getUserId, p -> p));
         return members.stream()
-                .map(member -> toMember(member, enrollments.get(member.getEnrollmentId())))
+                .map(member -> toMember(member, enrollments.get(member.getEnrollmentId()), userRefs, profiles))
                 .filter(java.util.Objects::nonNull)
                 .sorted(Comparator.comparing(StudentGroupResponse.Member::studentNumber,
                         Comparator.nullsLast(String::compareToIgnoreCase)))
@@ -320,17 +333,22 @@ class StudentGroupService {
         }
     }
 
-    private StudentGroupResponse.Member toMember(StudentGroupMember member, Enrollment enrollment) {
+    private StudentGroupResponse.Member toMember(StudentGroupMember member, Enrollment enrollment,
+                                                 Map<Long, UserDirectory.NamedUserRef> userRefs,
+                                                 Map<Long, StudentProfile> profiles) {
         if (enrollment == null) {
             return null;
         }
         Optional<ClassGroupDirectory.ClassGroupRef> classRef =
                 classGroups.findByInternalId(enrollment.getClassGroupId());
+        UserDirectory.NamedUserRef userRef = userRefs.get(enrollment.getUserId());
+        StudentProfile profile = profiles.get(enrollment.getUserId());
         return new StudentGroupResponse.Member(
                 member.getPublicId(),
                 enrollment.getPublicId(),
-                enrollment.getStudentProfile().getPublicId(),
-                enrollment.getStudentProfile().getStudentNumber(),
+                userRef != null ? userRef.publicId() : null,
+                profile != null ? profile.getPublicId() : null,
+                profile != null ? profile.getStudentNumber() : null,
                 classRef.map(ClassGroupDirectory.ClassGroupRef::publicId).orElse(null),
                 classRef.map(ClassGroupDirectory.ClassGroupRef::code).orElse(null),
                 member.getJoinedAt());

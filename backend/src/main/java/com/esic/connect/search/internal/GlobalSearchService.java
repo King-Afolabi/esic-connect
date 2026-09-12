@@ -119,8 +119,11 @@ class GlobalSearchService {
         for (EnrollmentDirectory.RosterEntry s : students) {
             String label = join(s.lastName(), s.firstName());
             String secondary = join(s.studentNumber(), s.classGroupCode());
+            // Identifiant du COMPTE apprenant (toujours renseigné), pas du
+            // profil (facultatif, refonte 2026-09) : la fiche apprenant
+            // s'affiche pour tout compte STUDENT, avec ou sans profil.
             hits.add(new SearchResponses.Hit("STUDENT",
-                    s.studentProfilePublicId() == null ? "" : s.studentProfilePublicId().toString(),
+                    s.studentUserPublicId() == null ? "" : s.studentUserPublicId().toString(),
                     label, secondary));
         }
 

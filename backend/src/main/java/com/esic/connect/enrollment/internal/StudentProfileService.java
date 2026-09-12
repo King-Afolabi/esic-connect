@@ -158,10 +158,17 @@ class StudentProfileService {
         Optional<java.util.Set<Long>> visibleClasses =
                 rosterScope.visibleClassGroupInternalIds(callerSubject);
         if (visibleClasses.isPresent()) {
-            List<Long> scopedProfileIds = visibleClasses.get().isEmpty()
+            // L'inscription rattache un compte, pas un profil (refonte
+            // 2026-09) : on résout d'abord les comptes visibles, puis les
+            // profils correspondants — un compte visible sans profil ne
+            // produit simplement aucun identifiant ici, sans erreur.
+            List<Long> scopedUserIds = visibleClasses.get().isEmpty()
                     ? List.of()
-                    : enrollmentRepository.findStudentProfileIdsByClassGroupIdInAndStatus(
+                    : enrollmentRepository.findUserIdsByClassGroupIdInAndStatus(
                             visibleClasses.get(), EnrollmentStatus.ACTIVE);
+            List<Long> scopedProfileIds = scopedUserIds.isEmpty()
+                    ? List.of()
+                    : profileRepository.findIdsByUserIdIn(scopedUserIds);
             if (scopedProfileIds.isEmpty()) {
                 return PageResponse.of(Page.<StudentProfile>empty(pageable),
                         profile -> StudentProfileResponse.from(profile, null));
@@ -227,7 +234,7 @@ class StudentProfileService {
             return false;
         }
         return enrollmentRepository
-                .findByStudentProfile_UserIdAndStatus(profile.getUserId(), EnrollmentStatus.ACTIVE)
+                .findByUserIdAndStatus(profile.getUserId(), EnrollmentStatus.ACTIVE)
                 .stream()
                 .anyMatch(enrollment -> classGroupIds.contains(enrollment.getClassGroupId()));
     }

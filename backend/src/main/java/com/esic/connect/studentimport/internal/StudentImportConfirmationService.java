@@ -290,7 +290,11 @@ class StudentImportConfirmationService {
             }
         }
 
-        StudentImportRowOutcome outcome = applyEnrollment(row, resolution, profilePublicId, actorId, today);
+        // L'inscription se rattache directement au COMPTE (userPublicId),
+        // jamais au profil (refonte 2026-09) : elle ne suppose plus
+        // l'existence d'un student_profile, même si l'import continue par
+        // ailleurs de provisionner ce dernier (numéro étudiant).
+        StudentImportRowOutcome outcome = applyEnrollment(row, resolution, userPublicId, actorId, today);
         row.setAppliedOutcome(outcome);
         tally(totals, outcome, invited);
     }
@@ -329,12 +333,12 @@ class StudentImportConfirmationService {
     }
 
     private StudentImportRowOutcome applyEnrollment(StudentImportRow row, RowResolution resolution,
-                                                   UUID profilePublicId, Long actorId, LocalDate today) {
+                                                   UUID userPublicId, Long actorId, LocalDate today) {
         UUID classPublicId = resolution.resolvedClassPublicId();
         if (resolution.plannedAction() == StudentImportPlannedAction.UPDATE_PROFILE) {
             return StudentImportRowOutcome.UPDATED;
         }
-        Situation situation = enrollmentProvisioner.describeSituation(profilePublicId, classPublicId);
+        Situation situation = enrollmentProvisioner.describeSituation(userPublicId, classPublicId);
         return switch (situation.kind()) {
             case SAME_CLASS -> resolution.contactDivergent()
                     ? StudentImportRowOutcome.UPDATED : StudentImportRowOutcome.NOOP;
@@ -344,7 +348,7 @@ class StudentImportConfirmationService {
                 yield StudentImportRowOutcome.TRANSFERRED;
             }
             case NONE -> {
-                enrollmentProvisioner.provisionEnrollment(profilePublicId, classPublicId, today, actorId);
+                enrollmentProvisioner.provisionEnrollment(userPublicId, classPublicId, today, actorId);
                 yield resolution.plannedAction() == StudentImportPlannedAction.CREATE_ACCOUNT_AND_ENROLL
                         ? StudentImportRowOutcome.CREATED : StudentImportRowOutcome.ENROLLED;
             }

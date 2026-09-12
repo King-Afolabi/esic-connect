@@ -36,10 +36,16 @@ public record StudentGroupResponse(
      * suffisent à identifier la ligne dans l'interface, et les données
      * nominatives sont résolues au besoin par les écrans qui en ont le
      * droit (docs/02 §33, minimisation).
+     *
+     * @param studentUserId  identifiant public du compte apprenant — toujours renseigné
+     * @param studentProfileId identifiant public du profil apprenant ; {@code null}
+     *                         si ce compte n'a pas de profil (donnée facultative)
+     * @param studentNumber  numéro étudiant ; {@code null} si aucun profil
      */
     public record Member(
             UUID id,
             UUID enrollmentId,
+            UUID studentUserId,
             UUID studentProfileId,
             String studentNumber,
             UUID classGroupId,

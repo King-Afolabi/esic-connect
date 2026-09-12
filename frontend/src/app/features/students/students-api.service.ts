@@ -14,36 +14,40 @@ import {
   CloseEnrollmentRequest,
   RemoteAttendanceAuthorizationResponse,
   RemoteAttendanceAuthorizeRequest,
-  StudentProfileListQuery,
+  StudentListQuery,
   StudentProfileResponse,
+  StudentResponse,
   TransferEnrollmentRequest,
-  UserIdentitySummary,
 } from './students.models';
 
 /**
  * Accès aux endpoints des modules `enrollment` et `identity` de l'espace
- * « Apprenants » : consultation (profils, inscriptions, identité civile),
- * suivi à distance individuel, et **création manuelle d'un apprenant**
- * (Lot H — trois routes existantes enchaînées).
+ * « Apprenants » : consultation (écran « Apprenants », profils facultatifs,
+ * inscriptions), suivi à distance individuel, et **création manuelle d'un
+ * apprenant** (Lot H — trois routes existantes enchaînées).
+ *
+ * Refonte 2026-09 : l'écran « Apprenants » repose sur
+ * `GET /api/v1/students` — tous les comptes porteurs du rôle `STUDENT`,
+ * avec ou sans profil, avec ou sans inscription. `student-profiles` et
+ * `enrollments` restent des routes de gestion de données facultatives,
+ * plus la source de la liste elle-même.
  *
  * Ce service ne consomme que des routes déjà exposées par le back-end ;
  * aucune n'est inventée. Les appels sont authentifiés par le jeton
  * porteur ajouté par `authTokenInterceptor` (le jeton reste en mémoire).
  * L'autorisation effective est décidée par Spring Security
- * (`EnrollmentWeb.MANAGE_ROLES` ; `POST /users` exige `ADMIN` /
- * `SUPER_ADMIN`) : les gardes de route côté client ne font que masquer
- * une navigation.
+ * (`EnrollmentWeb.READ_ROLES` / `MANAGE_ROLES` ; `POST /users` exige
+ * `ADMIN` / `SUPER_ADMIN`) : les gardes de route côté client ne font que
+ * masquer une navigation.
  */
 @Injectable({ providedIn: 'root' })
 export class StudentsApiService {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiBaseUrl}/v1`;
 
-  /** `GET /api/v1/student-profiles` — liste paginée, filtrée, triée. */
-  listProfiles(
-    query: StudentProfileListQuery,
-  ): Observable<PageResponse<StudentProfileResponse>> {
-    return this.http.get<PageResponse<StudentProfileResponse>>(`${this.base}/student-profiles`, {
+  /** `GET /api/v1/students` — liste paginée, filtrée, triée (rôle STUDENT). */
+  listStudents(query: StudentListQuery): Observable<PageResponse<StudentResponse>> {
+    return this.http.get<PageResponse<StudentResponse>>(`${this.base}/students`, {
       params: toHttpParams({
         q: query.q,
         status: query.status,
@@ -54,16 +58,14 @@ export class StudentsApiService {
     });
   }
 
-  /** `GET /api/v1/student-profiles/{publicId}`. */
-  getProfile(publicId: string): Observable<StudentProfileResponse> {
-    return this.http.get<StudentProfileResponse>(
-      `${this.base}/student-profiles/${encodeURIComponent(publicId)}`,
-    );
+  /** `GET /api/v1/students/{userPublicId}`. */
+  getStudent(userPublicId: string): Observable<StudentResponse> {
+    return this.http.get<StudentResponse>(`${this.base}/students/${encodeURIComponent(userPublicId)}`);
   }
 
   /**
-   * `GET /api/v1/enrollments` — utilisé ici avec le filtre `student` pour
-   * l'historique d'inscriptions d'un apprenant.
+   * `GET /api/v1/enrollments` — utilisé ici avec le filtre `student` (le
+   * **compte** apprenant) pour l'historique d'inscriptions d'un apprenant.
    */
   listEnrollments(query: EnrollmentListQuery): Observable<PageResponse<EnrollmentResponse>> {
     return this.http.get<PageResponse<EnrollmentResponse>>(`${this.base}/enrollments`, {
@@ -78,17 +80,6 @@ export class StudentsApiService {
     });
   }
 
-  /**
-   * `GET /api/v1/users/{publicId}` — identité civile, **facultative**. Le
-   * profil apprenant n'exposant que `userPublicId`, cet appel enrichit la
-   * fiche ; son échec est ignoré par l'appelant.
-   */
-  getUserIdentity(publicId: string): Observable<UserIdentitySummary> {
-    return this.http.get<UserIdentitySummary>(
-      `${this.base}/users/${encodeURIComponent(publicId)}`,
-    );
-  }
-
   // -------------------------------------------------------------------
   // Création manuelle d'un apprenant (Lot H)
   // -------------------------------------------------------------------
@@ -98,17 +89,28 @@ export class StudentsApiService {
    * rôle `STUDENT` et lui émet son invitation (aucun mot de passe n'est
    * transmis : la personne le choisit via le lien). `409` si l'adresse
    * est déjà utilisée. Réservé à `ADMIN` / `SUPER_ADMIN` côté serveur.
+   * L'apprenant est immédiatement visible dans `/api/v1/students`, sans
+   * qu'aucune autre étape ne soit requise.
    */
   createStudentAccount(body: CreateStudentAccountRequest): Observable<CreatedUserResponse> {
     return this.http.post<CreatedUserResponse>(`${this.base}/users`, body);
   }
 
-  /** `POST /api/v1/student-profiles` — profil pour un compte existant. */
+  /**
+   * `POST /api/v1/student-profiles` — données facultatives (numéro
+   * étudiant, alternance…) pour un compte `STUDENT` existant. Ni requis
+   * ni suffisant pour être un apprenant : c'est le rôle qui l'établit.
+   */
   createStudentProfile(body: CreateStudentProfileRequest): Observable<StudentProfileResponse> {
     return this.http.post<StudentProfileResponse>(`${this.base}/student-profiles`, body);
   }
 
-  /** `POST /api/v1/enrollments` — inscription initiale dans une classe. */
+  /**
+   * `POST /api/v1/enrollments` — inscription initiale dans une classe,
+   * pour le **compte** apprenant désigné (`studentUserPublicId`). Opération
+   * distincte et non obligatoire : un compte `STUDENT` sans inscription
+   * reste un apprenant pleinement visible.
+   */
   enrollStudent(body: EnrollStudentRequest): Observable<EnrollmentResponse> {
     return this.http.post<EnrollmentResponse>(`${this.base}/enrollments`, body);
   }

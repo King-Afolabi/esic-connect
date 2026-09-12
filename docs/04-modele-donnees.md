@@ -609,6 +609,31 @@ est attribué.
 - `student_number_sequence` : allocation **atomique** du numéro
   `ESIC-{annéeDébut}-{NNNNN}`.
 
+### Refonte du modèle apprenant (2026-09) — `student_profile` / `enrollment`
+- Le rôle **STUDENT** (`user_role`, module `identity`) est l'**unique**
+  source de vérité du statut apprenant. Ni l'existence d'un
+  `student_profile`, ni celle d'un `enrollment`, ne conditionnent plus la
+  présence d'un compte dans l'écran « Apprenants ».
+- `enrollment.user_id` référence directement `user_account` (`FK
+  RESTRICT`) — la migration `V7` a été réécrite en place (projet en
+  conception, aucune donnée à préserver) : `enrollment` **ne référence
+  plus `student_profile`** du tout. Les deux tables sont désormais
+  indépendantes ; une inscription n'a jamais requis, et ne requiert
+  toujours pas, de profil apprenant.
+- `student_profile` reste une table de données **facultatives** (numéro
+  étudiant, date de naissance, alternance), avec `user_id` unique vers
+  `user_account`, sans aucun lien vers `enrollment`.
+- Nouveau point d'entrée `GET /api/v1/students` (module `enrollment`) :
+  liste tous les comptes porteurs d'un rôle actif `STUDENT`, décorés
+  (jamais conditionnés) par leur profil et leur inscription courante
+  lorsqu'ils existent. Remplace `student_profile` comme source de la
+  liste des apprenants (`GET /api/v1/student-profiles` reste disponible
+  pour la gestion directe des profils).
+- Les sections §9 à §25 ci-dessous (modèle cible, non audité) n'ont pas
+  été mises à jour de cette refonte et peuvent encore montrer
+  `enrollment.student_profile_id` : seule cette section §6bis décrit le
+  schéma réellement en base.
+
 ### Contraintes métier notables ailleurs
 - `enrollment` : **une seule inscription active** par apprenant et par
   année (contrainte SQL + isolation de la concurrence testée).

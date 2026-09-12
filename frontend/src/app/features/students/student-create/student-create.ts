@@ -23,15 +23,21 @@ interface ClassOption {
 /**
  * Création manuelle d'un apprenant (Lot H) — sans passer par un import CSV.
  *
- * Vérifié avant écriture : aucune fonctionnalité de ce type n'existait
- * (le service `students` était en lecture seule pour les profils, et
- * `/students` n'offrait aucune action de création). Ce parcours enchaîne
- * **trois routes existantes**, chacune contrôlée côté serveur :
+ * Refonte 2026-09 : le rôle {@code STUDENT} est l'unique source de vérité
+ * du statut apprenant. Dès la première étape (création du compte), la
+ * personne est un apprenant pleinement visible dans {@code /students} —
+ * le profil et l'inscription qui suivent sont des enrichissements
+ * facultatifs, pas des conditions. Ce parcours enchaîne **trois routes
+ * existantes**, chacune contrôlée côté serveur :
  *
  *   1. `POST /api/v1/users` — compte `PENDING_ACTIVATION` + invitation
- *      (rôle `STUDENT`, aucun mot de passe) ;
- *   2. `POST /api/v1/student-profiles` — profil (numéro étudiant, etc.) ;
- *   3. `POST /api/v1/enrollments` — inscription initiale dans une classe.
+ *      (rôle `STUDENT`, aucun mot de passe) — apprenant visible dès cette
+ *      étape ;
+ *   2. `POST /api/v1/student-profiles` — profil facultatif (numéro
+ *      étudiant, etc.) ;
+ *   3. `POST /api/v1/enrollments` — inscription initiale dans une classe,
+ *      rattachée directement au compte créé à l'étape 1 (jamais au
+ *      profil de l'étape 2).
  *
  * L'enchaînement **n'est pas atomique** (trois transactions, deux
  * modules). Ce n'est pas masqué : si une étape échoue, l'écran conserve
@@ -121,24 +127,26 @@ export class StudentCreate {
 
     this.accountStep(raw)
       .pipe(
-        switchMap((userPublicId) => this.profileStep(userPublicId, raw)),
-        switchMap((profilePublicId) =>
+        switchMap((userPublicId) =>
+          this.profileStep(userPublicId, raw).pipe(map(() => userPublicId)),
+        ),
+        switchMap((userPublicId) =>
           this.api
             .enrollStudent({
-              studentProfilePublicId: profilePublicId,
+              studentUserPublicId: userPublicId,
               classGroupPublicId: raw.classGroupPublicId,
               startDate: null,
             })
-            .pipe(map(() => profilePublicId)),
+            .pipe(map(() => userPublicId)),
         ),
       )
       .subscribe({
-        next: (profilePublicId) => {
+        next: (userPublicId) => {
           this.submitting.set(false);
           this.notifications.info(
             "Apprenant créé et inscrit. L'invitation d'activation a été envoyée.",
           );
-          void this.router.navigate(['/students', profilePublicId]);
+          void this.router.navigate(['/students', userPublicId]);
         },
         error: (error: unknown) => this.handleError(error),
       });

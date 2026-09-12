@@ -654,9 +654,7 @@ class AlternationIntegrationTests {
 
     private String enrollmentInClass(String admin, String classPublicId) {
         String studentUser = accountWithRoles(RoleCode.STUDENT).publicId();
-        String profile = (String) created("/api/v1/student-profiles", Map.of("userPublicId", studentUser,
-                "studentNumber", "ESIC-2026-" + code()), admin).get("publicId");
-        return (String) created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
+        return (String) created("/api/v1/enrollments", Map.of("studentUserPublicId", studentUser,
                 "classGroupPublicId", classPublicId), admin).get("publicId");
     }
 

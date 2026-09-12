@@ -72,8 +72,8 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
 
     @Override
     @Transactional(readOnly = true)
-    public Situation describeSituation(UUID studentProfilePublicId, UUID targetClassGroupPublicId) {
-        if (studentProfilePublicId == null || targetClassGroupPublicId == null) {
+    public Situation describeSituation(UUID userPublicId, UUID targetClassGroupPublicId) {
+        if (userPublicId == null || targetClassGroupPublicId == null) {
             return Situation.none();
         }
         ClassGroupDirectory.ClassGroupRef target =
@@ -81,8 +81,12 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
         if (target == null) {
             return Situation.none();
         }
+        UserDirectory.UserRef user = userDirectory.findByPublicId(userPublicId).orElse(null);
+        if (user == null) {
+            return Situation.none();
+        }
         List<Enrollment> active = enrollmentRepository
-                .findByStudentProfile_PublicIdAndStatus(studentProfilePublicId, EnrollmentStatus.ACTIVE);
+                .findByUserIdAndStatus(user.internalId(), EnrollmentStatus.ACTIVE);
         Optional<Enrollment> sameYear = active.stream()
                 .filter(e -> e.getAcademicYearId() != null
                         && e.getAcademicYearId() == target.academicYearInternalId())
@@ -114,12 +118,13 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
 
     @Override
     @Transactional
-    public EnrollmentView provisionEnrollment(UUID studentProfilePublicId, UUID classGroupPublicId,
+    public EnrollmentView provisionEnrollment(UUID userPublicId, UUID classGroupPublicId,
                                               LocalDate startDate, Long actorUserInternalId) {
-        StudentProfile profile = requireProfile(studentProfilePublicId);
+        UserDirectory.UserRef user = userDirectory.findByPublicId(userPublicId)
+                .orElseThrow(() -> new IllegalStateException("Compte introuvable pour l'inscription."));
         ClassGroupDirectory.ClassGroupRef target = requireClass(classGroupPublicId);
-        Enrollment enrollment = new Enrollment(profile, target.internalId(), target.academicYearInternalId(),
-                startDate, EnrollmentSource.MANUAL, null, null);
+        Enrollment enrollment = new Enrollment(user.internalId(), target.internalId(),
+                target.academicYearInternalId(), startDate, EnrollmentSource.MANUAL, null, null);
         enrollment.markCreatedBy(actorUserInternalId);
         return toView(enrollmentRepository.saveAndFlush(enrollment));
     }
@@ -135,7 +140,7 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
         current.close(EnrollmentStatus.TRANSFERRED, reason, effectiveDate, actorUserInternalId);
         enrollmentRepository.saveAndFlush(current); // libère le créneau d'unicité avant l'INSERT
 
-        Enrollment next = new Enrollment(current.getStudentProfile(), target.internalId(),
+        Enrollment next = new Enrollment(current.getUserId(), target.internalId(),
                 target.academicYearInternalId(), effectiveDate.plusDays(1), EnrollmentSource.CLASS_TRANSFER,
                 reason, current.getId());
         next.markCreatedBy(actorUserInternalId);
@@ -152,11 +157,6 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
 
     // ------------------------------------------------------------------
 
-    private StudentProfile requireProfile(UUID publicId) {
-        return profileRepository.findByPublicId(publicId)
-                .orElseThrow(() -> new IllegalStateException("Profil apprenant introuvable."));
-    }
-
     private ClassGroupDirectory.ClassGroupRef requireClass(UUID publicId) {
         return classGroupDirectory.findByPublicId(publicId)
                 .orElseThrow(() -> new IllegalStateException("Classe introuvable pour l'inscription."));
@@ -172,9 +172,11 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
     private EnrollmentView toView(Enrollment enrollment) {
         ClassGroupDirectory.ClassGroupRef classRef =
                 classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
+        UUID userPublicId = userDirectory.findByInternalId(enrollment.getUserId())
+                .map(UserDirectory.UserRef::publicId).orElse(null);
         return new EnrollmentView(
                 enrollment.getPublicId(),
-                enrollment.getStudentProfile().getPublicId(),
+                userPublicId,
                 classRef != null ? classRef.publicId() : null,
                 enrollment.getStatus() == EnrollmentStatus.ACTIVE);
     }

@@ -15,64 +15,60 @@ interface EnrollmentRepository
 
     Optional<Enrollment> findByPublicId(UUID publicId);
 
-    List<Enrollment> findByStudentProfile_PublicIdAndStatus(UUID studentProfilePublicId, EnrollmentStatus status);
+    List<Enrollment> findByUserIdAndStatus(Long userId, EnrollmentStatus status);
 
-    List<Enrollment> findByStudentProfile_UserIdAndStatus(Long userId, EnrollmentStatus status);
+    List<Enrollment> findByUserId(Long userId);
 
-    List<Enrollment> findByStudentProfile_UserId(Long userId);
+    /** Toutes les inscriptions (tous statuts) d'un lot de comptes, en une requête (anti-N+1). */
+    List<Enrollment> findByUserIdIn(Collection<Long> userIds);
 
     /** Décompte borné des inscriptions d'un compte (comparaison de doublons, ANO-USER-001). */
-    long countByStudentProfile_UserId(Long userId);
+    long countByUserId(Long userId);
 
-    long countByStudentProfile_UserIdAndStatus(Long userId, EnrollmentStatus status);
+    long countByUserIdAndStatus(Long userId, EnrollmentStatus status);
 
     long countByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);
 
     List<Enrollment> findByClassGroupIdInAndStatus(Collection<Long> classGroupIds, EnrollmentStatus status);
 
     /**
-     * Identifiants internes distincts des profils apprenants ayant une
-     * inscription au statut donné dans l'une des classes indiquées —
-     * filtre de périmètre pédagogique pour la liste des profils
-     * (un {@code PEDAGOGICAL_MANAGER} ne voit que ses apprenants).
+     * Identifiants internes distincts des <strong>comptes</strong> ayant
+     * une inscription au statut donné dans l'une des classes indiquées —
+     * filtre de périmètre pédagogique (un {@code PEDAGOGICAL_MANAGER} ne
+     * voit que les apprenants de ses classes). Utilisé pour l'écran «
+     * Apprenants » (rôle {@code STUDENT}) et, par traduction vers des
+     * identifiants de profil, pour la liste des profils apprenants.
      */
     @Query("""
-            SELECT DISTINCT e.studentProfile.id FROM Enrollment e
+            SELECT DISTINCT e.userId FROM Enrollment e
             WHERE e.status = :status AND e.classGroupId IN :classGroupIds
             """)
-    List<Long> findStudentProfileIdsByClassGroupIdInAndStatus(
+    List<Long> findUserIdsByClassGroupIdInAndStatus(
             @Param("classGroupIds") Collection<Long> classGroupIds,
             @Param("status") EnrollmentStatus status);
 
-    boolean existsByStudentProfileIdAndAcademicYearIdAndStatus(Long studentProfileId, Long academicYearId,
-                                                              EnrollmentStatus status);
+    boolean existsByUserIdAndAcademicYearIdAndStatus(Long userId, Long academicYearId, EnrollmentStatus status);
 
     /**
      * Inscriptions <strong>actives</strong> dont l'apprenant porte le
      * numéro étudiant recherché (EF-USER-009).
      *
-     * <p>La recherche par nom ne se fait pas ici : le nom vit dans
-     * {@code identity}, et {@code enrollment} n'a pas d'entité vers
-     * laquelle joindre — la frontière de module est respectée en
-     * demandant d'abord les comptes à {@code UserDirectory}, puis les
-     * inscriptions de ces comptes.
+     * <p>Le numéro étudiant vit dans {@code student_profile}, une table
+     * indépendante — sans relation JPA depuis {@link Enrollment} (refonte
+     * 2026-09 : une inscription ne présuppose plus de profil). Le
+     * rapprochement se fait ici par égalité de {@code user_id}, dans une
+     * requête JPQL à deux racines (pas de jointure d'objet-graphe), ce qui
+     * reste une requête SQL unique.
      */
     @Query("""
-            SELECT e FROM Enrollment e
-            JOIN e.studentProfile p
-            WHERE e.status = :status AND LOWER(p.studentNumber) LIKE :pattern
+            SELECT e FROM Enrollment e, StudentProfile p
+            WHERE e.status = :status AND e.userId = p.userId AND LOWER(p.studentNumber) LIKE :pattern
             ORDER BY p.studentNumber ASC
             """)
     List<Enrollment> searchByStudentNumber(@Param("pattern") String pattern,
                                            @Param("status") EnrollmentStatus status,
                                            org.springframework.data.domain.Pageable pageable);
 
-    /** Inscriptions actives des profils apprenants indiqués. */
-    @Query("""
-            SELECT e FROM Enrollment e
-            JOIN e.studentProfile p
-            WHERE e.status = :status AND p.userId IN :userIds
-            """)
-    List<Enrollment> findActiveByStudentUserIds(@Param("userIds") java.util.Collection<Long> userIds,
-                                                @Param("status") EnrollmentStatus status);
+    /** Inscriptions actives des comptes indiqués. */
+    List<Enrollment> findByUserIdInAndStatus(java.util.Collection<Long> userIds, EnrollmentStatus status);
 }

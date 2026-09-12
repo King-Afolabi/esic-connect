@@ -36,12 +36,14 @@ public interface StudentEnrollmentProvisioner {
     boolean studentNumberTaken(String studentNumber);
 
     /**
-     * Situation d'inscription d'un profil apprenant vis-à-vis d'une classe
-     * cible (rapport §3.3). {@link Situation#currentEnrollmentPublicId} est
+     * Situation d'inscription d'un <strong>compte</strong> apprenant
+     * vis-à-vis d'une classe cible (rapport §3.3). Ne dépend d'aucun
+     * profil apprenant : une inscription rattache directement le compte
+     * (refonte 2026-09). {@link Situation#currentEnrollmentPublicId} est
      * renseigné pour le seul cas {@link Situation.Kind#OTHER_CLASS_SAME_YEAR}
      * (changement de classe).
      */
-    Situation describeSituation(UUID studentProfilePublicId, UUID targetClassGroupPublicId);
+    Situation describeSituation(UUID userPublicId, UUID targetClassGroupPublicId);
 
     // --- Application (confirmation) — dans la transaction de l'appelant ---
 
@@ -54,8 +56,15 @@ public interface StudentEnrollmentProvisioner {
      */
     StudentProfileView provisionProfile(ProvisionProfile command);
 
-    /** Nouvelle inscription {@code ACTIVE} dans la classe indiquée. */
-    EnrollmentView provisionEnrollment(UUID studentProfilePublicId, UUID classGroupPublicId,
+    /**
+     * Nouvelle inscription {@code ACTIVE} dans la classe indiquée, pour le
+     * <strong>compte</strong> apprenant désigné — jamais un profil : une
+     * inscription ne suppose l'existence d'aucun {@code student_profile}
+     * (refonte 2026-09). L'import continue par ailleurs de provisionner un
+     * profil (numéro étudiant) en parallèle lorsque le métier l'exige,
+     * mais les deux écritures sont indépendantes.
+     */
+    EnrollmentView provisionEnrollment(UUID userPublicId, UUID classGroupPublicId,
                                        LocalDate startDate, Long actorUserInternalId);
 
     /**
@@ -91,11 +100,11 @@ public interface StudentEnrollmentProvisioner {
 
     /**
      * @param publicId            identifiant public de l'inscription
-     * @param studentProfilePublicId profil rattaché
+     * @param userPublicId        compte apprenant rattaché
      * @param classGroupPublicId  classe de l'inscription
      * @param active              {@code true} si {@code ACTIVE}
      */
-    record EnrollmentView(UUID publicId, UUID studentProfilePublicId, UUID classGroupPublicId, boolean active) {
+    record EnrollmentView(UUID publicId, UUID userPublicId, UUID classGroupPublicId, boolean active) {
     }
 
     /**

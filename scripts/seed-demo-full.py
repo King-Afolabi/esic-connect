@@ -674,13 +674,15 @@ def phase_backdate():
             continue
         eid = e["publicId"]
         cg = e["classGroupPublicId"]
-        prof = e["studentProfilePublicId"]
+        # Refonte 2026-09 : l'inscription rattache directement le COMPTE
+        # apprenant (toujours renseigné), jamais un profil (facultatif).
+        user = e["studentUserPublicId"]
         # clôture puis recréation avec une date de début reculée
         s, _ = api("POST", f"/enrollments/{eid}/close",
                    {"status": "WITHDRAWN", "reason": "Recalage démo — date d'entrée réelle"})
         if s not in (200, 204):
             continue
-        s, _ = api("POST", "/enrollments", {"studentProfilePublicId": prof,
+        s, _ = api("POST", "/enrollments", {"studentUserPublicId": user,
                                             "classGroupPublicId": cg,
                                             "startDate": ENROLL_START.isoformat()})
         if s in (200, 201):

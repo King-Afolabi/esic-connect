@@ -21,6 +21,7 @@ import java.util.UUID;
  */
 @RestControllerAdvice(assignableTypes = {
         StudentProfileController.class,
+        StudentController.class,
         EnrollmentController.class,
         StudentGroupController.class,
         RemoteAttendanceController.class
@@ -37,6 +38,11 @@ class EnrollmentExceptionHandler {
                 status = HttpStatus.NOT_FOUND;
                 code = "ENR_STUDENT_PROFILE_NOT_FOUND";
                 message = "Aucun profil apprenant ne correspond à cet identifiant.";
+            }
+            case STUDENT_NOT_FOUND -> {
+                status = HttpStatus.NOT_FOUND;
+                code = "ENR_STUDENT_NOT_FOUND";
+                message = "Aucun apprenant ne correspond à cet identifiant.";
             }
             case ENROLLMENT_NOT_FOUND -> {
                 status = HttpStatus.NOT_FOUND;

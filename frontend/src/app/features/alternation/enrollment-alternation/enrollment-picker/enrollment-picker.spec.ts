@@ -83,6 +83,7 @@ describe('EnrollmentPicker', () => {
       content: [
         {
           publicId: 'e-1',
+          studentUserPublicId: 'u-1',
           studentProfilePublicId: 'sp-1',
           studentNumber: 'ESIC-2026-0001',
           classGroupPublicId: 'c-1',

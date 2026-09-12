@@ -35,10 +35,9 @@ class EnrollmentDuplicateContributor implements DuplicateDependencyContributor {
         counts.put("studentProfile",
                 studentProfileRepository.existsByUserId(userInternalId) ? 1L : 0L);
         counts.put("enrollments",
-                enrollmentRepository.countByStudentProfile_UserId(userInternalId));
+                enrollmentRepository.countByUserId(userInternalId));
         counts.put("activeEnrollments",
-                enrollmentRepository.countByStudentProfile_UserIdAndStatus(
-                        userInternalId, EnrollmentStatus.ACTIVE));
+                enrollmentRepository.countByUserIdAndStatus(userInternalId, EnrollmentStatus.ACTIVE));
         return counts;
     }
 

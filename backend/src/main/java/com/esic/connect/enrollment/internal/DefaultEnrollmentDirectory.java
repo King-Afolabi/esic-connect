@@ -17,24 +17,33 @@ import java.util.stream.Collectors;
 /**
  * Implémentation du port {@link EnrollmentDirectory}. Reste confinée à
  * {@code enrollment.internal} : les autres modules ne connaissent que
- * l'interface publique et le {@link EnrollmentDirectory.EnrollmentRef}.
+ * l'interface publique et les types qu'elle expose.
  *
  * <p>La classe et l'année scolaire sont résolues via le port
  * {@link ClassGroupDirectory} (déjà consommé par ce module) à partir de
  * la valeur technique {@code enrollment.class_group_id} — aucun partage
- * d'entité JPA avec {@code academic}.
+ * d'entité JPA avec {@code academic}. Le compte apprenant est résolu via
+ * {@link UserDirectory} à partir de {@code enrollment.user_id} — une
+ * inscription rattache directement un compte, jamais un profil
+ * apprenant. Le profil ({@code student_profile}) est une donnée
+ * facultative et indépendante, résolue séparément par
+ * {@link StudentProfileRepository} lorsqu'elle existe : son absence ne
+ * masque jamais l'inscription ni l'apprenant (refonte 2026-09).
  */
 @Component
 class DefaultEnrollmentDirectory implements EnrollmentDirectory {
 
     private final EnrollmentRepository enrollmentRepository;
+    private final StudentProfileRepository profileRepository;
     private final ClassGroupDirectory classGroupDirectory;
     private final UserDirectory userDirectory;
 
     DefaultEnrollmentDirectory(EnrollmentRepository enrollmentRepository,
+                               StudentProfileRepository profileRepository,
                                ClassGroupDirectory classGroupDirectory,
                                UserDirectory userDirectory) {
         this.enrollmentRepository = enrollmentRepository;
+        this.profileRepository = profileRepository;
         this.classGroupDirectory = classGroupDirectory;
         this.userDirectory = userDirectory;
     }
@@ -58,8 +67,7 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     @Transactional(readOnly = true)
     public List<EnrollmentRef> findActiveEnrollmentsForUserOn(UUID userPublicId, LocalDate date) {
         return userDirectory.findByPublicId(userPublicId)
-                .map(user -> enrollmentRepository
-                        .findByStudentProfile_UserIdAndStatus(user.internalId(), EnrollmentStatus.ACTIVE))
+                .map(user -> enrollmentRepository.findByUserIdAndStatus(user.internalId(), EnrollmentStatus.ACTIVE))
                 .orElseGet(List::of)
                 .stream()
                 .filter(enrollment -> coversDate(enrollment, date))
@@ -71,7 +79,7 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     @Transactional(readOnly = true)
     public List<EnrollmentRef> findEnrollmentsForUser(UUID userPublicId) {
         return userDirectory.findByPublicId(userPublicId)
-                .map(user -> enrollmentRepository.findByStudentProfile_UserId(user.internalId()))
+                .map(user -> enrollmentRepository.findByUserId(user.internalId()))
                 .orElseGet(List::of)
                 .stream()
                 .filter(enrollment -> enrollment.getStatus() != EnrollmentStatus.ARCHIVED)
@@ -115,10 +123,10 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         org.springframework.data.domain.Pageable page =
                 org.springframework.data.domain.PageRequest.of(0, bounded);
 
-        // Deux sources, réunies : le numéro étudiant vit dans `enrollment`,
-        // le nom dans `identity`. Joindre les deux tables franchirait une
-        // frontière de module ; on demande donc les comptes au port, puis
-        // leurs inscriptions.
+        // Deux sources, réunies : le numéro étudiant vit dans
+        // `student_profile`, le nom dans `identity`. Joindre les deux
+        // tables franchirait une frontière de module ; on demande donc les
+        // comptes au port, puis leurs inscriptions.
         java.util.LinkedHashMap<Long, Enrollment> found = new java.util.LinkedHashMap<>();
         for (Enrollment enrollment
                 : enrollmentRepository.searchByStudentNumber(pattern, EnrollmentStatus.ACTIVE, page)) {
@@ -129,7 +137,7 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
                 .toList();
         if (!userIds.isEmpty()) {
             for (Enrollment enrollment
-                    : enrollmentRepository.findActiveByStudentUserIds(userIds, EnrollmentStatus.ACTIVE)) {
+                    : enrollmentRepository.findByUserIdInAndStatus(userIds, EnrollmentStatus.ACTIVE)) {
                 found.putIfAbsent(enrollment.getId(), enrollment);
             }
         }
@@ -145,24 +153,11 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         if (visibleClassIds != null && visibleClassIds.isEmpty()) {
             return List.of();
         }
-        return found.values().stream()
+        List<Enrollment> matching = found.values().stream()
                 .filter(e -> visibleClassIds == null || visibleClassIds.contains(e.getClassGroupId()))
                 .limit(bounded)
-                .map(this::toRosterEntry)
                 .toList();
-    }
-
-    private RosterEntry toRosterEntry(Enrollment enrollment) {
-        StudentProfile profile = enrollment.getStudentProfile();
-        UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);
-        ClassGroupDirectory.ClassGroupRef classRef =
-                classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
-        return new RosterEntry(enrollment.getId(), enrollment.getPublicId(), profile.getPublicId(),
-                profile.getStudentNumber(),
-                name != null ? name.firstName() : null,
-                name != null ? name.lastName() : null,
-                classRef != null ? classRef.publicId() : null,
-                classRef != null ? classRef.code() : null);
+        return toRosterEntries(matching);
     }
 
     /**
@@ -179,15 +174,25 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
                 .findByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE).stream()
                 .filter(enrollment -> date == null || coversDate(enrollment, date))
                 .toList();
+        return toRosterEntries(enrollments);
+    }
+
+    /**
+     * Résolution par lot du nom, du profil facultatif et du code de classe
+     * pour un lot d'inscriptions : la variante unitaire, appelée par
+     * inscription, coûtait plusieurs requêtes par apprenant — un effectif
+     * de trente en payait quatre-vingt-dix pour une information que la
+     * base rend en trois (NFR-PERF-08, dette T-03).
+     */
+    private List<RosterEntry> toRosterEntries(List<Enrollment> enrollments) {
         if (enrollments.isEmpty()) {
             return List.of();
         }
-        // Résolution par lot du nom et du code de classe : la variante
-        // unitaire, appelée par inscription, coûtait deux requêtes par
-        // apprenant — un effectif de trente en payait soixante pour une
-        // information que la base rend en deux (NFR-PERF-08, dette T-03).
-        java.util.Map<Long, UserDirectory.PersonName> names = userDirectory.findNames(
-                enrollments.stream().map(e -> e.getStudentProfile().getUserId()).toList());
+        List<Long> userIds = enrollments.stream().map(Enrollment::getUserId).distinct().toList();
+        java.util.Map<Long, UserDirectory.NamedUserRef> refs = userDirectory.findNamedRefs(userIds).values().stream()
+                .collect(Collectors.toMap(UserDirectory.NamedUserRef::internalId, ref -> ref));
+        java.util.Map<Long, StudentProfile> profiles = profileRepository.findByUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(StudentProfile::getUserId, p -> p));
         java.util.Map<Long, ClassGroupDirectory.ClassGroupRef> classes = new java.util.HashMap<>();
         for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByInternalIds(
                 enrollments.stream().map(Enrollment::getClassGroupId).distinct().toList())) {
@@ -195,16 +200,17 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         }
         return enrollments.stream()
                 .map(enrollment -> {
-                    StudentProfile profile = enrollment.getStudentProfile();
-                    UserDirectory.PersonName name = names.get(profile.getUserId());
+                    UserDirectory.NamedUserRef userRef = refs.get(enrollment.getUserId());
+                    StudentProfile profile = profiles.get(enrollment.getUserId());
                     ClassGroupDirectory.ClassGroupRef classRef = classes.get(enrollment.getClassGroupId());
                     return new RosterEntry(
                             enrollment.getId(),
                             enrollment.getPublicId(),
-                            profile.getPublicId(),
-                            profile.getStudentNumber(),
-                            name != null ? name.firstName() : null,
-                            name != null ? name.lastName() : null,
+                            userRef != null ? userRef.publicId() : null,
+                            profile != null ? profile.getPublicId() : null,
+                            profile != null ? profile.getStudentNumber() : null,
+                            userRef != null ? userRef.firstName() : null,
+                            userRef != null ? userRef.lastName() : null,
                             classRef != null ? classRef.publicId() : null,
                             classRef != null ? classRef.code() : null);
                 })
@@ -221,7 +227,7 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
         return enrollmentRepository
                 .findByClassGroupIdInAndStatus(classInternalIds, EnrollmentStatus.ACTIVE).stream()
                 .filter(enrollment -> date == null || coversDate(enrollment, date))
-                .map(enrollment -> enrollment.getStudentProfile().getUserId())
+                .map(Enrollment::getUserId)
                 .filter(java.util.Objects::nonNull)
                 .map(userDirectory::findByInternalId)
                 .filter(Optional::isPresent)
@@ -238,18 +244,28 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     @Transactional(readOnly = true)
     public Optional<AttendeeRef> describeAttendee(long enrollmentInternalId) {
         return enrollmentRepository.findById(enrollmentInternalId).map(enrollment -> {
-            StudentProfile profile = enrollment.getStudentProfile();
-            UserDirectory.PersonName name = userDirectory.findName(profile.getUserId()).orElse(null);
+            UserDirectory.PersonName name = userDirectory.findName(enrollment.getUserId()).orElse(null);
+            UUID studentUserPublicId = userDirectory.findByInternalId(enrollment.getUserId())
+                    .map(UserDirectory.UserRef::publicId).orElse(null);
+            StudentProfile profile = profileRepository.findByUserId(enrollment.getUserId()).orElse(null);
             return new AttendeeRef(
-                    profile.getPublicId(),
+                    studentUserPublicId,
+                    profile != null ? profile.getPublicId() : null,
                     enrollment.getPublicId(),
-                    profile.getStudentNumber(),
+                    profile != null ? profile.getStudentNumber() : null,
                     name != null ? name.firstName() : null,
                     name != null ? name.lastName() : null);
         });
     }
 
-    /** Traduction publique -> interne d'un lot de classes ; les inconnues sont ignorées. */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findStudentUserPublicId(long enrollmentInternalId) {
+        return enrollmentRepository.findById(enrollmentInternalId)
+                .flatMap(enrollment -> userDirectory.findByInternalId(enrollment.getUserId()))
+                .map(UserDirectory.UserRef::publicId);
+    }
+
     /**
      * Résout un lot de classes en une <strong>seule</strong> requête
      * (dette T-03).
@@ -298,12 +314,14 @@ class DefaultEnrollmentDirectory implements EnrollmentDirectory {
     private EnrollmentRef toRef(Enrollment enrollment) {
         ClassGroupDirectory.ClassGroupRef classRef =
                 classGroupDirectory.findByInternalId(enrollment.getClassGroupId()).orElse(null);
-        UUID studentUserPublicId = userDirectory.findByInternalId(enrollment.getStudentProfile().getUserId())
+        UUID studentUserPublicId = userDirectory.findByInternalId(enrollment.getUserId())
                 .map(UserDirectory.UserRef::publicId).orElse(null);
+        UUID studentProfilePublicId = profileRepository.findByUserId(enrollment.getUserId())
+                .map(StudentProfile::getPublicId).orElse(null);
         return new EnrollmentRef(
                 enrollment.getId(),
                 enrollment.getPublicId(),
-                enrollment.getStudentProfile().getPublicId(),
+                studentProfilePublicId,
                 studentUserPublicId,
                 classRef != null ? classRef.publicId() : null,
                 classRef != null ? classRef.code() : null,

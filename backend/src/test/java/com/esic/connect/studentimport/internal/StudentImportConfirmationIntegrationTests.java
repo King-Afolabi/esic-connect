@@ -233,10 +233,11 @@ class StudentImportConfirmationIntegrationTests {
         String studentEmail = "mover." + UUID.randomUUID() + "@esic-connect.test";
         Actor mover = actorWith(studentEmail, RoleCode.STUDENT);
         String studentNumber = "ESIC-TR-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
-        String profileId = (String) created("/api/v1/student-profiles", Map.of(
+        created("/api/v1/student-profiles", Map.of(
                 "userPublicId", mover.publicId(), "studentNumber", studentNumber), admin.token()).get("publicId");
         created("/api/v1/enrollments", Map.of(
-                "studentProfilePublicId", profileId, "classGroupPublicId", chain.classBPublicId()), admin.token());
+                "studentUserPublicId", mover.publicId(), "classGroupPublicId", chain.classBPublicId()),
+                admin.token());
 
         long accountsForEmail0 = countAccounts(studentEmail);
         UUID jobId = simulate(admin, "transfer.csv",
@@ -247,14 +248,16 @@ class StudentImportConfirmationIntegrationTests {
         assertThat(result.transferred()).isEqualTo(1);
 
         assertThat(countAccounts(studentEmail)).isEqualTo(accountsForEmail0); // aucun doublon de compte
+        // Refonte 2026-09 : `enrollment.user_id` référence directement le
+        // compte, plus `student_profile`.
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM enrollment WHERE student_profile_id = "
-                        + "(SELECT id FROM student_profile WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
-                        + "AND status = 'TRANSFERRED'", Long.class, profileId)).isEqualTo(1L);
+                "SELECT COUNT(*) FROM enrollment WHERE user_id = "
+                        + "(SELECT id FROM user_account WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
+                        + "AND status = 'TRANSFERRED'", Long.class, mover.publicId())).isEqualTo(1L);
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM enrollment WHERE student_profile_id = "
-                        + "(SELECT id FROM student_profile WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
-                        + "AND status = 'ACTIVE'", Long.class, profileId)).isEqualTo(1L);
+                "SELECT COUNT(*) FROM enrollment WHERE user_id = "
+                        + "(SELECT id FROM user_account WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
+                        + "AND status = 'ACTIVE'", Long.class, mover.publicId())).isEqualTo(1L);
     }
 
     // ------------------------------------------------------------------

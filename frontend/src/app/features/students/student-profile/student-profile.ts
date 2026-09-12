@@ -18,23 +18,22 @@ import { StudentsApiService } from '../students-api.service';
 import {
   EnrollmentResponse,
   RemoteAttendanceAuthorizationResponse,
-  StudentProfileResponse,
-  UserIdentitySummary,
+  StudentResponse,
   enrollmentSourceLabel,
   enrollmentStatusLabel,
   remoteAuthorizationStatusLabel,
-  studentProfileStatusLabel,
+  studentAccountStatusLabel,
 } from '../students.models';
 
 /** Rôles habilités à changer la classe / clôturer une inscription (`EnrollmentWeb.MANAGE_ROLES`). */
 const ENROLLMENT_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const;
 
-type ProfileState =
+type StudentState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'not-found' }
   | { kind: 'forbidden' }
-  | { kind: 'ready'; profile: StudentProfileResponse; identity: UserIdentitySummary | null };
+  | { kind: 'ready'; student: StudentResponse };
 
 type HistoryState =
   | { kind: 'loading' }
@@ -50,15 +49,21 @@ type RemoteState =
 /**
  * Fiche d'un apprenant et historique de ses inscriptions.
  *
- * - `GET /api/v1/student-profiles/{publicId}` : le profil ;
- * - `GET /api/v1/enrollments?student={publicId}&sort=startDate,desc` :
- *   l'historique (RG-006, RG-023, AC-006 — l'ancienne inscription reste
- *   consultable après un changement de classe) ;
- * - `GET /api/v1/users/{userPublicId}` : identité civile, **facultative**
- *   (le profil n'expose que `userPublicId`). Un échec est ignoré.
+ * Refonte 2026-09 : la fiche est adressée par l'identifiant du
+ * **compte** (`GET /api/v1/students/{userPublicId}`), pas par un profil
+ * apprenant — un compte `STUDENT` sans profil ni inscription a une fiche
+ * parfaitement consultable, avec les sections correspondantes affichées
+ * comme « aucune donnée » plutôt qu'absentes.
  *
- * Un `404` sur le profil rend un état « introuvable » ; un `403` rend un
- * état « accès refusé » (le contrôle d'accès reste côté Spring Security).
+ * - `GET /api/v1/students/{userPublicId}` : identité civile, statut du
+ *   compte, et décorations facultatives (profil, inscription courante) ;
+ * - `GET /api/v1/enrollments?student={userPublicId}&sort=startDate,desc` :
+ *   l'historique complet (RG-006, RG-023, AC-006 — l'ancienne inscription
+ *   reste consultable après un changement de classe).
+ *
+ * Un `404` sur le compte (inconnu, ou pas de rôle `STUDENT` actif) rend un
+ * état « introuvable » ; un `403` rend un état « accès refusé » (le
+ * contrôle d'accès reste côté Spring Security).
  */
 @Component({
   selector: 'app-student-profile',
@@ -86,9 +91,10 @@ export class StudentProfile {
   private readonly route = inject(ActivatedRoute);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
+  /** Identifiant public du **compte** apprenant (route `/students/:publicId`). */
   private readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
 
-  protected readonly statusLabel = studentProfileStatusLabel;
+  protected readonly accountStatusLabel = studentAccountStatusLabel;
   protected readonly enrollmentStatusLabel = enrollmentStatusLabel;
   protected readonly enrollmentSourceLabel = enrollmentSourceLabel;
   protected readonly historyColumns = [
@@ -103,7 +109,7 @@ export class StudentProfile {
   protected readonly remoteStatusLabel = remoteAuthorizationStatusLabel;
   protected readonly remoteColumns = ['period', 'scope', 'reason', 'status', 'actions'] as const;
 
-  protected readonly state = signal<ProfileState>({ kind: 'loading' });
+  protected readonly state = signal<StudentState>({ kind: 'loading' });
   protected readonly history = signal<HistoryState>({ kind: 'loading' });
   protected readonly remote = signal<RemoteState>({ kind: 'loading' });
   protected readonly remoteBusy = signal(false);
@@ -141,13 +147,9 @@ export class StudentProfile {
     validUntil: this.formBuilder.control(''),
   });
 
-  protected readonly profile = computed(() => {
+  protected readonly student = computed(() => {
     const current = this.state();
-    return current.kind === 'ready' ? current.profile : null;
-  });
-  protected readonly identity = computed(() => {
-    const current = this.state();
-    return current.kind === 'ready' ? current.identity : null;
+    return current.kind === 'ready' ? current.student : null;
   });
   protected readonly errorMessage = computed(() => {
     const current = this.state();
@@ -196,11 +198,11 @@ export class StudentProfile {
   });
 
   constructor() {
-    this.loadProfile();
+    this.loadStudent();
   }
 
   protected retryProfile(): void {
-    this.loadProfile();
+    this.loadStudent();
   }
 
   protected retryHistory(): void {
@@ -208,15 +210,13 @@ export class StudentProfile {
   }
 
   protected retryRemote(): void {
-    const profile = this.profile();
-    if (profile) {
-      this.loadRemote(profile.userPublicId);
+    if (this.student()) {
+      this.loadRemote();
     }
   }
 
   protected grantRemote(): void {
-    const profile = this.profile();
-    if (!profile || this.remoteForm.invalid || this.remoteBusy()) {
+    if (!this.student() || this.remoteForm.invalid || this.remoteBusy()) {
       this.remoteForm.markAllAsTouched();
       return;
     }
@@ -225,7 +225,7 @@ export class StudentProfile {
     this.remoteActionError.set(null);
     this.api
       .authorizeRemoteAttendance({
-        studentUserPublicId: profile.userPublicId,
+        studentUserPublicId: this.publicId,
         classGroupPublicId: raw.classGroupPublicId || null,
         reason: raw.reason,
         validFrom: raw.validFrom,
@@ -240,7 +240,7 @@ export class StudentProfile {
             validFrom: '',
             validUntil: '',
           });
-          this.loadRemote(profile.userPublicId);
+          this.loadRemote();
         },
         error: (error: unknown) => {
           this.remoteBusy.set(false);
@@ -250,8 +250,7 @@ export class StudentProfile {
   }
 
   protected revokeRemote(authorization: RemoteAttendanceAuthorizationResponse): void {
-    const profile = this.profile();
-    if (!profile || this.remoteBusy()) {
+    if (!this.student() || this.remoteBusy()) {
       return;
     }
     this.remoteBusy.set(true);
@@ -261,7 +260,7 @@ export class StudentProfile {
       .subscribe({
         next: () => {
           this.remoteBusy.set(false);
-          this.loadRemote(profile.userPublicId);
+          this.loadRemote();
         },
         error: (error: unknown) => {
           this.remoteBusy.set(false);
@@ -326,14 +325,13 @@ export class StudentProfile {
     });
   }
 
-  private loadProfile(): void {
+  private loadStudent(): void {
     this.state.set({ kind: 'loading' });
-    this.api.getProfile(this.publicId).subscribe({
-      next: (profile) => {
-        this.state.set({ kind: 'ready', profile, identity: null });
-        this.loadIdentity(profile.userPublicId);
+    this.api.getStudent(this.publicId).subscribe({
+      next: (student) => {
+        this.state.set({ kind: 'ready', student });
         this.loadHistory();
-        this.loadRemote(profile.userPublicId);
+        this.loadRemote();
       },
       error: (error: unknown) => {
         const normalized = normalizeHttpError(error);
@@ -350,29 +348,14 @@ export class StudentProfile {
     });
   }
 
-  /** Facultatif : n'altère jamais l'état du profil en cas d'échec. */
-  private loadIdentity(userPublicId: string): void {
-    this.api.getUserIdentity(userPublicId).subscribe({
-      next: (identity) => {
-        const current = this.state();
-        if (current.kind === 'ready') {
-          this.state.set({ ...current, identity });
-        }
-      },
-      error: () => {
-        /* identité indisponible : la fiche reste affichée sans nom civil */
-      },
-    });
-  }
-
   /**
    * Autorisations de suivi à distance. Un `403` n'est pas une erreur : le
    * rôle courant n'a simplement pas à décider de ces autorisations, la
    * section est alors masquée plutôt que présentée en échec.
    */
-  private loadRemote(userPublicId: string): void {
+  private loadRemote(): void {
     this.remote.set({ kind: 'loading' });
-    this.api.listRemoteAuthorizations(userPublicId).subscribe({
+    this.api.listRemoteAuthorizations(this.publicId).subscribe({
       next: (authorizations) => this.remote.set({ kind: 'ready', authorizations }),
       error: (error: unknown) => {
         const normalized = normalizeHttpError(error);

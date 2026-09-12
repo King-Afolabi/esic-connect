@@ -6,9 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -21,10 +18,17 @@ import java.time.LocalDate;
  * Inscription d'un apprenant dans une classe pour une année scolaire
  * (docs/04-modele-donnees.md §13).
  *
- * <p>{@code studentProfile} est une relation intra-module.
- * {@code classGroupId} et {@code academicYearId} sont de simples valeurs
- * techniques (clés étrangères SQL), résolues via le port
- * {@link com.esic.connect.academic.ClassGroupDirectory}.
+ * <p>{@code userId} est une simple valeur technique (clé étrangère SQL
+ * vers {@code user_account}), résolue via le port
+ * {@link com.esic.connect.identity.UserDirectory} — exactement comme
+ * {@code classGroupId} / {@code academicYearId} le sont via
+ * {@link com.esic.connect.academic.ClassGroupDirectory}. Une inscription
+ * ne porte <strong>aucune</strong> relation vers {@link StudentProfile} :
+ * le profil apprenant est une donnée facultative et indépendante du même
+ * compte (refonte 2026-09) — son absence ne rend jamais une inscription
+ * impossible ni invisible. {@code classGroupId} et {@code academicYearId}
+ * sont de simples valeurs techniques (clés étrangères SQL), résolues via
+ * le port {@link com.esic.connect.academic.ClassGroupDirectory}.
  * {@code previousEnrollmentId} référence l'inscription clôturée dont
  * celle-ci prend la suite lors d'un changement de classe (docs/04 §13.2).
  *
@@ -38,9 +42,8 @@ import java.time.LocalDate;
 @EntityListeners(AuditingEntityListener.class)
 class Enrollment extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "student_profile_id", nullable = false, updatable = false)
-    private StudentProfile studentProfile;
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
 
     @Column(name = "class_group_id", nullable = false, updatable = false)
     private Long classGroupId;
@@ -86,9 +89,9 @@ class Enrollment extends BaseEntity {
         // JPA
     }
 
-    Enrollment(StudentProfile studentProfile, Long classGroupId, Long academicYearId, LocalDate startDate,
+    Enrollment(Long userId, Long classGroupId, Long academicYearId, LocalDate startDate,
                EnrollmentSource enrollmentSource, String changeReason, Long previousEnrollmentId) {
-        this.studentProfile = studentProfile;
+        this.userId = userId;
         this.classGroupId = classGroupId;
         this.academicYearId = academicYearId;
         this.startDate = startDate;
@@ -120,8 +123,8 @@ class Enrollment extends BaseEntity {
         return status == EnrollmentStatus.ACTIVE;
     }
 
-    StudentProfile getStudentProfile() {
-        return studentProfile;
+    Long getUserId() {
+        return userId;
     }
 
     Long getClassGroupId() {

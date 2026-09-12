@@ -291,7 +291,7 @@ ensure_primary_manager() {
 ensure_primary_manager
 say "responsable pédagogique affecté à PRG-DEMO"
 
-# Profils apprenants (numéro étudiant = code fixe).
+# Profil apprenant (numéro étudiant = code fixe).
 ensure_profile() {
   local user="$1" number="$2" out id rc
   out="$(http_post /student-profiles "{\"userPublicId\":\"$user\",\"studentNumber\":\"$number\"}" --allow-conflict)" && rc=0 || rc=$?
@@ -309,22 +309,31 @@ ensure_profile() {
   [ -n "$id" ] || { echo "Conflit sur le profil $number mais profil introuvable : abandon." >&2; exit 1; }
   printf '%s' "$id"
 }
-PROFILE1_ID="$(ensure_profile "$STUDENT1_ID" 'ESIC-DEMO-001')"
-PROFILE2_ID="$(ensure_profile "$STUDENT2_ID" 'ESIC-DEMO-002')"
-say "profils     $PROFILE1_ID / $PROFILE2_ID"
 
-# Inscriptions (une par apprenant si absente).
+# Inscription (rattachée directement au COMPTE apprenant — refonte
+# 2026-09 — jamais à un profil : `student` désigne ici le
+# `user_account.public_id`).
 ensure_enrollment() {
-  local profile="$1" existing
-  existing="$(http_get_q /enrollments student "$profile" status ACTIVE \
+  local user="$1" existing
+  existing="$(http_get_q /enrollments student "$user" status ACTIVE \
     | jq -r '.content[0]?.publicId // empty')"
   if [ -z "$existing" ]; then
-    http_post /enrollments "{\"studentProfilePublicId\":\"$profile\",\"classGroupPublicId\":\"$CLASS_ID\"}" >/dev/null
+    http_post /enrollments "{\"studentUserPublicId\":\"$user\",\"classGroupPublicId\":\"$CLASS_ID\"}" >/dev/null
   fi
 }
-ensure_enrollment "$PROFILE1_ID"
-ensure_enrollment "$PROFILE2_ID"
-say "inscriptions ok (2 apprenants dans C-DEMO)"
+
+# Trois profils d'apprenant délibérément distincts (refonte 2026-09 : le
+# rôle STUDENT est l'unique source de vérité du statut apprenant — ni le
+# profil ni l'inscription ne le sont) :
+#   - apprenant1@example.test : apprenant COMPLET (profil + inscription) ;
+#   - apprenant2@example.test : apprenant MINIMAL (rôle STUDENT seul,
+#     aucun profil, aucune inscription — reste pleinement visible dans
+#     Apprenants) ;
+#   - formateur@example.test (et les comptes d'administration) : non-apprenants.
+PROFILE1_ID="$(ensure_profile "$STUDENT1_ID" 'ESIC-DEMO-001')"
+ensure_enrollment "$STUDENT1_ID"
+say "apprenant complet   apprenant1@example.test (profil $PROFILE1_ID, inscrit dans C-DEMO)"
+say "apprenant minimal   apprenant2@example.test (rôle STUDENT seul, aucun profil ni inscription)"
 
 # Séance PLANNED de démonstration. Créée UNIQUEMENT si aucune séance
 # PLANNED de ce formateur n'existe déjà (pas de contrainte d'unicité

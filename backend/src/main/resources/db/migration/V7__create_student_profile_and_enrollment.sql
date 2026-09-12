@@ -1,6 +1,19 @@
--- Inscriptions historiques (docs/02-cahier-des-charges.md §7.6, §9.2, §13 ;
--- docs/04-modele-donnees.md §11.1 et §13 ; RG-006, RG-012, RG-022, RG-023 ;
--- AC-006 ; sprint T-J1-032 / backlog US-053).
+-- Apprenants et inscriptions historiques (docs/02-cahier-des-charges.md
+-- §7.6, §9.2, §13 ; docs/04-modele-donnees.md §11.1 et §13 ; RG-006,
+-- RG-012, RG-022, RG-023 ; AC-006).
+--
+-- Refonte du modèle apprenant (2026-09) : le rôle STUDENT (`user_role`,
+-- module `identity`) est l'UNIQUE source de vérité du statut apprenant.
+-- Ni `student_profile` ni `enrollment` ne déterminent si un compte est un
+-- apprenant. En particulier :
+--   * `enrollment` référence directement `user_account` (`user_id`) — et
+--     PAS `student_profile` : une inscription ne présuppose plus l'existence
+--     d'un profil apprenant ;
+--   * `student_profile` reste indépendante, référence aussi `user_account`
+--     (`user_id`, unique) et ne porte que des données facultatives
+--     (numéro étudiant, date de naissance, alternance) ;
+--   * un compte STUDENT sans aucune ligne dans l'une ou l'autre de ces deux
+--     tables reste un apprenant valide.
 --
 -- Portée : profil apprenant (`student_profile`) et inscription
 -- (`enrollment`), avec conservation de l'historique lors d'un changement
@@ -13,13 +26,14 @@
 -- (`version`), colonnes auteur en FK RESTRICT vers `user_account`. Aucune
 -- donnée métier n'est insérée ici.
 --
--- `student_profile.user_id` est une valeur technique (FK SQL vers
--- `user_account`) : le module `enrollment` n'importe jamais
--- `identity.internal` et ne partage aucune entité JPA avec `identity` ;
--- la cohérence repose sur cette FK et sur le port `identity.UserDirectory`.
--- De même, `enrollment.class_group_id` / `academic_year_id` sont des
--- valeurs techniques (FK SQL vers `class_group` / `academic_year`),
--- résolues via le port `academic.ClassGroupDirectory`.
+-- `student_profile.user_id` et `enrollment.user_id` sont des valeurs
+-- techniques (FK SQL vers `user_account`) : le module `enrollment`
+-- n'importe jamais `identity.internal` et ne partage aucune entité JPA
+-- avec `identity` ; la cohérence repose sur ces FK et sur le port
+-- `identity.UserDirectory`. De même, `enrollment.class_group_id` /
+-- `academic_year_id` sont des valeurs techniques (FK SQL vers
+-- `class_group` / `academic_year`), résolues via le port
+-- `academic.ClassGroupDirectory`.
 
 CREATE TABLE student_profile (
     id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -37,7 +51,9 @@ CREATE TABLE student_profile (
     version        BIGINT UNSIGNED NOT NULL DEFAULT 0,
 
     CONSTRAINT uq_student_profile_public_id UNIQUE (public_id),
-    -- Un seul profil apprenant par compte (docs/04 §11.1).
+    -- Un seul profil apprenant par compte (docs/04 §11.1) — et un profil
+    -- reste strictement facultatif : son absence ne masque jamais un
+    -- apprenant (le statut vient du rôle STUDENT, module identity).
     CONSTRAINT uq_student_profile_user UNIQUE (user_id),
     -- Numéro étudiant unique lorsqu'il est attribué (docs/04 §3.5).
     CONSTRAINT uq_student_profile_student_number UNIQUE (student_number),
@@ -52,7 +68,10 @@ CREATE INDEX idx_student_profile_status ON student_profile (status);
 CREATE TABLE enrollment (
     id                    BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     public_id             BINARY(16)      NOT NULL,
-    student_profile_id    BIGINT UNSIGNED NOT NULL,
+    -- Compte apprenant directement rattaché (module identity, rôle
+    -- STUDENT) — PAS le profil apprenant : une inscription ne dépend
+    -- jamais de l'existence d'un `student_profile` (refonte 2026-09).
+    user_id               BIGINT UNSIGNED NOT NULL,
     class_group_id        BIGINT UNSIGNED NOT NULL,
     academic_year_id      BIGINT UNSIGNED NOT NULL,
     start_date            DATE            NOT NULL,
@@ -69,7 +88,7 @@ CREATE TABLE enrollment (
     -- les lignes ACTIVE (cf. V6 `active_primary_key`). Une clôture
     -- (status != ACTIVE) libère immédiatement le créneau.
     active_student_key    BIGINT UNSIGNED GENERATED ALWAYS AS (
-        IF(status = 'ACTIVE', student_profile_id, NULL)) VIRTUAL,
+        IF(status = 'ACTIVE', user_id, NULL)) VIRTUAL,
     active_year_key       BIGINT UNSIGNED GENERATED ALWAYS AS (
         IF(status = 'ACTIVE', academic_year_id, NULL)) VIRTUAL,
 
@@ -83,7 +102,7 @@ CREATE TABLE enrollment (
     CONSTRAINT uq_enrollment_active_per_year UNIQUE (active_student_key, active_year_key),
     CONSTRAINT chk_enrollment_period CHECK (end_date IS NULL OR end_date >= start_date),
 
-    CONSTRAINT fk_enrollment_student_profile FOREIGN KEY (student_profile_id) REFERENCES student_profile (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_enrollment_user FOREIGN KEY (user_id) REFERENCES user_account (id) ON DELETE RESTRICT,
     CONSTRAINT fk_enrollment_class_group FOREIGN KEY (class_group_id) REFERENCES class_group (id) ON DELETE RESTRICT,
     CONSTRAINT fk_enrollment_academic_year FOREIGN KEY (academic_year_id) REFERENCES academic_year (id) ON DELETE RESTRICT,
     CONSTRAINT fk_enrollment_previous FOREIGN KEY (previous_enrollment_id) REFERENCES enrollment (id) ON DELETE RESTRICT,
@@ -91,7 +110,7 @@ CREATE TABLE enrollment (
     CONSTRAINT fk_enrollment_updated_by FOREIGN KEY (updated_by_id) REFERENCES user_account (id) ON DELETE RESTRICT
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
-CREATE INDEX idx_enrollment_student_profile ON enrollment (student_profile_id);
+CREATE INDEX idx_enrollment_user ON enrollment (user_id);
 CREATE INDEX idx_enrollment_class_group ON enrollment (class_group_id);
 CREATE INDEX idx_enrollment_academic_year ON enrollment (academic_year_id);
 CREATE INDEX idx_enrollment_status ON enrollment (status);

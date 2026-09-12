@@ -2,9 +2,10 @@
   <div class="esic-page-header__text">
     <h1 class="esic-page-header__title">Apprenants</h1>
     <p class="esic-page-header__description">
-      Profils apprenants enregistrés. La recherche porte sur le <strong>nom</strong>, le
-      <strong>prénom</strong> ou le <strong>numéro étudiant</strong> ; sélectionnez un
-      apprenant pour consulter sa fiche et l'historique de ses inscriptions.
+      Tous les comptes portant le rôle <strong>Apprenant</strong>, avec ou sans profil ni
+      inscription. La recherche porte sur le <strong>nom</strong>, le <strong>prénom</strong> ou
+      l'<strong>e-mail</strong> ; sélectionnez un apprenant pour consulter sa fiche et
+      l'historique de ses inscriptions.
     </p>
   </div>
   @if (canCreateStudent() || canImportStudents()) {
@@ -27,18 +28,12 @@
 
 <form class="students__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
   <mat-form-field appearance="outline" class="students__filter">
-    <mat-label>Nom, prénom ou numéro</mat-label>
-    <input
-      matInput
-      type="search"
-      formControlName="q"
-      autocomplete="off"
-      placeholder="ex. Durand, ou ESIC-2026-00001"
-    />
+    <mat-label>Nom, prénom ou e-mail</mat-label>
+    <input matInput type="search" formControlName="q" autocomplete="off" placeholder="ex. Durand" />
   </mat-form-field>
 
   <mat-form-field appearance="outline" class="students__filter">
-    <mat-label>Statut</mat-label>
+    <mat-label>Statut du compte</mat-label>
     <mat-select formControlName="status">
       <mat-option [value]="''">Tous</mat-option>
       @for (status of statuses; track status) {
@@ -77,63 +72,9 @@
   </div>
 }
 
-@if (canSeeOrphanAccounts() && orphanAccounts().length > 0) {
-  <section class="students__orphans" aria-labelledby="students-orphans-title">
-    <h2 id="students-orphans-title" class="students__orphans-title">
-      <mat-icon aria-hidden="true">person_off</mat-icon>
-      Comptes apprenants sans profil ({{ orphanAccounts().length }})
-    </h2>
-    <p class="students__orphans-hint">
-      Ces comptes existent (ils peuvent se connecter) mais n'ont pas encore de profil ni de
-      classe — ils sont donc absents de la liste ci-dessous. Complétez-les pour les rattacher
-      à une formation.
-    </p>
-    <ul class="students__orphans-list">
-      @for (user of orphanAccounts(); track user.publicId) {
-        <li class="students__orphan-row">
-          <span>{{ user.lastName }} {{ user.firstName }} — {{ user.email }}</span>
-          @if (completingUserId() === user.publicId) {
-            <form
-              class="students__reveal"
-              role="group"
-              [attr.aria-label]="'Compléter le profil de ' + user.firstName + ' ' + user.lastName"
-              [formGroup]="completeForm"
-              (ngSubmit)="confirmComplete()"
-            >
-              <mat-form-field appearance="outline">
-                <mat-label>Classe</mat-label>
-                <mat-select formControlName="classGroupPublicId">
-                  @for (classGroup of classGroups(); track classGroup.publicId) {
-                    <mat-option [value]="classGroup.publicId">{{ classGroup.code }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <button mat-flat-button type="submit" [disabled]="completeSubmitting()">
-                Créer le profil et inscrire
-              </button>
-              <button mat-button type="button" (click)="cancelComplete()" [disabled]="completeSubmitting()">
-                Annuler
-              </button>
-              @if (completeError()) {
-                <p class="students__inline-error" role="alert">{{ completeError() }}</p>
-              }
-            </form>
-          } @else {
-            <button mat-stroked-button type="button" (click)="startComplete(user.publicId)">
-              Compléter le profil
-            </button>
-          }
-        </li>
-      }
-    </ul>
-  </section>
-}
-
 @if (state().kind === 'ready') {
   @if (isEmpty()) {
-    <p class="students__status" role="status">
-      Aucun profil apprenant ne correspond à votre recherche.
-    </p>
+    <p class="students__status" role="status">Aucun apprenant ne correspond à votre recherche.</p>
   } @else {
     <div class="students__table-wrapper esic-table-wrap--tall">
       <table
@@ -146,19 +87,18 @@
         (matSortChange)="onSortChange($event)"
       >
         <ng-container matColumnDef="name">
-          <th mat-header-cell *matHeaderCellDef>Apprenant</th>
-          <td mat-cell *matCellDef="let row">
-            @if (row.lastName || row.firstName) {
-              {{ row.lastName }}{{ row.lastName && row.firstName ? ' ' : '' }}{{ row.firstName }}
-            } @else {
-              <span class="students__unknown">Identité non résolue</span>
-            }
-          </td>
+          <th mat-header-cell *matHeaderCellDef mat-sort-header="lastName">Apprenant</th>
+          <td mat-cell *matCellDef="let row">{{ row.lastName }} {{ row.firstName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="email">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>E-mail</th>
+          <td mat-cell *matCellDef="let row">{{ row.email }}</td>
         </ng-container>
 
         <ng-container matColumnDef="studentNumber">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header>Numéro étudiant</th>
-          <td mat-cell *matCellDef="let row">{{ row.studentNumber }}</td>
+          <th mat-header-cell *matHeaderCellDef>Numéro étudiant</th>
+          <td mat-cell *matCellDef="let row">{{ row.studentNumber || '—' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="classGroup">
@@ -167,14 +107,14 @@
             @if (hasNoClass(row)) {
               <span class="esic-badge esic-badge--warning">Sans classe</span>
             } @else {
-              {{ classGroupLabel(row) }}
+              {{ row.classGroupCode }}
             }
           </td>
         </ng-container>
 
         <ng-container matColumnDef="workStudy">
           <th mat-header-cell *matHeaderCellDef>Alternance</th>
-          <td mat-cell *matCellDef="let row">{{ row.workStudy ? 'Oui' : 'Non' }}</td>
+          <td mat-cell *matCellDef="let row">{{ row.workStudy === null ? '—' : row.workStudy ? 'Oui' : 'Non' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="companyName">
@@ -185,7 +125,9 @@
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef>Statut</th>
           <td mat-cell *matCellDef="let row">
-            <span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span>
+            <span class="esic-badge" [attr.data-status]="row.accountStatus">{{
+              statusLabel(row.accountStatus)
+            }}</span>
           </td>
         </ng-container>
 
@@ -202,15 +144,13 @@
             <a
               mat-button
               color="primary"
-              [routerLink]="['/students', row.publicId]"
-              [attr.aria-label]="
-                'Consulter la fiche de ' + (row.lastName || row.firstName || row.studentNumber)
-              "
+              [routerLink]="['/students', row.userPublicId]"
+              [attr.aria-label]="'Consulter la fiche de ' + row.lastName + ' ' + row.firstName"
             >
               Consulter
             </a>
-            @if (hasNoClass(row) && assigningProfileId() !== row.publicId) {
-              <button mat-button type="button" (click)="startAssign(row.publicId)">
+            @if (canManageEnrollment() && hasNoClass(row) && assigningUserId() !== row.userPublicId) {
+              <button mat-button type="button" (click)="startAssign(row.userPublicId)">
                 Attribuer une classe
               </button>
             }
@@ -222,7 +162,7 @@
       </table>
     </div>
 
-    @if (assigningProfileId()) {
+    @if (assigningUserId()) {
       <form
         class="students__reveal"
         role="group"

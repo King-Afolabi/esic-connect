@@ -1307,9 +1307,9 @@ class AttendanceIntegrationTests {
      */
     private String enrollExtraStudentInFixtureClass(String admin, Fixture fx, String startDate) {
         Account student = accountWithRoles(RoleCode.STUDENT);
-        String profile = createProfile(admin, student.publicId());
+        createProfile(admin, student.publicId());
         Map<String, Object> body = new java.util.HashMap<>();
-        body.put("studentProfilePublicId", profile);
+        body.put("studentUserPublicId", student.publicId());
         body.put("classGroupPublicId", fx.classA());
         if (startDate != null) {
             body.put("startDate", startDate);
@@ -1344,13 +1344,14 @@ class AttendanceIntegrationTests {
         java.util.ArrayList<String> enrollments = new java.util.ArrayList<>();
         for (int i = 0; i < studentCount; i++) {
             Account student = accountWithRoles(RoleCode.STUDENT);
-            String profile = createProfile(admin, student.publicId());
+            createProfile(admin, student.publicId());
             // startDate explicite antérieure à toutes les dates de séance des
             // fixtures (la plus ancienne = 2026-08-01) : la couverture de
             // l'inscription à la date de la séance ne doit jamais dépendre de
             // la date d'exécution des tests (défaut = LocalDate.now).
-            String enrollment = (String) created("/api/v1/enrollments", Map.of("studentProfilePublicId", profile,
-                    "classGroupPublicId", chain.classA(), "startDate", "2026-08-01"), admin).get("publicId");
+            String enrollment = (String) created("/api/v1/enrollments", Map.of("studentUserPublicId",
+                    student.publicId(), "classGroupPublicId", chain.classA(), "startDate", "2026-08-01"), admin)
+                    .get("publicId");
             students.add(student);
             enrollments.add(enrollment);
         }
@@ -1369,9 +1370,9 @@ class AttendanceIntegrationTests {
         post("/api/v1/sessions/" + sessionId + "/open", null, admin, HttpStatus.NO_CONTENT);
 
         Account student = accountWithRoles(RoleCode.STUDENT);
-        String profile = createProfile(admin, student.publicId());
+        createProfile(admin, student.publicId());
         String enrollment = (String) created("/api/v1/enrollments", Map.of(
-                "studentProfilePublicId", profile, "classGroupPublicId", chain.classA(),
+                "studentUserPublicId", student.publicId(), "classGroupPublicId", chain.classA(),
                 "startDate", "2026-08-01"), admin).get("publicId");
         return new Fixture(sessionId, List.of(student), List.of(enrollment), chain.classA(),
                 chain.program(), teacher);

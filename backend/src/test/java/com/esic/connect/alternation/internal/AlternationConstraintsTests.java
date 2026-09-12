@@ -60,8 +60,9 @@ class AlternationConstraintsTests {
         long promotionId = insertPromotion(programId, yearId);
         classGroupId = insertClassGroup(promotionId, levelId, siteId, "C1-" + shortCode());
         otherClassGroupId = insertClassGroup(promotionId, levelId, siteId, "C2-" + shortCode());
-        long profileId = insertStudentProfile(userId);
-        enrollmentId = insertEnrollment(profileId, classGroupId, yearId);
+        // Refonte 2026-09 : l'inscription rattache directement le compte —
+        // aucun student_profile n'est nécessaire pour ces tests.
+        enrollmentId = insertEnrollment(userId, classGroupId, yearId);
     }
 
     // ------------------------------------------------------------------
@@ -326,25 +327,14 @@ class AlternationConstraintsTests {
         return ((Number) em.createNativeQuery("SELECT LAST_INSERT_ID()").getSingleResult()).longValue();
     }
 
-    private long insertStudentProfile(long userId) {
+    private long insertEnrollment(long userId, long classGroupId, long yearId) {
         EntityManager em = entityManager.getEntityManager();
         em.createNativeQuery("""
-                INSERT INTO student_profile (public_id, user_id, student_number, work_study, status,
-                                             created_at, updated_at, version)
-                VALUES (UNHEX(REPLACE(UUID(), '-', '')), :userId, :number, FALSE, 'ACTIVE',
-                        UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)
-                """).setParameter("userId", userId).setParameter("number", "STU-" + shortCode()).executeUpdate();
-        return ((Number) em.createNativeQuery("SELECT LAST_INSERT_ID()").getSingleResult()).longValue();
-    }
-
-    private long insertEnrollment(long profileId, long classGroupId, long yearId) {
-        EntityManager em = entityManager.getEntityManager();
-        em.createNativeQuery("""
-                INSERT INTO enrollment (public_id, student_profile_id, class_group_id, academic_year_id,
+                INSERT INTO enrollment (public_id, user_id, class_group_id, academic_year_id,
                                         start_date, status, enrollment_source, created_at, updated_at, version)
-                VALUES (UNHEX(REPLACE(UUID(), '-', '')), :profileId, :classGroupId, :yearId, '2026-09-01',
+                VALUES (UNHEX(REPLACE(UUID(), '-', '')), :userId, :classGroupId, :yearId, '2026-09-01',
                         'ACTIVE', 'MANUAL', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0)
-                """).setParameter("profileId", profileId).setParameter("classGroupId", classGroupId)
+                """).setParameter("userId", userId).setParameter("classGroupId", classGroupId)
                 .setParameter("yearId", yearId).executeUpdate();
         return ((Number) em.createNativeQuery("SELECT LAST_INSERT_ID()").getSingleResult()).longValue();
     }

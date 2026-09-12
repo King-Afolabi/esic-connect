@@ -308,11 +308,11 @@ class StudentGroupIntegrationTests {
     /** Crée un compte apprenant, son profil et son inscription dans la classe indiquée. */
     private String enroll(String admin, Fixture fixture, String classId) {
         UserAccount student = persistUser(RoleCode.STUDENT);
-        String profileId = (String) created("/api/v1/student-profiles", body(
+        created("/api/v1/student-profiles", body(
                 "userPublicId", student.getPublicId().toString(),
                 "studentNumber", "ESIC-" + shortId()), admin).get("publicId");
         return (String) created("/api/v1/enrollments", body(
-                "studentProfilePublicId", profileId,
+                "studentUserPublicId", student.getPublicId().toString(),
                 "classGroupPublicId", classId,
                 "startDate", "2026-09-01"), admin).get("publicId");
     }

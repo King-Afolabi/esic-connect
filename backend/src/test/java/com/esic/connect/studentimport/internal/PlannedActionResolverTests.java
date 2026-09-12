@@ -106,7 +106,7 @@ class PlannedActionResolverTests {
                 userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
         when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.of(new StudentProfileView(
                 profileId, userId, "ESIC-1", false, null, false)));
-        when(enrollmentProvisioner.describeSituation(profileId, classPublicId))
+        when(enrollmentProvisioner.describeSituation(userId, classPublicId))
                 .thenReturn(new Situation(Situation.Kind.OTHER_CLASS_SAME_YEAR, currentEnrollmentId));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.TRANSFER_CLASS);
@@ -121,7 +121,7 @@ class PlannedActionResolverTests {
                 userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
         when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.of(new StudentProfileView(
                 profileId, userId, "ESIC-1", false, null, false)));
-        when(enrollmentProvisioner.describeSituation(profileId, classPublicId))
+        when(enrollmentProvisioner.describeSituation(userId, classPublicId))
                 .thenReturn(new Situation(Situation.Kind.SAME_CLASS, null));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.NONE);
@@ -135,7 +135,7 @@ class PlannedActionResolverTests {
                 userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true)));
         when(enrollmentProvisioner.findProfileByUser(userId)).thenReturn(Optional.of(new StudentProfileView(
                 profileId, userId, "ESIC-1", false, null, false)));
-        when(enrollmentProvisioner.describeSituation(profileId, classPublicId))
+        when(enrollmentProvisioner.describeSituation(userId, classPublicId))
                 .thenReturn(new Situation(Situation.Kind.SAME_CLASS, null));
         RowResolution resolution = resolver.resolve(row(",work_study,company_name", ",oui,ACME"), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.UPDATE_PROFILE);
