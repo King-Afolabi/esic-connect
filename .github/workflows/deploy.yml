@@ -87,7 +87,7 @@ jobs:
       - name: Réinitialisation de la base de démonstration (opt-in explicite)
         # Exige aussi backend == 'true' (donc `force`) : sans ça, l'étape
         # suivante ne relancerait jamais le backend qu'on vient d'arrêter.
-        if: github.event_name == 'workflow_dispatch' && inputs.reset_demo_db == 'true' && steps.changed.outputs.backend == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.reset_demo_db == true && steps.changed.outputs.backend == 'true'
         working-directory: /home/king_a/esic-connect
         run: |
           set -e
