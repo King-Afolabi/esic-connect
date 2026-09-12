@@ -24,6 +24,10 @@ on:
         description: "Reconstruire/redéployer backend + frontend même si le dernier commit ne les touche pas (rejouer un déploiement)"
         type: boolean
         default: false
+      reset_demo_db:
+        description: "DANGER — purge complète de la base applicative (DROP + CREATE) avant le redéploiement. Une sauvegarde est prise juste avant. Réservé à une base de démonstration dont la perte est acceptée (ex. incompatibilité de schéma après réécriture d'une migration Flyway déjà appliquée)."
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-pi
@@ -79,6 +83,19 @@ jobs:
             docker tag "$(cat backups/$STAMP/frontend-image-before.txt)" "esic-connect-frontend:rollback-$STAMP"
           fi
           echo "Sauvegarde: backups/$STAMP"
+
+      - name: Réinitialisation de la base de démonstration (opt-in explicite)
+        # Exige aussi backend == 'true' (donc `force`) : sans ça, l'étape
+        # suivante ne relancerait jamais le backend qu'on vient d'arrêter.
+        if: github.event_name == 'workflow_dispatch' && inputs.reset_demo_db == 'true' && steps.changed.outputs.backend == 'true'
+        working-directory: /home/king_a/esic-connect
+        run: |
+          set -e
+          echo "::warning::Réinitialisation demandée (reset_demo_db) : arrêt du backend puis purge complète de la base applicative. Sauvegarde déjà prise à l'étape précédente (backups/$STAMP)."
+          docker compose -f compose.prod.yaml stop backend
+          docker compose -f compose.prod.yaml exec -T mysql sh -c \
+            'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS $MYSQL_DATABASE; CREATE DATABASE $MYSQL_DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"'
+          echo "Base réinitialisée (vide) — Flyway la repeuplera entièrement (toutes les migrations, schéma courant) au prochain démarrage du backend ; DemoDataInitializer réamorcera les comptes de démonstration, SuperAdmin inclus."
 
       - name: Synchroniser le code source (sans toucher .env / backups)
         if: steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true'
