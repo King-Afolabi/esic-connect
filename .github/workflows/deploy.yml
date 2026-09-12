@@ -129,14 +129,20 @@ jobs:
           SERVICES=""
           [ "${{ steps.changed.outputs.backend }}" = "true" ] && SERVICES="$SERVICES esic-connect-backend"
           [ "${{ steps.changed.outputs.frontend }}" = "true" ] && SERVICES="$SERVICES esic-connect-frontend"
-          for i in $(seq 1 30); do
+          # 60 x 5s = 5 min : sur la Pi, un démarrage à froid (migrations
+          # Flyway sur une base tout juste réinitialisée, ex. via
+          # reset_demo_db) peut dépasser les 2 min précédentes — mesuré à
+          # ~95 s pour 35 migrations + démarrage Spring lors d'un test réel
+          # (2026-09-12). Un redémarrage normal (migrations déjà à jour)
+          # reste largement sous ce plafond.
+          for i in $(seq 1 60); do
             OK=true
             for s in $SERVICES; do
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$s" 2>/dev/null || echo "unknown")
               [ "$STATUS" != "healthy" ] && OK=false
             done
             $OK && { echo "Tous les services impactés sont healthy."; exit 0; }
-            sleep 4
+            sleep 5
           done
           echo "::error::Au moins un service n'est pas devenu healthy à temps."
           exit 1
