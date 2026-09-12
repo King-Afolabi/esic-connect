@@ -126,6 +126,17 @@ jobs:
           echo "::error::Le site public ne répond pas 200 après déploiement."
           exit 1
 
+      - name: Journaux de diagnostic (si dégradé)
+        if: failure() && (steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true')
+        working-directory: /home/king_a/esic-connect
+        run: |
+          echo "--- docker compose ps ---"
+          docker compose -f compose.prod.yaml ps || true
+          echo "--- backend (200 dernières lignes) ---"
+          docker compose -f compose.prod.yaml logs --tail=200 backend || true
+          echo "--- frontend (100 dernières lignes) ---"
+          docker compose -f compose.prod.yaml logs --tail=100 frontend || true
+
       - name: Rollback automatique si dégradé
         if: failure() && (steps.changed.outputs.backend == 'true' || steps.changed.outputs.frontend == 'true')
         working-directory: /home/king_a/esic-connect
