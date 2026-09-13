@@ -57,6 +57,7 @@ const STUDENT: StudentResponse = {
   companyName: null,
   currentEnrollmentPublicId: null,
   classGroupPublicId: null,
+  classGroupName: null,
   classGroupCode: null,
   academicYearPublicId: null,
   academicYearCode: null,
@@ -77,6 +78,7 @@ const ENROLLMENT: EnrollmentResponse = {
   studentUserPublicId: ID,
   studentNumber: 'ESIC-2026-0007',
   classGroupPublicId: 'c-1',
+  classGroupName: 'BTS SIO 1 A',
   classGroupCode: 'BTS-SIO-1-A',
   programPublicId: 'pr-1',
   programCode: 'BTS-SIO',
@@ -200,7 +202,8 @@ describe('StudentProfile', () => {
     expect(text()).toContain('Scolarité actuelle');
     // Les valeurs viennent de l'inscription ACTIVE, en libellés humains.
     expect(text()).toContain('BTS-SIO');
-    expect(text()).toContain('BTS-SIO-1-A');
+    // Format « Nom — Code » (Lots 14/15 ; l'année a sa propre ligne ici).
+    expect(text()).toContain('BTS SIO 1 A — BTS-SIO-1-A');
     expect(text()).toContain('2026-2027');
     expect(text()).toContain('Active');
     // Aucun UUID exposé.

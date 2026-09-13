@@ -8,9 +8,12 @@ export interface MyPlanningTeacher {
   lastName: string | null;
 }
 
+/** `MyPlanningResponses.ClassView` (Lot 14 : vue enrichie). */
 export interface MyPlanningClass {
   publicId: string;
-  code: string | null;
+  name: string;
+  code: string;
+  academicYearCode: string;
 }
 
 export interface MyPlanningSession {

@@ -12,6 +12,7 @@ import { RoleContextService } from '../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../core/models/api-error';
 import { roleLabel } from '../../core/models/role';
 import { NAV_ITEMS, visibleNavItems } from '../../core/navigation/navigation';
+import { classGroupLabel } from '../academic/academic.models';
 import { DashboardApiService } from './dashboard-api.service';
 import { barWidth, DashboardResponse, percent, shortDate, shortInstant } from './dashboard.models';
 
@@ -41,6 +42,12 @@ export class Dashboard {
 
   protected readonly roleLabel = roleLabel;
   protected readonly shortInstant = shortInstant;
+  protected readonly classGroupLabel = classGroupLabel;
+
+  /** Codes de classe d'une séance, compacts — plusieurs classes possibles pour un cours commun. */
+  protected sessionClassCodes(line: { classes: { code: string }[] }): string {
+    return line.classes.map((c) => c.code).join(', ') || '—';
+  }
   protected readonly shortDate = shortDate;
   protected readonly percent = percent;
   protected readonly barWidth = barWidth;

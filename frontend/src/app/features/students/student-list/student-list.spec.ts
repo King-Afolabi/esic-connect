@@ -53,6 +53,7 @@ const FULL_STUDENT: StudentResponse = {
   companyName: 'ACME',
   currentEnrollmentPublicId: 'e-1',
   classGroupPublicId: 'c-1',
+  classGroupName: 'Classe 1',
   classGroupCode: 'C1',
   academicYearPublicId: 'y-1',
   academicYearCode: '2026-2027',
@@ -74,6 +75,7 @@ const BARE_STUDENT: StudentResponse = {
   companyName: null,
   currentEnrollmentPublicId: null,
   classGroupPublicId: null,
+  classGroupName: null,
   classGroupCode: null,
   academicYearPublicId: null,
   academicYearCode: null,
@@ -122,6 +124,8 @@ describe('StudentList', () => {
 
     expect(text()).toContain('ESIC-2026-0001');
     expect(text()).toContain('ACME');
+    // Format « Nom — Code — Année » (Lots 14/15).
+    expect(text()).toContain('Classe 1 — C1 — 2026-2027');
     const link = fixture.nativeElement.querySelector('a[href="/students/u-1"]') as HTMLAnchorElement;
     expect(link).not.toBeNull();
     expect(link.textContent).toContain('Consulter');

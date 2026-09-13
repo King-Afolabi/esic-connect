@@ -21,6 +21,7 @@ const CREATE_URL = '/api/v1/alternation/class-assignments';
 const ASSIGNMENT: ClassAssignmentResponse = {
   publicId: 'a-1',
   classGroupPublicId: CID,
+  classGroupName: 'BTS SIO 1 A',
   classGroupCode: 'BTS-SIO-1-A',
   workStudyPatternPublicId: 'p-1',
   workStudyPatternCode: 'RY-3-2',

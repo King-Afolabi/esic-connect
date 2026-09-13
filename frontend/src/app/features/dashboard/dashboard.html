@@ -90,6 +90,14 @@
       @case ('ready') {
         @if (dash(); as d) {
           @if (d.student; as s) {
+            <p class="dashboard__meta" role="status">
+              Ma classe :
+              @if (s.activeClass; as activeClass) {
+                <strong>{{ classGroupLabel(activeClass) }}</strong>
+              } @else {
+                <strong>Aucune classe active</strong>
+              }
+            </p>
             <ul class="esic-metric-grid" aria-label="Indicateurs d'assiduité">
               <li class="esic-metric" data-tone="present">
                 <span class="esic-metric__label">Présences</span>
@@ -127,7 +135,7 @@
                         <li>
                           <span>{{ line.title || 'Séance' }}</span>
                           <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
-                          <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span>
+                          <span class="dashboard__meta">{{ sessionClassCodes(line) }}</span>
                         </li>
                       }
                     </ul>
@@ -247,11 +255,13 @@
                   <dl class="dashboard__facts">
                     <dt>Classes gérées</dt><dd>{{ m.classCount }}</dd>
                   </dl>
-                  @if (m.classCodes.length) {
+                  @if (m.classes.length) {
                     <p class="dashboard__scope-preview">
-                      {{ m.classCodes.slice(0, 3).join(' · ') }}<!--
-                      -->@if (m.classCodes.length > 3) {
-                        <span class="dashboard__meta"> · +{{ m.classCodes.length - 3 }} autres</span>
+                      @for (classGroup of m.classes.slice(0, 3); track classGroup.publicId; let last = $last) {
+                        {{ classGroupLabel(classGroup) }}@if (!last) {<span> · </span>}
+                      }
+                      @if (m.classes.length > 3) {
+                        <span class="dashboard__meta"> · +{{ m.classes.length - 3 }} autres</span>
                       }
                     </p>
                   }
@@ -348,7 +358,7 @@
                             <span>{{ line.title || 'Séance' }}</span>
                           }
                           <span class="dashboard__meta">{{ shortInstant(line.startsAt) }}</span>
-                          <span class="dashboard__meta">{{ line.classCodes.join(', ') }}</span>
+                          <span class="dashboard__meta">{{ sessionClassCodes(line) }}</span>
                         </li>
                       }
                     </ul>

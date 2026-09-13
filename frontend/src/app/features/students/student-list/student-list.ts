@@ -13,7 +13,7 @@ import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
-import { ClassGroupResponse } from '../../academic/academic.models';
+import { ClassGroupResponse, classGroupLabel } from '../../academic/academic.models';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { normalizeHttpError } from '../../../core/models/api-error';
@@ -155,6 +155,7 @@ export class StudentList {
   protected readonly pageSize = signal(20);
 
   protected readonly classGroups = signal<ClassGroupResponse[]>([]);
+  protected readonly classGroupLabel = classGroupLabel;
 
   /** Ligne (compte) pour laquelle le formulaire « attribuer une classe » est ouvert. */
   protected readonly assigningUserId = signal<string | null>(null);

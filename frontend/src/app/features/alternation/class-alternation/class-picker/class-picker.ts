@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -8,6 +9,7 @@ import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/materi
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { AcademicApiService } from '../../../academic/academic-api.service';
 import {
@@ -55,6 +57,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 export class ClassPicker {
   private readonly academic = inject(AcademicApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   protected readonly displayedColumns = ['code', 'name', 'status', 'actions'] as const;
@@ -86,15 +89,27 @@ export class ClassPicker {
 
   constructor() {
     this.load();
+
+    // Recherche différée (Lot 4) : chaque frappe relance la recherche
+    // après une courte pause, sans bouton de validation à actionner.
+    this.filters.controls.q.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef), debounceTime(300), distinctUntilChanged())
+      .subscribe(() => {
+        this.pageIndex.set(0);
+        this.load();
+      });
   }
 
-  protected applyFilters(): void {
+  /** Validation explicite (Entrée / bouton) : recherche immédiate, sans attendre le délai. */
+  protected submitFilters(): void {
     this.pageIndex.set(0);
     this.load();
   }
 
   protected resetFilters(): void {
-    this.filters.reset({ q: '' });
+    // `emitEvent: false` : la recherche différée relancerait de toute
+    // façon la même requête 300 ms plus tard — autant l'éviter ici.
+    this.filters.reset({ q: '' }, { emitEvent: false });
     this.pageIndex.set(0);
     this.load();
   }

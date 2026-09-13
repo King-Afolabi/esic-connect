@@ -67,6 +67,8 @@ const CLASS_GROUP: ClassGroupResponse = {
   sitePublicId: null,
   code: 'SIO-2026-A',
   name: 'Groupe A',
+  academicYearPublicId: 'ay-1',
+  academicYearCode: 'AY-2026',
   capacity: 24,
   status: 'ACTIVE',
   archivedAt: null,

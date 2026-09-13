@@ -8,6 +8,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 
 import { normalizeHttpError } from '../../core/models/api-error';
+import { classGroupLabel } from '../academic/academic.models';
 import { formatInTimeZone } from '../alternation/zoned-time';
 import { MyPlanningApiService } from './my-planning-api.service';
 import { MyPlanningSession, sessionStatusLabel, teacherDisplayName } from './my-planning.models';
@@ -44,6 +45,7 @@ export class MyPlanning {
   private readonly fb = inject(FormBuilder);
 
   protected readonly formatInTimeZone = formatInTimeZone;
+  protected readonly classGroupLabel = classGroupLabel;
   protected readonly sessionStatusLabel = sessionStatusLabel;
   protected readonly teacherDisplayName = teacherDisplayName;
 

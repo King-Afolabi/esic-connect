@@ -10,7 +10,7 @@ import { MatTableModule } from '@angular/material/table';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
-import { ClassGroupResponse } from '../../academic/academic.models';
+import { ClassGroupResponse, classGroupLabel } from '../../academic/academic.models';
 import { formatInTimeZone } from '../../alternation/zoned-time';
 import { PlanningApiService } from '../planning-api.service';
 import { toPlanningError } from '../planning-errors';
@@ -88,6 +88,7 @@ export class PlanningVersions {
     const current = this.classesState();
     return current.kind === 'ready' ? current.classes : [];
   });
+  protected readonly classGroupLabel = classGroupLabel;
   protected readonly classesError = computed(() => {
     const current = this.classesState();
     return current.kind === 'error' ? current.message : null;

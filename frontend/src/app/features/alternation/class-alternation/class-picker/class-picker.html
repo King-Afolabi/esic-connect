@@ -14,16 +14,13 @@
   <a routerLink="/alternation/enrollments" routerLinkActive="alt__tab--active" ariaCurrentWhenActive="page">Exceptions par inscription</a>
 </nav>
 
-<form class="alt__filters esic-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+<form class="alt__filters esic-filters" [formGroup]="filters" (ngSubmit)="submitFilters()">
   <mat-form-field appearance="outline" class="alt__filter">
     <mat-label>Code ou nom de classe</mat-label>
     <input matInput type="search" formControlName="q" autocomplete="off" />
+    <mat-hint>La recherche se relance automatiquement pendant la saisie.</mat-hint>
   </mat-form-field>
   <div class="alt__filter-actions">
-    <button mat-flat-button type="submit">
-      <mat-icon aria-hidden="true">search</mat-icon>
-      Filtrer
-    </button>
     <button mat-button type="button" (click)="resetFilters()">Réinitialiser</button>
   </div>
 </form>

@@ -263,6 +263,7 @@ export interface WorkStudyPatternResponse {
 export interface ClassAssignmentResponse {
   publicId: string;
   classGroupPublicId: string | null;
+  classGroupName: string | null;
   classGroupCode: string | null;
   workStudyPatternPublicId: string;
   workStudyPatternCode: string;

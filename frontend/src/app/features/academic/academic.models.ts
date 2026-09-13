@@ -128,12 +128,32 @@ export interface ClassGroupResponse {
   sitePublicId: string | null;
   code: string;
   name: string;
+  /** Année scolaire de la promotion de la classe (Lot 4). */
+  academicYearPublicId: string;
+  academicYearCode: string;
   capacity: number | null;
   status: AcademicStatus;
   archivedAt: string | null;
   archiveReason: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Format d'affichage partagé d'une classe (Lots 14/15) :
+ * `Nom — Code — Année` (ex. « Bachelor 3 Développement — B3-DEV-A —
+ * 2026-2027 »). `AcademicYear.code` est utilisé, jamais `.name` — décision
+ * validée. Un champ manquant est simplement omis plutôt que de laisser un
+ * tiret orphelin.
+ */
+export function classGroupLabel(classGroup: {
+  name: string | null | undefined;
+  code: string | null | undefined;
+  academicYearCode?: string | null | undefined;
+}): string {
+  return [classGroup.name, classGroup.code, classGroup.academicYearCode]
+    .filter((part): part is string => !!part)
+    .join(' — ');
 }
 
 /** Toute entité du référentiel académique renvoyée par l'API. */
@@ -180,6 +200,8 @@ export interface ClassGroupListQuery extends AcademicListQuery {
   programLevel?: string | null;
   /** `site` — `public_id` d'un site. */
   site?: string | null;
+  /** `academicYear` — `public_id` d'une année scolaire (Lot 4). */
+  academicYear?: string | null;
 }
 
 /** `POST /api/v1/academic-years` — `AcademicYearRequests.Create`. */

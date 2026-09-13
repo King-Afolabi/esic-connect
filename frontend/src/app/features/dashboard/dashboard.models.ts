@@ -21,7 +21,18 @@ export interface DashboardSessionLine {
   status: string;
   startsAt: string;
   endsAt: string;
-  classCodes: string[];
+  classes: DashboardClassRef[];
+}
+
+/**
+ * Identité d'une classe suffisante pour l'affichage « Nom — Code —
+ * Année » (Lots 14/15) — `DashboardResponses.ClassRef`.
+ */
+export interface DashboardClassRef {
+  publicId: string;
+  name: string;
+  code: string;
+  academicYearCode: string;
 }
 
 export interface DashboardImportLine {
@@ -32,6 +43,13 @@ export interface DashboardImportLine {
 }
 
 export interface DashboardStudentCard {
+  /**
+   * Classe de l'inscription ACTIVE de l'apprenant (Lot 13),
+   * indépendamment des séances de la semaine ; `null` si aucune
+   * inscription active — ou si plusieurs le sont (anomalie signalée dans
+   * {@link DashboardResponse.notes} plutôt que résolue arbitrairement ici).
+   */
+  activeClass: DashboardClassRef | null;
   nextSession: DashboardSessionLine | null;
   weekSessions: DashboardSessionLine[];
   present: number;
@@ -77,7 +95,7 @@ export interface DashboardAuditLine {
 export interface DashboardManagerCard {
   classCount: number;
   upcomingSessions: DashboardSessionLine[];
-  classCodes: string[];
+  classes: DashboardClassRef[];
   periodFrom: string;
   periodTo: string;
   attendanceRate: number;

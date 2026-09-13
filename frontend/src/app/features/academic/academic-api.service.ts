@@ -104,13 +104,14 @@ export class AcademicApiService {
     );
   }
 
-  /** `GET /api/v1/class-groups` — filtres `promotion` / `programLevel` / `site` inclus. */
+  /** `GET /api/v1/class-groups` — filtres `promotion` / `programLevel` / `site` / `academicYear` inclus. */
   listClassGroups(query: ClassGroupListQuery): Observable<PageResponse<ClassGroupResponse>> {
     return this.http.get<PageResponse<ClassGroupResponse>>(`${this.base}/class-groups`, {
       params: listParams(query, {
         promotion: query.promotion,
         programLevel: query.programLevel,
         site: query.site,
+        academicYear: query.academicYear,
       }),
     });
   }

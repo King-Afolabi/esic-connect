@@ -81,6 +81,7 @@ export interface StudentResponse {
   workStudy: boolean | null;
   companyName: string | null;
   classGroupPublicId: string | null;
+  classGroupName: string | null;
   classGroupCode: string | null;
   academicYearPublicId: string | null;
   academicYearCode: string | null;
@@ -100,6 +101,7 @@ export interface EnrollmentResponse {
   studentUserPublicId: string;
   studentNumber: string | null;
   classGroupPublicId: string;
+  classGroupName: string;
   classGroupCode: string;
   programPublicId: string;
   programCode: string;

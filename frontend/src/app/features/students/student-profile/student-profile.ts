@@ -12,6 +12,7 @@ import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
+import { classGroupLabel } from '../../academic/academic.models';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { StudentsApiService } from '../students-api.service';
@@ -103,6 +104,7 @@ export class StudentProfile {
   private readonly publicId = this.route.snapshot.paramMap.get('publicId') ?? '';
 
   protected readonly accountStatusLabel = studentAccountStatusLabel;
+  protected readonly classGroupLabel = classGroupLabel;
   protected readonly enrollmentStatusLabel = enrollmentStatusLabel;
   protected readonly enrollmentSourceLabel = enrollmentSourceLabel;
   protected readonly historyColumns = [

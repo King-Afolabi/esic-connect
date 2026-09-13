@@ -16,7 +16,7 @@ import { Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
-import { ClassGroupResponse } from '../../academic/academic.models';
+import { ClassGroupResponse, classGroupLabel } from '../../academic/academic.models';
 import { OrganizationApiService } from '../../organization/organization-api.service';
 import { RoomResponse } from '../../organization/organization.models';
 import { SubjectsApiService } from '../../subjects/subjects-api.service';
@@ -128,6 +128,7 @@ export class SessionForm {
   protected readonly loadState = signal<LoadState>({ kind: 'loading' });
   protected readonly teachers = signal<TeacherOptionResponse[]>([]);
   protected readonly classes = signal<ClassGroupResponse[]>([]);
+  protected readonly classGroupLabel = classGroupLabel;
   protected readonly subjects = signal<SubjectResponse[]>([]);
   /** Salles du site déduit des classes choisies ; vide tant qu'aucune classe n'est sélectionnée. */
   protected readonly rooms = signal<RoomResponse[]>([]);

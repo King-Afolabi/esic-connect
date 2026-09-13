@@ -26,7 +26,7 @@
       <mat-label>Classe</mat-label>
       <mat-select formControlName="classGroupPublicId">
         @for (klass of classes(); track klass.publicId) {
-          <mat-option [value]="klass.publicId">{{ klass.code }} — {{ klass.name }}</mat-option>
+          <mat-option [value]="klass.publicId">{{ classGroupLabel(klass) }}</mat-option>
         }
       </mat-select>
       @if (form.controls.classGroupPublicId.touched && form.controls.classGroupPublicId.invalid) {

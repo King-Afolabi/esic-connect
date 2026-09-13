@@ -80,7 +80,7 @@
             <div><dt>Formateur</dt><dd>{{ teacherName(current.teacher) }}</dd></div>
             <div><dt>Matière</dt><dd>{{ current.subject?.name || '—' }}</dd></div>
             <div><dt>Salle</dt><dd>{{ current.roomCode || '—' }}</dd></div>
-            <div><dt>Classes</dt><dd>{{ classCodes(current) }}</dd></div>
+            <div><dt>Classes</dt><dd>{{ classGroupLabels(current) }}</dd></div>
             <div><dt>Début</dt><dd>{{ formatInTimeZone(current.startsAt, current.timeZoneId) }}</dd></div>
             <div><dt>Fin</dt><dd>{{ formatInTimeZone(current.endsAt, current.timeZoneId) }}</dd></div>
             <div><dt>Fuseau de saisie</dt><dd>{{ current.timeZoneId }}</dd></div>

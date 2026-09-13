@@ -107,7 +107,7 @@
             @if (hasNoClass(row)) {
               <span class="esic-badge esic-badge--warning">Sans classe</span>
             } @else {
-              {{ row.classGroupCode }}
+              {{ classGroupLabel({ name: row.classGroupName, code: row.classGroupCode, academicYearCode: row.academicYearCode }) }}
             }
           </td>
         </ng-container>
@@ -174,7 +174,7 @@
           <mat-label>Classe</mat-label>
           <mat-select formControlName="classGroupPublicId">
             @for (classGroup of classGroups(); track classGroup.publicId) {
-              <mat-option [value]="classGroup.publicId">{{ classGroup.code }}</mat-option>
+              <mat-option [value]="classGroup.publicId">{{ classGroupLabel(classGroup) }}</mat-option>
             }
           </mat-select>
           @if (assignForm.controls.classGroupPublicId.touched && assignForm.controls.classGroupPublicId.invalid) {

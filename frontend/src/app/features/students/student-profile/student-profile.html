@@ -120,7 +120,7 @@
                   <dt>Formation</dt>
                   <dd>{{ e.programCode }}</dd>
                   <dt>Classe active</dt>
-                  <dd>{{ e.classGroupCode }}</dd>
+                  <dd>{{ classGroupLabel({ name: e.classGroupName, code: e.classGroupCode }) }}</dd>
                   <dt>Année scolaire</dt>
                   <dd>{{ e.academicYearCode }}</dd>
                   <dt>Statut de l'inscription</dt>
@@ -228,7 +228,7 @@
 
                   <ng-container matColumnDef="classGroup">
                     <th mat-header-cell *matHeaderCellDef>Classe</th>
-                    <td mat-cell *matCellDef="let row">{{ row.classGroupCode }}</td>
+                    <td mat-cell *matCellDef="let row">{{ classGroupLabel({ name: row.classGroupName, code: row.classGroupCode }) }}</td>
                   </ng-container>
 
                   <ng-container matColumnDef="program">

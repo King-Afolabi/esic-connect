@@ -306,10 +306,12 @@ export function isValidRemoteLink(value: string): boolean {
   }
 }
 
-/** `CourseSessionResponse.SessionClassView`. */
+/** `CourseSessionResponse.SessionClassView` (Lot 14 : vue enrichie). */
 export interface SessionClassView {
   publicId: string;
+  name: string;
   code: string;
+  academicYearCode: string;
 }
 
 /** `CourseSessionResponse.SubjectView` (V35). */

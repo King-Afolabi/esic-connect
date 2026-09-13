@@ -55,7 +55,7 @@ const OPEN_SESSION: CourseSessionResponse = {
   teacher: { publicId: 't-1', firstName: 'Alice', lastName: 'Martin' },
   subject: null,
   roomCode: null,
-  classes: [{ publicId: 'c-1', code: 'C1' }],
+  classes: [{ publicId: 'c-1', name: 'Classe 1', code: 'C1', academicYearCode: 'AY-2026' }],
   startsAt: '2026-09-10T06:00:00Z',
   endsAt: '2026-09-10T10:00:00Z',
   timeZoneId: 'Europe/Paris',
@@ -237,6 +237,8 @@ describe('SessionDetail', () => {
     expect(text()).toContain('08:00 (Europe/Paris)');
     expect(text()).toContain('12:00 (Europe/Paris)');
     expect(text()).toContain('07:55 (Europe/Paris)');
+    // Format « Nom — Code — Année » (Lots 14/15).
+    expect(text()).toContain('Classe 1 — C1 — AY-2026');
   });
 
   it('shows the open button for a PLANNED session and opens it after confirmation', () => {

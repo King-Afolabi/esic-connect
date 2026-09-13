@@ -34,7 +34,7 @@ describe('MyPlanning', () => {
           endsAt: '2026-09-15T10:00:00Z',
           timeZoneId: 'Europe/Paris',
           teacher: { publicId: 't-1', firstName: 'Awa', lastName: 'Diallo' },
-          classes: [{ publicId: 'c-1', code: 'C1' }],
+          classes: [{ publicId: 'c-1', name: 'Classe 1', code: 'C1', academicYearCode: 'AY-2026' }],
           roomCode: null,
         },
       ],
@@ -43,7 +43,8 @@ describe('MyPlanning', () => {
 
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Cours de rattrapage');
-    expect(text).toContain('C1');
+    // Format « Nom — Code — Année » (Lots 14/15).
+    expect(text).toContain('Classe 1 — C1 — AY-2026');
     // 08:00Z / 10:00Z converted to the session's declared zone
     // (Europe/Paris, DST, UTC+2) → 10:00 / 12:00 local (Lot 8).
     expect(text).toContain('10:00 (Europe/Paris)');

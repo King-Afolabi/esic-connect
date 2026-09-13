@@ -8,7 +8,6 @@ import { ClassPicker } from './class-picker';
 
 interface Internals {
   filters: { setValue: (v: { q: string }) => void };
-  applyFilters: () => void;
   onPageChange: (e: { pageIndex: number; pageSize: number; length: number }) => void;
   retry: () => void;
 }
@@ -22,6 +21,8 @@ const CLASS: ClassGroupResponse = {
   sitePublicId: null,
   code: 'BTS-SIO-1-A',
   name: 'BTS SIO 1 A',
+  academicYearPublicId: 'ay-1',
+  academicYearCode: 'AY-2026',
   capacity: 24,
   status: 'ACTIVE',
   archivedAt: null,
@@ -78,12 +79,18 @@ describe('ClassPicker', () => {
     expect(text()).toContain("Vous n'êtes pas autorisé à consulter les classes");
   });
 
-  it('applies the q filter and resets to the first page', () => {
+  it('searches live as the user types (Lot 4), debounced, and resets to the first page', () => {
+    vi.useFakeTimers();
     expectList().flush(page([CLASS]));
     internals.onPageChange({ pageIndex: 2, pageSize: 20, length: 100 });
     expectList().flush(page([CLASS]));
+
     internals.filters.setValue({ q: '  BTS ' });
-    internals.applyFilters();
+    // Aucune requête avant la fin du délai (Lot 4 : recherche différée).
+    http.expectNone((r) => r.url === URL);
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
+
     const req = expectList();
     expect(req.request.params.get('q')).toBe('BTS');
     expect(req.request.params.get('page')).toBe('0');

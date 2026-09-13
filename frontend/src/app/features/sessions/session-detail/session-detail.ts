@@ -22,6 +22,7 @@ import { Observable, interval } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import { AcademicApiService } from '../../academic/academic-api.service';
+import { classGroupLabel } from '../../academic/academic.models';
 import { formatInTimeZone } from '../../alternation/zoned-time';
 import { OrganizationApiService } from '../../organization/organization-api.service';
 import { RoomResponse } from '../../organization/organization.models';
@@ -51,7 +52,6 @@ import {
   attendanceStatusLabel,
   checkpointStatusLabel,
   checkpointTypeLabel,
-  classCodes,
   correctionActionLabel,
   correctionActorLabel,
   formatInstantUtc,
@@ -139,7 +139,10 @@ export class SessionDetail {
   protected readonly formatInstantUtc = formatInstantUtc;
   /** Faits propres à la séance (horaires, ouverture/fermeture, remplacements) : fuseau déclaré (Lot 8). */
   protected readonly formatInTimeZone = formatInTimeZone;
-  protected readonly classCodes = classCodes;
+  /** Format « Nom — Code — Année » (Lots 14/15), une classe par ligne rattachée. */
+  protected classGroupLabels(session: Pick<CourseSessionResponse, 'classes'>): string {
+    return session.classes.map((c) => classGroupLabel(c)).join(', ') || '—';
+  }
   protected readonly teacherName = teacherName;
   protected readonly attendanceModeLabel = sessionAttendanceModeLabel;
   protected readonly rosterColumns = ['student', 'number', 'status', 'recordedAt', 'actions'] as const;

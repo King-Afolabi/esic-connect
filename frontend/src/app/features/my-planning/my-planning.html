@@ -61,7 +61,7 @@
               @if (isTeacher()) {
                 Classe(s) :
                 @for (c of session.classes; track c.publicId) {
-                  <span>{{ c.code || '—' }}</span>
+                  <span>{{ classGroupLabel(c) }}</span>
                 }
               } @else {
                 Formateur : {{ teacherDisplayName(session.teacher) }}

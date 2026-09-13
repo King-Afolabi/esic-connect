@@ -8,7 +8,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
-import { ClassGroupResponse } from '../../academic/academic.models';
+import { ClassGroupResponse, classGroupLabel } from '../../academic/academic.models';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { PlanningApiService } from '../planning-api.service';
 import { toPlanningError } from '../planning-errors';
@@ -71,6 +71,7 @@ export class PlanningImport {
     const current = this.classesState();
     return current.kind === 'ready' ? current.classes : [];
   });
+  protected readonly classGroupLabel = classGroupLabel;
   protected readonly classesError = computed(() => {
     const current = this.classesState();
     return current.kind === 'error' ? current.message : null;

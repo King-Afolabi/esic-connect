@@ -281,6 +281,7 @@ describe('Dashboard', () => {
       administration: null,
       notes: [],
       student: {
+        activeClass: { publicId: 'c-1', name: 'Classe 1', code: 'C1', academicYearCode: 'AY-2026' },
         nextSession: null,
         weekSessions: [
           {
@@ -289,7 +290,7 @@ describe('Dashboard', () => {
             status: 'PLANNED',
             startsAt: '2026-09-11T08:00:00Z',
             endsAt: '2026-09-11T10:00:00Z',
-            classCodes: ['C1'],
+            classes: [{ publicId: 'c-1', name: 'Classe 1', code: 'C1', academicYearCode: 'AY-2026' }],
           },
         ],
         present: 4,
@@ -303,6 +304,46 @@ describe('Dashboard', () => {
     expect(text()).toContain('Atelier');
     expect(text()).toContain('Présences');
     expect((fixture.nativeElement as HTMLElement).querySelector('a[href^="/sessions/"]')).toBeNull();
+    // « Ma classe » (Lot 13) : dérivée de l'inscription active, pas des
+    // séances de la semaine — format « Nom — Code — Année » (Lot 15).
+    expect(text()).toContain('Ma classe');
+    expect(text()).toContain('Classe 1 — C1 — AY-2026');
+  });
+
+  it('shows "Aucune classe active" when the student has no active enrollment, even with sessions this week', () => {
+    roles.set(['STUDENT']);
+    reload({
+      role: 'STUDENT',
+      generatedAt: '2026-09-10T09:00:00Z',
+      teacher: null,
+      manager: null,
+      administration: null,
+      notes: ['Anomalie : 2 inscriptions actives détectées.'],
+      student: {
+        activeClass: null,
+        nextSession: null,
+        weekSessions: [
+          {
+            sessionPublicId: 's-1',
+            title: 'Atelier',
+            status: 'PLANNED',
+            startsAt: '2026-09-11T08:00:00Z',
+            endsAt: '2026-09-11T10:00:00Z',
+            classes: [{ publicId: 'c-1', name: 'Classe 1', code: 'C1', academicYearCode: 'AY-2026' }],
+          },
+        ],
+        present: 0,
+        late: 0,
+        absent: 0,
+        excused: 0,
+        pendingJustifications: 0,
+        rejectedJustifications: 0,
+      },
+    });
+    expect(text()).toContain('Aucune classe active');
+    // Une séance cette semaine reste affichée même sans classe active
+    // résolue (Lot 13) : ce ne sont pas la même source.
+    expect(text()).toContain('Atelier');
   });
 
   it('links teacher sessions to /sessions/:id for a TEACHER context', () => {
@@ -323,7 +364,7 @@ describe('Dashboard', () => {
             status: 'PLANNED',
             startsAt: '2026-09-11T08:00:00Z',
             endsAt: '2026-09-11T10:00:00Z',
-            classCodes: ['C1'],
+            classes: [{ publicId: 'c-1', name: 'Classe 1', code: 'C1', academicYearCode: 'AY-2026' }],
           },
         ],
         toOpen: [],
@@ -393,7 +434,10 @@ describe('Dashboard', () => {
       manager: {
         classCount: 2,
         upcomingSessions: [],
-        classCodes: ['BTS1-A', 'BTS1-B'],
+        classes: [
+          { publicId: 'g-1', name: 'Groupe A', code: 'BTS1-A', academicYearCode: 'AY-2026' },
+          { publicId: 'g-2', name: 'Groupe B', code: 'BTS1-B', academicYearCode: 'AY-2026' },
+        ],
         periodFrom: '2026-08-11T09:00:00Z',
         periodTo: '2026-09-10T09:00:00Z',
         attendanceRate: 0.9125,
@@ -441,7 +485,13 @@ describe('Dashboard', () => {
       manager: {
         classCount: 12,
         upcomingSessions: [],
-        classCodes: ['BTS1-A', 'BTS1-B', 'BTS2-A', 'M1-A', 'M2-A'],
+        classes: [
+          { publicId: 'g-1', name: 'Groupe A', code: 'BTS1-A', academicYearCode: 'AY-2026' },
+          { publicId: 'g-2', name: 'Groupe B', code: 'BTS1-B', academicYearCode: 'AY-2026' },
+          { publicId: 'g-3', name: 'Groupe C', code: 'BTS2-A', academicYearCode: 'AY-2026' },
+          { publicId: 'g-4', name: 'Groupe D', code: 'M1-A', academicYearCode: 'AY-2026' },
+          { publicId: 'g-5', name: 'Groupe E', code: 'M2-A', academicYearCode: 'AY-2026' },
+        ],
         periodFrom: '2026-08-11T09:00:00Z',
         periodTo: '2026-09-10T09:00:00Z',
         attendanceRate: 0.9125,
@@ -497,7 +547,7 @@ describe('Dashboard', () => {
       manager: {
         classCount: 2,
         upcomingSessions: [],
-        classCodes: ['BTS1-A'],
+        classes: [{ publicId: 'g-1', name: 'Groupe A', code: 'BTS1-A', academicYearCode: 'AY-2026' }],
         periodFrom: '2026-08-11T09:00:00Z',
         periodTo: '2026-09-10T09:00:00Z',
         attendanceRate: 0.9125,
