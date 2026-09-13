@@ -119,7 +119,7 @@ describe('EnrollmentPicker', () => {
     const enrollmentRows = harness.routeNativeElement?.querySelectorAll('tr[mat-row]') ?? [];
     const enrollmentRow = enrollmentRows[enrollmentRows.length - 1] as HTMLTableRowElement;
     expect(enrollmentRow.getAttribute('tabindex')).toBe('0');
-    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => undefined);
     const cell = enrollmentRow.querySelector('td') as HTMLElement;
     cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(linkClickSpy).toHaveBeenCalledTimes(1);

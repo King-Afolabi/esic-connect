@@ -139,7 +139,7 @@ describe('StudentList', () => {
     const link = fixture.nativeElement.querySelector('a[href="/students/u-1"]') as HTMLAnchorElement;
     expect(row.getAttribute('tabindex')).toBe('0');
 
-    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => undefined);
     const nameCell = row.querySelector('td') as HTMLElement;
     nameCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(linkClickSpy).toHaveBeenCalledTimes(1);

@@ -107,7 +107,7 @@ describe('UserList', () => {
     ) as HTMLAnchorElement;
     expect(row.getAttribute('tabindex')).toBe('0');
 
-    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => undefined);
     const nameCell = row.querySelector('td') as HTMLElement;
     nameCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(linkClickSpy).toHaveBeenCalledTimes(1);
@@ -266,7 +266,7 @@ describe('UserList — opérations de masse (EF-USER-004)', () => {
     ) as HTMLAnchorElement;
     expect(row.getAttribute('tabindex')).toBeNull();
 
-    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => undefined);
     // td[0] est la case à cocher (colonne « select ») ; on cible la
     // cellule e-mail (non interactive) pour vérifier que c'est bien le
     // mode bulk, et non l'ignorance native des éléments interactifs, qui

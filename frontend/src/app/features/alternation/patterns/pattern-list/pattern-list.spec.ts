@@ -92,7 +92,7 @@ describe('PatternList', () => {
     ) as HTMLAnchorElement;
     expect(row.getAttribute('tabindex')).toBe('0');
 
-    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => undefined);
     const cell = row.querySelector('td') as HTMLElement;
     cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(linkClickSpy).toHaveBeenCalledTimes(1);
