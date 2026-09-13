@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -48,9 +49,19 @@ import java.util.Set;
  * bloqués à l'écran d'enrôlement, comme avant. Cette variable ne doit
  * JAMAIS porter un secret de production ; elle n'a d'effet que sous le
  * profil {@code demo}, jamais en production.
+ *
+ * <p>{@code app.demo.seed-accounts} ({@code ESIC_DEMO_SEED_ACCOUNTS}),
+ * activé par défaut, permet de désactiver cet amorçage sans changer de
+ * profil : utile quand le déploiement tourne sous {@code demo} pour son
+ * infrastructure (aucun profil {@code prod} séparé pour l'instant, voir
+ * {@code docs/03-architecture.md} DEC-D01) mais héberge des comptes réels
+ * et ne doit plus voir apparaître les six comptes {@code @example.test}.
+ * Ne supprime pas les comptes déjà créés — une désactivation ultérieure
+ * les laisse en base, à retirer manuellement si besoin.
  */
 @Component
 @Profile("demo")
+@ConditionalOnProperty(name = "app.demo.seed-accounts", havingValue = "true", matchIfMissing = true)
 class DemoDataInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoDataInitializer.class);
