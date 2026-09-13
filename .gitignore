@@ -54,10 +54,11 @@ logs/
 report/generated/
 presentation/generated/
 
-# Documents de travail internes, conservés hors dépôt (voir README.md
-# « Documents de travail locaux ») : rapports d'audit détaillés, captures
-# de rapport, journaux de lot, journal d'ingénierie, dossier de
-# soutenance, registres d'anomalies, comptes rendus de fixtures.
+# Documentation interne : conservée en local, retirée du suivi Git public
+# (passe d'assainissement 2026-09-14 ; sauvegarde hors dépôt avant retrait).
+# Les règles historiques ci-dessous deviennent redondantes avec /docs/ mais
+# restent au cas où l'exclusion globale serait un jour retirée.
+/docs/
 /artifacts/
 /docs/audit/
 /docs/JOURNAL-*.md
