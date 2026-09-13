@@ -39,16 +39,19 @@ class ClassGroupService {
     private final ClassGroupRepository classGroupRepository;
     private final PromotionRepository promotionRepository;
     private final ProgramLevelRepository programLevelRepository;
+    private final AcademicYearRepository academicYearRepository;
     private final SiteDirectory siteDirectory;
     private final AcademicScopeGuard scopeGuard;
     private final AcademicChangePublisher changePublisher;
 
     ClassGroupService(ClassGroupRepository classGroupRepository, PromotionRepository promotionRepository,
-                      ProgramLevelRepository programLevelRepository, SiteDirectory siteDirectory,
-                      AcademicScopeGuard scopeGuard, AcademicChangePublisher changePublisher) {
+                      ProgramLevelRepository programLevelRepository, AcademicYearRepository academicYearRepository,
+                      SiteDirectory siteDirectory, AcademicScopeGuard scopeGuard,
+                      AcademicChangePublisher changePublisher) {
         this.classGroupRepository = classGroupRepository;
         this.promotionRepository = promotionRepository;
         this.programLevelRepository = programLevelRepository;
+        this.academicYearRepository = academicYearRepository;
         this.siteDirectory = siteDirectory;
         this.scopeGuard = scopeGuard;
         this.changePublisher = changePublisher;
@@ -56,7 +59,8 @@ class ClassGroupService {
 
     @Transactional(readOnly = true)
     PageResponse<ClassGroupResponse> list(String promotionPublicId, String programLevelPublicId, String sitePublicId,
-                                          String statusFilter, String textFilter, int page, int size, String sort) {
+                                          String academicYearPublicId, String statusFilter, String textFilter,
+                                          int page, int size, String sort) {
         Pageable pageable = AcademicQuerySupport.pageable(page, size, sort, SORTABLE, DEFAULT_SORT);
         Set<Long> visible = scopeGuard.visibleProgramIds();
         if (visible != null && visible.isEmpty()) {
@@ -80,6 +84,12 @@ class ClassGroupService {
                             AcademicException.Kind.SITE_NOT_FOUND))
                     .orElseThrow(() -> new AcademicException(AcademicException.Kind.SITE_NOT_FOUND));
             specs.add(AcademicSpecifications.classGroupHasSite(site.internalId()));
+        }
+        if (academicYearPublicId != null && !academicYearPublicId.isBlank()) {
+            AcademicYear year = academicYearRepository.findByPublicId(parseUuid(academicYearPublicId,
+                            AcademicException.Kind.ACADEMIC_YEAR_NOT_FOUND))
+                    .orElseThrow(() -> new AcademicException(AcademicException.Kind.ACADEMIC_YEAR_NOT_FOUND));
+            specs.add(AcademicSpecifications.classGroupHasAcademicYear(year.getId()));
         }
         AcademicQuerySupport.parseStatus(statusFilter)
                 .ifPresent(status -> specs.add(AcademicSpecifications.hasStatus(status)));

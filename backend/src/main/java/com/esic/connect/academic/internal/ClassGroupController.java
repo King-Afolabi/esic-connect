@@ -35,12 +35,13 @@ class ClassGroupController {
     PageResponse<ClassGroupResponse> list(@RequestParam(required = false) String promotion,
                                           @RequestParam(required = false) String programLevel,
                                           @RequestParam(required = false) String site,
+                                          @RequestParam(required = false) String academicYear,
                                           @RequestParam(required = false) String status,
                                           @RequestParam(required = false) String q,
                                           @RequestParam(required = false) String sort,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return service.list(promotion, programLevel, site, status, q, page, size, sort);
+        return service.list(promotion, programLevel, site, academicYear, status, q, page, size, sort);
     }
 
     @GetMapping("/{publicId}")

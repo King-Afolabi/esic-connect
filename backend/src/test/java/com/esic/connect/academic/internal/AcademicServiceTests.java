@@ -70,7 +70,7 @@ class AcademicServiceTests {
 
     private ClassGroupService classGroupService() {
         return new ClassGroupService(classGroupRepository, promotionRepository, programLevelRepository,
-                siteDirectory, scopeGuard, changePublisher);
+                academicYearRepository, siteDirectory, scopeGuard, changePublisher);
     }
 
     // ------------------------------------------------------------------

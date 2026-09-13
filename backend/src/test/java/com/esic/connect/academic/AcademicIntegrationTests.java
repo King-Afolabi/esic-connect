@@ -90,8 +90,9 @@ class AcademicIntegrationTests {
         String admin = adminToken();
         String sitePublicId = createSite(admin);
 
+        String yearCode = code("AY");
         Map<String, Object> year = created("/api/v1/academic-years", Map.of(
-                "code", code("AY"), "name", "2026-2027",
+                "code", yearCode, "name", "2026-2027",
                 "startDate", "2026-09-01", "endDate", "2027-08-31"), admin);
         String yearId = (String) year.get("publicId");
         assertThat(year).containsKey("publicId").doesNotContainKey("id");
@@ -126,11 +127,39 @@ class AcademicIntegrationTests {
         assertThat(classGroup.get("sitePublicId")).isEqualTo(sitePublicId);
         assertThat(classGroup.get("capacity")).isEqualTo(24);
         assertThat(classGroup).doesNotContainKeys("id", "siteId", "promotionId", "programLevelId");
+        // Lot 4 : l'année scolaire de la classe (via sa promotion) est exposée.
+        assertThat(classGroup.get("academicYearPublicId")).isEqualTo(yearId);
+        assertThat(classGroup.get("academicYearCode")).isEqualTo(yearCode);
 
         // Consultations
         assertThat(getMap("/api/v1/class-groups/" + classGroupId, admin).get("code")).isEqualTo("C1");
         assertThat(getMap("/api/v1/programs?q=" + programCode, admin).get("totalElements")).isEqualTo(1);
         assertThat(getMap("/api/v1/class-groups?promotion=" + promotionId, admin).get("totalElements")).isEqualTo(1);
+
+        // Lot 4 : recherche par code, par nom, filtre année, combinaison,
+        // résultat vide — sur GET /api/v1/class-groups. La base de test est
+        // partagée entre suites (des classes « C1 » / « Classe 1 » à code
+        // identique s'y accumulent) : une seconde classe à code et nom
+        // UNIQUES (comme program/year ci-dessus) est donc créée exprès
+        // pour ces assertions, afin qu'un total exact reste fiable.
+        String searchCode = code("SRCH");
+        String searchName = "Recherche " + searchCode;
+        Map<String, Object> searchClass = created("/api/v1/class-groups", Map.of(
+                "promotionPublicId", promotionId, "programLevelPublicId", levelId,
+                "sitePublicId", sitePublicId, "code", searchCode, "name", searchName), admin);
+        String searchClassId = (String) searchClass.get("publicId");
+
+        assertThat(getMap("/api/v1/class-groups?q=" + searchCode, admin).get("totalElements")).isEqualTo(1);
+        assertThat(getMap("/api/v1/class-groups?q=" + java.net.URLEncoder.encode(searchName,
+                java.nio.charset.StandardCharsets.UTF_8), admin).get("totalElements")).isEqualTo(1);
+        assertThat(classGroupIdsMatching("/api/v1/class-groups?academicYear=" + yearId, admin))
+                .containsExactlyInAnyOrder(classGroupId, searchClassId);
+        assertThat(getMap("/api/v1/class-groups?q=" + searchCode + "&academicYear=" + yearId, admin)
+                .get("totalElements")).isEqualTo(1);
+        assertThat(getMap("/api/v1/class-groups?q=" + code("NOPE"), admin).get("totalElements")).isEqualTo(0);
+        ResponseEntity<Map<String, Object>> unknownYear = exchange(HttpMethod.GET,
+                "/api/v1/class-groups?academicYear=" + UUID.randomUUID(), null, admin);
+        assertThat(unknownYear.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
         // Modification
         ResponseEntity<Map<String, Object>> renamed = exchange(HttpMethod.PATCH,
@@ -138,8 +167,12 @@ class AcademicIntegrationTests {
         assertThat(renamed.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(renamed.getBody().get("name")).isEqualTo("Classe 1 A");
 
-        // Archivage en cascade contrôlée (enfant -> parent)
+        // Archivage en cascade contrôlée (enfant -> parent) : les DEUX
+        // classes de la promotion (dont la classe créée pour la recherche
+        // Lot 4 ci-dessus) doivent être archivées avant la promotion elle-même.
         assertThat(action("/api/v1/class-groups/" + classGroupId + "/archive", "réorg", admin))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(action("/api/v1/class-groups/" + searchClassId + "/archive", "réorg", admin))
                 .isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(action("/api/v1/promotions/" + promotionId + "/archive", "clôture", admin))
                 .isEqualTo(HttpStatus.NO_CONTENT);
@@ -352,6 +385,21 @@ class AcademicIntegrationTests {
         ResponseEntity<Map<String, Object>> response = exchange(HttpMethod.GET, path, null, token);
         assertThat(response.getStatusCode()).as("GET " + path).isEqualTo(HttpStatus.OK);
         return response.getBody();
+    }
+
+    /**
+     * Identifiants publics d'une page de {@code GET /api/v1/class-groups}
+     * (bornée à 200 résultats) — pour vérifier une appartenance plutôt
+     * qu'un total exact quand la recherche par texte libre ({@code q})
+     * peut recouper des classes créées par d'autres suites dans la base
+     * de test partagée.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> classGroupIdsMatching(String path, String token) {
+        String sep = path.contains("?") ? "&" : "?";
+        Map<String, Object> page = getMap(path + sep + "size=200", token);
+        List<Map<String, Object>> content = (List<Map<String, Object>>) page.get("content");
+        return content.stream().map(row -> (String) row.get("publicId")).toList();
     }
 
     private HttpStatus action(String path, String reason, String token) {

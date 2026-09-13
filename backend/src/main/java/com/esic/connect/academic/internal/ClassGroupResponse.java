@@ -15,6 +15,8 @@ record ClassGroupResponse(
         UUID sitePublicId,
         String code,
         String name,
+        UUID academicYearPublicId,
+        String academicYearCode,
         Integer capacity,
         AcademicStatus status,
         Instant archivedAt,
@@ -23,6 +25,8 @@ record ClassGroupResponse(
         Instant updatedAt) {
 
     static ClassGroupResponse from(ClassGroup classGroup, UUID sitePublicId) {
+        // `promotion` / `promotion.academicYear` sont chargées EAGER
+        // (Promotion, ClassGroup) : aucune requête supplémentaire ici.
         return new ClassGroupResponse(
                 classGroup.getPublicId(),
                 classGroup.getPromotion().getPublicId(),
@@ -30,6 +34,8 @@ record ClassGroupResponse(
                 sitePublicId,
                 classGroup.getCode(),
                 classGroup.getName(),
+                classGroup.getPromotion().getAcademicYear().getPublicId(),
+                classGroup.getPromotion().getAcademicYear().getCode(),
                 classGroup.getCapacity(),
                 classGroup.getStatus(),
                 classGroup.getArchivedAt(),

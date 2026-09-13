@@ -51,6 +51,11 @@ final class AcademicSpecifications {
         return (root, query, cb) -> cb.equal(root.get("siteId"), siteId);
     }
 
+    /** Filtre par année scolaire (Lot 4) : traverse la promotion de la classe. */
+    static Specification<ClassGroup> classGroupHasAcademicYear(Long academicYearId) {
+        return (root, query, cb) -> cb.equal(root.get("promotion").get("academicYear").get("id"), academicYearId);
+    }
+
     static Specification<PedagogicalAssignment> assignmentHasProgram(Long programId) {
         return (root, query, cb) -> cb.equal(root.get("program").get("id"), programId);
     }
