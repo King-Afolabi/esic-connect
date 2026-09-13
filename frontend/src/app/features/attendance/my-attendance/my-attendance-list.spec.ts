@@ -16,6 +16,7 @@ const ROW = {
   sessionPublicId: 's-1',
   sessionTitle: 'Atelier',
   sessionStartsAt: '2026-09-10T08:00:00Z',
+  timeZoneId: 'Europe/Paris',
   checkpointPublicId: 'cp-1',
   checkpointLabel: 'Arrivée',
   checkpointType: 'START',
@@ -77,6 +78,9 @@ describe('MyAttendanceList', () => {
     expect(text()).toContain('Atelier');
     expect(text()).toContain('Absent');
     expect(text()).toContain('Déposer un justificatif');
+    // 08:00Z converted to the session's declared zone (Europe/Paris,
+    // DST, UTC+2) → 10:00 local, never the raw UTC value (Lot 8).
+    expect(text()).toContain('10:00 (Europe/Paris)');
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
   });

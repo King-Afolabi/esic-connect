@@ -22,6 +22,7 @@ import { Observable, interval } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import { AcademicApiService } from '../../academic/academic-api.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { OrganizationApiService } from '../../organization/organization-api.service';
 import { RoomResponse } from '../../organization/organization.models';
 import { EarlyDeparturePanel } from '../../attendance/early-departure/early-departure-panel';
@@ -134,7 +135,10 @@ export class SessionDetail {
   protected readonly correctionActionLabel = correctionActionLabel;
   protected readonly correctionActorLabel = correctionActorLabel;
   protected readonly candidateLabel = attendanceCandidateLabel;
+  /** Émargement / historique : instants techniques, restent en UTC (Lot 8, règle 6). */
   protected readonly formatInstantUtc = formatInstantUtc;
+  /** Faits propres à la séance (horaires, ouverture/fermeture, remplacements) : fuseau déclaré (Lot 8). */
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly classCodes = classCodes;
   protected readonly teacherName = teacherName;
   protected readonly attendanceModeLabel = sessionAttendanceModeLabel;

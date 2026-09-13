@@ -24,12 +24,16 @@ import {
   StudentExceptionResponse,
   alternationContextLabel,
   contextSourceLabel,
-  formatInstantUtc,
   formatIsoDate,
   scheduleExceptionStatusLabel,
   scheduleExceptionTypeLabel,
 } from '../../alternation.models';
-import { COMMON_TIME_ZONES, isSupportedTimeZone, zonedWallTimeToInstant } from '../../zoned-time';
+import {
+  COMMON_TIME_ZONES,
+  formatInTimeZone,
+  isSupportedTimeZone,
+  zonedWallTimeToInstant,
+} from '../../zoned-time';
 
 type ListState =
   | { kind: 'loading' }
@@ -98,7 +102,7 @@ export class EnrollmentAlternation {
   protected readonly statusLabel = scheduleExceptionStatusLabel;
   protected readonly contextLabel = alternationContextLabel;
   protected readonly sourceLabel = contextSourceLabel;
-  protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly formatIsoDate = formatIsoDate;
   protected readonly columns = [
     'type',

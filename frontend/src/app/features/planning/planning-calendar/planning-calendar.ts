@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
+import { isSupportedTimeZone } from '../../alternation/zoned-time';
 import { PlanningApiService } from '../planning-api.service';
 import { toPlanningError } from '../planning-errors';
 import {
@@ -239,7 +240,11 @@ export class PlanningCalendar {
     if (!slot.startsAt || !slot.endsAt) {
       return '—';
     }
-    return `${timeOf(slot.startsAt, slot.timeZoneId)} – ${timeOf(slot.endsAt, slot.timeZoneId)}`;
+    // Fuseau absent ou invalide : repli déterministe vers UTC, jamais un
+    // fuseau implicite (Lot 8, règle 7) — la date du créneau est déjà
+    // affichée dans la colonne « Jour », inutile de la répéter ici.
+    const zone = slot.timeZoneId && isSupportedTimeZone(slot.timeZoneId) ? slot.timeZoneId : 'UTC';
+    return `${timeOf(slot.startsAt, zone)} – ${timeOf(slot.endsAt, zone)} (${zone})`;
   }
 
   private slotValues() {
@@ -297,19 +302,19 @@ function lastDayOfCurrentMonth(): string {
   return `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
 }
 
-/** Heure locale du créneau dans SON fuseau, jamais celui du navigateur. */
-function timeOf(instant: string, timeZoneId: string | null): string {
+/**
+ * Heure locale du créneau dans le fuseau déjà résolu par l'appelant
+ * (validé via {@link isSupportedTimeZone}) — jamais celui du navigateur,
+ * jamais une double conversion.
+ */
+function timeOf(instant: string, zone: string): string {
   const date = new Date(instant);
   if (Number.isNaN(date.getTime())) {
     return '—';
   }
-  try {
-    return new Intl.DateTimeFormat('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: timeZoneId ?? 'Europe/Paris',
-    }).format(date);
-  } catch {
-    return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
-  }
+  return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: zone,
+  }).format(date);
 }

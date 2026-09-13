@@ -10,6 +10,7 @@ import { MatTableModule } from '@angular/material/table';
 import { RouterLink } from '@angular/router';
 
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { AttendanceApiService } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
@@ -60,7 +61,10 @@ export class MyEarlyDepartures {
   protected readonly statusLabel = earlyDepartureStatusLabel;
   protected readonly effectLabel = earlyDepartureEffectLabel;
   protected readonly opinionLabel = earlyDepartureOpinionLabel;
+  /** Décision : instant technique, reste en UTC (Lot 8, règle 6). */
   protected readonly formatInstantUtc = formatInstantUtc;
+  /** Séance et départ : convertis dans le fuseau déclaré de la séance (Lot 8). */
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly columns = ['session', 'departureAt', 'status', 'effect', 'decision'] as const;
 
   protected readonly state = signal<ListState>({ kind: 'loading' });

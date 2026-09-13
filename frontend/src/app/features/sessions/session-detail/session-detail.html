@@ -36,7 +36,8 @@
         <p class="sessions__status" role="note">
           Vous intervenez comme <strong>remplaçant</strong> sur cette séance
           (remplacement de {{ sub.originalTeacher.firstName }} {{ sub.originalTeacher.lastName }},
-          du {{ formatInstantUtc(sub.validFrom) }} au {{ formatInstantUtc(sub.validUntil) }}).
+          du {{ formatInTimeZone(sub.validFrom, current.timeZoneId) }} au
+          {{ formatInTimeZone(sub.validUntil, current.timeZoneId) }}).
           Vos droits de gestion sont révoqués à la fin de cette période.
         </p>
       }
@@ -80,8 +81,8 @@
             <div><dt>Matière</dt><dd>{{ current.subject?.name || '—' }}</dd></div>
             <div><dt>Salle</dt><dd>{{ current.roomCode || '—' }}</dd></div>
             <div><dt>Classes</dt><dd>{{ classCodes(current) }}</dd></div>
-            <div><dt>Début</dt><dd>{{ formatInstantUtc(current.startsAt) }}</dd></div>
-            <div><dt>Fin</dt><dd>{{ formatInstantUtc(current.endsAt) }}</dd></div>
+            <div><dt>Début</dt><dd>{{ formatInTimeZone(current.startsAt, current.timeZoneId) }}</dd></div>
+            <div><dt>Fin</dt><dd>{{ formatInTimeZone(current.endsAt, current.timeZoneId) }}</dd></div>
             <div><dt>Fuseau de saisie</dt><dd>{{ current.timeZoneId }}</dd></div>
             <div><dt>Modalité</dt><dd>{{ attendanceModeLabel(current.attendanceMode) }}</dd></div>
             @if (current.remoteLink) {
@@ -90,10 +91,10 @@
                 <dd><a [href]="current.remoteLink" target="_blank" rel="noopener noreferrer">{{ current.remoteLink }}</a></dd>
               </div>
             }
-            <div><dt>Ouverte le</dt><dd>{{ formatInstantUtc(current.openedAt) }}</dd></div>
-            <div><dt>Clôturée le</dt><dd>{{ formatInstantUtc(current.closedAt) }}</dd></div>
+            <div><dt>Ouverte le</dt><dd>{{ formatInTimeZone(current.openedAt, current.timeZoneId) }}</dd></div>
+            <div><dt>Clôturée le</dt><dd>{{ formatInTimeZone(current.closedAt, current.timeZoneId) }}</dd></div>
             @if (isCancelled()) {
-              <div><dt>Annulée le</dt><dd>{{ formatInstantUtc(current.cancelledAt) }}</dd></div>
+              <div><dt>Annulée le</dt><dd>{{ formatInTimeZone(current.cancelledAt, current.timeZoneId) }}</dd></div>
               <div><dt>Motif d'annulation</dt><dd>{{ current.cancellationReason || '—' }}</dd></div>
             }
           </dl>
@@ -263,7 +264,8 @@
                   remplace {{ s.originalTeacher.firstName }} {{ s.originalTeacher.lastName }}
                 </span>
                 <span>
-                  du {{ formatInstantUtc(s.validFrom) }} au {{ formatInstantUtc(s.validUntil) }}
+                  du {{ formatInTimeZone(s.validFrom, current.timeZoneId) }} au
+                  {{ formatInTimeZone(s.validUntil, current.timeZoneId) }}
                   — {{ s.status === 'ACTIVE' ? 'actif' : 'terminé' }}
                 </span>
                 @if (s.status === 'ACTIVE' && canManageSubstitutions()) {

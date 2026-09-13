@@ -231,6 +231,12 @@ describe('SessionDetail', () => {
     expect(text()).toContain('Alice Martin');
     expect(text()).toContain('0 présent(s)');
     expect(text()).toContain('sur 2 attendu(s)');
+    // 06:00Z / 10:00Z / 05:55Z converted to the session's declared zone
+    // (Europe/Paris, DST, UTC+2) → 08:00 / 12:00 / 07:55 local, never
+    // the raw UTC value (Lot 8).
+    expect(text()).toContain('08:00 (Europe/Paris)');
+    expect(text()).toContain('12:00 (Europe/Paris)');
+    expect(text()).toContain('07:55 (Europe/Paris)');
   });
 
   it('shows the open button for a PLANNED session and opens it after confirmation', () => {

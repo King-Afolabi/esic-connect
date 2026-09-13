@@ -103,6 +103,10 @@ describe('SessionList', () => {
     expect(text()).toContain('Alice Martin');
     expect(text()).toContain('BTS-SIO-1');
     expect(text()).toContain('Ouverte');
+    // 06:00Z converted to the session's declared zone (Europe/Paris,
+    // DST, UTC+2) → 08:00 local, never the raw UTC value (Lot 8).
+    expect(text()).toContain('08:00 (Europe/Paris)');
+    expect(link.getAttribute('aria-label')).toContain('08:00 (Europe/Paris)');
   });
 
   it('bounds the long table height and pins its header (ANO-UX-002)', () => {

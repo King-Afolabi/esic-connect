@@ -18,6 +18,7 @@ const DETAIL = {
     sessionPublicId: 's-1',
     sessionTitle: 'Atelier',
     sessionStartsAt: '2026-09-10T08:00:00Z',
+    timeZoneId: 'Europe/Paris',
     checkpointPublicId: 'cp-1',
     checkpointLabel: 'Arrivée',
     checkpointType: 'START',
@@ -44,6 +45,7 @@ const DETAIL = {
     sessionPublicId: 's-1',
     sessionTitle: 'Atelier',
     sessionStartsAt: '2026-09-10T08:00:00Z',
+    timeZoneId: 'Europe/Paris',
     checkpointPublicId: 'cp-1',
     checkpointLabel: 'Arrivée',
     classCode: 'C1',
@@ -117,6 +119,18 @@ describe('MyAttendanceDetail — pièces jointes (G1-E)', () => {
    * doit le DIRE avant le dépôt. Le taire laisserait croire à une
    * protection qui n'existe pas.
    */
+  it('convertit le début de séance dans son fuseau déclaré, jamais l’UTC brut (Lot 8)', () => {
+    const { fixture, http } = setup();
+    http.expectOne(ATT).flush(DETAIL);
+    http.expectOne(JUS).flush(null, { status: 404, statusText: 'Not Found' });
+    fixture.detectChanges();
+
+    // 08:00Z converti en Europe/Paris (été, UTC+2) → 10:00 local.
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('10:00 (Europe/Paris)');
+    http.verify();
+  });
+
   it('annonce, avant le dépôt, qu’aucune analyse antivirus n’est active', () => {
     const { fixture, http } = setup();
     http.expectOne(ATT).flush(DETAIL);

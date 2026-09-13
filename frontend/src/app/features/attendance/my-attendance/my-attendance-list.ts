@@ -11,6 +11,7 @@ import { RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { AttendanceApiService } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
@@ -19,7 +20,7 @@ import {
   justificationCategoryLabel,
   justificationStatusLabel,
 } from '../attendance.models';
-import { attendanceStatusLabel, formatInstantUtc } from '../../sessions/sessions.models';
+import { attendanceStatusLabel } from '../../sessions/sessions.models';
 
 type ListState =
   | { kind: 'loading' }
@@ -62,7 +63,7 @@ export class MyAttendanceList {
   protected readonly categoryLabel = justificationCategoryLabel;
   protected readonly justificationStatusLabel = justificationStatusLabel;
   protected readonly attendanceStatusLabel = attendanceStatusLabel;
-  protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly columns = ['session', 'checkpoint', 'status', 'justification', 'actions'] as const;
 
   protected readonly state = signal<ListState>({ kind: 'loading' });

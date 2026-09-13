@@ -1,4 +1,10 @@
-import { COMMON_TIME_ZONES, isSupportedTimeZone, zonedWallTimeToInstant } from './zoned-time';
+import {
+  COMMON_TIME_ZONES,
+  formatInTimeZone,
+  instantToZonedWallParts,
+  isSupportedTimeZone,
+  zonedWallTimeToInstant,
+} from './zoned-time';
 
 describe('isSupportedTimeZone', () => {
   it('accepts a valid IANA identifier and rejects an unknown one', () => {
@@ -44,5 +50,47 @@ describe('zonedWallTimeToInstant', () => {
     const paris = zonedWallTimeToInstant('2026-03-10T12:00', 'Europe/Paris');
     const utc = zonedWallTimeToInstant('2026-03-10T12:00', 'UTC');
     expect(paris).not.toBe(utc);
+  });
+});
+
+describe('instantToZonedWallParts', () => {
+  it('projects a UTC instant onto its wall time in a summer zone (DST, UTC+2)', () => {
+    expect(instantToZonedWallParts('2026-09-07T06:00:00Z', 'Europe/Paris')).toEqual({
+      date: '2026-09-07',
+      time: '08:00',
+    });
+  });
+
+  it('projects onto a winter offset (UTC+1)', () => {
+    expect(instantToZonedWallParts('2026-01-15T08:00:00Z', 'Europe/Paris')).toEqual({
+      date: '2026-01-15',
+      time: '09:00',
+    });
+  });
+
+  it('returns null for an unsupported zone or an unreadable instant (never falls back silently)', () => {
+    expect(instantToZonedWallParts('2026-09-07T06:00:00Z', 'Mars/Olympus')).toBeNull();
+    expect(instantToZonedWallParts('not-an-instant', 'Europe/Paris')).toBeNull();
+  });
+});
+
+describe('formatInTimeZone (Lot 8)', () => {
+  it('converts to the declared zone, never the raw UTC value, with the zone visible alongside', () => {
+    expect(formatInTimeZone('2026-09-07T06:00:00Z', 'Europe/Paris')).toBe(
+      '07/09/2026 08:00 (Europe/Paris)',
+    );
+  });
+
+  it('falls back deterministically to UTC when the zone is missing or invalid — never Europe/Paris implicitly', () => {
+    expect(formatInTimeZone('2026-09-07T06:00:00Z', null)).toBe('07/09/2026 06:00 (UTC)');
+    expect(formatInTimeZone('2026-09-07T06:00:00Z', 'Mars/Olympus')).toBe(
+      '07/09/2026 06:00 (UTC)',
+    );
+  });
+
+  it('returns an em dash for an absent or unreadable value', () => {
+    expect(formatInTimeZone(null, 'Europe/Paris')).toBe('—');
+    expect(formatInTimeZone(undefined, 'Europe/Paris')).toBe('—');
+    expect(formatInTimeZone('not-an-instant', 'Europe/Paris')).toBe('—');
   });
 });

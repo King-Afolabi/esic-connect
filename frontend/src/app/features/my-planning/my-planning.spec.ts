@@ -44,6 +44,10 @@ describe('MyPlanning', () => {
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Cours de rattrapage');
     expect(text).toContain('C1');
+    // 08:00Z / 10:00Z converted to the session's declared zone
+    // (Europe/Paris, DST, UTC+2) → 10:00 / 12:00 local (Lot 8).
+    expect(text).toContain('10:00 (Europe/Paris)');
+    expect(text).toContain('12:00 (Europe/Paris)');
   });
 
   it('affiche une liste vide sans erreur', () => {

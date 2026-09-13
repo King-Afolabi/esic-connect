@@ -11,6 +11,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { AntivirusStatusService } from '../antivirus-status.service';
 import { AttendanceApiService, triggerAttachmentDownload } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
@@ -73,7 +74,10 @@ export class MyAttendanceDetail {
   protected readonly justificationStatusLabel = justificationStatusLabel;
   protected readonly attendanceStatusLabel = attendanceStatusLabel;
   protected readonly correctionActionLabel = correctionActionLabel;
+  /** Émargement / justificatif / historique : instants techniques, restent en UTC (Lot 8, règle 6). */
   protected readonly formatInstantUtc = formatInstantUtc;
+  /** Début de séance : converti dans le fuseau déclaré de la séance (Lot 8). */
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly formatFileSize = formatFileSize;
   protected readonly attachmentAccept = JUSTIFICATION_ATTACHMENT_ACCEPT;
 

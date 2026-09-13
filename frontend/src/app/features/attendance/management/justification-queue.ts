@@ -18,6 +18,7 @@ import { MatTableModule } from '@angular/material/table';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { AttendanceApiService, triggerAttachmentDownload } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
@@ -28,7 +29,7 @@ import {
   justificationCategoryLabel,
   justificationStatusLabel,
 } from '../attendance.models';
-import { attendanceStatusLabel, formatInstantUtc } from '../../sessions/sessions.models';
+import { attendanceStatusLabel } from '../../sessions/sessions.models';
 
 type State =
   | { kind: 'loading' }
@@ -68,7 +69,7 @@ export class JustificationQueue {
   protected readonly categoryLabel = justificationCategoryLabel;
   protected readonly justificationStatusLabel = justificationStatusLabel;
   protected readonly attendanceStatusLabel = attendanceStatusLabel;
-  protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly columns = ['student', 'session', 'category', 'status', 'actions'] as const;
 
   protected readonly state = signal<State>({ kind: 'loading' });

@@ -134,6 +134,39 @@ export function instantToZonedWallParts(
 }
 
 /**
+ * Formatage partagé (Lot 8) : instant → `jj/mm/aaaa hh:mm (fuseau)`,
+ * converti dans le fuseau **déclaré** du timestamp — jamais celui du
+ * navigateur, jamais une double conversion, jamais l'UTC brut comme
+ * valeur principale (écrans alternance, prévisualisations d'exception,
+ * versions de planning). Le fuseau reste toujours visible à côté de la
+ * valeur convertie, pour qu'aucune lecture ne soit ambiguë.
+ *
+ * Fuseau absent ou invalide ⇒ repli déterministe vers UTC, jamais un
+ * fuseau implicite (jamais `Europe/Paris` par défaut) : le repli reste
+ * visible dans le libellé (`(UTC)`), il ne se fait jamais en silence.
+ *
+ * Les timestamps **techniques** (`createdAt`, `updatedAt`, audit)
+ * restent en UTC ailleurs, via {@link formatIsoDate} / l'équivalent
+ * `formatInstantUtc` de chaque module — cette fonction ne concerne que
+ * les timestamps **métier** rattachés à un fuseau déclaré.
+ */
+export function formatInTimeZone(
+  value: string | null | undefined,
+  timeZoneId: string | null | undefined,
+): string {
+  if (!value) {
+    return '—';
+  }
+  const zone = timeZoneId && isSupportedTimeZone(timeZoneId) ? timeZoneId.trim() : 'UTC';
+  const parts = instantToZonedWallParts(value, zone);
+  if (!parts) {
+    return '—';
+  }
+  const [year, month, day] = parts.date.split('-');
+  return `${day}/${month}/${year} ${parts.time} (${zone})`;
+}
+
+/**
  * Fuseaux IANA proposés dans le sélecteur. Liste **volontairement
  * restreinte** aux fuseaux utiles à l'ESIC et à quelques cas courants —
  * ce n'est pas un référentiel exhaustif. La saisie reste validée par le

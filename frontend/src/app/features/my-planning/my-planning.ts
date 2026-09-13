@@ -8,9 +8,9 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 
 import { normalizeHttpError } from '../../core/models/api-error';
+import { formatInTimeZone } from '../alternation/zoned-time';
 import { MyPlanningApiService } from './my-planning-api.service';
 import { MyPlanningSession, sessionStatusLabel, teacherDisplayName } from './my-planning.models';
-import { formatInstantUtc } from '../sessions/sessions.models';
 
 type ViewState =
   | { kind: 'loading' }
@@ -43,7 +43,7 @@ export class MyPlanning {
   private readonly api = inject(MyPlanningApiService);
   private readonly fb = inject(FormBuilder);
 
-  protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly sessionStatusLabel = sessionStatusLabel;
   protected readonly teacherDisplayName = teacherDisplayName;
 

@@ -15,7 +15,7 @@
           <li class="ed__item">
             <p>
               <span class="esic-badge" [attr.data-status]="row.status">{{ statusLabel(row.status) }}</span>
-              — départ annoncé à {{ formatInstantUtc(row.departureAt) }}
+              — départ annoncé à {{ formatInTimeZone(row.departureAt, row.timeZoneId) }}
             </p>
             <p class="ed__meta">
               Motif : {{ row.reason }} · Effet : {{ effectLabel(row.effect) }}

@@ -67,11 +67,11 @@
             </ng-container>
             <ng-container matColumnDef="start">
               <th mat-header-cell *matHeaderCellDef mat-sort-header="startAt">Début (inclus)</th>
-              <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.startAt) }}</td>
+              <td mat-cell *matCellDef="let row">{{ formatInTimeZone(row.startAt, row.timeZoneId) }}</td>
             </ng-container>
             <ng-container matColumnDef="end">
               <th mat-header-cell *matHeaderCellDef mat-sort-header="endAt">Fin (exclue)</th>
-              <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.endAt) }}</td>
+              <td mat-cell *matCellDef="let row">{{ formatInTimeZone(row.endAt, row.timeZoneId) }}</td>
             </ng-container>
             <ng-container matColumnDef="timeZone">
               <th mat-header-cell *matHeaderCellDef>Fuseau déclaré</th>
@@ -180,9 +180,17 @@
 
         <p class="alt__hint" role="status">
           Instants transmis :
-          <strong>{{ computedInstants().startAt ? formatInstantUtc(computedInstants().startAt) : '—' }}</strong>
+          <strong>{{
+            computedInstants().startAt
+              ? formatInTimeZone(computedInstants().startAt, createForm.controls.timeZoneId.value)
+              : '—'
+          }}</strong>
           →
-          <strong>{{ computedInstants().endAt ? formatInstantUtc(computedInstants().endAt) : '—' }}</strong>
+          <strong>{{
+            computedInstants().endAt
+              ? formatInTimeZone(computedInstants().endAt, createForm.controls.timeZoneId.value)
+              : '—'
+          }}</strong>
         </p>
 
         @if (createBlockingMessage()) {

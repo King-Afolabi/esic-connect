@@ -73,7 +73,7 @@
       >
         <ng-container matColumnDef="startsAt">
           <th mat-header-cell *matHeaderCellDef mat-sort-header>Début</th>
-          <td mat-cell *matCellDef="let row">{{ formatInstantUtc(row.startsAt) }}</td>
+          <td mat-cell *matCellDef="let row">{{ formatInTimeZone(row.startsAt, row.timeZoneId) }}</td>
         </ng-container>
 
         <ng-container matColumnDef="teacher">
@@ -100,7 +100,7 @@
               mat-button
               color="primary"
               [routerLink]="['/sessions', row.publicId]"
-              [attr.aria-label]="'Consulter la séance du ' + formatInstantUtc(row.startsAt)"
+              [attr.aria-label]="'Consulter la séance du ' + formatInTimeZone(row.startsAt, row.timeZoneId)"
             >
               Consulter
             </a>

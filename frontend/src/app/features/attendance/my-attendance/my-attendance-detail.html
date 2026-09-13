@@ -40,7 +40,7 @@
           <dl class="att__facts">
             <div><dt>Statut</dt><dd><span class="att__chip" [attr.data-status]="d.row.status">{{ attendanceStatusLabel(d.row.status) }}</span></dd></div>
             <div><dt>Classe</dt><dd>{{ d.row.classCode || '—' }}</dd></div>
-            <div><dt>Début de séance</dt><dd>{{ formatInstantUtc(d.row.sessionStartsAt) }}</dd></div>
+            <div><dt>Début de séance</dt><dd>{{ formatInTimeZone(d.row.sessionStartsAt, d.row.timeZoneId) }}</dd></div>
             <div><dt>Retard</dt><dd>{{ d.row.lateMinutes ? d.row.lateMinutes + ' min' : '—' }}</dd></div>
             <div><dt>Enregistré le</dt><dd>{{ formatInstantUtc(d.row.recordedAt) }}</dd></div>
             <div><dt>Commentaire</dt><dd>{{ d.row.comment || '—' }}</dd></div>

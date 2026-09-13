@@ -153,6 +153,17 @@ describe('PlanningCalendar', () => {
     );
   });
 
+  it('convertit la fenêtre du créneau dans son fuseau déclaré, jamais Europe/Paris implicitement (Lot 8)', () => {
+    const slotWindow = internals()['slotWindow'] as (slot: unknown) => string;
+    const slot = view().draft[0];
+
+    // 08:00Z / 11:30Z convertis en Europe/Paris (hiver, UTC+1) → 09:00 / 12:30.
+    expect(slotWindow(slot)).toBe('09:00 – 12:30 (Europe/Paris)');
+
+    // Fuseau absent : repli déterministe vers UTC, jamais Europe/Paris implicite.
+    expect(slotWindow({ ...slot, timeZoneId: null })).toBe('08:00 – 11:30 (UTC)');
+  });
+
   it('n’ajoute rien tant que le formulaire est incomplet', () => {
     control('filters').controls['classGroupPublicId'].setValue(CLASS_ID);
     call('addSlot');

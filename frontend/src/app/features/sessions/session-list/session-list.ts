@@ -13,6 +13,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { frenchPaginatorIntl } from '../../alternation/alternation-paginator';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { SessionsApiService } from '../sessions-api.service';
 import { toSessionError } from '../session-errors';
 import {
@@ -25,7 +26,6 @@ import {
   SessionStatus,
   SortDirection,
   classCodes,
-  formatInstantUtc,
   sessionStatusLabel,
   teacherName,
 } from '../sessions.models';
@@ -82,7 +82,8 @@ export class SessionList {
   protected readonly statuses = SESSION_STATUSES;
   protected readonly statusLabel = sessionStatusLabel;
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
-  protected readonly formatInstantUtc = formatInstantUtc;
+  /** Début de la séance, converti dans son fuseau déclaré (Lot 8). */
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly classCodes = classCodes;
   protected readonly teacherName = teacherName;
   protected readonly displayedColumns = [

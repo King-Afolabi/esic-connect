@@ -11,6 +11,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../academic/academic.models';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { PlanningApiService } from '../planning-api.service';
 import { toPlanningError } from '../planning-errors';
 import {
@@ -67,7 +68,10 @@ export class PlanningVersions {
   private readonly academic = inject(AcademicApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
+  /** `publishedAt` : timestamp technique, reste en UTC (Lot 8, règle 6). */
   protected readonly formatInstant = formatInstant;
+  /** `startsAt` / `endsAt` d'une entrée : converti dans le fuseau déclaré (Lot 8). */
+  protected readonly formatInTimeZone = formatInTimeZone;
   protected readonly versionColumns = ['versionNumber', 'status', 'entryCount', 'changeSummary', 'publishedAt', 'actions'];
   protected readonly entryColumns = ['slotKey', 'title', 'window', 'room'];
 

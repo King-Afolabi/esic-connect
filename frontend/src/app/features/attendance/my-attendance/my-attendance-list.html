@@ -62,7 +62,7 @@
             <th mat-header-cell *matHeaderCellDef>Séance</th>
             <td mat-cell *matCellDef="let row">
               {{ row.sessionTitle || 'Séance' }}<br />
-              <span class="att__meta">{{ formatInstantUtc(row.sessionStartsAt) }} · {{ row.classCode || '—' }}</span>
+              <span class="att__meta">{{ formatInTimeZone(row.sessionStartsAt, row.timeZoneId) }} · {{ row.classCode || '—' }}</span>
             </td>
           </ng-container>
           <ng-container matColumnDef="checkpoint">

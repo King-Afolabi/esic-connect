@@ -20,6 +20,7 @@ import { Observable } from 'rxjs';
 
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { AttendanceApiService, triggerCsvDownload } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
@@ -36,7 +37,6 @@ import {
   percent,
   reportSortOptions,
 } from '../attendance.models';
-import { formatInstantUtc } from '../../sessions/sessions.models';
 
 type Row = SessionReportRow | ClassReportRow | StudentReportRow;
 type State =
@@ -83,7 +83,7 @@ export class AttendanceReport {
 
   protected readonly kind = (this.route.snapshot.data['kind'] as ReportKind) ?? 'sessions';
   protected readonly percent = percent;
-  protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatInTimeZone = formatInTimeZone;
 
   protected readonly state = signal<State>({ kind: 'loading' });
   protected readonly page = signal(0);

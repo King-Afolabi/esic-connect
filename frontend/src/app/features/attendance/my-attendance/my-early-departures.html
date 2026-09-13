@@ -79,12 +79,12 @@
               <th mat-header-cell *matHeaderCellDef scope="col">Séance</th>
               <td mat-cell *matCellDef="let r">
                 {{ r.sessionTitle || '—' }}
-                <span class="att__meta">{{ formatInstantUtc(r.sessionStartsAt) }}</span>
+                <span class="att__meta">{{ formatInTimeZone(r.sessionStartsAt, r.timeZoneId) }}</span>
               </td>
             </ng-container>
             <ng-container matColumnDef="departureAt">
               <th mat-header-cell *matHeaderCellDef scope="col">Départ annoncé</th>
-              <td mat-cell *matCellDef="let r">{{ formatInstantUtc(r.departureAt) }}</td>
+              <td mat-cell *matCellDef="let r">{{ formatInTimeZone(r.departureAt, r.timeZoneId) }}</td>
             </ng-container>
             <ng-container matColumnDef="status">
               <th mat-header-cell *matHeaderCellDef scope="col">État</th>

@@ -54,7 +54,8 @@
               <span class="mp__chip" [attr.data-status]="session.status">{{ sessionStatusLabel(session.status) }}</span>
             </div>
             <p class="mp__meta">
-              {{ formatInstantUtc(session.startsAt) }} – {{ formatInstantUtc(session.endsAt) }}
+              {{ formatInTimeZone(session.startsAt, session.timeZoneId) }} –
+              {{ formatInTimeZone(session.endsAt, session.timeZoneId) }}
             </p>
             <p class="mp__meta">
               @if (isTeacher()) {

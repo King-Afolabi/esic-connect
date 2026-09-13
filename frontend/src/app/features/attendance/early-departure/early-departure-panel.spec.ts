@@ -14,6 +14,7 @@ function dossier(status: string, teacherOpinion: string | null = null) {
     sessionPublicId: 's-1',
     sessionTitle: 'Atelier',
     sessionStartsAt: '2026-09-10T08:00:00Z',
+    timeZoneId: 'Europe/Paris',
     enrollmentPublicId: 'e-1',
     classCode: 'C1',
     departureAt: '2026-09-10T09:00:00Z',
@@ -80,6 +81,8 @@ describe('EarlyDeparturePanel', () => {
     expect(text()).toContain('Signalé');
     expect(text()).toContain('À confirmer');
     expect(text()).toContain('rendez-vous');
+    // 09:00Z converti en Europe/Paris (été, UTC+2) → 11:00 local (Lot 8).
+    expect(text()).toContain('11:00 (Europe/Paris)');
   });
 
   it('offers both forwarding and decision on a fresh dossier', () => {

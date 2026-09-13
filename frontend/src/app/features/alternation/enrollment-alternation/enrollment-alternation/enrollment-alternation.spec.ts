@@ -98,6 +98,18 @@ describe('EnrollmentAlternation', () => {
     http.verify();
   });
 
+  it('shows the exception times converted to their declared zone, never raw UTC as the primary value (Lot 8)', async () => {
+    const { harness, http, listReq, text } = await setup();
+    listReq.flush({ content: [EXCEPTION], page: 0, size: 100, totalElements: 1, totalPages: 1 });
+    harness.detectChanges();
+
+    // 2026-09-07T06:00:00Z / 2026-09-11T06:00:00Z converted to Europe/Paris
+    // (DST, UTC+2) → 08:00 local, never the raw 06:00 UTC value.
+    expect(text()).toContain('07/09/2026 08:00 (Europe/Paris)');
+    expect(text()).toContain('11/09/2026 08:00 (Europe/Paris)');
+    http.verify();
+  });
+
   it('encodes the wall time in the chosen zone and POSTs the exact body', async () => {
     const { harness, http, listReq, component } = await setup();
     listReq.flush({ content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 });

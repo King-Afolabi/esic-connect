@@ -16,6 +16,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { formatInTimeZone } from '../../alternation/zoned-time';
 import { AttendanceApiService } from '../attendance-api.service';
 import { toAttendanceError } from '../attendance-errors';
 import {
@@ -24,7 +25,6 @@ import {
   earlyDepartureOpinionLabel,
   earlyDepartureStatusLabel,
 } from '../attendance.models';
-import { formatInstantUtc } from '../../sessions/sessions.models';
 
 type PanelState =
   | { kind: 'loading' }
@@ -75,7 +75,7 @@ export class EarlyDeparturePanel {
   protected readonly statusLabel = earlyDepartureStatusLabel;
   protected readonly effectLabel = earlyDepartureEffectLabel;
   protected readonly opinionLabel = earlyDepartureOpinionLabel;
-  protected readonly formatInstantUtc = formatInstantUtc;
+  protected readonly formatInTimeZone = formatInTimeZone;
 
   protected readonly state = signal<PanelState>({ kind: 'loading' });
   protected readonly busy = signal(false);

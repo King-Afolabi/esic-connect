@@ -14,6 +14,7 @@ const OPEN_DOSSIER = {
   sessionPublicId: 's-1',
   sessionTitle: 'Atelier',
   sessionStartsAt: '2026-09-10T08:00:00Z',
+  timeZoneId: 'Europe/Paris',
   enrollmentPublicId: 'e-1',
   classCode: 'C1',
   departureAt: '2026-09-10T09:00:00Z',
@@ -70,6 +71,10 @@ describe('MyEarlyDepartures', () => {
     expect(text()).toContain("Un signalement n'est pas une autorisation");
     expect(text()).toContain('À confirmer');
     expect(text()).toContain('Signalé');
+    // 08:00Z / 09:00Z convertis en Europe/Paris (été, UTC+2) → 10:00 /
+    // 11:00 local, jamais l'UTC brut (Lot 8).
+    expect(text()).toContain('10:00 (Europe/Paris)');
+    expect(text()).toContain('11:00 (Europe/Paris)');
   });
 
   it('declares a departure with an ISO instant and reloads the list', () => {
