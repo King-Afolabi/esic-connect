@@ -630,9 +630,14 @@ est attribué.
   liste des apprenants (`GET /api/v1/student-profiles` reste disponible
   pour la gestion directe des profils).
 - Les sections §9 à §25 ci-dessous (modèle cible, non audité) n'ont pas
-  été mises à jour de cette refonte et peuvent encore montrer
-  `enrollment.student_profile_id` : seule cette section §6bis décrit le
-  schéma réellement en base.
+  toutes été mises à jour de cette refonte et peuvent encore montrer
+  `enrollment.student_profile_id` — **à l'exception de §13** (inscriptions
+  et historique des classes), réalignée sur le schéma réel (2026-09) :
+  `enrollment.user_id` (plus de `student_profile_id`), unicité d'une
+  inscription `ACTIVE` par colonnes générées + contrainte SQL (pas de
+  verrouillage pessimiste), transfert décrit tel qu'implémenté. Pour les
+  autres sections, cette §6bis reste la source fiable du schéma réellement
+  en base.
 
 ### Contraintes métier notables ailleurs
 - `enrollment` : **une seule inscription active** par apprenant et par
@@ -1301,7 +1306,7 @@ Cette table est centrale pour conserver l’historique.
 |---|---|
 | `id` | BIGINT |
 | `public_id` | BINARY(16) |
-| `student_profile_id` | BIGINT FK |
+| `user_id` | BIGINT FK → `user_account` |
 | `class_group_id` | BIGINT FK |
 | `academic_year_id` | BIGINT FK |
 | `start_date` | DATE |
@@ -1310,10 +1315,18 @@ Cette table est centrale pour conserver l’historique.
 | `enrollment_source` | VARCHAR(50) |
 | `change_reason` | VARCHAR(500) NULL |
 | `previous_enrollment_id` | BIGINT FK NULL |
+| `work_study` | BOOLEAN |
+| `company_name` | VARCHAR(191) NULL |
+| `active_student_key` / `active_year_key` | BIGINT UNSIGNED, colonnes générées (`VIRTUAL`) — voir §13.3 |
 | `created_at` | TIMESTAMP(6) |
 | `created_by_id` | BIGINT NULL |
 | `updated_at` | TIMESTAMP(6) |
 | `version` | BIGINT |
+
+Il n'existe **pas** de `student_profile_id` : depuis la refonte 2026-09
+(§6bis), `enrollment` référence directement `user_account.id` — il n'y a
+plus de `student_profile` du tout, et une inscription n'a jamais requis
+l'existence d'un tel profil.
 
 Statuts :
 
@@ -1325,16 +1338,31 @@ Statuts :
 - `SUSPENDED` ;
 - `ARCHIVED`.
 
-## 13.2 Changement de classe
+## 13.2 Changement de classe (transfert)
 
-Lorsqu’un apprenant change de classe :
+Lorsqu’un apprenant change de classe (`EnrollmentService.transfer`),
+dans une seule transaction (`@Transactional`, aucun verrouillage
+pessimiste — la protection réelle est décrite en §13.3) :
 
-1. l’inscription actuelle est chargée avec verrouillage ;
-2. son `end_date` est renseigné ;
-3. son statut devient `TRANSFERRED` ou `COMPLETED` ;
-4. une nouvelle inscription est créée ;
-5. `previous_enrollment_id` référence l’ancienne inscription ;
-6. l’opération est auditée.
+1. l’inscription actuelle est chargée (par son `public_id`) et doit être
+   `ACTIVE` (`ENR_ENROLLMENT_NOT_ACTIVE` sinon) ;
+2. son `end_date` est renseigné à la date d’effet (aujourd’hui par
+   défaut, jamais antérieure à `start_date`) et son statut devient
+   `TRANSFERRED` — cette clôture est **flushée avant** l’insertion
+   suivante, pour libérer immédiatement le créneau (`active_student_key`
+   / `active_year_key`, §13.3) que la nouvelle inscription doit occuper ;
+3. une nouvelle inscription est créée, avec `start_date` au lendemain de
+   la date d’effet (bornes inclusives, sans chevauchement) ;
+4. `previous_enrollment_id` référence l’ancienne inscription ;
+5. la situation d’alternance (`work_study` / `company_name`) est reprise
+   telle quelle depuis l’ancienne inscription — un changement de classe
+   n’est pas, en soi, un changement d’alternance ;
+6. l’opération est auditée (deux événements : `TRANSFERRED` sur
+   l’ancienne, `CREATED` sur la nouvelle).
+
+Un transfert vers une **autre année académique** revalide explicitement
+qu’aucune inscription active n’existe déjà pour cette année (l’ancienne
+inscription ne libère pas ce créneau-là).
 
 Aucune ancienne présence n’est déplacée.
 
@@ -1343,17 +1371,31 @@ Aucune ancienne présence n’est déplacée.
 Règle :
 
 ```text
-Un apprenant possède au maximum une inscription principale active
-pour une même période.
+Un apprenant possède au maximum une inscription ACTIVE par année
+académique.
 ```
 
-Cette règle doit être protégée par :
+Cette règle est protégée par deux mécanismes complémentaires, **sans
+verrouillage pessimiste** :
 
-- transaction ;
-- verrouillage ;
-- service métier ;
-- test concurrent ;
-- contrainte technique lorsque possible.
+- un contrôle métier préalable (`guardNoActiveEnrollment`), dans la
+  transaction du service ;
+- une contrainte d’unicité **au niveau base**, portée par deux colonnes
+  générées virtuelles (`active_student_key` = `user_id` si `status =
+  'ACTIVE'`, sinon `NULL` ; `active_year_key` = `academic_year_id` dans
+  les mêmes conditions) et une contrainte `UNIQUE` composite
+  (`uq_enrollment_active_per_year`, V7) sur ces deux colonnes — MySQL
+  n’ayant pas d’index partiel natif, seules les lignes `ACTIVE` portent
+  une valeur non nulle et sont donc réellement contraintes ; une
+  clôture (`status != ACTIVE`) libère immédiatement le créneau.
+
+Le contrôle applicatif rejette la grande majorité des cas ; la
+contrainte reste la garantie de dernier recours en cas de course
+concurrente : sa violation (`DataIntegrityViolationException`) est
+reconnue par nom de contrainte
+(`EnrollmentPersistence.isActiveEnrollmentUniqueViolation`) et
+retraduite en erreur métier 409 (`ENR_ACTIVE_ENROLLMENT_EXISTS`), jamais
+en 500 générique. Un test de concurrence vérifie ce chemin.
 
 ## 13.4 Suppression
 
@@ -1361,8 +1403,8 @@ Une inscription n’est pas supprimée.
 
 Elle est clôturée.
 
-La clé étrangère vers `student_profile` et `class_group` utilise
-`RESTRICT`.
+La clé étrangère vers `user_account` (`user_id`) et vers `class_group`
+utilise `RESTRICT`.
 
 ---
 
@@ -2390,10 +2432,12 @@ INDEX user_account(external_source, external_id)
 ### Inscriptions
 
 ```text
-INDEX enrollment(student_profile_id, status)
-INDEX enrollment(class_group_id, status)
-INDEX enrollment(academic_year_id, status)
-INDEX enrollment(start_date, end_date)
+INDEX enrollment(user_id)
+INDEX enrollment(class_group_id)
+INDEX enrollment(academic_year_id)
+INDEX enrollment(status)
+INDEX enrollment(previous_enrollment_id)
+UNIQUE enrollment(active_student_key, active_year_key)  -- uq_enrollment_active_per_year, §13.3
 ```
 
 ### Séances
@@ -2526,8 +2570,10 @@ Deux validations simultanées ne doivent pas créer deux présences.
 
 ## 29.3 Changement de classe
 
-Le changement de classe doit verrouiller ou protéger l’inscription active
-afin d’éviter deux inscriptions actives concurrentes.
+Le changement de classe doit protéger l’inscription active afin d’éviter
+deux inscriptions actives concurrentes — sans verrouillage pessimiste :
+un contrôle métier préalable, doublé d’une contrainte SQL de dernier
+recours (§13.3), retraduite en erreur métier plutôt qu’en 500 générique.
 
 ## 29.4 Modification d’un planning
 
@@ -2900,33 +2946,20 @@ Modulith.
 
 ```java
 @Entity
-@Table(
-    name = "enrollment",
-    indexes = {
-        @Index(name = "idx_enrollment_student_status",
-               columnList = "student_profile_id,status"),
-        @Index(name = "idx_enrollment_class_status",
-               columnList = "class_group_id,status")
-    }
-)
-public class Enrollment {
+@Table(name = "enrollment")
+class Enrollment extends BaseEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    // Simple valeur technique (FK SQL vers `user_account`), résolue via
+    // le port `UserDirectory` — jamais un `@ManyToOne` vers l'entité
+    // d'un autre module (frontière Spring Modulith). Même principe pour
+    // `classGroupId` / `academicYearId`, résolus via `ClassGroupDirectory`.
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
 
-    @Column(name = "public_id", nullable = false, unique = true, updatable = false)
-    private UUID publicId;
+    @Column(name = "class_group_id", nullable = false, updatable = false)
+    private Long classGroupId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_profile_id", nullable = false)
-    private StudentProfile student;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "class_group_id", nullable = false)
-    private ClassGroup classGroup;
-
-    @Column(name = "start_date", nullable = false)
+    @Column(name = "start_date", nullable = false, updatable = false)
     private LocalDate startDate;
 
     @Column(name = "end_date")
@@ -2936,14 +2969,19 @@ public class Enrollment {
     @Column(name = "status", nullable = false)
     private EnrollmentStatus status;
 
-    @Version
-    private long version;
+    // `version` (verrouillage optimiste, §5.7) est hérité de `BaseEntity`,
+    // pas redéclaré ici.
 }
 ```
 
 Aucun `CascadeType.REMOVE`.
 
 Aucun `orphanRemoval=true`.
+
+(Reflet simplifié de la véritable entité — voir
+`com.esic.connect.enrollment.internal.Enrollment` pour les champs
+complets : `academicYearId`, `enrollmentSource`, `changeReason`,
+`previousEnrollmentId`, `workStudy`, `companyName`.)
 
 ---
 
@@ -3022,11 +3060,12 @@ sequenceDiagram
     participant A as Audit
 
     R->>S: Demande le changement de classe
-    S->>DB: Charge l'inscription active avec verrouillage
-    S->>DB: Clôture l'ancienne inscription
-    S->>DB: Crée la nouvelle inscription
+    S->>DB: Charge l'inscription active (doit être ACTIVE)
+    S->>DB: Clôture l'ancienne inscription (TRANSFERRED, end_date) + flush
+    S->>DB: Crée la nouvelle inscription (start_date = end_date + 1j)
     S->>DB: Lie previous_enrollment_id
-    S->>A: Publie EnrollmentTransferred
+    Note over S,DB: Une seule transaction ; aucun verrouillage pessimiste —<br/>protection par uq_enrollment_active_per_year (§13.3)
+    S->>A: Publie EnrollmentTransferred (x2 : ancienne + nouvelle)
     S-->>R: Confirmation
 ```
 
