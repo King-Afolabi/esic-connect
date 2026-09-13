@@ -27,6 +27,14 @@ import {
 
 /** Rôles habilités à changer la classe / clôturer une inscription (`EnrollmentWeb.MANAGE_ROLES`). */
 const ENROLLMENT_WRITE_ROLES = ['ADMIN', 'SUPER_ADMIN', 'SCHOOL_ADMINISTRATION'] as const;
+/**
+ * Rôles pouvant réellement atteindre `PATCH /api/v1/users/{publicId}`
+ * (`UserAccountController` `ADMIN_ROLES`, mêmes rôles que la création
+ * d'un compte). Modifier l'identité civile / le contact se fait sur la
+ * fiche Administration du même compte, pas ici (un seul formulaire
+ * d'édition pour un même `user_account`).
+ */
+const ACCOUNT_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'] as const;
 
 type StudentState =
   | { kind: 'loading' }
@@ -123,6 +131,10 @@ export class StudentProfile {
    */
   protected readonly canManageEnrollment = computed(() =>
     this.roleContext.effectiveRoles().some((r) => (ENROLLMENT_WRITE_ROLES as readonly string[]).includes(r)),
+  );
+  /** Visibilité du lien « Gérer le compte » vers la fiche Administration. */
+  protected readonly canManageAccount = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => (ACCOUNT_ADMIN_ROLES as readonly string[]).includes(r)),
   );
   protected readonly transferOpen = signal(false);
   protected readonly transferBusy = signal(false);

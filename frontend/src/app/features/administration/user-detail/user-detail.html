@@ -55,6 +55,18 @@
               <dt>Téléphone</dt>
               <dd>{{ currentUser.phone || '—' }}</dd>
             </div>
+            @if (currentUser.studentNumber) {
+              <div>
+                <dt>Numéro étudiant</dt>
+                <dd>{{ currentUser.studentNumber }}</dd>
+              </div>
+            }
+            @if (currentUser.birthDate) {
+              <div>
+                <dt>Date de naissance</dt>
+                <dd>{{ currentUser.birthDate | date: 'dd/MM/yyyy' }}</dd>
+              </div>
+            }
             <div>
               <dt>Statut</dt>
               <dd><span class="esic-badge" [attr.data-status]="currentUser.status">{{ statusLabel(currentUser.status) }}</span></dd>
@@ -204,6 +216,11 @@
                 Archiver le compte
               </button>
             }
+            @if (showEdit()) {
+              <button mat-stroked-button type="button" (click)="startEdit()">
+                Modifier les informations
+              </button>
+            }
             @if (canManageTargetRoles()) {
               <button mat-stroked-button type="button" (click)="startAssign()">
                 Attribuer un rôle
@@ -250,6 +267,74 @@
                   @if (assignForm.controls.reason.touched && assignForm.controls.reason.invalid) {
                     <mat-error>Le motif est obligatoire.</mat-error>
                   }
+                </mat-form-field>
+
+                <div class="account__confirm-actions">
+                  <button mat-flat-button type="submit" [disabled]="submitting()">
+                    {{ confirmCta() }}
+                  </button>
+                  <button mat-button type="button" (click)="cancelAction()" [disabled]="submitting()">
+                    Annuler
+                  </button>
+                </div>
+                @if (actionError()) {
+                  <p class="account__inline-error" role="alert">{{ actionError() }}</p>
+                }
+              </form>
+            } @else if (action.kind === 'edit') {
+              <form
+                class="account__confirm"
+                role="group"
+                aria-label="Modifier les informations"
+                [formGroup]="editForm"
+                (ngSubmit)="confirm()"
+              >
+                <h3 class="account__confirm-title">{{ confirmTitle() }}</h3>
+                <p class="account__confirm-text">{{ confirmDescription() }}</p>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Prénom</mat-label>
+                  <input matInput formControlName="firstName" maxlength="120" required autocomplete="off" />
+                  @if (editForm.controls.firstName.touched && editForm.controls.firstName.invalid) {
+                    <mat-error>Le prénom est obligatoire.</mat-error>
+                  }
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Nom</mat-label>
+                  <input matInput formControlName="lastName" maxlength="120" required autocomplete="off" />
+                  @if (editForm.controls.lastName.touched && editForm.controls.lastName.invalid) {
+                    <mat-error>Le nom est obligatoire.</mat-error>
+                  }
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Adresse électronique</mat-label>
+                  <input
+                    matInput
+                    type="email"
+                    formControlName="email"
+                    maxlength="320"
+                    required
+                    autocomplete="off"
+                  />
+                  @if (editForm.controls.email.hasError('server')) {
+                    <mat-error>{{ editForm.controls.email.getError('server') }}</mat-error>
+                  } @else if (editForm.controls.email.touched && editForm.controls.email.invalid) {
+                    <mat-error>Adresse électronique valide obligatoire.</mat-error>
+                  }
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Téléphone</mat-label>
+                  <input matInput formControlName="phone" maxlength="30" autocomplete="off" />
+                  <mat-hint>Facultatif.</mat-hint>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="account__field">
+                  <mat-label>Date de naissance</mat-label>
+                  <input matInput type="date" formControlName="birthDate" autocomplete="off" />
+                  <mat-hint>Facultatif.</mat-hint>
                 </mat-form-field>
 
                 <div class="account__confirm-actions">

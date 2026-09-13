@@ -489,3 +489,57 @@ describe('StudentProfile — changement de classe', () => {
     http.verify();
   });
 });
+
+describe('StudentProfile — lien vers la fiche Administration', () => {
+  async function setupWithRole(role: Role) {
+    localStorage.clear();
+    sessionStorage.clear();
+    const effectiveRoles: WritableSignal<Role[]> = signal([role]);
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: 'students', component: ListStub },
+          { path: 'students/:publicId', component: StudentProfile },
+          { path: 'dashboard', component: DashStub },
+        ]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { effectiveRoles } },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(`/students/${ID}`, StudentProfile);
+    harness.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne(STUDENT_URL).flush(STUDENT);
+    harness.detectChanges();
+    http
+      .expectOne((r) => r.url === ENROLLMENTS_URL)
+      .flush({ content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 });
+    http.expectOne(REMOTE_URL).flush([]);
+    harness.detectChanges();
+    return { harness, http };
+  }
+
+  it('shows Gérer le compte for ADMIN/SUPER_ADMIN, linking to the same account in Administration', async () => {
+    const { harness, http } = await setupWithRole('ADMIN');
+    const link = [...(harness.routeNativeElement?.querySelectorAll('a') ?? [])].find((a) =>
+      a.textContent?.includes('Gérer le compte'),
+    ) as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toContain(`/administration/${ID}`);
+    http.verify();
+  });
+
+  it('hides it for SCHOOL_ADMINISTRATION, even though it can still transfer the enrollment', async () => {
+    const { harness, http } = await setupWithRole('SCHOOL_ADMINISTRATION');
+    expect(harness.routeNativeElement?.textContent).not.toContain('Gérer le compte');
+    http.verify();
+  });
+
+  it('hides it for a read-only profile viewer (TEACHER)', async () => {
+    const { harness, http } = await setupWithRole('TEACHER');
+    expect(harness.routeNativeElement?.textContent).not.toContain('Gérer le compte');
+    http.verify();
+  });
+});

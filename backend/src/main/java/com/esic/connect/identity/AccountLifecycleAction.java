@@ -9,6 +9,8 @@ public enum AccountLifecycleAction {
     ACCOUNT_SUSPENDED,
     ACCOUNT_REACTIVATED,
     ACCOUNT_ARCHIVED,
+    /** Informations personnelles corrigées par un administrateur (identité, contact, naissance). */
+    PROFILE_UPDATED,
     ROLE_ASSIGNED,
     ROLE_REVOKED
 }

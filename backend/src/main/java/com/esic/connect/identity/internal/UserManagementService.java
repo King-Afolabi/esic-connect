@@ -57,15 +57,18 @@ public class UserManagementService {
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AccountInvitationService accountInvitationService;
 
     public UserManagementService(UserAccountRepository userAccountRepository,
                                  UserRoleRepository userRoleRepository,
                                  RoleRepository roleRepository,
-                                 ApplicationEventPublisher eventPublisher) {
+                                 ApplicationEventPublisher eventPublisher,
+                                 AccountInvitationService accountInvitationService) {
         this.userAccountRepository = userAccountRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.eventPublisher = eventPublisher;
+        this.accountInvitationService = accountInvitationService;
     }
 
     // ------------------------------------------------------------------
@@ -115,6 +118,8 @@ public class UserManagementService {
                 account.getFirstName(),
                 account.getLastName(),
                 account.getPhone(),
+                account.getStudentNumber(),
+                account.getBirthDate(),
                 account.getStatus(),
                 account.getEmailVerifiedAt(),
                 account.getLastLoginAt(),
@@ -235,6 +240,67 @@ public class UserManagementService {
         publish(account, caller, AccountLifecycleAction.ACCOUNT_CREATED,
                 roleCode.name());
         return getUser(account.getPublicId());
+    }
+
+    /**
+     * Corrige les informations personnelles d'un compte déjà créé
+     * (identité civile, contact, date de naissance). Distinct du cycle de
+     * vie du statut : n'accepte ni ne modifie {@code status},
+     * {@code studentNumber} ou les rôles. Réservé à {@code ADMIN} /
+     * {@code SUPER_ADMIN}, comme la création d'un compte — modifier
+     * l'adresse électronique revient à changer l'identifiant de
+     * connexion de quelqu'un d'autre.
+     *
+     * <p>Un changement d'adresse <strong>réel</strong> (après
+     * normalisation) a un effet distinct selon le statut du compte :
+     * <ul>
+     *   <li>{@code PENDING_ACTIVATION} : l'invitation en cours ne mène
+     *       plus à la bonne boîte — elle est réémise vers la nouvelle
+     *       adresse via {@link AccountInvitationService#issue}, qui
+     *       révoque déjà l'ancienne ;</li>
+     *   <li>{@code ACTIVE} : la vérification obtenue à l'activation
+     *       portait sur l'ancienne adresse, elle est donc invalidée
+     *       ({@code emailVerifiedAt} remis à {@code null}) plutôt que de
+     *       laisser croire qu'une adresse jamais confirmée l'a été.</li>
+     * </ul>
+     * Adresse inchangée : aucun des deux effets ne se produit.
+     */
+    public UserDetailResponse updateProfile(UUID publicId, UpdateUserProfileRequest request,
+                                            String callerSubject, Collection<String> callerRoles) {
+        CallerContext caller = resolveCaller(callerSubject, callerRoles);
+        requireAdminLevel(caller);
+        UserAccount target = requireAccount(publicId);
+        guardSuperAdminTarget(caller, target);
+        if (target.getStatus() == AccountStatus.ARCHIVED) {
+            throw new UserManagementException(UserManagementException.Kind.INVALID_STATE_TRANSITION);
+        }
+
+        String email = EmailNormalization.normalize(request.email());
+        userAccountRepository.findByEmail(email)
+                .filter(found -> !found.getId().equals(target.getId()))
+                .ifPresent(found -> {
+                    throw new UserManagementException(UserManagementException.Kind.EMAIL_ALREADY_USED);
+                });
+
+        AccountStatus statusBeforeUpdate = target.getStatus();
+        boolean emailChanged = !email.equals(target.getEmail());
+
+        target.updateProfile(request.firstName().trim(), request.lastName().trim(), email,
+                trimToNull(request.phone()), request.birthDate(), caller.internalId());
+        if (emailChanged && statusBeforeUpdate == AccountStatus.ACTIVE) {
+            target.resetEmailVerification();
+        }
+        userAccountRepository.save(target);
+        publish(target, caller, AccountLifecycleAction.PROFILE_UPDATED, "Informations mises à jour");
+
+        if (emailChanged && statusBeforeUpdate == AccountStatus.PENDING_ACTIVATION) {
+            RoleCode activeRole = userRoleRepository.findActiveRoleCodesByUserId(target.getId()).stream()
+                    .findFirst()
+                    .orElseThrow(() -> new UserManagementException(UserManagementException.Kind.ROLE_UNKNOWN));
+            accountInvitationService.issue(target.getEmail(), activeRole, callerSubject);
+        }
+
+        return getUser(target.getPublicId());
     }
 
     // ------------------------------------------------------------------

@@ -35,6 +35,11 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Office (fichiers de verrouillage temporaires Word/Excel/PowerPoint)
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
 # Data and uploads
 data/uploads/**
 !data/uploads/.gitkeep

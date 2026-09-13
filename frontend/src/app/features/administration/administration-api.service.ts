@@ -13,6 +13,7 @@ import {
   DuplicateComparisonResponse,
   DuplicateGroup,
   PageResponse,
+  UpdateUserProfileRequest,
   UserDetailResponse,
   UserListQuery,
   UserSummaryResponse,
@@ -73,6 +74,19 @@ export class AdministrationApiService {
   getUser(publicId: string): Observable<UserDetailResponse> {
     return this.http.get<UserDetailResponse>(
       `${this.base}/users/${encodeURIComponent(publicId)}`,
+    );
+  }
+
+  /**
+   * `PATCH /api/v1/users/{publicId}` — corrige les informations
+   * personnelles d'un compte déjà créé (identité civile, contact, date de
+   * naissance). Le numéro étudiant n'en fait jamais partie (immuable une
+   * fois posé). Réservé à `ADMIN` / `SUPER_ADMIN` côté serveur.
+   */
+  updateProfile(publicId: string, body: UpdateUserProfileRequest): Observable<UserDetailResponse> {
+    return this.http.patch<UserDetailResponse>(
+      `${this.base}/users/${encodeURIComponent(publicId)}`,
+      body,
     );
   }
 

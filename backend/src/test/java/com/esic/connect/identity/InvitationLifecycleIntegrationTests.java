@@ -10,6 +10,7 @@ import com.esic.connect.identity.internal.UserRole;
 import com.esic.connect.identity.internal.UserRoleRepository;
 import com.esic.connect.notification.internal.InvitationMailer;
 import com.esic.connect.support.AuthTestSupport;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -91,6 +93,12 @@ class InvitationLifecycleIntegrationTests {
     private PasswordEncoder passwordEncoder;
     @Autowired
     private CapturedInvitations captured;
+
+    @BeforeEach
+    void useJdkClient() {
+        // SimpleClientHttpRequestFactory ne supporte pas PATCH.
+        rest.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+    }
 
     // ------------------------------------------------------------------
     // EF-USER-001 — création d'un compte en attente d'activation
@@ -208,6 +216,50 @@ class InvitationLifecycleIntegrationTests {
         // adresse laisserait un lien valide dans la mauvaise boîte.
         assertThat(validate(firstToken)).isFalse();
         assertThat(validate(secondToken)).isTrue();
+    }
+
+    @Test
+    void unChangementDAdresseSurUnCompteEnAttenteReemetAutomatiquementLInvitation() {
+        String admin = tokenFor(RoleCode.ADMIN);
+        String email = "avant-correction-" + UUID.randomUUID() + "@esic-connect.test";
+        Map<String, Object> created = created("/api/v1/users", body("email", email, "firstName", "Corr",
+                "lastName", "Ectif", "role", "STUDENT"), admin);
+        String publicId = (String) created.get("publicId");
+        String firstToken = captured.tokens().get(captured.tokens().size() - 1);
+        String newEmail = "apres-correction-" + UUID.randomUUID() + "@esic-connect.test";
+
+        ResponseEntity<Map<String, Object>> patched = exchange(HttpMethod.PATCH, "/api/v1/users/" + publicId,
+                body("firstName", "Corr", "lastName", "Ectif", "email", newEmail), admin);
+        assertThat(patched.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(patched.getBody().get("email")).isEqualTo(newEmail);
+
+        String secondToken = captured.tokens().get(captured.tokens().size() - 1);
+        assertThat(secondToken).isNotEqualTo(firstToken);
+        // L'ancien jeton, envoyé à la mauvaise adresse, ne doit plus rien ouvrir.
+        assertThat(validate(firstToken)).isFalse();
+        assertThat(validate(secondToken)).isTrue();
+
+        assertThat(exchange(HttpMethod.POST, "/api/v1/account-invitations/activate",
+                body("token", secondToken, "password", CHOSEN_PASSWORD), null).getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(userAccountRepository.findByEmail(newEmail).orElseThrow().getStatus())
+                .isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    void unChangementDAdresseInchangeeNeReemetRienSurUnCompteEnAttente() {
+        String admin = tokenFor(RoleCode.ADMIN);
+        String email = "stable-" + UUID.randomUUID() + "@esic-connect.test";
+        Map<String, Object> created = created("/api/v1/users", body("email", email, "firstName", "Stable",
+                "lastName", "Adresse", "role", "STUDENT"), admin);
+        String publicId = (String) created.get("publicId");
+        int before = captured.tokens().size();
+
+        ResponseEntity<Map<String, Object>> patched = exchange(HttpMethod.PATCH, "/api/v1/users/" + publicId,
+                body("firstName", "Stable", "lastName", "Adresse-Corrigée", "email", email), admin);
+
+        assertThat(patched.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(captured.tokens()).hasSize(before);
     }
 
     @Test

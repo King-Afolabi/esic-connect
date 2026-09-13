@@ -10,6 +10,7 @@ import com.esic.connect.identity.internal.UserAccountRepository;
 import com.esic.connect.identity.internal.UserRole;
 import com.esic.connect.identity.internal.UserRoleRepository;
 import com.esic.connect.notification.internal.InvitationMailer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -70,6 +72,12 @@ class UserManagementSecurityTests {
     private RoleRepository roleRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @BeforeEach
+    void useJdkClient() {
+        // SimpleClientHttpRequestFactory ne supporte pas PATCH.
+        restTemplate.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+    }
 
     @Test
     void listRejectsAnonymousRequestWith401() {
@@ -131,6 +139,35 @@ class UserManagementSecurityTests {
                         .body(Map.of("role", "TEACHER", "reason", "x")),
                 String.class);
         assertThat(assignRole.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void schoolAdministrationCannotUpdateProfile() {
+        String schoolAdmin = tokenFor(AccountStatus.ACTIVE, RoleCode.SCHOOL_ADMINISTRATION);
+        UserAccount target = persistUser(AccountStatus.ACTIVE, RoleCode.STUDENT);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + target.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + schoolAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "X", "lastName", "Y", "email", target.getEmail())),
+                String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminCannotUpdateASuperAdminAccount() {
+        String admin = tokenFor(AccountStatus.ACTIVE, RoleCode.ADMIN);
+        UserAccount superAdmin = persistUser(AccountStatus.ACTIVE, RoleCode.SUPER_ADMIN);
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + superAdmin.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "X", "lastName", "Y", "email", superAdmin.getEmail())),
+                mapType());
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().get("code")).isEqualTo("USER_SUPER_ADMIN_PROTECTED");
     }
 
     @Test

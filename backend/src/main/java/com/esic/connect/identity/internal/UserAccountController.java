@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -145,6 +146,20 @@ class UserAccountController {
     DuplicateComparisonWeb.ComparisonResponse compareDuplicates(
             @Valid @RequestBody DuplicateComparisonWeb.CompareRequest request) {
         return duplicateComparisonService.compare(request.firstUserId(), request.secondUserId());
+    }
+
+    /**
+     * Corrige les informations personnelles d'un compte déjà créé
+     * (identité civile, contact, date de naissance). Le numéro étudiant
+     * n'en fait jamais partie (immuable une fois posé).
+     */
+    @PatchMapping("/{publicId}")
+    @PreAuthorize(ADMIN_ROLES)
+    UserDetailResponse updateProfile(@PathVariable String publicId,
+                                     @Valid @RequestBody UpdateUserProfileRequest request,
+                                     @AuthenticationPrincipal Jwt caller) {
+        return userManagementService.updateProfile(parseUuid(publicId), request,
+                subject(caller), roles(caller));
     }
 
     @PostMapping("/{publicId}/suspend")

@@ -35,6 +35,14 @@ describe('toAdministrationError', () => {
     expect(view.message).toBe('Code de rôle inconnu.');
   });
 
+  it('attaches USER_EMAIL_ALREADY_USED to the email field', () => {
+    const view = toAdministrationError(
+      apiError(409, 'USER_EMAIL_ALREADY_USED', 'Un compte existe déjà pour cette adresse électronique.'),
+    );
+    expect(view.field).toBe('email');
+    expect(view.message).toBe('Un compte existe déjà pour cette adresse électronique.');
+  });
+
   it('never surfaces a 5xx body and reports no business code', () => {
     const view = toAdministrationError(
       new HttpErrorResponse({ status: 500, statusText: 'Server Error', error: 'stacktrace leak' }),

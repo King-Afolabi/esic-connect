@@ -47,9 +47,12 @@ class UserManagementServiceTests {
     private RoleRepository roleRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private AccountInvitationService accountInvitationService;
 
     private UserManagementService newService() {
-        return new UserManagementService(userAccountRepository, userRoleRepository, roleRepository, eventPublisher);
+        return new UserManagementService(userAccountRepository, userRoleRepository, roleRepository, eventPublisher,
+                accountInvitationService);
     }
 
     private UserAccount account(AccountStatus status) {
@@ -278,6 +281,153 @@ class UserManagementServiceTests {
                 .archive(target.getPublicId(), "x", null, List.of("SCHOOL_ADMINISTRATION")))
                 .satisfies(ex -> assertThat(((UserManagementException) ex).kind())
                         .isEqualTo(UserManagementException.Kind.NOT_AUTHORIZED));
+    }
+
+    // ---------- Modification des informations ----------
+
+    @Test
+    void updateProfileUpdatesFieldsAndPublishesEvent() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        stubFound(target);
+        when(userAccountRepository.findByEmail("nouvelle@esic-connect.test")).thenReturn(Optional.empty());
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Nouveau", "Nom", "nouvelle@esic-connect.test", "0600000000",
+                java.time.LocalDate.of(2000, 1, 1));
+
+        newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN"));
+
+        assertThat(target.getFirstName()).isEqualTo("Nouveau");
+        assertThat(target.getLastName()).isEqualTo("Nom");
+        assertThat(target.getEmail()).isEqualTo("nouvelle@esic-connect.test");
+        assertThat(target.getPhone()).isEqualTo("0600000000");
+        assertThat(target.getBirthDate()).isEqualTo(java.time.LocalDate.of(2000, 1, 1));
+        verify(userAccountRepository).save(target);
+
+        ArgumentCaptor<AccountLifecycleEvent> event = ArgumentCaptor.forClass(AccountLifecycleEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().action()).isEqualTo(AccountLifecycleAction.PROFILE_UPDATED);
+    }
+
+    @Test
+    void updateProfileRejectsEmailAlreadyUsedByAnotherAccount() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        stubFound(target);
+        UserAccount other = account(AccountStatus.ACTIVE);
+        ReflectionTestUtils.setField(other, "id", 99L);
+        when(userAccountRepository.findByEmail("prise@esic-connect.test")).thenReturn(Optional.of(other));
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Nouveau", "Nom", "prise@esic-connect.test", null, null);
+
+        assertThatThrownBy(() -> newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN")))
+                .satisfies(ex -> assertThat(((UserManagementException) ex).kind())
+                        .isEqualTo(UserManagementException.Kind.EMAIL_ALREADY_USED));
+        verify(userAccountRepository, never()).save(any());
+    }
+
+    @Test
+    void updateProfileAllowsKeepingItsOwnUnchangedEmail() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        stubFound(target);
+        when(userAccountRepository.findByEmail("cible@esic-connect.test")).thenReturn(Optional.of(target));
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Cible", "Test", "cible@esic-connect.test", null, null);
+
+        newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN"));
+
+        verify(userAccountRepository).save(target);
+    }
+
+    @Test
+    void updateProfileResetsEmailVerificationWhenAnActiveAccountsEmailReallyChanges() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        ReflectionTestUtils.setField(target, "emailVerifiedAt", Instant.parse("2026-01-01T00:00:00Z"));
+        stubFound(target);
+        when(userAccountRepository.findByEmail("nouvelle@esic-connect.test")).thenReturn(Optional.empty());
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Cible", "Test", "nouvelle@esic-connect.test", null, null);
+
+        newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN"));
+
+        assertThat(target.getEmailVerifiedAt()).isNull();
+        verify(accountInvitationService, never()).issue(any(), any(), any());
+    }
+
+    @Test
+    void updateProfileDoesNotResetEmailVerificationWhenEmailIsUnchanged() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        ReflectionTestUtils.setField(target, "emailVerifiedAt", Instant.parse("2026-01-01T00:00:00Z"));
+        stubFound(target);
+        when(userAccountRepository.findByEmail("cible@esic-connect.test")).thenReturn(Optional.of(target));
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Cible", "Test", "cible@esic-connect.test", null, null);
+
+        newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN"));
+
+        assertThat(target.getEmailVerifiedAt()).isNotNull();
+        verify(accountInvitationService, never()).issue(any(), any(), any());
+    }
+
+    @Test
+    void updateProfileReissuesTheInvitationWhenAPendingAccountsEmailReallyChanges() {
+        UserAccount target = account(AccountStatus.PENDING_ACTIVATION);
+        stubFound(target);
+        when(userAccountRepository.findByEmail("nouvelle@esic-connect.test")).thenReturn(Optional.empty());
+        when(userRoleRepository.findActiveRoleCodesByUserId(42L)).thenReturn(List.of(RoleCode.STUDENT));
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Cible", "Test", "nouvelle@esic-connect.test", null, null);
+
+        newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN"));
+
+        verify(accountInvitationService).issue("nouvelle@esic-connect.test", RoleCode.STUDENT, null);
+    }
+
+    @Test
+    void updateProfileDoesNotReissueTheInvitationWhenAPendingAccountsEmailIsUnchanged() {
+        UserAccount target = account(AccountStatus.PENDING_ACTIVATION);
+        stubFound(target);
+        when(userAccountRepository.findByEmail("cible@esic-connect.test")).thenReturn(Optional.of(target));
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Cible", "Test", "cible@esic-connect.test", null, null);
+
+        newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN"));
+
+        verify(accountInvitationService, never()).issue(any(), any(), any());
+    }
+
+    @Test
+    void updateProfileRejectsAnArchivedAccount() {
+        UserAccount target = account(AccountStatus.ARCHIVED);
+        stubFound(target);
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("A", "B", "a@esic-connect.test", null, null);
+
+        assertThatThrownBy(() -> newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN")))
+                .satisfies(ex -> assertThat(((UserManagementException) ex).kind())
+                        .isEqualTo(UserManagementException.Kind.INVALID_STATE_TRANSITION));
+    }
+
+    @Test
+    void updateProfileRejectsCallerWithoutAdminLevel() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        stubFound(target);
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("A", "B", "a@esic-connect.test", null, null);
+
+        assertThatThrownBy(() -> newService()
+                .updateProfile(target.getPublicId(), request, null, List.of("SCHOOL_ADMINISTRATION")))
+                .satisfies(ex -> assertThat(((UserManagementException) ex).kind())
+                        .isEqualTo(UserManagementException.Kind.NOT_AUTHORIZED));
+    }
+
+    @Test
+    void adminCannotUpdateASuperAdminAccount() {
+        UserAccount target = account(AccountStatus.ACTIVE);
+        stubFound(target);
+        when(userRoleRepository.findActiveWithRoleByUserId(42L))
+                .thenReturn(List.of(activeAssignment(target, RoleCode.SUPER_ADMIN)));
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("A", "B", "a@esic-connect.test", null, null);
+
+        assertThatThrownBy(() -> newService().updateProfile(target.getPublicId(), request, null, List.of("ADMIN")))
+                .satisfies(ex -> assertThat(((UserManagementException) ex).kind())
+                        .isEqualTo(UserManagementException.Kind.SUPER_ADMIN_PROTECTED));
     }
 
     // ---------- Attribution de rôle ----------

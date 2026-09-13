@@ -41,6 +41,7 @@ public class AccountLifecycleAuditListener {
             case ACCOUNT_SUSPENDED -> "ACCOUNT_SUSPENDED";
             case ACCOUNT_REACTIVATED -> "ACCOUNT_REACTIVATED";
             case ACCOUNT_ARCHIVED -> "ACCOUNT_ARCHIVED";
+            case PROFILE_UPDATED -> "PROFILE_UPDATED";
             case ROLE_ASSIGNED -> "ROLE_ASSIGNED";
             case ROLE_REVOKED -> "ROLE_REVOKED";
         };

@@ -12,6 +12,7 @@ import com.esic.connect.identity.internal.UserAccountRepository;
 import com.esic.connect.identity.internal.UserRole;
 import com.esic.connect.identity.internal.UserRoleRepository;
 import com.esic.connect.notification.internal.InvitationMailer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -71,6 +73,12 @@ class UserManagementIntegrationTests {
     private AuditEventRepository auditEventRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @BeforeEach
+    void useJdkClient() {
+        // SimpleClientHttpRequestFactory ne supporte pas PATCH.
+        restTemplate.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+    }
 
     // ------------------------------------------------------------------
     // Consultation
@@ -201,6 +209,111 @@ class UserManagementIntegrationTests {
         assertThat(restore.getBody().get("code")).isEqualTo("USER_INVALID_STATE");
 
         assertThat(auditActionsFor(user.getPublicId())).contains("ACCOUNT_ARCHIVED");
+    }
+
+    // ------------------------------------------------------------------
+    // Informations personnelles
+    // ------------------------------------------------------------------
+
+    @Test
+    void updateProfilePatchesFieldsLetsLoginWithNewEmailAndRecordsAudit() {
+        UserAccount user = persistUser(uniqueEmail(), "Henri", "Avant", AccountStatus.ACTIVE, RoleCode.STUDENT);
+        String admin = adminToken();
+        String newEmail = uniqueEmail();
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + user.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "Henriette", "lastName", "Après", "email", newEmail,
+                                "phone", "0601020304", "birthDate", "1999-05-20")),
+                mapType());
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("firstName")).isEqualTo("Henriette");
+        assertThat(response.getBody().get("lastName")).isEqualTo("Après");
+        assertThat(response.getBody().get("email")).isEqualTo(newEmail);
+        assertThat(response.getBody().get("phone")).isEqualTo("0601020304");
+        assertThat(response.getBody().get("birthDate")).isEqualTo("1999-05-20");
+
+        assertThat(login(newEmail, PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(auditActionsFor(user.getPublicId())).contains("PROFILE_UPDATED");
+    }
+
+    @Test
+    void updateProfileResetsEmailVerificationWhenAnActiveAccountsEmailReallyChanges() {
+        UserAccount user = new UserAccount(uniqueEmail(), "Léa", "Vérifiée", AccountStatus.PENDING_ACTIVATION);
+        user.activateWithPassword(passwordEncoder.encode(PASSWORD), Instant.now());
+        user = userAccountRepository.saveAndFlush(user);
+        Role role = roleRepository.findByCode(RoleCode.STUDENT).orElseThrow();
+        userRoleRepository.saveAndFlush(new UserRole(user, role, Instant.now(), true));
+        assertThat(user.getEmailVerifiedAt()).isNotNull();
+        String admin = adminToken();
+        String newEmail = uniqueEmail();
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + user.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "Léa", "lastName", "Vérifiée", "email", newEmail)),
+                mapType());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("emailVerifiedAt")).isNull();
+    }
+
+    @Test
+    void updateProfileKeepsEmailVerificationWhenEmailIsUnchanged() {
+        UserAccount user = new UserAccount(uniqueEmail(), "Marc", "Inchangé", AccountStatus.PENDING_ACTIVATION);
+        user.activateWithPassword(passwordEncoder.encode(PASSWORD), Instant.now());
+        user = userAccountRepository.saveAndFlush(user);
+        Role role = roleRepository.findByCode(RoleCode.STUDENT).orElseThrow();
+        userRoleRepository.saveAndFlush(new UserRole(user, role, Instant.now(), true));
+        String admin = adminToken();
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + user.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "Marc", "lastName", "Corrigé", "email", user.getEmail())),
+                mapType());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("emailVerifiedAt")).isNotNull();
+    }
+
+    @Test
+    void updateProfileRejectsAnEmailAlreadyUsedByAnotherAccount() {
+        UserAccount user = persistUser(uniqueEmail(), "Ida", "Un", AccountStatus.ACTIVE, RoleCode.STUDENT);
+        UserAccount other = persistUser(uniqueEmail(), "Jules", "Deux", AccountStatus.ACTIVE, RoleCode.STUDENT);
+        String admin = adminToken();
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + user.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "Ida", "lastName", "Un", "email", other.getEmail())),
+                mapType());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("USER_EMAIL_ALREADY_USED");
+    }
+
+    @Test
+    void updateProfileRejectsAnArchivedAccount() {
+        UserAccount user = persistUser(uniqueEmail(), "Karl", "Archivé", AccountStatus.ACTIVE, RoleCode.STUDENT);
+        String admin = adminToken();
+        assertThat(action("/api/v1/users/" + user.getPublicId() + "/archive", "Fin", admin))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                RequestEntity.patch("/api/v1/users/" + user.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("firstName", "Karl", "lastName", "Archivé", "email", user.getEmail())),
+                mapType());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("USER_INVALID_STATE");
     }
 
     // ------------------------------------------------------------------

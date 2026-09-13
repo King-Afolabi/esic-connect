@@ -188,6 +188,36 @@ public class UserAccount extends BaseEntity {
         this.updatedById = actorId;
     }
 
+    /**
+     * Corrige les informations personnelles modifiables d'un compte déjà
+     * créé (identité civile, contact, date de naissance) — action
+     * d'administration distincte du cycle de vie du statut. Le numéro
+     * étudiant n'en fait jamais partie : il reste immuable une fois posé
+     * (voir {@link #assignStudentNumber}), car réutilisé comme référence
+     * stable dans des documents déjà émis (attestations) et parfois
+     * généré automatiquement — une correction ponctuelle de la date de
+     * naissance, elle, ne pose pas ce problème.
+     */
+    public void updateProfile(String firstName, String lastName, String email, String phone,
+                              LocalDate birthDate, Long actorId) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.email = email;
+        this.phone = phone;
+        this.birthDate = birthDate;
+        this.updatedById = actorId;
+    }
+
+    /**
+     * Invalide la vérification d'adresse en cours : à appeler quand
+     * l'email d'un compte {@code ACTIVE} change réellement, puisque la
+     * preuve de propriété obtenue à l'activation (voir
+     * {@link #activateWithPassword}) portait sur l'ancienne adresse.
+     */
+    public void resetEmailVerification() {
+        this.emailVerifiedAt = null;
+    }
+
     public AccountStatus getStatus() {
         return status;
     }

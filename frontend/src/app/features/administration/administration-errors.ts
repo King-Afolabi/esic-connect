@@ -25,8 +25,9 @@ import {
  * `USER_ROLE_ALREADY_ASSIGNED` (409), `USER_ROLE_NOT_ASSIGNED` (409),
  * `USER_LAST_ACTIVE_ROLE` (409), `USER_SELF_ACTION_FORBIDDEN` (409),
  * `USER_SUPER_ADMIN_PROTECTED` (403), `USER_OPERATION_FORBIDDEN` (403),
- * `USER_ROLE_UNKNOWN` (400), `USER_INVALID_SORT` (400),
- * `USER_INVALID_FILTER` (400).
+ * `USER_ROLE_UNKNOWN` (400), `USER_EMAIL_ALREADY_USED` (409, `PATCH`
+ * seulement — la création utilise son propre écran), `USER_INVALID_SORT`
+ * (400), `USER_INVALID_FILTER` (400).
  */
 export interface AdministrationErrorView {
   status: number;
@@ -36,9 +37,10 @@ export interface AdministrationErrorView {
   message: string;
   /**
    * Champ de formulaire à marquer en erreur, ou `null` pour un message
-   * global. Seul `USER_ROLE_UNKNOWN` cible un champ (`role`).
+   * global. `USER_ROLE_UNKNOWN` cible `role` ; `USER_EMAIL_ALREADY_USED`
+   * cible `email` (modification des informations personnelles).
    */
-  field: 'role' | null;
+  field: 'role' | 'email' | null;
 }
 
 /**
@@ -56,13 +58,15 @@ const KNOWN_USER_CODES: ReadonlySet<string> = new Set([
   'USER_SUPER_ADMIN_PROTECTED',
   'USER_OPERATION_FORBIDDEN',
   'USER_ROLE_UNKNOWN',
+  'USER_EMAIL_ALREADY_USED',
   'USER_INVALID_SORT',
   'USER_INVALID_FILTER',
 ]);
 
 /** Codes `USER_*` rattachables à un champ de formulaire précis. */
-const USER_FIELD_CODES: Record<string, 'role'> = {
+const USER_FIELD_CODES: Record<string, 'role' | 'email'> = {
   USER_ROLE_UNKNOWN: 'role',
+  USER_EMAIL_ALREADY_USED: 'email',
 };
 
 export function toAdministrationError(error: unknown): AdministrationErrorView {

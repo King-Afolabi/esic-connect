@@ -40,6 +40,13 @@
           <h1 class="esic-page-header__title">{{ s.lastName }} {{ s.firstName }}</h1>
           <p class="esic-page-header__description">{{ s.email }}</p>
         </div>
+        @if (canManageAccount()) {
+          <div class="esic-page-header__actions">
+            <a mat-stroked-button [routerLink]="['/administration', s.userPublicId]">
+              Gérer le compte
+            </a>
+          </div>
+        }
       </header>
 
       <mat-card appearance="outlined" class="profile__card">

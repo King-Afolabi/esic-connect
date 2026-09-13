@@ -27,7 +27,11 @@ import { ROLES, Role, roleLabel } from '../../../core/models/role';
 import { NotificationService } from '../../../core/notifications/notification.service';
 import { AdministrationApiService } from '../administration-api.service';
 import { toAdministrationError } from '../administration-errors';
-import { ACTION_REASON_MAX_LENGTH, UserDetailResponse, accountStatusLabel } from '../administration.models';
+import {
+  ACTION_REASON_MAX_LENGTH,
+  UserDetailResponse,
+  accountStatusLabel,
+} from '../administration.models';
 
 type DetailState =
   | { kind: 'loading' }
@@ -41,6 +45,7 @@ type PendingAction =
   | { kind: 'suspend' }
   | { kind: 'restore' }
   | { kind: 'archive' }
+  | { kind: 'edit' }
   | { kind: 'assign' }
   | { kind: 'revoke'; role: string };
 
@@ -115,6 +120,8 @@ export class UserDetail {
   protected readonly actionError = signal<string | null>(null);
   /** Message d'erreur rattaché au champ « rôle » (`USER_ROLE_UNKNOWN`). */
   protected readonly roleFieldError = signal<string | null>(null);
+  /** Message d'erreur rattaché au champ « email » (`USER_EMAIL_ALREADY_USED`). */
+  protected readonly emailFieldError = signal<string | null>(null);
 
   protected readonly reasonForm = this.formBuilder.group({
     reason: this.formBuilder.control('', [
@@ -129,6 +136,16 @@ export class UserDetail {
   protected readonly assignForm = this.formBuilder.group({
     role: this.formBuilder.control<Role | ''>('', [Validators.required]),
     reason: this.formBuilder.control('', [Validators.required]),
+  });
+
+  // Bornes alignées sur `UpdateUserProfileRequest` côté serveur. Le
+  // numéro étudiant n'apparaît pas ici : immuable une fois posé.
+  protected readonly editForm = this.formBuilder.group({
+    firstName: this.formBuilder.control('', [Validators.required, Validators.maxLength(120)]),
+    lastName: this.formBuilder.control('', [Validators.required, Validators.maxLength(120)]),
+    email: this.formBuilder.control('', [Validators.required, Validators.email, Validators.maxLength(320)]),
+    phone: this.formBuilder.control('', [Validators.maxLength(30)]),
+    birthDate: this.formBuilder.control(''),
   });
 
   protected readonly user = computed(() => {
@@ -203,6 +220,15 @@ export class UserDetail {
       this.user() !== null &&
       !this.isArchived(),
   );
+  /**
+   * Modifier ses propres informations est autorisé (contrairement au
+   * cycle de vie) : seul le back-end (`UserManagementService.updateProfile`,
+   * mêmes rôles que la création d'un compte) tranche.
+   */
+  protected readonly showEdit = computed(
+    () =>
+      this.canManageRoles() && !this.isSuperAdminProtectedTarget() && this.user() !== null && !this.isArchived(),
+  );
   /** Le retrait de rôle et le formulaire d'attribution partagent ce garde. */
   protected readonly canManageTargetRoles = computed(
     () =>
@@ -240,6 +266,8 @@ export class UserDetail {
         return 'Réactiver le compte';
       case 'archive':
         return 'Archiver le compte';
+      case 'edit':
+        return 'Modifier les informations';
       case 'assign':
         return 'Attribuer un rôle';
       case 'revoke':
@@ -258,6 +286,8 @@ export class UserDetail {
         return 'Le compte pourra de nouveau se connecter.';
       case 'archive':
         return 'Le compte est archivé et son historique conservé. Cette opération est irréversible dans ce lot.';
+      case 'edit':
+        return 'Le numéro étudiant, lui, ne se corrige pas ici : il reste immuable une fois posé.';
       case 'assign':
         return 'Le rôle choisi devient actif immédiatement. Le back-end reste l’autorité (rôle déjà actif, compte protégé…).';
       case 'revoke':
@@ -276,6 +306,8 @@ export class UserDetail {
         return 'Réactiver';
       case 'archive':
         return 'Archiver';
+      case 'edit':
+        return 'Enregistrer';
       case 'assign':
         return 'Attribuer';
       case 'revoke':
@@ -294,6 +326,13 @@ export class UserDetail {
         this.clearRoleFieldError();
       }
     });
+    // Même logique pour l'erreur serveur « email » du formulaire de
+    // modification des informations (`USER_EMAIL_ALREADY_USED`).
+    this.editForm.controls.email.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      if (this.emailFieldError() !== null) {
+        this.clearEmailFieldError();
+      }
+    });
     // Un changement de contexte de rôle (ou de compte cible) doit fermer
     // un panneau devenu indisponible : on ne laisse jamais un formulaire
     // sensible ouvert pour une action que l'interface ne propose plus.
@@ -306,6 +345,7 @@ export class UserDetail {
         (action.kind === 'suspend' && this.showSuspend()) ||
         (action.kind === 'restore' && this.showRestore()) ||
         (action.kind === 'archive' && this.showArchive()) ||
+        (action.kind === 'edit' && this.showEdit()) ||
         (action.kind === 'assign' && this.canManageTargetRoles()) ||
         (action.kind === 'revoke' && this.canManageTargetRoles() && !this.isSelf());
       if (!stillOffered) {
@@ -337,6 +377,22 @@ export class UserDetail {
     this.assignForm.reset({ role: '', reason: '' });
     this.clearActionErrors();
     this.pending.set({ kind: 'assign' });
+  }
+
+  protected startEdit(): void {
+    const current = this.user();
+    if (!current) {
+      return;
+    }
+    this.editForm.reset({
+      firstName: current.firstName,
+      lastName: current.lastName,
+      email: current.email,
+      phone: current.phone ?? '',
+      birthDate: current.birthDate ?? '',
+    });
+    this.clearActionErrors();
+    this.pending.set({ kind: 'edit' });
   }
 
   protected startRevoke(role: string): void {
@@ -373,6 +429,26 @@ export class UserDetail {
       return;
     }
 
+    if (action.kind === 'edit') {
+      if (this.editForm.invalid) {
+        this.editForm.markAllAsTouched();
+        return;
+      }
+      const raw = this.editForm.getRawValue();
+      const newEmail = raw.email.trim();
+      this.run(
+        this.api.updateProfile(current.publicId, {
+          firstName: raw.firstName.trim(),
+          lastName: raw.lastName.trim(),
+          email: newEmail,
+          phone: raw.phone.trim() || null,
+          birthDate: raw.birthDate || null,
+        }),
+        this.editSuccessMessage(current, newEmail),
+      );
+      return;
+    }
+
     if (this.reasonForm.invalid) {
       this.reasonForm.markAllAsTouched();
       return;
@@ -394,7 +470,30 @@ export class UserDetail {
     }
   }
 
-  private run(call: Observable<void>, successMessage: string): void {
+  /**
+   * Message de succès de l'édition, adapté à l'effet réel d'un changement
+   * d'adresse côté serveur (`UserManagementService.updateProfile`) : un
+   * compte en attente voit son invitation réémise vers la nouvelle
+   * adresse, un compte actif perd sa vérification. Un email inchangé (une
+   * fois comparé comme le back-end le normalise) ne déclenche ni l'un ni
+   * l'autre.
+   */
+  private editSuccessMessage(current: UserDetailResponse, newEmail: string): string {
+    const emailChanged = current.email.trim().toLowerCase() !== newEmail.trim().toLowerCase();
+    if (!emailChanged) {
+      return 'Informations mises à jour.';
+    }
+    if (current.status === 'PENDING_ACTIVATION') {
+      return 'Informations mises à jour. Une nouvelle invitation a été envoyée à la nouvelle adresse.';
+    }
+    if (current.status === 'ACTIVE') {
+      return 'Informations mises à jour. La nouvelle adresse devra être vérifiée.';
+    }
+    return 'Informations mises à jour.';
+  }
+
+  /** Générique : les mutations de cycle de vie renvoient `void`, `updateProfile` la fiche mise à jour. */
+  private run<T>(call: Observable<T>, successMessage: string): void {
     this.submitting.set(true);
     this.clearActionErrors();
     call.subscribe({
@@ -409,6 +508,8 @@ export class UserDetail {
         const view = toAdministrationError(error);
         if (view.field === 'role') {
           this.setRoleFieldError(view.message);
+        } else if (view.field === 'email') {
+          this.setEmailFieldError(view.message);
         } else {
           this.actionError.set(view.message);
         }
@@ -419,6 +520,7 @@ export class UserDetail {
   private clearActionErrors(): void {
     this.actionError.set(null);
     this.clearRoleFieldError();
+    this.clearEmailFieldError();
   }
 
   /**
@@ -442,6 +544,26 @@ export class UserDetail {
     if (errors && 'serverUnknown' in errors) {
       const rest = { ...errors };
       delete rest['serverUnknown'];
+      control.setErrors(Object.keys(rest).length > 0 ? rest : null);
+    }
+  }
+
+  /** Rattache l'erreur serveur `USER_EMAIL_ALREADY_USED` au champ « email » du formulaire d'édition. */
+  private setEmailFieldError(message: string): void {
+    this.emailFieldError.set(message);
+    const control = this.editForm.controls.email;
+    control.setErrors({ ...(control.errors ?? {}), server: message });
+    control.markAsTouched();
+  }
+
+  /** Retire l'erreur serveur « email » sans effacer les validations locales. */
+  private clearEmailFieldError(): void {
+    this.emailFieldError.set(null);
+    const control = this.editForm.controls.email;
+    const errors = control.errors;
+    if (errors && 'server' in errors) {
+      const rest = { ...errors };
+      delete rest['server'];
       control.setErrors(Object.keys(rest).length > 0 ? rest : null);
     }
   }

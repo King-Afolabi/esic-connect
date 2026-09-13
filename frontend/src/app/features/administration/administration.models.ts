@@ -5,6 +5,7 @@
  *
  * - `GET  /api/v1/users`                            → `PageResponse<UserSummaryResponse>`
  * - `GET  /api/v1/users/{publicId}`                 → `UserDetailResponse`
+ * - `PATCH /api/v1/users/{publicId}`                ← `UpdateUserProfileRequest` → `UserDetailResponse`
  * - `POST /api/v1/users/{publicId}/suspend`         ← `AccountActionRequest`  → 204
  * - `POST /api/v1/users/{publicId}/restore`         ← `AccountActionRequest`  → 204
  * - `POST /api/v1/users/{publicId}/archive`         ← `AccountActionRequest`  → 204
@@ -91,6 +92,10 @@ export interface UserDetailResponse {
   firstName: string;
   lastName: string;
   phone: string | null;
+  /** Immuable une fois posé — jamais envoyé dans `UpdateUserProfileRequest`. */
+  studentNumber: string | null;
+  /** `LocalDate` ISO-8601 (`aaaa-MM-jj`) ou `null`. */
+  birthDate: string | null;
   status: AccountStatus;
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
@@ -101,6 +106,22 @@ export interface UserDetailResponse {
   updatedAt: string;
   /** Historique complet des rôles, du plus récent au plus ancien. */
   roleAssignments: RoleAssignmentResponse[];
+}
+
+/**
+ * Corps de `PATCH /api/v1/users/{publicId}` — `UpdateUserProfileRequest`.
+ * Réservé à `ADMIN` / `SUPER_ADMIN` (même périmètre que la création d'un
+ * compte). Le numéro étudiant n'en fait jamais partie : immuable une fois
+ * posé (voir `UserAccount.assignStudentNumber` côté serveur), il ne se
+ * corrige que par réimport CSV.
+ */
+export interface UpdateUserProfileRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+  /** `LocalDate` ISO-8601 (`aaaa-MM-jj`) ou `null`. */
+  birthDate?: string | null;
 }
 
 /**

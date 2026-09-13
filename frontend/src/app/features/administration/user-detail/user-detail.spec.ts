@@ -31,6 +31,8 @@ const USER: UserDetailResponse = {
   firstName: 'Bruno',
   lastName: 'Leroy',
   phone: '+33123456789',
+  studentNumber: null,
+  birthDate: null,
   status: 'ACTIVE',
   emailVerifiedAt: '2026-07-01T09:00:00Z',
   lastLoginAt: '2026-08-10T07:30:00Z',
@@ -54,6 +56,7 @@ const USER: UserDetailResponse = {
 interface Internals {
   startAction: (k: 'suspend' | 'restore' | 'archive') => void;
   startAssign: () => void;
+  startEdit: () => void;
   startRevoke: (role: string) => void;
   cancelAction: () => void;
   confirm: () => void;
@@ -63,9 +66,21 @@ interface Internals {
     valid: boolean;
     controls: { role: { hasError: (code: string) => boolean } };
   };
+  editForm: {
+    setValue: (v: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      birthDate: string;
+    }) => void;
+    valid: boolean;
+    controls: { email: { hasError: (code: string) => boolean } };
+  };
   assignableRoleOptions: () => Role[];
   pending: () => unknown;
   roleFieldError: () => string | null;
+  emailFieldError: () => string | null;
   actionError: () => string | null;
 }
 
@@ -205,6 +220,13 @@ describe('UserDetail — read view (non-regression)', () => {
 
     expect(text()).toContain('Bruno Leroy');
     http.verify();
+  });
+
+  it('renders the student number and birth date only when present', async () => {
+    const { flushUser, text } = await setup({ effectiveRoles: ['ADMIN'] });
+    flushUser({ ...USER, studentNumber: 'ESIC-2026-00042', birthDate: '1999-05-20' });
+    expect(text()).toContain('ESIC-2026-00042');
+    expect(text()).toContain('20/05/1999');
   });
 
   it('issues no write request on load and writes nothing to browser storage', async () => {
@@ -421,6 +443,178 @@ describe('UserDetail — lifecycle actions', () => {
     other.harness.detectChanges();
     expect(other.harness.routeNativeElement?.textContent).toContain('super administrateur');
     other.http.verify();
+  });
+});
+
+describe('UserDetail — profile editing', () => {
+  it('offers Modifier les informations only for ADMIN/SUPER_ADMIN, not SCHOOL_ADMINISTRATION', async () => {
+    const admin = await setup({ effectiveRoles: ['ADMIN'] });
+    admin.flushUser();
+    expect(admin.text()).toContain('Modifier les informations');
+
+    const school = await setup({ effectiveRoles: ['SCHOOL_ADMINISTRATION'] });
+    school.flushUser();
+    expect(school.text()).not.toContain('Modifier les informations');
+  });
+
+  it('is still offered on the user’s own account (unlike suspend/archive)', async () => {
+    const { flushUser, text, internals } = await setup({ effectiveRoles: ['ADMIN'], subject: ID });
+    flushUser();
+    expect(text()).toContain('Modifier les informations');
+    internals().startEdit();
+    expect(internals().pending()).not.toBeNull();
+  });
+
+  it('pre-fills from the current account, blocks an invalid form, then PATCHes trimmed fields (blank optionals as null)', async () => {
+    const { harness, http, internals, userReq } = await setup({ effectiveRoles: ['ADMIN'] });
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startEdit();
+    harness.detectChanges();
+    // Submitting unchanged proves the form was pre-filled from the current account.
+    internals().confirm();
+    const prefilled = http.expectOne(USER_URL);
+    expect(prefilled.request.method).toBe('PATCH');
+    expect(prefilled.request.body).toEqual({
+      firstName: 'Bruno',
+      lastName: 'Leroy',
+      email: 'bruno.leroy@esic.test',
+      phone: '+33123456789',
+      birthDate: null,
+    });
+    prefilled.flush(USER);
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startEdit();
+    harness.detectChanges();
+    internals().editForm.setValue({
+      firstName: '',
+      lastName: 'Leroy',
+      email: 'x@esic.test',
+      phone: '',
+      birthDate: '',
+    });
+    internals().confirm();
+    http.expectNone((r) => r.method === 'PATCH');
+
+    internals().editForm.setValue({
+      firstName: '  Brune  ',
+      lastName: '  Leroy  ',
+      // No surrounding whitespace here: Angular's built-in `email`
+      // validator itself rejects a leading/trailing space before the
+      // component ever gets to trim it (unlike firstName/lastName/phone,
+      // which only carry `required`/`maxLength`).
+      email: 'brune.leroy@esic.test',
+      phone: '   ',
+      birthDate: '',
+    });
+    internals().confirm();
+    const req = http.expectOne(USER_URL);
+    expect(req.request.body).toEqual({
+      firstName: 'Brune',
+      lastName: 'Leroy',
+      email: 'brune.leroy@esic.test',
+      phone: null,
+      birthDate: null,
+    });
+    req.flush({ ...USER, firstName: 'Brune', email: 'brune.leroy@esic.test' });
+    userReq().flush({ ...USER, firstName: 'Brune', email: 'brune.leroy@esic.test' });
+    harness.detectChanges();
+    // The account was ACTIVE and the address really changed: the admin is
+    // told the new address will need to be verified again.
+    expect(notifications.info).toHaveBeenCalledWith(
+      'Informations mises à jour. La nouvelle adresse devra être vérifiée.',
+    );
+    expect(internals().pending()).toBeNull();
+    http.verify();
+  });
+
+  it('reports a plain success message when the email is left unchanged', async () => {
+    const { harness, http, internals, userReq } = await setup({ effectiveRoles: ['ADMIN'] });
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startEdit();
+    harness.detectChanges();
+    internals().editForm.setValue({
+      firstName: 'Bruno',
+      lastName: 'Leroy',
+      email: USER.email,
+      phone: '',
+      birthDate: '',
+    });
+    internals().confirm();
+    http.expectOne(USER_URL).flush(USER);
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    expect(notifications.info).toHaveBeenCalledWith('Informations mises à jour.');
+  });
+
+  it('reports that the invitation was reissued when a pending account’s email really changes', async () => {
+    const pendingUser: UserDetailResponse = { ...USER, status: 'PENDING_ACTIVATION', emailVerifiedAt: null };
+    const { harness, http, internals, userReq } = await setup({ effectiveRoles: ['ADMIN'], user: pendingUser });
+    userReq().flush(pendingUser);
+    harness.detectChanges();
+
+    internals().startEdit();
+    harness.detectChanges();
+    internals().editForm.setValue({
+      firstName: 'Bruno',
+      lastName: 'Leroy',
+      email: 'nouvelle-adresse@esic.test',
+      phone: '',
+      birthDate: '',
+    });
+    internals().confirm();
+    const updated = { ...pendingUser, email: 'nouvelle-adresse@esic.test' };
+    http.expectOne(USER_URL).flush(updated);
+    userReq().flush(updated);
+    harness.detectChanges();
+
+    expect(notifications.info).toHaveBeenCalledWith(
+      'Informations mises à jour. Une nouvelle invitation a été envoyée à la nouvelle adresse.',
+    );
+  });
+
+  it('attaches USER_EMAIL_ALREADY_USED to the email field, not a global message, without reloading', async () => {
+    const { harness, http, internals, userReq, el } = await setup({ effectiveRoles: ['ADMIN'] });
+    userReq().flush(USER);
+    harness.detectChanges();
+
+    internals().startEdit();
+    harness.detectChanges();
+    internals().editForm.setValue({
+      firstName: 'Bruno',
+      lastName: 'Leroy',
+      email: 'prise@esic.test',
+      phone: '',
+      birthDate: '',
+    });
+    internals().confirm();
+
+    http.expectOne(USER_URL).flush(
+      {
+        status: 409,
+        code: 'USER_EMAIL_ALREADY_USED',
+        message: 'Un compte existe déjà pour cette adresse électronique.',
+        path: '',
+        correlationId: null,
+        details: [],
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    harness.detectChanges();
+
+    expect(el().textContent).toContain('Un compte existe déjà');
+    expect(internals().emailFieldError()).toBe('Un compte existe déjà pour cette adresse électronique.');
+    expect(internals().actionError()).toBeNull();
+    expect(internals().editForm.controls.email.hasError('server')).toBe(true);
+    expect(notifications.info).not.toHaveBeenCalled();
+    http.expectNone((r) => r.method === 'GET'); // no reload
+    http.verify();
   });
 });
 
@@ -710,6 +904,7 @@ describe('UserDetail — SUPER_ADMIN target protection', () => {
     expect(text()).not.toContain('Suspendre le compte');
     expect(text()).not.toContain('Réactiver le compte');
     expect(text()).not.toContain('Archiver le compte');
+    expect(text()).not.toContain('Modifier les informations');
     expect(text()).not.toContain('Attribuer un rôle');
     expect([...el().querySelectorAll('button')].some((b) => b.textContent?.trim().startsWith('Retirer'))).toBe(
       false,

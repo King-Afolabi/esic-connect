@@ -63,6 +63,23 @@ describe('AdministrationApiService', () => {
     req.flush({});
   });
 
+  it('updateProfile PATCHes /api/v1/users/{publicId} with the exact body and returns the updated detail', () => {
+    let result: { firstName: string } | undefined;
+    service
+      .updateProfile('abc 123', { firstName: 'Nouveau', lastName: 'Nom', email: 'n@esic-connect.test' })
+      .subscribe((detail) => (result = detail));
+
+    const req = http.expectOne('/api/v1/users/abc%20123');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({
+      firstName: 'Nouveau',
+      lastName: 'Nom',
+      email: 'n@esic-connect.test',
+    });
+    req.flush({ firstName: 'Nouveau' });
+    expect(result).toEqual({ firstName: 'Nouveau' });
+  });
+
   describe('lifecycle mutations', () => {
     it('suspendUser POSTs /suspend with the exact { reason } body and completes on 204', () => {
       let completed = false;
