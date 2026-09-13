@@ -31,10 +31,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles({ "test", "demo" })
-@TestPropertySource(properties =
+@TestPropertySource(properties = {
         "spring.datasource.url=jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/"
         + "${MYSQL_TEST_DATABASE:esic_test}"
-        + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC")
+        + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+        // app.demo.password est obligatoire sous le profil demo (voir
+        // DemoDataInitializer) et n'a pas de valeur par défaut. Ce test ne
+        // dépend donc pas de ESIC_DEMO_PASSWORD dans l'environnement (absent
+        // en CI) : une valeur de test suffisamment longue est fournie ici.
+        "app.demo.password=overnight-audit-fixture-password" })
 class SpringDocDemoProfileExposureTests {
 
     @Autowired
