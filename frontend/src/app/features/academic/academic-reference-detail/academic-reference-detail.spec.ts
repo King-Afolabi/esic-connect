@@ -163,6 +163,36 @@ describe('AcademicReferenceDetail', () => {
     http.verify();
   });
 
+  it('makes a child sub-list row clickable (Lot 2) toward the same destination as "Consulter"', async () => {
+    const { harness, http, oneReq } = await setup('programs');
+    oneReq(`/api/v1/programs/${ID}`).flush(PROGRAM);
+    harness.detectChanges();
+
+    http.expectOne((r) => r.url === `/api/v1/programs/${ID}/levels`).flush({
+      content: [LEVEL],
+      page: 0,
+      size: 100,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    http
+      .expectOne((r) => r.url === '/api/v1/promotions')
+      .flush({ content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 });
+    harness.detectChanges();
+
+    const row = harness.routeNativeElement?.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = harness.routeNativeElement?.querySelector(
+      'a[href="/academic/program-levels/lv-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+    http.verify();
+  });
+
   it('shows the per-section empty message when a child sub-list is empty', async () => {
     const { harness, http, text, oneReq } = await setup('programs');
     oneReq(`/api/v1/programs/${ID}`).flush(PROGRAM);

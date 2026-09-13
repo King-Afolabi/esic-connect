@@ -64,6 +64,22 @@ describe('ClassPicker', () => {
     expect(fixture.nativeElement.querySelector('a[href="/alternation/classes/c-1"]')).not.toBeNull();
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as "Gérer le rythme"', () => {
+    expectList().flush(page([CLASS]));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/alternation/classes/c-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the empty state', () => {
     expectList().flush(page([]));
     fixture.detectChanges();

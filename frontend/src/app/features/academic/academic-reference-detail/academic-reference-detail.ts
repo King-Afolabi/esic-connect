@@ -9,6 +9,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 
+import { ClickableRow } from '../../../core/a11y/clickable-row';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { Role } from '../../../core/models/role';
 import { normalizeHttpError } from '../../../core/models/api-error';
@@ -84,6 +85,7 @@ type ChildState =
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   templateUrl: './academic-reference-detail.html',
   styleUrl: './academic-reference-detail.scss',

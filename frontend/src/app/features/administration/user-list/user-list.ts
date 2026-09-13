@@ -13,6 +13,7 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
+import { ClickableRow } from '../../../core/a11y/clickable-row';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
 import { ROLES, Role, roleLabel } from '../../../core/models/role';
@@ -88,6 +89,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
     MatIconModule,
     MatProgressBarModule,
     MatCheckboxModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './user-list.html',

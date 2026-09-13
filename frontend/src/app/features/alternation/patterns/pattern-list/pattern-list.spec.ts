@@ -81,6 +81,23 @@ describe('PatternList', () => {
     expect(fixture.nativeElement.querySelector('a[href="/alternation/patterns/p-1"]')).not.toBeNull();
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as the detail link', () => {
+    ({ fixture, http, internals } = setup(true));
+    expectList().flush(page([PATTERN]));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/alternation/patterns/p-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the "Nouveau modèle" button for a write role', () => {
     ({ fixture, http, internals } = setup(true));
     expectList().flush(page([PATTERN]));

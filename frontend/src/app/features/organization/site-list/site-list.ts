@@ -16,6 +16,7 @@ import {
   writeListQueryParams,
 } from '../../../core/navigation/list-query-params';
 
+import { ClickableRow } from '../../../core/a11y/clickable-row';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { Role } from '../../../core/models/role';
 import { frenchPaginatorIntl } from '../organization-paginator';
@@ -71,6 +72,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './site-list.html',

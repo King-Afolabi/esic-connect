@@ -11,6 +11,7 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 
+import { ClickableRow } from '../../../core/a11y/clickable-row';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { Role } from '../../../core/models/role';
 import { normalizeHttpError } from '../../../core/models/api-error';
@@ -80,6 +81,7 @@ const CREATE_ROLES: Record<AcademicResourceSlug, readonly Role[]> = {
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './academic-reference-list.html',

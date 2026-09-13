@@ -89,6 +89,23 @@ describe('SiteList', () => {
     expect(link.textContent).toContain('Consulter');
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as "Consulter"', () => {
+    const { fixture, expectList } = setup();
+    expectList().flush(page([SITE]));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/organization/sites/s-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the "Nouveau site" action for an ADMIN context and hides it for a PEDAGOGICAL_MANAGER', () => {
     const admin = setup(['ADMIN']);
     admin.expectList().flush(page([SITE]));

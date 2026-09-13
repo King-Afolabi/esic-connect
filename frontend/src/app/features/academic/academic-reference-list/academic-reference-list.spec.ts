@@ -87,6 +87,23 @@ describe('AcademicReferenceList', () => {
     expect(link.textContent).toContain('Consulter');
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as "Consulter"', () => {
+    const { fixture, expectList } = setup('programs', '/api/v1/programs');
+    expectList().flush(page([PROGRAM]));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/academic/programs/pr-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the empty state when nothing matches', () => {
     const { fixture, text, expectList } = setup('programs', '/api/v1/programs');
     expectList().flush(page([]));

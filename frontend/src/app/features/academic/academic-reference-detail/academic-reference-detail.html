@@ -202,7 +202,7 @@
                     </ng-container>
 
                     <tr mat-header-row *matHeaderRowDef="childColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: childColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: childColumns" appClickableRow></tr>
                   </table>
                 </div>
               }

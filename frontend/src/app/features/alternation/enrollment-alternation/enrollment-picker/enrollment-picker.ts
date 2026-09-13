@@ -10,6 +10,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AcademicApiService } from '../../../academic/academic-api.service';
 import { ClassGroupResponse } from '../../../academic/academic.models';
+import { ClickableRow } from '../../../../core/a11y/clickable-row';
 import { EnrollmentResponse } from '../../../students/students.models';
 import { StudentsApiService } from '../../../students/students-api.service';
 import { toAlternationError } from '../../alternation-errors';
@@ -56,6 +57,7 @@ type EnrollmentState =
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   templateUrl: './enrollment-picker.html',
   styleUrl: './enrollment-picker.scss',

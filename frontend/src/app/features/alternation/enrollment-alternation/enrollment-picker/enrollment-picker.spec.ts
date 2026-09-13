@@ -110,9 +110,19 @@ describe('EnrollmentPicker', () => {
     });
     harness.detectChanges();
     expect(text()).toContain('ESIC-2026-0001');
-    expect(
-      harness.routeNativeElement?.querySelector('a[href="/alternation/enrollments/e-1"]'),
-    ).not.toBeNull();
+    const link = harness.routeNativeElement?.querySelector(
+      'a[href="/alternation/enrollments/e-1"]',
+    ) as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+
+    // Lot 2 : la ligne des inscriptions (la deuxième table) est cliquable.
+    const enrollmentRows = harness.routeNativeElement?.querySelectorAll('tr[mat-row]') ?? [];
+    const enrollmentRow = enrollmentRows[enrollmentRows.length - 1] as HTMLTableRowElement;
+    expect(enrollmentRow.getAttribute('tabindex')).toBe('0');
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = enrollmentRow.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
     http.verify();
   });
 

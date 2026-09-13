@@ -559,6 +559,19 @@
   }
 }
 
+// Ligne de tableau cliquable (Lot 2, `appClickableRow`) : affordance visuelle
+// minimale — curseur et anneau de focus clavier, jamais la seule couleur
+// comme signal (déjà porté par `.esic-table tbody tr:hover`, générique à
+// tout tableau, `mat-table` compris).
+.esic-clickable-row {
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--esic-focus-ring);
+    outline-offset: -2px;
+  }
+}
+
 .esic-num {
   text-align: right;
   font-variant-numeric: tabular-nums;

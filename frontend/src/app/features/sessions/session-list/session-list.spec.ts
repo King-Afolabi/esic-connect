@@ -109,6 +109,23 @@ describe('SessionList', () => {
     expect(link.getAttribute('aria-label')).toContain('08:00 (Europe/Paris)');
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as "Consulter"', () => {
+    ({ fixture, http, internals } = setup(true));
+    expectList().flush(page([SESSION]));
+    fixture.detectChanges();
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = (fixture.nativeElement as HTMLElement).querySelector(
+      'a[href="/sessions/s-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('bounds the long table height and pins its header (ANO-UX-002)', () => {
     ({ fixture, http, internals } = setup(true));
     expectList().flush(page([SESSION]));

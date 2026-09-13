@@ -131,6 +131,20 @@ describe('StudentList', () => {
     expect(link.textContent).toContain('Consulter');
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as "Consulter"', () => {
+    expectList().flush(page([FULL_STUDENT]));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector('a[href="/students/u-1"]') as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const nameCell = row.querySelector('td') as HTMLElement;
+    nameCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a STUDENT account without any profile nor enrollment directly in the list — no separate panel', () => {
     // Refonte 2026-09 : plus de panneau « comptes sans profil » distinct
     // ni de comparaison côté client — le compte apparaît normalement.

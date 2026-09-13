@@ -14,6 +14,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { AcademicApiService } from '../../academic/academic-api.service';
 import { ClassGroupResponse, classGroupLabel } from '../../academic/academic.models';
+import { ClickableRow } from '../../../core/a11y/clickable-row';
 import { RoleContextService } from '../../../core/auth/role-context.service';
 import { ListQueryReader, writeListQueryParams } from '../../../core/navigation/list-query-params';
 import { normalizeHttpError } from '../../../core/models/api-error';
@@ -76,6 +77,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './student-list.html',

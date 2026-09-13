@@ -12,6 +12,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { AcademicApiService } from '../../../academic/academic-api.service';
+import { ClickableRow } from '../../../../core/a11y/clickable-row';
 import {
   ClassGroupResponse,
   PageResponse as AcademicPageResponse,
@@ -49,6 +50,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './class-picker.html',

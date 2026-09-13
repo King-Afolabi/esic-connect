@@ -97,6 +97,22 @@ describe('UserList', () => {
     expect(link.textContent).toContain('Consulter');
   });
 
+  it('makes the whole row clickable (Lot 2) toward the same destination as "Consulter" outside bulk mode', () => {
+    expectList().flush(page([USER]));
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/administration/u-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const nameCell = row.querySelector('td') as HTMLElement;
+    nameCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the empty state when no account matches', () => {
     expectList().flush(page([]));
     fixture.detectChanges();
@@ -237,6 +253,27 @@ describe('UserList — opérations de masse (EF-USER-004)', () => {
     internals.toggleRow('u-1');
     fixture.detectChanges();
     expect(text()).toContain('1 compte(s) sélectionné(s)');
+  });
+
+  it('disables row-click navigation once a selection is active (Lot 2 : ne pas perturber le mode bulk)', () => {
+    setup(['ADMIN']);
+    internals.toggleRow('u-1');
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/administration/u-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBeNull();
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    // td[0] est la case à cocher (colonne « select ») ; on cible la
+    // cellule e-mail (non interactive) pour vérifier que c'est bien le
+    // mode bulk, et non l'ignorance native des éléments interactifs, qui
+    // empêche la navigation ici.
+    const emailCell = row.querySelectorAll('td')[1] as HTMLElement;
+    emailCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).not.toHaveBeenCalled();
   });
 
   it('preview (confirm omitted) shows eligible/ignored/rejected without applying anything', () => {

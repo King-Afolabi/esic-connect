@@ -12,6 +12,7 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
+import { ClickableRow } from '../../../../core/a11y/clickable-row';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { toAlternationError } from '../../alternation-errors';
 import { frenchPaginatorIntl } from '../../alternation-paginator';
@@ -69,6 +70,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './pattern-list.html',

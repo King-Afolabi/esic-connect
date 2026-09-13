@@ -23,7 +23,7 @@ function fileEvent(file: File | null): Event {
   return { target: { files: file ? [file] : [] } } as unknown as Event;
 }
 
-function setup(roles: Role[] = ['ADMIN']) {
+function setup(roles: Role[] = ['ADMIN'], recentJobs: unknown[] = []) {
   localStorage.clear();
   sessionStorage.clear();
   TestBed.resetTestingModule();
@@ -43,11 +43,11 @@ function setup(roles: Role[] = ['ADMIN']) {
   const http = TestBed.inject(HttpTestingController);
   fixture.detectChanges();
   http.expectOne((r) => r.url === LIST_URL && r.method === 'GET').flush({
-    content: [],
+    content: recentJobs,
     page: 0,
     size: 10,
-    totalElements: 0,
-    totalPages: 0,
+    totalElements: recentJobs.length,
+    totalPages: recentJobs.length > 0 ? 1 : 0,
   });
   return {
     fixture,
@@ -149,6 +149,30 @@ describe('StudentImportHome', () => {
     const req = http.expectOne((r) => r.url === LIST_URL && r.method === 'POST');
     req.flush({ publicId: 'job-click' });
     expect(navigate).toHaveBeenCalledWith(['/students/import', 'job-click']);
+  });
+
+  it('makes a recent-import row clickable (Lot 2) toward the same destination as "Consulter"', () => {
+    const { fixture } = setup(['ADMIN'], [
+      {
+        publicId: 'job-1',
+        fileName: 'liste.csv',
+        status: 'COMPLETED',
+        summary: { total: 10, error: 0, warning: 0, blocking: 0 },
+        createdAt: '2026-09-01T10:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tr[mat-row]') as HTMLTableRowElement;
+    const link = fixture.nativeElement.querySelector(
+      'a[href="/students/import/job-1"]',
+    ) as HTMLAnchorElement;
+    expect(row.getAttribute('tabindex')).toBe('0');
+
+    const linkClickSpy = vi.spyOn(link, 'click').mockImplementation(() => {});
+    const cell = row.querySelector('td') as HTMLElement;
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(linkClickSpy).toHaveBeenCalledTimes(1);
   });
 
   it('never touches browser storage', () => {

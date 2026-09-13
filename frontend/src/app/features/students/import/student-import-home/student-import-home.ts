@@ -10,6 +10,7 @@ import { MatTableModule } from '@angular/material/table';
 import { Router, RouterLink } from '@angular/router';
 
 import { frenchPaginatorIntl } from '../../../alternation/alternation-paginator';
+import { ClickableRow } from '../../../../core/a11y/clickable-row';
 import { RoleContextService } from '../../../../core/auth/role-context.service';
 import { MatPaginatorIntl } from '@angular/material/paginator';
 import { StudentImportApiService } from '../student-import-api.service';
@@ -47,6 +48,7 @@ type SubmitState =
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    ClickableRow,
   ],
   providers: [{ provide: MatPaginatorIntl, useFactory: frenchPaginatorIntl }],
   templateUrl: './student-import-home.html',
