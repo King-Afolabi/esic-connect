@@ -274,6 +274,38 @@ export interface SessionTeacherView {
   lastName: string | null;
 }
 
+/**
+ * `SessionAttendanceMode` (docs/02 §15 ; Lot 11). Règles de lien distant,
+ * alignées sur la validation back-end (`CourseSessionService`) :
+ * `ON_SITE` → lien ignoré, `REMOTE` → lien obligatoire, `HYBRID` → lien
+ * facultatif.
+ */
+export const SESSION_ATTENDANCE_MODES = ['ON_SITE', 'REMOTE', 'HYBRID'] as const;
+export type SessionAttendanceMode = (typeof SESSION_ATTENDANCE_MODES)[number];
+export const SESSION_ATTENDANCE_MODE_LABELS: Record<SessionAttendanceMode, string> = {
+  ON_SITE: 'Présentiel',
+  REMOTE: 'À distance',
+  HYBRID: 'Hybride',
+};
+export function sessionAttendanceModeLabel(value: string): string {
+  return (SESSION_ATTENDANCE_MODE_LABELS as Record<string, string>)[value] ?? value;
+}
+
+/**
+ * Validation basique d'un lien distant — URL absolue `http`/`https`,
+ * cohérente avec la vérification faite côté serveur (`CourseSessionService`
+ * ; JDK `URI`, aucune bibliothèque ajoutée). Utilise l'API native `URL` du
+ * navigateur, déjà disponible, plutôt qu'une dépendance nouvelle.
+ */
+export function isValidRemoteLink(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** `CourseSessionResponse.SessionClassView`. */
 export interface SessionClassView {
   publicId: string;
@@ -303,6 +335,10 @@ export interface CourseSessionResponse {
   startsAt: string;
   endsAt: string;
   timeZoneId: string;
+  /** Modalité d'enseignement (docs/02 §15 ; Lot 11). */
+  attendanceMode: SessionAttendanceMode;
+  /** Lien distant ; `null` sur une séance `ON_SITE`. */
+  remoteLink: string | null;
   openedAt: string | null;
   closedAt: string | null;
   /**
@@ -423,6 +459,10 @@ export interface CreateSessionRequest {
   timeZoneId: string;
   reason: string;
   title?: string | null;
+  /** Modalité d'enseignement ; absente ⇒ `ON_SITE` côté serveur (Lot 11). */
+  attendanceMode?: SessionAttendanceMode | null;
+  /** Obligatoire si `attendanceMode === 'REMOTE'`, facultatif si `HYBRID`, ignoré si `ON_SITE`. */
+  remoteLink?: string | null;
 }
 
 /** `CourseSessionRequests.Cancel` (G1-C) — motif obligatoire, borné à 500. */

@@ -78,6 +78,13 @@
             <div><dt>Début</dt><dd>{{ formatInstantUtc(current.startsAt) }}</dd></div>
             <div><dt>Fin</dt><dd>{{ formatInstantUtc(current.endsAt) }}</dd></div>
             <div><dt>Fuseau de saisie</dt><dd>{{ current.timeZoneId }}</dd></div>
+            <div><dt>Modalité</dt><dd>{{ attendanceModeLabel(current.attendanceMode) }}</dd></div>
+            @if (current.remoteLink) {
+              <div>
+                <dt>Lien distant</dt>
+                <dd><a [href]="current.remoteLink" target="_blank" rel="noopener noreferrer">{{ current.remoteLink }}</a></dd>
+              </div>
+            }
             <div><dt>Ouverte le</dt><dd>{{ formatInstantUtc(current.openedAt) }}</dd></div>
             <div><dt>Clôturée le</dt><dd>{{ formatInstantUtc(current.closedAt) }}</dd></div>
             @if (isCancelled()) {

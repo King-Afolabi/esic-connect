@@ -55,6 +55,7 @@ import {
   correctionActorLabel,
   formatInstantUtc,
   holdsAnySessionRole,
+  sessionAttendanceModeLabel,
   sessionStatusLabel,
   teacherName,
 } from '../sessions.models';
@@ -136,6 +137,7 @@ export class SessionDetail {
   protected readonly formatInstantUtc = formatInstantUtc;
   protected readonly classCodes = classCodes;
   protected readonly teacherName = teacherName;
+  protected readonly attendanceModeLabel = sessionAttendanceModeLabel;
   protected readonly rosterColumns = ['student', 'number', 'status', 'recordedAt', 'actions'] as const;
   protected readonly checkpointColumns = ['label', 'type', 'status', 'required', 'actions'] as const;
 

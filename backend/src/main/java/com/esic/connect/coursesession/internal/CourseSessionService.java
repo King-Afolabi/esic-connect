@@ -5,6 +5,7 @@ import com.esic.connect.academic.ClassGroupDirectory;
 import com.esic.connect.academic.SubjectDirectory;
 import com.esic.connect.coursesession.CourseSessionChangeAction;
 import com.esic.connect.coursesession.CourseSessionDirectory.AccessLevel;
+import com.esic.connect.coursesession.SessionAttendanceMode;
 import com.esic.connect.coursesession.SessionLifecycle;
 import com.esic.connect.identity.TeacherDirectory;
 import com.esic.connect.identity.UserDirectory;
@@ -147,6 +148,7 @@ class CourseSessionService {
             throw new CourseSessionException(CourseSessionException.Kind.INVALID_PERIOD);
         }
         String timeZoneId = requireZone(request.timeZoneId());
+        String remoteLink = validateModality(request.attendanceMode(), trimToNull(request.remoteLink()));
 
         TeacherDirectory.TeacherRef teacher = requireEligibleTeacher(request.teacherPublicId());
 
@@ -189,7 +191,7 @@ class CourseSessionService {
         CourseSession session = new CourseSession(teacher.internalId(), trimToNull(request.title()),
                 request.startsAt(), request.endsAt(), timeZoneId, request.reason().trim());
         session.markCreatedBy(actorId);
-        session.applyModality(request.attendanceMode(), trimToNull(request.remoteLink()));
+        session.applyModality(request.attendanceMode(), remoteLink);
         session.assignSubject(subjectId);
         session.assignRoom(roomCode);
         classInternalIds.forEach(session::addClass);
@@ -665,6 +667,47 @@ class CourseSessionService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Règles de modalité (Lot 11 ; docs/02 §15) : {@code ON_SITE} ignore
+     * tout lien fourni (retiré par {@link CourseSession#applyModality}) ;
+     * {@code REMOTE} exige un lien ; {@code HYBRID} l'accepte en option.
+     * Le lien fourni, quelle que soit la modalité, doit être une URL
+     * {@code http}/{@code https} absolue s'il est retenu.
+     *
+     * @return le lien à conserver (déjà trimé), ou {@code null}
+     */
+    private static String validateModality(SessionAttendanceMode mode, String trimmedRemoteLink) {
+        SessionAttendanceMode effectiveMode = mode == null ? SessionAttendanceMode.ON_SITE : mode;
+        if (effectiveMode == SessionAttendanceMode.ON_SITE) {
+            return null;
+        }
+        if (effectiveMode == SessionAttendanceMode.REMOTE && trimmedRemoteLink == null) {
+            throw new CourseSessionException(CourseSessionException.Kind.REMOTE_LINK_REQUIRED);
+        }
+        if (trimmedRemoteLink != null && !isValidRemoteLink(trimmedRemoteLink)) {
+            throw new CourseSessionException(CourseSessionException.Kind.INVALID_REMOTE_LINK);
+        }
+        return trimmedRemoteLink;
+    }
+
+    /**
+     * Validation basique et cohérente avec le JDK déjà utilisé ailleurs
+     * dans le code (ex. {@code notification.internal.HttpWebPushSender})
+     * plutôt qu'une nouvelle bibliothèque : URL absolue, schéma
+     * {@code http}/{@code https}, hôte non vide.
+     */
+    private static boolean isValidRemoteLink(String value) {
+        try {
+            java.net.URI uri = new java.net.URI(value);
+            String scheme = uri.getScheme();
+            return uri.isAbsolute()
+                    && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && uri.getHost() != null && !uri.getHost().isBlank();
+        } catch (java.net.URISyntaxException invalid) {
+            return false;
+        }
     }
 
     /** Sentinelle « aucune restriction » pour {@link #scopeRestriction}. */

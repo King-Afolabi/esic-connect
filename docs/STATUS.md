@@ -77,7 +77,10 @@ exploitation avancée). Ce ne sont pas des régressions.
   interactif.
 - **Séances** : création depuis un planning publié ou en exception,
   cycle de vie strict `PLANNED → OPEN → CLOSED`, annulation, report,
-  demandes d'annulation, remplacements datés, séances multi-classes.
+  demandes d'annulation, remplacements datés, séances multi-classes,
+  modalité d'enseignement (présentiel / distanciel / hybride) avec lien
+  distant obligatoire en distanciel, facultatif en hybride, validé
+  (format URL) et jamais journalisé en entier.
   **« Mon planning »** (CDC §5.6/§5.7) : un formateur et un apprenant
   consultent désormais leurs propres séances dans l'application
   (`GET /api/v1/me/planning`, périmètre décidé côté serveur) — jusque-là

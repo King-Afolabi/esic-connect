@@ -206,6 +206,16 @@ class CourseSessionExceptionHandler {
                 message = "Cette salle est déjà occupée par une autre séance sur un horaire qui "
                         + "chevauche celui-ci.";
             }
+            case REMOTE_LINK_REQUIRED -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_REMOTE_LINK_REQUIRED";
+                message = "Un lien distant est obligatoire pour une séance à distance.";
+            }
+            case INVALID_REMOTE_LINK -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "SESSION_INVALID_REMOTE_LINK";
+                message = "Le lien distant doit être une URL http(s) valide.";
+            }
             case ALREADY_POSTPONED -> {
                 status = HttpStatus.CONFLICT;
                 code = "SESSION_ALREADY_POSTPONED";

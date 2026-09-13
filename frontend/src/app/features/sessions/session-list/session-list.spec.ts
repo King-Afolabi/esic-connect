@@ -32,6 +32,8 @@ const SESSION: CourseSessionResponse = {
   startsAt: '2026-09-10T06:00:00Z',
   endsAt: '2026-09-10T10:00:00Z',
   timeZoneId: 'Europe/Paris',
+  attendanceMode: 'ON_SITE',
+  remoteLink: null,
   openedAt: '2026-09-10T05:55:00Z',
   closedAt: null,
   cancellationReason: null,

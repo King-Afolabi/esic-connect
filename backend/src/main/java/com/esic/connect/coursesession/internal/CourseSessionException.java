@@ -98,7 +98,12 @@ class CourseSessionException extends RuntimeException {
          */
         TEACHER_DOUBLE_BOOKING,
         /** La salle est déjà occupée par une autre séance sur un horaire qui chevauche celui demandé. */
-        ROOM_DOUBLE_BOOKING
+        ROOM_DOUBLE_BOOKING,
+        // --- Modalité et lien distant (Lot 11) ---
+        /** Modalité {@code REMOTE} sans lien distant fourni : le lien est obligatoire dans ce cas. */
+        REMOTE_LINK_REQUIRED,
+        /** Lien distant syntaxiquement invalide (URL {@code http}/{@code https} absolue attendue). */
+        INVALID_REMOTE_LINK
     }
 
     private final Kind kind;

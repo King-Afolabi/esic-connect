@@ -128,7 +128,36 @@
           }
         </mat-select>
       </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Modalité</mat-label>
+        <mat-select formControlName="attendanceMode">
+          @for (mode of attendanceModes; track mode.value) {
+            <mat-option [value]="mode.value">{{ mode.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
       </div>
+
+      @if (attendanceMode() !== 'ON_SITE') {
+        <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
+          <mat-label>
+            Lien distant{{ attendanceMode() === 'HYBRID' ? ' (facultatif)' : '' }}
+          </mat-label>
+          <input
+            matInput
+            formControlName="remoteLink"
+            [maxlength]="remoteLinkMaxLength"
+            placeholder="https://…"
+          />
+          @if (form.controls.remoteLink.touched && form.controls.remoteLink.hasError('required')) {
+            <mat-error>Un lien distant est obligatoire pour une séance à distance.</mat-error>
+          }
+          @if (form.controls.remoteLink.touched && form.controls.remoteLink.hasError('invalidUrl')) {
+            <mat-error>Le lien doit être une URL http(s) valide.</mat-error>
+          }
+        </mat-form-field>
+      }
 
       <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
         <mat-label>Motif de la séance exceptionnelle</mat-label>

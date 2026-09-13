@@ -190,6 +190,83 @@ class SessionSubjectRoomIntegrationTests {
     }
 
     // ------------------------------------------------------------------
+    // Modalité et lien distant (Lot 11)
+    // ------------------------------------------------------------------
+
+    @Test
+    void uneSeanceEnPresentielIgnoreUnLienDistantFourniParErreur() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+
+        Map<String, Object> body = createBody(teacher.publicId(), List.of(chain.classA()), "Présentiel");
+        body.put("attendanceMode", "ON_SITE");
+        body.put("remoteLink", "https://meet.example.org/salle-x");
+        Map<String, Object> created = created("/api/v1/sessions", body, admin);
+
+        assertThat(created.get("attendanceMode")).isEqualTo("ON_SITE");
+        assertThat(created.get("remoteLink")).isNull();
+    }
+
+    @Test
+    void uneSeanceADistanceSansLienEstRefusee() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+
+        Map<String, Object> body = createBody(teacher.publicId(), List.of(chain.classA()), "À distance");
+        body.put("attendanceMode", "REMOTE");
+
+        ResponseEntity<Map<String, Object>> rejected = exchange(HttpMethod.POST, "/api/v1/sessions", body, admin);
+        assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(rejected.getBody().get("code")).isEqualTo("SESSION_REMOTE_LINK_REQUIRED");
+    }
+
+    @Test
+    void uneSeanceADistanceAvecUnLienMalFormeEstRefusee() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+
+        Map<String, Object> body = createBody(teacher.publicId(), List.of(chain.classA()), "À distance");
+        body.put("attendanceMode", "REMOTE");
+        body.put("remoteLink", "pas-une-url");
+
+        ResponseEntity<Map<String, Object>> rejected = exchange(HttpMethod.POST, "/api/v1/sessions", body, admin);
+        assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(rejected.getBody().get("code")).isEqualTo("SESSION_INVALID_REMOTE_LINK");
+    }
+
+    @Test
+    void uneSeanceADistanceAvecUnLienValideEstCreee() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+
+        Map<String, Object> body = createBody(teacher.publicId(), List.of(chain.classA()), "À distance");
+        body.put("attendanceMode", "REMOTE");
+        body.put("remoteLink", "https://meet.example.org/salle-x");
+        Map<String, Object> created = created("/api/v1/sessions", body, admin);
+
+        assertThat(created.get("attendanceMode")).isEqualTo("REMOTE");
+        assertThat(created.get("remoteLink")).isEqualTo("https://meet.example.org/salle-x");
+    }
+
+    @Test
+    void uneSeanceHybrideSansLienEstAcceptee() {
+        String admin = adminToken();
+        Chain chain = academicChain(admin);
+        Account teacher = accountWithRoles(RoleCode.TEACHER);
+
+        Map<String, Object> body = createBody(teacher.publicId(), List.of(chain.classA()), "Hybride");
+        body.put("attendanceMode", "HYBRID");
+        Map<String, Object> created = created("/api/v1/sessions", body, admin);
+
+        assertThat(created.get("attendanceMode")).isEqualTo("HYBRID");
+        assertThat(created.get("remoteLink")).isNull();
+    }
+
+    // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
 

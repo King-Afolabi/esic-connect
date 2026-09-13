@@ -79,6 +79,8 @@ function fillValid(internals: FormInternals): void {
     timeZoneId: 'Europe/Paris',
     reason: 'rattrapage',
     title: '',
+    attendanceMode: 'ON_SITE',
+    remoteLink: '',
   });
 }
 
@@ -140,9 +142,57 @@ describe('SessionForm', () => {
       timeZoneId: 'Europe/Paris',
       reason: 'rattrapage',
       title: null,
+      attendanceMode: 'ON_SITE',
+      remoteLink: null,
     });
     req.flush({ publicId: 's-9' });
     expect(navigate).toHaveBeenCalledWith(['/sessions', 's-9']);
+  });
+
+  it('requires a remote link when the modality is REMOTE', () => {
+    ({ fixture, http, internals } = setup());
+    loadReady(http);
+    fillValid(internals);
+    internals.form.controls['attendanceMode'].setValue('REMOTE');
+    internals.submit();
+    http.expectNone(CREATE_URL);
+    expect(internals.form.controls['remoteLink'].hasError('required')).toBe(true);
+  });
+
+  it('rejects a malformed remote link', () => {
+    ({ fixture, http, internals } = setup());
+    loadReady(http);
+    fillValid(internals);
+    internals.form.controls['attendanceMode'].setValue('HYBRID');
+    internals.form.controls['remoteLink'].setValue('not-a-url');
+    internals.submit();
+    http.expectNone(CREATE_URL);
+    expect(internals.form.controls['remoteLink'].hasError('invalidUrl')).toBe(true);
+  });
+
+  it('clears the remote link when switching back to ON_SITE', () => {
+    ({ fixture, http, internals } = setup());
+    loadReady(http);
+    fillValid(internals);
+    internals.form.controls['attendanceMode'].setValue('REMOTE');
+    internals.form.controls['remoteLink'].setValue('https://meet.example.org/abc');
+    internals.form.controls['attendanceMode'].setValue('ON_SITE');
+    expect(internals.form.controls['remoteLink'].value).toBe('');
+  });
+
+  it('posts a REMOTE session with its validated link', () => {
+    ({ fixture, http, internals } = setup());
+    loadReady(http);
+    fillValid(internals);
+    internals.form.controls['attendanceMode'].setValue('REMOTE');
+    internals.form.controls['remoteLink'].setValue('https://meet.example.org/abc');
+    internals.submit();
+    const req = http.expectOne(CREATE_URL);
+    expect(req.request.body).toMatchObject({
+      attendanceMode: 'REMOTE',
+      remoteLink: 'https://meet.example.org/abc',
+    });
+    req.flush({ publicId: 's-9' });
   });
 
   it('prevents a double submission', () => {

@@ -1,5 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -21,9 +27,13 @@ import { NotificationService } from '../../../core/notifications/notification.se
 import { SessionsApiService } from '../sessions-api.service';
 import { toSessionError } from '../session-errors';
 import {
+  SESSION_ATTENDANCE_MODES,
   SESSION_CREATE_ROLES,
+  SessionAttendanceMode,
   TeacherOptionResponse,
   holdsAnySessionRole,
+  isValidRemoteLink,
+  sessionAttendanceModeLabel,
   teacherName,
 } from '../sessions.models';
 
@@ -37,6 +47,26 @@ type LoadState =
 /** Motif d'une séance exceptionnelle — `@NotBlank @Size(max = 500)`. */
 const REASON_MAX_LENGTH = 500;
 const TITLE_MAX_LENGTH = 191;
+const REMOTE_LINK_MAX_LENGTH = 500;
+
+/**
+ * Cohérence modalité / lien distant (Lot 11) : `REMOTE` exige un lien,
+ * `HYBRID` l'accepte en option, `ON_SITE` l'ignore (non validé, il est de
+ * toute façon supprimé côté serveur). Un lien fourni doit être une URL
+ * http(s) absolue. Lit la modalité via {@link AbstractControl.parent} —
+ * seule façon d'exprimer une règle inter-champs sans dupliquer l'état.
+ */
+function remoteLinkValidator(control: AbstractControl): ValidationErrors | null {
+  const mode = control.parent?.get('attendanceMode')?.value as SessionAttendanceMode | undefined;
+  const value = (control.value as string).trim();
+  if (mode === 'REMOTE' && !value) {
+    return { required: true };
+  }
+  if (value && !isValidRemoteLink(value)) {
+    return { invalidUrl: true };
+  }
+  return null;
+}
 
 /**
  * Création d'une séance exceptionnelle — `POST /api/v1/sessions`.
@@ -89,6 +119,11 @@ export class SessionForm {
   protected readonly teacherName = teacherName;
   protected readonly reasonMaxLength = REASON_MAX_LENGTH;
   protected readonly titleMaxLength = TITLE_MAX_LENGTH;
+  protected readonly remoteLinkMaxLength = REMOTE_LINK_MAX_LENGTH;
+  protected readonly attendanceModes = SESSION_ATTENDANCE_MODES.map((value) => ({
+    value,
+    label: sessionAttendanceModeLabel(value),
+  }));
 
   protected readonly loadState = signal<LoadState>({ kind: 'loading' });
   protected readonly teachers = signal<TeacherOptionResponse[]>([]);
@@ -118,9 +153,15 @@ export class SessionForm {
       Validators.maxLength(REASON_MAX_LENGTH),
     ]),
     title: this.formBuilder.control('', [Validators.maxLength(TITLE_MAX_LENGTH)]),
+    attendanceMode: this.formBuilder.control<SessionAttendanceMode>('ON_SITE'),
+    remoteLink: this.formBuilder.control('', [
+      Validators.maxLength(REMOTE_LINK_MAX_LENGTH),
+      remoteLinkValidator,
+    ]),
   });
 
   protected readonly reasonLength = computed(() => this.form.controls.reason.value.trim().length);
+  protected readonly attendanceMode = signal<SessionAttendanceMode>('ON_SITE');
 
   constructor() {
     this.load();
@@ -141,6 +182,18 @@ export class SessionForm {
     // recharge la liste dès qu'une classe rattachée à un site différent
     // est choisie, plutôt que de faire porter un site au formulaire.
     this.form.controls.classPublicIds.valueChanges.subscribe((ids) => this.loadRoomsFor(ids));
+
+    // La validité du lien distant dépend de la modalité (Lot 11) : un
+    // changement de modalité doit rejouer la validation du lien, et un
+    // passage à `ON_SITE` vide le champ (le serveur l'ignorerait de toute
+    // façon — autant ne pas laisser une valeur fantôme dans le formulaire).
+    this.form.controls.attendanceMode.valueChanges.subscribe((mode) => {
+      this.attendanceMode.set(mode);
+      if (mode === 'ON_SITE') {
+        this.form.controls.remoteLink.setValue('');
+      }
+      this.form.controls.remoteLink.updateValueAndValidity();
+    });
   }
 
   private loadRoomsFor(classPublicIds: string[]): void {
@@ -211,6 +264,8 @@ export class SessionForm {
         timeZoneId: raw.timeZoneId,
         reason: raw.reason.trim(),
         title: raw.title.trim() || null,
+        attendanceMode: raw.attendanceMode,
+        remoteLink: raw.remoteLink.trim() || null,
       })
       .subscribe({
         next: (session) => {
