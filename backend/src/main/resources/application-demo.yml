@@ -26,6 +26,19 @@ management:
     mail:
       enabled: false
 
+# Ce profil est celui réellement actif sur le déploiement public (Pi +
+# tunnel Cloudflare) — il n'existe pas de profil "prod" séparé à ce
+# stade (voir docs/03-architecture.md DEC-D01). La documentation OpenAPI
+# et Swagger UI ne doivent donc pas être exposées ici : elles révèlent
+# toute la surface d'API (endpoints, DTOs) à quiconque atteint le
+# tunnel. Recette/démonstration interne : utiliser le profil `local`,
+# où ces routes restent activées par défaut.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 app:
   demo:
     # Mot de passe des comptes de démonstration. Obligatoire, aucune
