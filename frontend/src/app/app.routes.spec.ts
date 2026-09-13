@@ -321,6 +321,64 @@ describe('application routes (guard wiring)', () => {
     });
   });
 
+  describe('subjects and invitations routes', () => {
+    // Ces deux routes déclaraient `canActivate: [roleGuard]` — la
+    // factory elle-même, jamais invoquée — au lieu de
+    // `roleGuard([...ROLES])` : Angular appelait alors `roleGuard(route,
+    // state)`, qui renvoyait une fonction (une valeur toujours "truthy"),
+    // laissant passer n'importe quel rôle. Ces tests verrouillent le vrai
+    // câblage attendu (`SubjectController.SUBJECT_READ_ROLES` /
+    // `AccountInvitationController` + `EmailDeliveryController`).
+
+    it('redirects an anonymous user from /subjects to /login', async () => {
+      await router.navigateByUrl('/subjects');
+      expect(location.path()).toContain('/login');
+    });
+
+    it('lets a TEACHER read /subjects (read-only role)', async () => {
+      signIn(['TEACHER']);
+      await router.navigateByUrl('/subjects');
+      expect(location.path()).toBe('/subjects');
+    });
+
+    it('lets SCHOOL_ADMINISTRATION and PEDAGOGICAL_MANAGER read /subjects', async () => {
+      signIn(['SCHOOL_ADMINISTRATION']);
+      await router.navigateByUrl('/subjects');
+      expect(location.path()).toBe('/subjects');
+
+      signIn(['PEDAGOGICAL_MANAGER']);
+      await router.navigateByUrl('/subjects');
+      expect(location.path()).toBe('/subjects');
+    });
+
+    it('routes a STUDENT to /forbidden on /subjects', async () => {
+      signIn(['STUDENT']);
+      await router.navigateByUrl('/subjects');
+      expect(location.path()).toBe('/forbidden');
+    });
+
+    it('redirects an anonymous user from /invitations to /login', async () => {
+      await router.navigateByUrl('/invitations');
+      expect(location.path()).toContain('/login');
+    });
+
+    it('lets ADMIN/SCHOOL_ADMINISTRATION/PEDAGOGICAL_MANAGER reach /invitations', async () => {
+      signIn(['ADMIN']);
+      await router.navigateByUrl('/invitations');
+      expect(location.path()).toBe('/invitations');
+
+      signIn(['PEDAGOGICAL_MANAGER']);
+      await router.navigateByUrl('/invitations');
+      expect(location.path()).toBe('/invitations');
+    });
+
+    it('routes a TEACHER (no invitation-tracking role) to /forbidden on /invitations', async () => {
+      signIn(['TEACHER']);
+      await router.navigateByUrl('/invitations');
+      expect(location.path()).toBe('/forbidden');
+    });
+  });
+
   it('keeps an authenticated user away from the guest-only login route', async () => {
     signIn(['STUDENT']);
     await router.navigateByUrl('/login');

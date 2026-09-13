@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -8,9 +8,20 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 
+import { RoleContextService } from '../../../core/auth/role-context.service';
 import { normalizeHttpError } from '../../../core/models/api-error';
+import { Role } from '../../../core/models/role';
 import { SubjectsApiService } from '../subjects-api.service';
 import { SubjectResponse } from '../subjects.models';
+
+/**
+ * Rôles d'écriture réels (`AcademicWeb.SCOPED_WRITE_ROLES`, appliqué par
+ * `SubjectController` à la création, l'archivage et la restauration). La
+ * lecture, elle, reste ouverte au `TEACHER` et à `SCHOOL_ADMINISTRATION`
+ * (`SubjectController.SUBJECT_READ_ROLES`) : ce masquage n'est
+ * qu'ergonomique, le serveur restant l'autorité.
+ */
+const SUBJECT_WRITE_ROLES: readonly Role[] = ['ADMIN', 'SUPER_ADMIN', 'PEDAGOGICAL_MANAGER'];
 
 /**
  * Référentiel des matières (EF-ACA-006 ; docs/02 §6.4).
@@ -39,8 +50,16 @@ import { SubjectResponse } from '../subjects.models';
 export class SubjectList {
   private readonly api = inject(SubjectsApiService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly roleContext = inject(RoleContextService);
 
-  protected readonly columns = ['code', 'name', 'hourlyVolume', 'programs', 'status', 'actions'];
+  protected readonly canWrite = computed(() =>
+    this.roleContext.effectiveRoles().some((r) => SUBJECT_WRITE_ROLES.includes(r)),
+  );
+  protected readonly columns = computed<string[]>(() =>
+    this.canWrite()
+      ? ['code', 'name', 'hourlyVolume', 'programs', 'status', 'actions']
+      : ['code', 'name', 'hourlyVolume', 'programs', 'status'],
+  );
   protected readonly subjects = signal<SubjectResponse[]>([]);
   protected readonly loading = signal(false);
   protected readonly errorMessage = signal<string | null>(null);

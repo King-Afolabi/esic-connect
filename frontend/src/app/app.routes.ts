@@ -246,8 +246,7 @@ export const routes: Routes = [
         // formateurs, écriture aux rôles de gestion, le serveur restant
         // l'autorité (un `403` est rendu « accès refusé »).
         path: 'subjects',
-        canActivate: [roleGuard],
-        data: { roles: SUBJECT_READ_ROLES },
+        canActivate: [roleGuard([...SUBJECT_READ_ROLES])],
         title: `Matières — ${APP_NAME}`,
         loadComponent: () =>
           import('./features/subjects/subject-list/subject-list').then((m) => m.SubjectList),
@@ -256,8 +255,7 @@ export const routes: Routes = [
         // Écran livré (sprint 3) : suivi des invitations et de leur
         // délivrabilité (EF-USER-007, EF-USER-008).
         path: 'invitations',
-        canActivate: [roleGuard],
-        data: { roles: INVITATION_TRACKING_ROLES },
+        canActivate: [roleGuard([...INVITATION_TRACKING_ROLES])],
         title: `Invitations — ${APP_NAME}`,
         loadComponent: () =>
           import('./features/invitations/invitation-list/invitation-list').then(
