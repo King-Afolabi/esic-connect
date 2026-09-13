@@ -118,6 +118,12 @@ public interface ClassGroupDirectory {
      * @param internalId             clé primaire SQL de la classe
      * @param publicId               identifiant public de la classe
      * @param code                   code fonctionnel de la classe
+     * @param name                   intitulé de la classe (ex. « Bachelor 3
+     *                               Développement »), pour les affichages
+     *                               au format « Nom — Code — Année »
+     *                               (docs/02 §22, Lot 14/15) — jamais
+     *                               remplacé par une chaîne concaténée côté
+     *                               serveur
      * @param programPublicId        identifiant public de la formation
      * @param programCode            code de la formation
      * @param academicYearInternalId clé primaire SQL de l'année scolaire
@@ -135,6 +141,7 @@ public interface ClassGroupDirectory {
             long internalId,
             UUID publicId,
             String code,
+            String name,
             UUID programPublicId,
             String programCode,
             long academicYearInternalId,

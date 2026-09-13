@@ -57,7 +57,7 @@ class AlternationContextServiceTests {
     private final UUID enrollmentPublicId = UUID.randomUUID();
 
     private ClassGroupDirectory.ClassGroupRef classRef() {
-        return new ClassGroupDirectory.ClassGroupRef(42L, classPublicId, "C1", UUID.randomUUID(), "PRG",
+        return new ClassGroupDirectory.ClassGroupRef(42L, classPublicId, "C1", "Classe 1", UUID.randomUUID(), "PRG",
                 7L, UUID.randomUUID(), "2026-2027", true);
     }
 

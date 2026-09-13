@@ -34,8 +34,8 @@ class PlannedActionResolverTests {
 
     private PlannedActionResolver resolver;
     private final UUID classPublicId = UUID.randomUUID();
-    private final ClassGroupRef classRef = new ClassGroupRef(1L, classPublicId, "C1", UUID.randomUUID(), "BTS",
-            9L, UUID.randomUUID(), "2026-2027", true);
+    private final ClassGroupRef classRef = new ClassGroupRef(1L, classPublicId, "C1", "Classe 1", UUID.randomUUID(),
+            "BTS", 9L, UUID.randomUUID(), "2026-2027", true);
 
     @BeforeEach
     void setUp() {

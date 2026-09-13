@@ -85,6 +85,7 @@ class ClassGroupDirectoryTests {
 
         ClassGroupRef ref = classGroupDirectory.findByPublicId(UUID.fromString(classId)).orElseThrow();
         assertThat(ref.publicId()).isEqualTo(UUID.fromString(classId));
+        assertThat(ref.name()).isEqualTo("Classe 1");
         assertThat(ref.programCode()).isEqualTo(programCode);
         assertThat(ref.academicYearCode()).isEqualTo(yearCode);
         assertThat(ref.openForEnrollment()).isTrue();

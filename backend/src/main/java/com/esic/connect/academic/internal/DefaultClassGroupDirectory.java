@@ -153,6 +153,7 @@ class DefaultClassGroupDirectory implements ClassGroupDirectory {
                 classGroup.getId(),
                 classGroup.getPublicId(),
                 classGroup.getCode(),
+                classGroup.getName(),
                 program.getPublicId(),
                 program.getCode(),
                 academicYear.getId(),

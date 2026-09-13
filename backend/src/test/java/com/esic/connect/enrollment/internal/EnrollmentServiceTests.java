@@ -81,7 +81,7 @@ class EnrollmentServiceTests {
     }
 
     private static ClassGroupDirectory.ClassGroupRef classRef(long internalId, long yearId, boolean open) {
-        return new ClassGroupDirectory.ClassGroupRef(internalId, UUID.randomUUID(), "BTS-SIO-1",
+        return new ClassGroupDirectory.ClassGroupRef(internalId, UUID.randomUUID(), "BTS-SIO-1", "BTS SIO 1",
                 UUID.randomUUID(), "BTS-SIO", yearId, UUID.randomUUID(), "2026-2027", open);
     }
 

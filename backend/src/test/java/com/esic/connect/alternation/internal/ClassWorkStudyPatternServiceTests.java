@@ -66,7 +66,7 @@ class ClassWorkStudyPatternServiceTests {
     private final UUID patternPublicId = UUID.randomUUID();
 
     private ClassGroupDirectory.ClassGroupRef classRef(boolean open) {
-        return new ClassGroupDirectory.ClassGroupRef(42L, classPublicId, "C1", UUID.randomUUID(), "PRG",
+        return new ClassGroupDirectory.ClassGroupRef(42L, classPublicId, "C1", "Classe 1", UUID.randomUUID(), "PRG",
                 7L, UUID.randomUUID(), "2026-2027", open);
     }
 
