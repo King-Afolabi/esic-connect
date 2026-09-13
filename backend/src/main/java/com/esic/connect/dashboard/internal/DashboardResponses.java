@@ -57,6 +57,16 @@ final class DashboardResponses {
     }
 
     /**
+     * @param activeClass           classe de l'inscription {@code ACTIVE} de
+     *                              l'apprenant (Lot 13), indépendamment des
+     *                              séances de la semaine — {@code null} si
+     *                              aucune inscription active. Plusieurs
+     *                              inscriptions actives simultanées sont une
+     *                              anomalie (invariant Lot 13, normalement
+     *                              impossible depuis V36) : ce champ reste
+     *                              alors {@code null} plutôt que de choisir
+     *                              arbitrairement une classe, et l'anomalie
+     *                              est signalée dans {@link Dashboard#notes}
      * @param nextSession           prochaine séance de l'apprenant ({@code null} si aucune)
      * @param weekSessions          séances des 7 prochains jours (≤ 10)
      * @param present               présences {@code PRESENT}
@@ -67,6 +77,7 @@ final class DashboardResponses {
      * @param rejectedJustifications justificatifs refusés
      */
     record StudentCard(
+            ClassRef activeClass,
             SessionLine nextSession,
             List<SessionLine> weekSessions,
             long present,

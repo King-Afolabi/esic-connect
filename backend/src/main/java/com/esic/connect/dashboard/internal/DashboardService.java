@@ -22,6 +22,8 @@ import com.esic.connect.dashboard.internal.DashboardResponses.TeacherCard;
 import com.esic.connect.enrollment.EnrollmentDirectory;
 import com.esic.connect.identity.AccountStatsDirectory;
 import com.esic.connect.studentimport.StudentImportDashboardDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +54,8 @@ import java.util.UUID;
  */
 @Service
 class DashboardService {
+
+    private static final Logger log = LoggerFactory.getLogger(DashboardService.class);
 
     private static final int LIST_LIMIT = 10;
     private static final Duration WEEK = Duration.ofDays(7);
@@ -139,16 +143,39 @@ class DashboardService {
 
     private StudentCard student(UUID userPublicId, Instant now, List<String> notes) {
         LocalDate today = LocalDate.ofInstant(now, clock.getZone());
-        Set<UUID> classIds = enrollmentDirectory.findActiveEnrollmentsForUserOn(userPublicId, today).stream()
+        List<EnrollmentDirectory.EnrollmentRef> activeEnrollments =
+                enrollmentDirectory.findActiveEnrollmentsForUserOn(userPublicId, today);
+        Set<UUID> classIds = activeEnrollments.stream()
                 .map(EnrollmentDirectory.EnrollmentRef::classGroupPublicId)
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        // « Ma classe » (Lot 13) : dérivée de l'inscription active elle-même,
+        // pas des séances de la semaine — un apprenant sans séance cette
+        // semaine voit quand même sa classe.
+        ClassRef activeClass = null;
+        if (activeEnrollments.size() == 1) {
+            UUID classPublicId = activeEnrollments.get(0).classGroupPublicId();
+            activeClass = classPublicId == null ? null
+                    : classGroupDirectory.findByPublicId(classPublicId).map(DashboardService::toClassRef).orElse(null);
+        } else if (activeEnrollments.size() > 1) {
+            // Anomalie (invariant Lot 13 : au plus une inscription ACTIVE,
+            // normalement garanti par la contrainte SQL globale V36) : ne
+            // jamais choisir arbitrairement une classe parmi plusieurs :
+            // le dashboard reste utilisable, l'anomalie est journalisée et
+            // signalée plutôt que masquée.
+            log.warn("Dashboard apprenant : {} inscriptions actives simultanées détectées pour un compte "
+                    + "(anomalie, invariant Lot 13 normalement garanti par uq_enrollment_active_global)",
+                    activeEnrollments.size());
+            notes.add("Anomalie détectée : plusieurs inscriptions actives sur ce compte. "
+                    + "Contactez l'administration.");
+        }
 
         List<SessionLine> week = classIds.isEmpty() ? List.of()
                 : lines(trim(courseSessionDirectory.findSessionsForClasses(classIds, now, now.plus(WEEK))));
 
         AttendanceDashboardDirectory.StudentAttendanceDigest d = attendanceDashboard.studentDigest(userPublicId);
-        return new StudentCard(week.isEmpty() ? null : week.get(0), week,
+        return new StudentCard(activeClass, week.isEmpty() ? null : week.get(0), week,
                 d.present(), d.late(), d.absent(), d.excused(),
                 d.pendingJustifications(), d.rejectedJustifications());
     }

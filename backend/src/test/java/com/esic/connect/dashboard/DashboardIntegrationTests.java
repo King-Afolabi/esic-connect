@@ -112,6 +112,38 @@ class DashboardIntegrationTests {
     }
 
     @Test
+    void aStudentSeesTheirActiveClassEvenWithoutAnySessionThisWeek() {
+        // Lot 13 : « Ma classe » vient de l'inscription active elle-même,
+        // pas des séances de la semaine — un apprenant sans séance cette
+        // semaine voit quand même sa classe.
+        String admin = tokenFor(account(RoleCode.ADMIN));
+        Chain chain = academicChain(admin);
+        Account s = enrolledStudent(admin, chain.classA());
+
+        Map<String, Object> d = dashboard(tokenFor(s));
+        Map<String, Object> activeClass = (Map<String, Object>) student(d).get("activeClass");
+        assertThat(activeClass).isNotNull();
+        assertThat(activeClass.get("name")).isEqualTo("Classe 1");
+        assertThat(activeClass.get("code")).isEqualTo("C1");
+        assertThat(activeClass.get("academicYearCode")).isNotNull();
+        assertThat((List<?>) student(d).get("weekSessions")).isEmpty();
+    }
+
+    @Test
+    void aStudentWithNoActiveEnrollmentHasNoActiveClass() {
+        Account s = account(RoleCode.STUDENT);
+
+        Map<String, Object> d = dashboard(tokenFor(s));
+        assertThat(student(d).get("activeClass")).isNull();
+    }
+
+    // Le cas « plusieurs inscriptions actives simultanées » est vérifié de
+    // façon isolée, au niveau service (DashboardServiceStudentCardTests) :
+    // depuis V36 (Lot 13), la contrainte SQL globale (uq_enrollment_active_global)
+    // empêche justement d'insérer une telle anomalie via l'API — la
+    // reproduire ici nécessiterait de contourner la contrainte elle-même.
+
+    @Test
     void aTeacherSeesOnlyTheirOwnUpcomingSessions() {
         String admin = tokenFor(account(RoleCode.ADMIN));
         Chain chain = academicChain(admin);
