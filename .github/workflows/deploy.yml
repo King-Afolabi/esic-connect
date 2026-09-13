@@ -102,14 +102,23 @@ jobs:
           SERVICES=""
           [ "${{ steps.changed.outputs.backend }}" = "true" ] && SERVICES="$SERVICES esic-connect-backend"
           [ "${{ steps.changed.outputs.frontend }}" = "true" ] && SERVICES="$SERVICES esic-connect-frontend"
-          for i in $(seq 1 30); do
+          # 60 x 5s = 5 min : sur la Pi, un démarrage à froid peut dépasser
+          # les 2 min précédentes (30 x 4s) — mesuré à ~83-95 s rien que
+          # pour le démarrage Spring (37 migrations), avant même que le
+          # healthcheck Docker (start_period 30s + interval 10s) ne
+          # marque le conteneur "healthy". Le plafond précédent causait un
+          # rollback automatique (donc un déploiement annulé) sur un
+          # backend qui aurait fini par devenir sain quelques dizaines de
+          # secondes plus tard (constaté 2026-09-14, run #34788332275,
+          # sur le correctif Swagger/OpenAPI).
+          for i in $(seq 1 60); do
             OK=true
             for s in $SERVICES; do
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$s" 2>/dev/null || echo "unknown")
               [ "$STATUS" != "healthy" ] && OK=false
             done
             $OK && { echo "Tous les services impactés sont healthy."; exit 0; }
-            sleep 4
+            sleep 5
           done
           echo "::error::Au moins un service n'est pas devenu healthy à temps."
           exit 1
