@@ -45,7 +45,7 @@ class DemoDataInitializerConditionalTests {
     static class TestDoubles {
         @Bean
         DemoAccountProvisioner demoAccountProvisioner() {
-            return (email, firstName, lastName, rawPassword, roleCodes, studentNumber) -> null;
+            return (email, firstName, lastName, rawPassword, roleCodes) -> null;
         }
 
         @Bean
