@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -86,6 +87,23 @@ class CourseSessionController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void close(@PathVariable String publicId, @AuthenticationPrincipal Jwt caller) {
         service.close(publicId, CourseSessionWeb.subject(caller));
+    }
+
+    /**
+     * Édition structurelle complète d'une séance {@code PLANNED} non
+     * démarrée (Lot 12) : libellé, motif, matière, salle, horaires,
+     * formateur, classes, modalité, lien distant. {@code CREATE_ROLES} et
+     * non {@code MANAGE_ROLES} : c'est une décision de gestion pédagogique,
+     * pas une action d'ouverture/fermeture — le formateur ne corrige pas
+     * lui-même la structure de sa séance (cohérent avec le report et les
+     * remplacements, ci-dessous).
+     */
+    @PatchMapping("/{publicId}")
+    @PreAuthorize(CourseSessionWeb.CREATE_ROLES)
+    CourseSessionResponse update(@PathVariable String publicId,
+                                 @Valid @RequestBody CourseSessionRequests.Update request,
+                                 @AuthenticationPrincipal Jwt caller) {
+        return service.update(publicId, request, CourseSessionWeb.subject(caller));
     }
 
     /**

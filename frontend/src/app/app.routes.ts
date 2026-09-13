@@ -900,6 +900,16 @@ export const routes: Routes = [
               import('./features/sessions/session-form/session-form').then((m) => m.SessionForm),
           },
           {
+            // Édition structurelle complète avant démarrage (Lot 12) —
+            // déclarée avant `:publicId` (segment unique) pour que ce
+            // segment supplémentaire soit résolu en priorité.
+            path: ':publicId/edit',
+            canActivate: [roleGuard([...SESSION_CREATE_ROLES])],
+            title: `Modifier la séance — ${APP_NAME}`,
+            loadComponent: () =>
+              import('./features/sessions/session-edit/session-edit').then((m) => m.SessionEdit),
+          },
+          {
             path: ':publicId',
             title: `Séance — ${APP_NAME}`,
             loadComponent: () =>

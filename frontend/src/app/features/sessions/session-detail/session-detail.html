@@ -44,8 +44,13 @@
         <div class="esic-page-header__text">
           <h1 class="esic-page-header__title">{{ current.title || 'Séance exceptionnelle' }}</h1>
         </div>
-        @if (canManageCheckpoint()) {
+        @if (canManageCheckpoint() || canEditStructure()) {
           <div class="esic-page-header__actions">
+            @if (canEditStructure()) {
+              <a mat-stroked-button [routerLink]="['/sessions', current.publicId, 'edit']">
+                Modifier la séance
+              </a>
+            }
             @if (isPlanned()) {
               <button mat-flat-button type="button" (click)="startOpen()">Ouvrir la séance</button>
             }

@@ -424,4 +424,57 @@ class CourseSession extends BaseEntity {
     List<SessionClass> getClasses() {
         return classes;
     }
+
+    /**
+     * Séance manuelle (créée en exception), par opposition à une séance
+     * d'origine planning ({@code planningSlotPublicId} non nul). Seule une
+     * séance manuelle peut être éditée par {@link #applyStructuralEdit} :
+     * une séance planning est gérée par sa republication
+     * ({@link #applyPlanningUpdate}), jamais par cette voie ad hoc, sous
+     * peine de désynchroniser la séance du planning qui l'a produite.
+     */
+    boolean isManuallyCreated() {
+        return planningSlotPublicId == null;
+    }
+
+    /**
+     * Remplace les classes rattachées par différence (Lot 12), jamais par
+     * un vidage complet suivi d'une reconstruction : sur un
+     * {@code @OneToMany(orphanRemoval = true)}, Hibernate peut ordonner
+     * l'{@code INSERT} d'une paire avant le {@code DELETE} de celle
+     * qu'elle remplace dans le même flush — un identifiant de classe
+     * conservé d'une version à l'autre déclencherait alors une violation
+     * de la contrainte d'unicité {@code (course_session_id,
+     * class_group_id)}. Ne retirer et n'ajouter que ce qui change évite le
+     * problème par construction.
+     */
+    void replaceClasses(java.util.Collection<Long> classGroupIds) {
+        this.classes.removeIf(sessionClass -> !classGroupIds.contains(sessionClass.getClassGroupId()));
+        java.util.Set<Long> stillPresent = this.classes.stream()
+                .map(SessionClass::getClassGroupId)
+                .collect(java.util.stream.Collectors.toSet());
+        classGroupIds.stream().filter(id -> !stillPresent.contains(id)).forEach(this::addClass);
+    }
+
+    /**
+     * Édition structurelle complète d'une séance exceptionnelle encore
+     * {@code PLANNED} et non démarrée (Lot 12). Le service a déjà validé
+     * chaque champ (formateur éligible, classes actives et dans le
+     * périmètre, matière/salle résolues, modalité et lien distant
+     * cohérents) avant l'appel : cette méthode se contente d'appliquer
+     * l'état validé, atomiquement avec le reste de la transaction.
+     */
+    void applyStructuralEdit(Long teacherUserId, String title, Instant startsAt, Instant endsAt,
+                             String reason, Long subjectId, String roomCode,
+                             SessionAttendanceMode mode, String remoteLink, Long actorId) {
+        this.teacherUserId = teacherUserId;
+        this.title = title;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+        this.exceptionReason = reason;
+        this.subjectId = subjectId;
+        this.roomCode = roomCode;
+        applyModality(mode, remoteLink);
+        this.updatedById = actorId;
+    }
 }

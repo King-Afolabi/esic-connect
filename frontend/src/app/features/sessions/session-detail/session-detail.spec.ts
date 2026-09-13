@@ -124,6 +124,7 @@ interface DetailInternals {
   substitutions: () => { publicId: string; status: string }[];
   canManageSubstitutions: () => boolean;
   canAddSubstitution: () => boolean;
+  canEditStructure: () => boolean;
   substitutionError: () => string | null;
   refreshToken: () => void;
   refreshAttendance: () => void;
@@ -252,6 +253,28 @@ describe('SessionDetail', () => {
     });
     http.expectOne(GET_URL).flush(OPEN_SESSION);
     http.expectOne(ATTENDANCE_URL).flush(EMPTY_ATTENDANCE);
+  });
+
+  it('shows the structural edit link for a manager on a PLANNED session, but not for a TEACHER (Lot 12)', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http, {
+      ...OPEN_SESSION,
+      status: 'PLANNED',
+      openedAt: null,
+      checkpointOpen: false,
+      checkpoints: [{ ...CP_OPEN, status: 'PLANNED', openedAt: null }],
+    });
+    fixture.detectChanges();
+    expect(internals.canEditStructure()).toBe(true);
+    expect(text()).toContain('Modifier la séance');
+  });
+
+  it('hides the structural edit link once the session is OPEN even for a manager', () => {
+    ({ fixture, http, internals } = setup(['ADMIN']));
+    initialLoad(http, OPEN_SESSION);
+    fixture.detectChanges();
+    expect(internals.canEditStructure()).toBe(false);
+    expect(text()).not.toContain('Modifier la séance');
   });
 
   it('cancels an OPEN session with a reason and reloads the persisted CANCELLED state', () => {

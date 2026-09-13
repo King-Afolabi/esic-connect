@@ -259,6 +259,15 @@ export class SessionDetail {
   protected readonly canAddSubstitution = computed(
     () => this.canManageSubstitutions() && (this.isPlanned() || this.isOpen()),
   );
+  /**
+   * Lot 12 — édition structurelle complète, réservée à la gestion
+   * pédagogique (mêmes rôles que la création) et à une séance `PLANNED`
+   * non démarrée : le serveur revérifie ces deux conditions à la
+   * soumission, ce guard n'est qu'ergonomique.
+   */
+  protected readonly canEditStructure = computed(
+    () => this.canManageSubstitutions() && this.isPlanned(),
+  );
 
   /**
    * G1-C.3 — l'utilisateur courant intervient sur cette séance en tant

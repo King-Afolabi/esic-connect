@@ -22,6 +22,7 @@ import {
   SessionListQuery,
   SubstitutionResponse,
   TeacherOptionResponse,
+  UpdateSessionRequest,
   ValidateAttendanceRequest,
   ValidateRoomQrRequest,
 } from './sessions.models';
@@ -76,6 +77,20 @@ export class SessionsApiService {
   /** `POST /api/v1/sessions` → 201. */
   createSession(body: CreateSessionRequest): Observable<CourseSessionResponse> {
     return this.http.post<CourseSessionResponse>(`${this.base}/sessions`, body);
+  }
+
+  /**
+   * `PATCH /api/v1/sessions/{publicId}` (Lot 12) — édition structurelle
+   * complète d'une séance `PLANNED` non démarrée : le corps remplace
+   * l'état déclaratif complet (formateur, classes, matière, salle,
+   * horaires, motif, libellé, modalité, lien), jamais une fusion
+   * partielle.
+   */
+  updateSession(publicId: string, body: UpdateSessionRequest): Observable<CourseSessionResponse> {
+    return this.http.patch<CourseSessionResponse>(
+      `${this.base}/sessions/${encodeURIComponent(publicId)}`,
+      body,
+    );
   }
 
   /** `POST /api/v1/sessions/{publicId}/open` → 204. */

@@ -61,6 +61,30 @@ final class CourseSessionRequests {
     }
 
     /**
+     * Édition structurelle complète d'une séance {@code PLANNED} non
+     * démarrée (Lot 12) — mêmes champs et mêmes contraintes que
+     * {@link Create}, sans {@code timeZoneId} : le fuseau déclaré de la
+     * séance n'est pas modifiable ici (docs/02 §15), les horaires soumis
+     * restent des instants absolus déjà convertis par l'appelant selon ce
+     * fuseau. Remplace l'état déclaratif complet des champs modifiables
+     * (formateur, classes, matière, salle, horaires, motif, libellé,
+     * modalité, lien) — pas une fusion partielle : le service refuse toute
+     * modification si un seul champ est invalide (atomicité).
+     */
+    record Update(
+            @NotBlank String teacherPublicId,
+            @Size(max = 40) String subjectPublicId,
+            @Size(max = 40) String roomPublicId,
+            @NotEmpty List<@NotBlank String> classPublicIds,
+            @NotNull Instant startsAt,
+            @NotNull Instant endsAt,
+            @NotBlank @Size(max = 500) String reason,
+            @Size(max = 191) String title,
+            SessionAttendanceMode attendanceMode,
+            @Size(max = 500) String remoteLink) {
+    }
+
+    /**
      * Affectation ou changement de salle a posteriori (V35) — la décision
      * de salle est souvent prise au dernier moment, bien après la
      * création de la séance.

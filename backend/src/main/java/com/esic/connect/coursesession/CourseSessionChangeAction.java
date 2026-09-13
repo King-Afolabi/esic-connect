@@ -30,5 +30,13 @@ public enum CourseSessionChangeAction {
     /** Décision rendue sur une demande d'annulation (EF-SES-008). */
     CANCELLATION_DECIDED,
     /** Salle affectée ou changée a posteriori (V35) — décidée souvent au dernier moment. */
-    ROOM_ASSIGNED
+    ROOM_ASSIGNED,
+    /**
+     * Édition structurelle complète d'une séance {@code PLANNED} non
+     * démarrée (Lot 12) : libellé, motif, matière, salle, horaires,
+     * formateur, classes, modalité, lien distant. Jamais de détail
+     * sensible dans l'événement — en particulier jamais le lien distant
+     * complet.
+     */
+    EDITED
 }

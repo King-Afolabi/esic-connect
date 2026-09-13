@@ -102,6 +102,38 @@ export function zonedWallTimeToInstant(
 }
 
 /**
+ * Inverse de {@link zonedWallTimeToInstant} : projette un instant absolu
+ * ISO-8601 sur l'heure de mur qu'il représente dans `timeZoneId` — utile
+ * pour pré-remplir un formulaire d'édition (Lot 12) à partir de l'instant
+ * persisté, sans jamais passer par le fuseau du navigateur.
+ *
+ * @returns `{ date: 'yyyy-MM-dd', time: 'HH:mm' }`, ou `null` si l'instant
+ *          est illisible ou le fuseau inconnu.
+ */
+export function instantToZonedWallParts(
+  instantIso: string,
+  timeZoneId: string,
+): { date: string; time: string } | null {
+  const instant = new Date(instantIso);
+  if (Number.isNaN(instant.getTime()) || !isSupportedTimeZone(timeZoneId)) {
+    return null;
+  }
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timeZoneId.trim(),
+    ...DATE_TIME_PARTS,
+  });
+  const parts = formatter.formatToParts(instant);
+  const lookup = (type: Intl.DateTimeFormatPartTypes): string => {
+    const found = parts.find((p) => p.type === type);
+    return found ? found.value.padStart(2, '0') : '00';
+  };
+  return {
+    date: `${lookup('year')}-${lookup('month')}-${lookup('day')}`,
+    time: `${lookup('hour')}:${lookup('minute')}`,
+  };
+}
+
+/**
  * Fuseaux IANA proposés dans le sélecteur. Liste **volontairement
  * restreinte** aux fuseaux utiles à l'ESIC et à quelques cas courants —
  * ce n'est pas un référentiel exhaustif. La saisie reste validée par le

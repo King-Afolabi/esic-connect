@@ -1,0 +1,204 @@
+<a class="esic-back" [routerLink]="['/sessions', publicId]">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  <span>Retour à la séance</span>
+</a>
+
+<header class="esic-page-header">
+  <div class="esic-page-header__text">
+    <h1 class="esic-page-header__title">Modifier la séance</h1>
+    <p class="esic-page-header__description">
+      Édition possible tant que la séance est planifiée et n'a pas démarré : au-delà, seules
+      les actions de cycle de vie (ouvrir, fermer, annuler) restent disponibles.
+    </p>
+  </div>
+</header>
+
+<p class="esic-form__required-note">Les champs suivis de « * » sont obligatoires.</p>
+
+@switch (loadState().kind) {
+  @case ('loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Chargement du formulaire"></mat-progress-bar>
+    <p class="sessions__status" role="status">Chargement…</p>
+  }
+
+  @case ('forbidden') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>Vous n'êtes pas autorisé à modifier cette séance.</p>
+      <a mat-stroked-button routerLink="/sessions">Retour aux séances</a>
+    </div>
+  }
+
+  @case ('not-found') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">search_off</mat-icon>
+      <p>Aucune séance ne correspond à cet identifiant.</p>
+      <a mat-stroked-button routerLink="/sessions">Retour aux séances</a>
+    </div>
+  }
+
+  @case ('not-editable') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">lock_clock</mat-icon>
+      <p>
+        Cette séance n'est plus modifiable structurellement : son état actuel
+        ({{ statusLabel($any(loadState()).status) }}) signifie qu'elle a démarré, est terminée ou annulée.
+      </p>
+      <a mat-stroked-button [routerLink]="['/sessions', publicId]">Voir la séance</a>
+    </div>
+  }
+
+  @case ('permission-lost') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <p>
+        Le contexte de rôle actif ne permet plus de modifier cette séance. Le formulaire a été
+        neutralisé. Revenez à un contexte autorisé pour recommencer.
+      </p>
+      <a mat-stroked-button [routerLink]="['/sessions', publicId]">Retour à la séance</a>
+    </div>
+  }
+
+  @case ('error') {
+    <div class="sessions__panel" role="alert">
+      <mat-icon aria-hidden="true">error_outline</mat-icon>
+      <p>{{ loadState().kind === 'error' ? $any(loadState()).message : '' }}</p>
+      <button mat-stroked-button type="button" (click)="retry()">Réessayer</button>
+    </div>
+  }
+
+  @case ('ready') {
+    <form class="sessions__form esic-form esic-form--wide" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="esic-form__grid">
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Formateur</mat-label>
+        <mat-select formControlName="teacherPublicId">
+          @for (teacher of teachers(); track teacher.publicId) {
+            <mat-option [value]="teacher.publicId">{{ teacherName(teacher) }}</mat-option>
+          }
+        </mat-select>
+        @if (form.controls.teacherPublicId.touched && form.controls.teacherPublicId.invalid) {
+          <mat-error>Sélectionnez un formateur.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Classes</mat-label>
+        <mat-select formControlName="classPublicIds" multiple>
+          @for (classGroup of classes(); track classGroup.publicId) {
+            <mat-option [value]="classGroup.publicId">
+              {{ classGroup.code }} — {{ classGroup.name }}
+            </mat-option>
+          }
+        </mat-select>
+        @if (form.controls.classPublicIds.touched && form.controls.classPublicIds.invalid) {
+          <mat-error>Sélectionnez au moins une classe.</mat-error>
+        }
+        <mat-hint>Plusieurs classes qui suivent la séance ensemble se choisissent ici, en une seule fois.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Matière (facultatif)</mat-label>
+        <mat-select formControlName="subjectPublicId">
+          <mat-option value="">Non précisée</mat-option>
+          @for (subject of subjects(); track subject.id) {
+            <mat-option [value]="subject.id">{{ subject.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Salle (facultatif)</mat-label>
+        <mat-select formControlName="roomPublicId" [disabled]="!form.controls.classPublicIds.value.length">
+          <mat-option value="">À préciser plus tard</mat-option>
+          @for (room of rooms(); track room.publicId) {
+            <mat-option [value]="room.publicId">{{ room.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Date</mat-label>
+        <input matInput type="date" formControlName="date" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Début (heure locale)</mat-label>
+        <input matInput type="time" formControlName="startTime" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Fin (heure locale)</mat-label>
+        <input matInput type="time" formControlName="endTime" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Fuseau horaire (fixe)</mat-label>
+        <input matInput [value]="timeZoneDisplay" disabled />
+        <mat-hint>Fixé à la création de la séance ; non modifiable.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field">
+        <mat-label>Modalité</mat-label>
+        <mat-select formControlName="attendanceMode">
+          @for (mode of attendanceModes; track mode.value) {
+            <mat-option [value]="mode.value">{{ mode.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      </div>
+
+      @if (attendanceMode() !== 'ON_SITE') {
+        <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
+          <mat-label>
+            Lien distant{{ attendanceMode() === 'HYBRID' ? ' (facultatif)' : '' }}
+          </mat-label>
+          <input
+            matInput
+            formControlName="remoteLink"
+            [maxlength]="remoteLinkMaxLength"
+            placeholder="https://…"
+          />
+          @if (form.controls.remoteLink.touched && form.controls.remoteLink.hasError('required')) {
+            <mat-error>Un lien distant est obligatoire pour une séance à distance.</mat-error>
+          }
+          @if (form.controls.remoteLink.touched && form.controls.remoteLink.hasError('invalidUrl')) {
+            <mat-error>Le lien doit être une URL http(s) valide.</mat-error>
+          }
+        </mat-form-field>
+      }
+
+      <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
+        <mat-label>Motif de la séance exceptionnelle</mat-label>
+        <textarea
+          matInput
+          formControlName="reason"
+          rows="2"
+          [maxlength]="reasonMaxLength"
+          required
+        ></textarea>
+        <mat-hint align="end">{{ reasonLength() }} / {{ reasonMaxLength }}</mat-hint>
+        @if (form.controls.reason.touched && form.controls.reason.invalid) {
+          <mat-error>Le motif est obligatoire ({{ reasonMaxLength }} caractères maximum).</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="sessions__form-field esic-form__row">
+        <mat-label>Libellé (facultatif)</mat-label>
+        <input matInput formControlName="title" [maxlength]="titleMaxLength" />
+      </mat-form-field>
+
+      @if (timeError()) {
+        <p class="esic-form__error" role="alert">{{ timeError() }}</p>
+      }
+      @if (submitError()) {
+        <p class="esic-form__error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="sessions__form-actions esic-form__actions">
+        <button mat-flat-button type="submit" [disabled]="submitting()">Enregistrer les modifications</button>
+        <a mat-button [routerLink]="['/sessions', publicId]">Annuler</a>
+      </div>
+    </form>
+  }
+}

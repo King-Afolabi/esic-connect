@@ -271,9 +271,11 @@ describe('application routes (guard wiring)', () => {
       expect(sessions?.canActivate?.length).toBeGreaterThan(0);
       expect(sessions?.canActivateChild?.length).toBeGreaterThan(0);
       const childPaths = (sessions?.children ?? []).map((c) => c.path);
-      expect(childPaths).toEqual(expect.arrayContaining(['', 'new', ':publicId']));
+      expect(childPaths).toEqual(expect.arrayContaining(['', 'new', ':publicId', ':publicId/edit']));
       const create = (sessions?.children ?? []).find((c) => c.path === 'new');
       expect(create?.canActivate?.length).toBeGreaterThan(0);
+      const edit = (sessions?.children ?? []).find((c) => c.path === ':publicId/edit');
+      expect(edit?.canActivate?.length).toBeGreaterThan(0);
     });
 
     it('declares /attendance guarded on the STUDENT role', () => {
@@ -297,6 +299,16 @@ describe('application routes (guard wiring)', () => {
       signIn(['PEDAGOGICAL_MANAGER']);
       await router.navigateByUrl('/sessions/new');
       expect(location.path()).toBe('/sessions/new');
+    });
+
+    it('blocks a TEACHER from the structural edit route (Lot 12) but lets a manager through', async () => {
+      signIn(['TEACHER']);
+      await router.navigateByUrl('/sessions/s-1/edit');
+      expect(location.path()).toBe('/forbidden');
+
+      signIn(['PEDAGOGICAL_MANAGER']);
+      await router.navigateByUrl('/sessions/s-1/edit');
+      expect(location.path()).toBe('/sessions/s-1/edit');
     });
 
     it('routes a STUDENT to /forbidden on /sessions and to /attendance for check-in', async () => {

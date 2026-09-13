@@ -465,6 +465,27 @@ export interface CreateSessionRequest {
   remoteLink?: string | null;
 }
 
+/**
+ * `CourseSessionRequests.Update` (Lot 12) — édition structurelle complète
+ * d'une séance `PLANNED` non démarrée : mêmes champs que
+ * {@link CreateSessionRequest} sans `timeZoneId` (le fuseau déclaré de la
+ * séance n'est pas modifiable ; `startsAt`/`endsAt` restent des instants
+ * déjà convertis selon ce fuseau). Remplace l'état déclaratif complet, ce
+ * n'est jamais une fusion partielle.
+ */
+export interface UpdateSessionRequest {
+  teacherPublicId: string;
+  subjectPublicId?: string | null;
+  roomPublicId?: string | null;
+  classPublicIds: string[];
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  title?: string | null;
+  attendanceMode?: SessionAttendanceMode | null;
+  remoteLink?: string | null;
+}
+
 /** `CourseSessionRequests.Cancel` (G1-C) — motif obligatoire, borné à 500. */
 export interface CancelSessionRequest {
   reason: string;

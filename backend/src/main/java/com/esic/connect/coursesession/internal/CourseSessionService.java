@@ -151,24 +151,7 @@ class CourseSessionService {
         String remoteLink = validateModality(request.attendanceMode(), trimToNull(request.remoteLink()));
 
         TeacherDirectory.TeacherRef teacher = requireEligibleTeacher(request.teacherPublicId());
-
-        LinkedHashSet<Long> classInternalIds = new LinkedHashSet<>();
-        boolean globalScope = academicScope.hasGlobalScope();
-        for (String rawClassId : request.classPublicIds()) {
-            UUID classPublicId = parseUuid(rawClassId, CourseSessionException.Kind.CLASS_NOT_FOUND);
-            ClassGroupDirectory.ClassGroupRef classRef = classGroupDirectory.findByPublicId(classPublicId)
-                    .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.CLASS_NOT_FOUND));
-            if (!classRef.openForEnrollment()) {
-                throw new CourseSessionException(CourseSessionException.Kind.CLASS_INACTIVE);
-            }
-            if (!globalScope && !academicScope.isClassInScope(classPublicId)) {
-                throw new CourseSessionException(CourseSessionException.Kind.SCOPE_FORBIDDEN);
-            }
-            classInternalIds.add(classRef.internalId());
-        }
-        if (classInternalIds.isEmpty()) {
-            throw new CourseSessionException(CourseSessionException.Kind.NO_CLASS);
-        }
+        LinkedHashSet<Long> classInternalIds = resolveClasses(request.classPublicIds());
 
         Long subjectId = resolveSubject(request.subjectPublicId());
         String roomCode = resolveRoom(request.roomPublicId());
@@ -201,6 +184,98 @@ class CourseSessionService {
         changePublisher.publish(saved.getPublicId(), CourseSessionChangeAction.CREATED, actorId,
                 "teacher=" + teacher.publicId() + ";classes=" + classInternalIds.size());
         return toResponse(saved);
+    }
+
+    /**
+     * Édition structurelle complète d'une séance exceptionnelle avant son
+     * démarrage réel (Lot 12 ; docs/02 §14.6). Réservée aux séances
+     * manuelles ({@code planningSlotPublicId} nul — une séance planning se
+     * corrige par republication, jamais ici), {@code PLANNED}, et dont
+     * aucun point de contrôle n'a quitté l'état {@code PLANNED} : ces trois
+     * conditions ensemble garantissent qu'aucun émargement n'a pu avoir
+     * lieu. Aucune substitution n'est créée par cette correction — corriger
+     * le formateur titulaire est distinct d'un remplacement temporaire
+     * (G1-C.2). Toutes les validations sont faites avant toute écriture :
+     * une classe, un formateur, une salle ou une modalité invalide laisse
+     * la séance intacte.
+     */
+    @Transactional
+    CourseSessionResponse update(String publicId, CourseSessionRequests.Update request, String callerSubject) {
+        CourseSession session = requireOperationalSession(publicId);
+        requireAccess(session, AccessLevel.MANAGE, callerSubject);
+
+        if (!session.isManuallyCreated() || !session.isPlanned() || hasStartedCheckpoint(session)) {
+            throw new CourseSessionException(CourseSessionException.Kind.INVALID_STATE);
+        }
+        if (!request.endsAt().isAfter(request.startsAt())) {
+            throw new CourseSessionException(CourseSessionException.Kind.INVALID_PERIOD);
+        }
+        String remoteLink = validateModality(request.attendanceMode(), trimToNull(request.remoteLink()));
+
+        TeacherDirectory.TeacherRef teacher = requireEligibleTeacher(request.teacherPublicId());
+        LinkedHashSet<Long> classInternalIds = resolveClasses(request.classPublicIds());
+
+        Long subjectId = resolveSubject(request.subjectPublicId());
+        String roomCode = resolveRoom(request.roomPublicId());
+
+        if (hasOverlap(CourseSessionSpecifications.taughtBy(teacher.internalId()),
+                request.startsAt(), request.endsAt(), session.getId())) {
+            throw new CourseSessionException(CourseSessionException.Kind.TEACHER_DOUBLE_BOOKING);
+        }
+        if (roomCode != null && hasOverlap(CourseSessionSpecifications.hasRoomCode(roomCode),
+                request.startsAt(), request.endsAt(), session.getId())) {
+            throw new CourseSessionException(CourseSessionException.Kind.ROOM_DOUBLE_BOOKING);
+        }
+
+        Long actorId = changePublisher.actorId(callerSubject);
+        session.applyStructuralEdit(teacher.internalId(), trimToNull(request.title()),
+                request.startsAt(), request.endsAt(), request.reason().trim(), subjectId, roomCode,
+                request.attendanceMode(), remoteLink, actorId);
+        session.replaceClasses(classInternalIds);
+
+        changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.EDITED, actorId,
+                "teacher=" + teacher.publicId() + ";classes=" + classInternalIds.size());
+        return toResponse(session);
+    }
+
+    /**
+     * @return {@code true} si un point de contrôle de la séance a quitté
+     *         {@code PLANNED} — signe qu'un émargement a pu commencer.
+     *         Redondant en théorie avec {@code session.isPlanned()} (un
+     *         point de contrôle ne s'ouvre que si la séance est
+     *         {@code OPEN}), vérifié explicitement par prudence (Lot 12).
+     */
+    private boolean hasStartedCheckpoint(CourseSession session) {
+        return checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId())
+                .stream()
+                .anyMatch(cp -> !cp.isPlanned());
+    }
+
+    /**
+     * Valide et résout les classes ciblées (création comme édition,
+     * Lot 12) : classes actives, dans le périmètre pédagogique de
+     * l'appelant, au moins une fournie. Plusieurs classes qui suivent la
+     * séance ensemble se déclarent ici en une seule fois.
+     */
+    private LinkedHashSet<Long> resolveClasses(List<String> classPublicIds) {
+        LinkedHashSet<Long> classInternalIds = new LinkedHashSet<>();
+        boolean globalScope = academicScope.hasGlobalScope();
+        for (String rawClassId : classPublicIds) {
+            UUID classPublicId = parseUuid(rawClassId, CourseSessionException.Kind.CLASS_NOT_FOUND);
+            ClassGroupDirectory.ClassGroupRef classRef = classGroupDirectory.findByPublicId(classPublicId)
+                    .orElseThrow(() -> new CourseSessionException(CourseSessionException.Kind.CLASS_NOT_FOUND));
+            if (!classRef.openForEnrollment()) {
+                throw new CourseSessionException(CourseSessionException.Kind.CLASS_INACTIVE);
+            }
+            if (!globalScope && !academicScope.isClassInScope(classPublicId)) {
+                throw new CourseSessionException(CourseSessionException.Kind.SCOPE_FORBIDDEN);
+            }
+            classInternalIds.add(classRef.internalId());
+        }
+        if (classInternalIds.isEmpty()) {
+            throw new CourseSessionException(CourseSessionException.Kind.NO_CLASS);
+        }
+        return classInternalIds;
     }
 
     /**
