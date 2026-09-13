@@ -1,6 +1,8 @@
 package com.esic.connect.identity.internal;
 
 import com.esic.connect.identity.DemoAccountProvisioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,8 @@ import java.util.stream.Collectors;
 @Component
 @Profile("demo")
 class DefaultDemoAccountProvisioner implements DemoAccountProvisioner {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultDemoAccountProvisioner.class);
 
     private final UserAccountRepository userAccountRepository;
     private final UserRoleRepository userRoleRepository;
@@ -80,9 +84,22 @@ class DefaultDemoAccountProvisioner implements DemoAccountProvisioner {
 
         // Refonte 2026-09 : numéro étudiant porté par user_account, posé
         // une seule fois — immuable ensuite, comme pour un compte réel.
+        //
+        // La contrainte d'unicité est globale : rien n'empêche qu'un compte
+        // réel (import, saisie manuelle) se voie attribuer entre-temps
+        // exactement cette valeur réservée à la démonstration. Dans ce cas
+        // précis on ne réattribue pas le numéro plutôt que de faire échouer
+        // tout l'amorçage (et donc tout le démarrage de l'application) —
+        // on ne touche jamais au compte qui le détient déjà.
         if (studentNumber != null && account.getStudentNumber() == null) {
-            account.assignStudentNumber(studentNumber, null, null);
-            userAccountRepository.saveAndFlush(account);
+            if (userAccountRepository.existsByStudentNumberIgnoreCase(studentNumber)) {
+                log.warn("Amorçage demo : le numéro étudiant {} est déjà attribué à un autre "
+                        + "compte (probablement réel) — non réattribué à {}.",
+                        studentNumber, normalizedEmail);
+            } else {
+                account.assignStudentNumber(studentNumber, null, null);
+                userAccountRepository.saveAndFlush(account);
+            }
         }
         return account.getPublicId();
     }

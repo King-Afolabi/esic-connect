@@ -168,6 +168,33 @@ class DefaultDemoAccountProvisionerTests {
     }
 
     @Test
+    void skipsTheStudentNumberRatherThanFailWhenAnotherAccountAlreadyHoldsIt() {
+        // Un compte réel peut se voir attribuer, par coïncidence, la valeur
+        // que l'amorçage de démo réserve à son propre apprenant fictif
+        // (import, saisie manuelle). L'amorçage ne doit ni planter tout le
+        // démarrage de l'application, ni toucher ce compte tiers.
+        String contested = "ESIC-DEMO-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String otherEmail = "real-" + UUID.randomUUID() + "@castor.education";
+        provisioner.ensureActiveAccount(otherEmail, "Une", "Vraie Personne", "demo-password-1234",
+                Set.of("STUDENT"), contested);
+        UserAccount other = userAccountRepository.findByEmail(otherEmail).orElseThrow();
+        assertThat(other.getStudentNumber()).isEqualTo(contested);
+
+        String demoEmail = "demo-" + UUID.randomUUID() + "@example.test";
+        UUID demoId = provisioner.ensureActiveAccount(demoEmail, "Alice", "Martin", "demo-password-1234",
+                Set.of("STUDENT"), contested);
+
+        UserAccount demoAccount = userAccountRepository.findByEmail(demoEmail).orElseThrow();
+        assertThat(demoAccount.getStudentNumber()).isNull();
+        assertThat(demoAccount.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(activeRoleCodes(demoAccount.getId())).containsExactly(RoleCode.STUDENT);
+        // Le compte réel garde son numéro, inchangé.
+        UserAccount otherReloaded = userAccountRepository.findByEmail(otherEmail).orElseThrow();
+        assertThat(otherReloaded.getStudentNumber()).isEqualTo(contested);
+        assertThat(demoId).isNotNull();
+    }
+
+    @Test
     void leavesTheStudentNumberNullWhenNoneIsProvided() {
         String email = "demo-" + UUID.randomUUID() + "@example.test";
         provisioner.ensureActiveAccount(email, "Sami", "Rahal", "demo-password-1234", Set.of("STUDENT"), null);
