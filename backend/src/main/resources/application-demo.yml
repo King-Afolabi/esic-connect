@@ -41,6 +41,11 @@ springdoc:
 
 app:
   demo:
+    # Désactive l'amorçage des 6 comptes @example.test sans changer de
+    # profil (utile ici : la Pi tourne sous `demo` en permanence, aucun
+    # profil `prod` séparé n'existe encore — DEC-D01). Ne supprime pas
+    # les comptes déjà créés ; à retirer manuellement si besoin.
+    seed-accounts: ${ESIC_DEMO_SEED_ACCOUNTS:true}
     # Mot de passe des comptes de démonstration. Obligatoire, aucune
     # valeur par défaut : le démarrage échoue si absent ou trop court
     # (voir DemoDataInitializer). À définir dans votre shell, jamais dans
