@@ -746,6 +746,32 @@ entité ou une table de réglages métier propre à un établissement
 physique sans réglages métier) et la résolution du délai à partir de
 l'établissement propriétaire de la séance.
 
+## 14.6 Édition structurelle avant démarrage (Lot 12, 2026-09)
+
+Une séance **exceptionnelle** (créée manuellement, jamais une séance
+d'origine planning — celle-ci se corrige par republication, §13.10) peut
+être modifiée intégralement tant qu'elle est `PLANNED` et qu'aucun point
+de contrôle n'a quitté cet état (signe qu'aucun émargement n'a pu
+commencer) : formateur titulaire, classes, matière, salle, horaires,
+motif, libellé, modalité et lien distant (règles du §15).
+
+- l'édition remplace l'état déclaratif complet, jamais une fusion
+  partielle : une classe, un formateur, une salle ou une modalité
+  invalide n'enregistre aucune modification (atomicité) ;
+- corriger le formateur titulaire est distinct d'un remplacement
+  (§14.4 / G1-C.2) : aucune substitution n'est créée automatiquement ;
+- le fuseau horaire déclaré de la séance n'est pas modifiable : les
+  horaires édités restent interprétés selon ce fuseau, jamais celui du
+  navigateur ;
+- une séance `OPEN`, `CLOSED` ou `CANCELLED` refuse l'édition
+  structurelle (`409 SESSION_INVALID_STATE`) — seules les actions de
+  cycle de vie restent disponibles.
+
+Réservé aux rôles de gestion pédagogique (`ADMIN`, `SUPER_ADMIN`,
+`PEDAGOGICAL_MANAGER`) : le formateur ne corrige pas lui-même la
+structure de sa séance, cohérent avec le report (§14.4) et les
+remplacements (§14.4 / G1-C.2).
+
 ---
 
 # 15. Modalités d'enseignement
@@ -1169,6 +1195,32 @@ et visible dans l'historique.
 
 Une réclamation clôturée peut être rouverte avec motif, nouveau message,
 notification et trace d'audit.
+
+## 20.5 Contexte lisible et ciblage facultatif d'un formateur (Lots 18-19, 2026-09)
+
+**Contexte lisible.** L'en-tête d'une réclamation expose des champs
+résolus côté serveur — `authorName`, `sessionLabel`, `classLabel`,
+`targetTeacherName` — par les ports publics des autres modules
+(`identity`, `coursesession`, `academic`), jamais en ouvrant
+`GET /users/{id}` à un rôle supplémentaire. Une recherche assistée
+remplace la saisie d'un identifiant de séance à la main.
+
+**Ciblage facultatif.** Sur le guichet TEACHER, l'auteur peut désigner
+facultativement un formateur précis (`targetTeacherPublicId`), vérifié
+(compte existant, actif, rôle `TEACHER` actif) et mémorisé durablement
+dans le contexte de la réclamation. Priorité de résolution du
+destinataire :
+
+1. formateur explicitement choisi — jamais de repli automatique vers le
+   responsable pédagogique ;
+2. sinon, formateur titulaire et remplaçants actifs de la séance
+   sélectionnée ;
+3. sinon, responsable pédagogique — l'auteur en est averti explicitement
+   avant l'envoi.
+
+Ce champ reste distinct du guichet (`audience`) : celui-ci désigne
+toujours une fonction, jamais une personne, et le principe du transfert
+(§20.3) n'est pas remis en cause.
 
 ---
 

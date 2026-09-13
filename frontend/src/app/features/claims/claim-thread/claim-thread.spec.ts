@@ -27,6 +27,11 @@ function thread(status: string, events: unknown[] = []) {
       closedAt: status === 'CLOSED' ? '2026-09-11T08:00:00Z' : null,
       createdAt: '2026-09-10T08:00:00Z',
       updatedAt: '2026-09-10T08:00:00Z',
+      authorName: 'Awa Diop' as string | null,
+      sessionLabel: null as string | null,
+      classLabel: 'Classe 1 — C1 — AY-2026' as string | null,
+      targetTeacherPublicId: null as string | null,
+      targetTeacherName: null as string | null,
     },
     messages: [
       {
@@ -91,6 +96,21 @@ describe('ClaimThread', () => {
     expect(text()).toContain('Absence du 10 septembre');
     expect(text()).toContain("J'ai bien émargé ce jour-là.");
     expect(text()).toContain('Apprenant');
+  });
+
+  it('shows the resolved context — author, class, session, targeted teacher — never a raw id (Lot 18/19)', () => {
+    ({ fixture, http } = setup());
+    const body = thread('OPEN');
+    body.claim.sessionLabel = 'Anglais — 10/09/2026 08:00 (Europe/Paris)';
+    body.claim.targetTeacherName = 'Bo Diallo';
+    http.expectOne(URL).flush(body);
+    fixture.detectChanges();
+
+    expect(text()).toContain('Awa Diop');
+    expect(text()).toContain('Classe 1 — C1 — AY-2026');
+    expect(text()).toContain('Anglais — 10/09/2026 08:00 (Europe/Paris)');
+    expect(text()).toContain('Bo Diallo');
+    expect(text()).not.toContain('u-1');
   });
 
   it('keeps decisions apart from the conversation, motive included', () => {

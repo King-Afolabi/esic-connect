@@ -59,8 +59,46 @@
         </mat-form-field>
         <mat-form-field appearance="outline" class="claims__field">
           <mat-label>Séance concernée (facultatif)</mat-label>
-          <input matInput formControlName="sessionPublicId" autocomplete="off" />
+          <input
+            matInput
+            formControlName="sessionQuery"
+            autocomplete="off"
+            placeholder="Rechercher par libellé…"
+            [matAutocomplete]="sessionAuto"
+          />
+          <mat-autocomplete #sessionAuto="matAutocomplete">
+            @for (option of sessionOptions(); track option.publicId) {
+              <mat-option [value]="option.label" (onSelectionChange)="selectSession(option)">
+                {{ option.label }}
+              </mat-option>
+            }
+          </mat-autocomplete>
+          <mat-hint>Recherche assistée : aucun identifiant ne se saisit à la main.</mat-hint>
         </mat-form-field>
+
+        @if (showTeacherTargeting()) {
+          <mat-form-field appearance="outline" class="claims__field">
+            <mat-label>Formateur ciblé (facultatif)</mat-label>
+            <input
+              matInput
+              formControlName="teacherQuery"
+              autocomplete="off"
+              placeholder="Rechercher par nom…"
+              [matAutocomplete]="teacherAuto"
+            />
+            <mat-autocomplete #teacherAuto="matAutocomplete">
+              @for (option of teacherOptions(); track option.publicId) {
+                <mat-option [value]="teacherOptionLabel(option)" (onSelectionChange)="selectTeacher(option)">
+                  {{ teacherOptionLabel(option) }}
+                </mat-option>
+              }
+            </mat-autocomplete>
+            <mat-hint>Sans choix, la réclamation se résout via la séance puis le responsable pédagogique.</mat-hint>
+          </mat-form-field>
+          @if (noTeacherOrSessionWarning(); as warning) {
+            <p class="claims__notice" role="status">{{ warning }}</p>
+          }
+        }
 
         @if (formError(); as message) {
           <p class="esic-form__error" role="alert">{{ message }}</p>
@@ -97,6 +135,10 @@
           <ng-container matColumnDef="subject">
             <th mat-header-cell *matHeaderCellDef scope="col">Sujet</th>
             <td mat-cell *matCellDef="let c">{{ c.subject }}</td>
+          </ng-container>
+          <ng-container matColumnDef="author">
+            <th mat-header-cell *matHeaderCellDef scope="col">Auteur</th>
+            <td mat-cell *matCellDef="let c">{{ c.authorName || '—' }}</td>
           </ng-container>
           <ng-container matColumnDef="category">
             <th mat-header-cell *matHeaderCellDef scope="col">Catégorie</th>

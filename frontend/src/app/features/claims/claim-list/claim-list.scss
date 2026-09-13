@@ -69,6 +69,17 @@ table {
   }
 }
 
+// Avertissement informatif (Lot 19) — distinct de `.esic-form__error` :
+// ce n'est jamais un blocage, juste une information de résolution.
+.claims__notice {
+  margin: 0 0 var(--esic-space-3);
+  padding: var(--esic-space-2) var(--esic-space-3);
+  border-radius: var(--esic-radius-sm);
+  background: var(--esic-surface-soft, var(--esic-surface));
+  color: var(--esic-ink-soft);
+  font-size: 0.8125rem;
+}
+
 // Erreur de soumission — cf. primitive `.esic-form__error`.
 
 .claims__section {

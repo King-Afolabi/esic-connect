@@ -33,4 +33,19 @@ final class ClaimResponses {
             String motive,
             Instant createdAt) {
     }
+
+    /**
+     * Option de séance pour la recherche assistée du dépôt (Lot 18) — le
+     * client ne saisit jamais un identifiant de séance à la main.
+     */
+    record SessionOption(UUID publicId, String label) {
+    }
+
+    /**
+     * Option de formateur pour le ciblage facultatif du guichet TEACHER
+     * (Lot 19) — jamais la liste complète : uniquement des résultats de
+     * recherche, bornés.
+     */
+    record TeacherOption(UUID publicId, String firstName, String lastName) {
+    }
 }

@@ -61,6 +61,28 @@ class ClaimController {
         return service.list(audience, page, size, sort, subject(caller));
     }
 
+    /**
+     * Recherche assistée d'une séance pour le dépôt (Lot 18) — jamais un
+     * identifiant saisi à la main.
+     */
+    @GetMapping("/sessions/search")
+    @PreAuthorize(AUTHENTICATED)
+    java.util.List<ClaimResponses.SessionOption> searchSessions(
+            @RequestParam(required = false) String q, @AuthenticationPrincipal Jwt caller) {
+        return service.searchSessionsForFiling(q, subject(caller));
+    }
+
+    /**
+     * Recherche assistée d'un formateur pour le ciblage facultatif du
+     * guichet TEACHER (Lot 19) — jamais la liste complète des comptes.
+     */
+    @GetMapping("/teachers/search")
+    @PreAuthorize(AUTHENTICATED)
+    java.util.List<ClaimResponses.TeacherOption> searchTeachers(
+            @RequestParam(required = false) String q, @AuthenticationPrincipal Jwt caller) {
+        return service.searchTeachersForFiling(q, subject(caller));
+    }
+
     /** Fil complet : en-tête, messages et historique des décisions. */
     @GetMapping("/{publicId}")
     @PreAuthorize(AUTHENTICATED)

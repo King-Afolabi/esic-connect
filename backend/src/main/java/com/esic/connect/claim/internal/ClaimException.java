@@ -22,7 +22,12 @@ class ClaimException extends RuntimeException {
          * cahier veut un destinataire compétent, pas un dépôt sans
          * lecteur (docs/02 §20.1).
          */
-        NO_SCOPE_FOR_AUDIENCE
+        NO_SCOPE_FOR_AUDIENCE,
+        /**
+         * Formateur ciblé (Lot 19) inconnu, non actif, ou sans rôle
+         * {@code TEACHER} actif.
+         */
+        TARGET_TEACHER_NOT_ELIGIBLE
     }
 
     private final Kind kind;

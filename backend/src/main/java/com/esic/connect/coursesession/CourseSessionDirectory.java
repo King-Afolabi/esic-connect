@@ -78,6 +78,16 @@ public interface CourseSessionDirectory {
     Optional<SessionRef> findSessionByInternalId(long sessionInternalId);
 
     /**
+     * Séances par identifiant interne, <strong>en bloc</strong>
+     * (anti-N+1, NFR-PERF-08) — consommé par {@code claim} pour résoudre
+     * un intitulé de séance par réclamation affichée sans un
+     * aller-retour par ligne (Lot 18). Un identifiant inconnu, ou une
+     * séance non historiquement lisible, est simplement absent du
+     * résultat.
+     */
+    List<SessionRef> findSessionsByInternalIds(java.util.Collection<Long> sessionInternalIds);
+
+    /**
      * Toutes les séances dont le début tombe dans {@code [from, to]}
      * ({@code null} = borne ouverte), <strong>sans</strong> contrôle
      * d'accès — le module {@code attendance} filtre ensuite chaque séance

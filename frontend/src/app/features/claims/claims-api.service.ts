@@ -1,9 +1,16 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { ClaimPage, ClaimSummary, ClaimThread, CreateClaimRequest } from './claims.models';
+import {
+  ClaimPage,
+  ClaimSessionOption,
+  ClaimSummary,
+  ClaimTeacherOption,
+  ClaimThread,
+  CreateClaimRequest,
+} from './claims.models';
 
 /**
  * Accès HTTP aux réclamations (docs/02 §20). Ne consomme que des routes
@@ -45,6 +52,37 @@ export class ClaimsApiService {
   /** `POST /api/v1/claims` → 201. */
   create(body: CreateClaimRequest): Observable<ClaimSummary> {
     return this.http.post<ClaimSummary>(this.base, body);
+  }
+
+  /**
+   * `GET /api/v1/claims/sessions/search` (Lot 18) — recherche assistée
+   * d'une séance pour le dépôt ; jamais un identifiant saisi à la main.
+   * Une requête vide renvoie une liste vide côté serveur : on évite
+   * l'appel réseau correspondant.
+   */
+  searchSessions(query: string): Observable<ClaimSessionOption[]> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return of([]);
+    }
+    return this.http.get<ClaimSessionOption[]>(`${this.base}/sessions/search`, {
+      params: new HttpParams().set('q', trimmed),
+    });
+  }
+
+  /**
+   * `GET /api/v1/claims/teachers/search` (Lot 19) — recherche assistée
+   * d'un formateur pour le ciblage facultatif du guichet TEACHER ; jamais
+   * la liste complète des comptes.
+   */
+  searchTeachers(query: string): Observable<ClaimTeacherOption[]> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return of([]);
+    }
+    return this.http.get<ClaimTeacherOption[]>(`${this.base}/teachers/search`, {
+      params: new HttpParams().set('q', trimmed),
+    });
   }
 
   /** `GET /api/v1/claims/{id}`. */

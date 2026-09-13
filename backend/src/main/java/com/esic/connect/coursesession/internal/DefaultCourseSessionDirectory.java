@@ -154,6 +154,18 @@ class DefaultCourseSessionDirectory implements CourseSessionDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public List<SessionRef> findSessionsByInternalIds(java.util.Collection<Long> sessionInternalIds) {
+        if (sessionInternalIds.isEmpty()) {
+            return List.of();
+        }
+        List<CourseSession> sessions = sessionRepository.findAllById(sessionInternalIds).stream()
+                .filter(CourseSession::isHistoricallyReadable)
+                .toList();
+        return toRefs(sessions);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<SessionRef> findSessionsInRange(Instant from, Instant to) {
         List<Specification<CourseSession>> specs = new ArrayList<>();
         specs.add(CourseSessionSpecifications.operational());

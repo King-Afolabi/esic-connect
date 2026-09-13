@@ -54,6 +54,16 @@ class Claim extends BaseEntity {
     @Column(name = "course_session_id", updatable = false)
     private Long courseSessionId;
 
+    /**
+     * Formateur explicitement ciblé par l'auteur (Lot 19) — facultatif,
+     * jamais déduit. Distinct du guichet {@link #audience} : celui-ci
+     * reste adressé à une fonction, ce champ mémorise une personne
+     * précise quand l'auteur en désigne une, pour que la résolution des
+     * destinataires (§20.3) la retienne en priorité sur la séance.
+     */
+    @Column(name = "target_teacher_user_id", updatable = false)
+    private Long targetTeacherUserId;
+
     @Column(name = "period_start")
     private LocalDate periodStart;
 
@@ -82,7 +92,8 @@ class Claim extends BaseEntity {
     }
 
     Claim(Long authorUserId, ClaimCategory category, String subject, ClaimAudience audience,
-          Long courseSessionId, LocalDate periodStart, LocalDate periodEnd, Long classGroupId) {
+          Long courseSessionId, LocalDate periodStart, LocalDate periodEnd, Long classGroupId,
+          Long targetTeacherUserId) {
         this.authorUserId = authorUserId;
         this.category = category;
         this.subject = subject;
@@ -91,6 +102,7 @@ class Claim extends BaseEntity {
         this.periodStart = periodStart;
         this.periodEnd = periodEnd;
         this.classGroupId = classGroupId;
+        this.targetTeacherUserId = targetTeacherUserId;
         this.status = ClaimStatus.OPEN;
     }
 
@@ -134,6 +146,10 @@ class Claim extends BaseEntity {
 
     Long getCourseSessionId() {
         return courseSessionId;
+    }
+
+    Long getTargetTeacherUserId() {
+        return targetTeacherUserId;
     }
 
     LocalDate getPeriodStart() {

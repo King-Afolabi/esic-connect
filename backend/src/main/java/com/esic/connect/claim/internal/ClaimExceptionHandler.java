@@ -59,6 +59,11 @@ class ClaimExceptionHandler {
                 code = "CLAIM_INVALID_SORT";
                 message = "Critère de tri non autorisé.";
             }
+            case TARGET_TEACHER_NOT_ELIGIBLE -> {
+                status = HttpStatus.BAD_REQUEST;
+                code = "CLAIM_TARGET_TEACHER_NOT_ELIGIBLE";
+                message = "Ce compte n'est pas un formateur actif : il ne peut pas être ciblé.";
+            }
             default -> {
                 status = HttpStatus.BAD_REQUEST;
                 code = "CLAIM_INVALID_SUBMISSION";

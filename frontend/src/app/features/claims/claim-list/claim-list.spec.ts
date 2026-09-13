@@ -25,12 +25,28 @@ const CLAIM = {
   closedAt: null,
   createdAt: '2026-09-10T08:00:00Z',
   updatedAt: '2026-09-10T08:00:00Z',
+  authorName: 'Awa Diop',
+  sessionLabel: null,
+  classLabel: null,
+  targetTeacherPublicId: null,
+  targetTeacherName: null,
 };
 
 interface Internals {
   toggleCreate: () => void;
-  form: { patchValue: (v: Record<string, unknown>) => void };
+  form: {
+    patchValue: (v: Record<string, unknown>) => void;
+    controls: {
+      audience: { setValue: (v: string) => void };
+      sessionQuery: { setValue: (v: string) => void };
+      teacherQuery: { setValue: (v: string) => void };
+    };
+  };
   submit: () => void;
+  selectSession: (o: { publicId: string; label: string }) => void;
+  selectTeacher: (o: { publicId: string; firstName: string; lastName: string }) => void;
+  showTeacherTargeting: () => boolean;
+  noTeacherOrSessionWarning: () => string | null;
 }
 
 function page(content: unknown[]) {
@@ -159,5 +175,83 @@ describe('ClaimList', () => {
     fixture.detectChanges();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it('shows the author column, never a raw identifier', () => {
+    ({ fixture, http } = setup(['PEDAGOGICAL_MANAGER']));
+    http.expectOne((r) => r.url === URL).flush(page([CLAIM]));
+    fixture.detectChanges();
+    expect(text()).toContain('Awa Diop');
+    expect(text()).not.toContain('u-1');
+  });
+
+  it('only offers the optional teacher targeting for the TEACHER guichet (Lot 19)', () => {
+    ({ fixture, http, internals } = setup());
+    http.expectOne((r) => r.url === URL).flush(page([]));
+    fixture.detectChanges();
+
+    internals.toggleCreate();
+    fixture.detectChanges();
+    expect(internals.showTeacherTargeting()).toBe(false);
+
+    internals.form.controls.audience.setValue('TEACHER');
+    fixture.detectChanges();
+    expect(internals.showTeacherTargeting()).toBe(true);
+  });
+
+  it('warns exactly once neither a teacher nor a session is picked for the TEACHER guichet', () => {
+    ({ fixture, http, internals } = setup());
+    http.expectOne((r) => r.url === URL).flush(page([]));
+    fixture.detectChanges();
+
+    internals.toggleCreate();
+    internals.form.controls.audience.setValue('TEACHER');
+    fixture.detectChanges();
+    expect(internals.noTeacherOrSessionWarning()).toBe(
+      "Aucune séance n'est sélectionnée. La réclamation sera transmise au responsable pédagogique.",
+    );
+
+    internals.selectTeacher({ publicId: 't-1', firstName: 'Bo', lastName: 'Diallo' });
+    fixture.detectChanges();
+    expect(internals.noTeacherOrSessionWarning()).toBeNull();
+  });
+
+  it('searches sessions live and submits the selected publicId, never free text', () => {
+    vi.useFakeTimers();
+    ({ fixture, http, internals } = setup());
+    http.expectOne((r) => r.url === URL).flush(page([]));
+    fixture.detectChanges();
+
+    internals.toggleCreate();
+    internals.form.patchValue({
+      category: 'ATTENDANCE',
+      audience: 'PEDAGOGICAL_MANAGER',
+      subject: 'Sujet',
+      description: 'Description',
+    });
+    internals.form.controls.sessionQuery.setValue('Anglais');
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
+    fixture.detectChanges();
+
+    const searchReq = http.expectOne((r) => r.url === `${URL}/sessions/search` && r.params.get('q') === 'Anglais');
+    searchReq.flush([{ publicId: 's-1', label: 'Anglais — 10/09/2026 08:00 (Europe/Paris)' }]);
+    fixture.detectChanges();
+
+    internals.selectSession({ publicId: 's-1', label: 'Anglais — 10/09/2026 08:00 (Europe/Paris)' });
+    internals.submit();
+
+    const created = http.expectOne((r) => r.url === URL && r.method === 'POST');
+    expect(created.request.body.sessionPublicId).toBe('s-1');
+  });
+
+  it('never searches sessions or teachers below the minimum query length', () => {
+    ({ fixture, http, internals } = setup());
+    http.expectOne((r) => r.url === URL).flush(page([]));
+    fixture.detectChanges();
+
+    internals.toggleCreate();
+    internals.form.controls.sessionQuery.setValue('A');
+    http.expectNone((r) => r.url === `${URL}/sessions/search`);
   });
 });

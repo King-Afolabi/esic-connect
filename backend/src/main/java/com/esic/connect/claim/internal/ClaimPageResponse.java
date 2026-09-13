@@ -17,4 +17,14 @@ record ClaimPageResponse(
         return new ClaimPageResponse(page.getContent().stream().map(mapper).toList(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
+
+    /**
+     * Variante « en bloc » (Lot 18, NFR-PERF-08) : {@code batchMapper}
+     * résout tous les champs enrichis d'une page en un nombre borné de
+     * requêtes, plutôt qu'un aller-retour par ligne.
+     */
+    static ClaimPageResponse ofBatch(Page<Claim> page, Function<List<Claim>, List<ClaimResponse>> batchMapper) {
+        return new ClaimPageResponse(batchMapper.apply(page.getContent()),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
 }

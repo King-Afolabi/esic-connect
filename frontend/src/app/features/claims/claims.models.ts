@@ -105,6 +105,18 @@ export interface ClaimSummary {
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Contexte lisible (Lot 18), résolu côté serveur — jamais un
+   * identifiant technique brut. `null` si la personne ou l'objet visé
+   * n'existe plus ; le champ correspondant (`sessionPublicId`,
+   * `classGroupPublicId`…) reste la référence stable pour tout lien.
+   */
+  authorName: string | null;
+  sessionLabel: string | null;
+  classLabel: string | null;
+  /** Formateur explicitement ciblé sur le guichet TEACHER (Lot 19). */
+  targetTeacherPublicId: string | null;
+  targetTeacherName: string | null;
 }
 
 export interface ClaimMessageView {
@@ -149,6 +161,26 @@ export interface CreateClaimRequest {
   sessionPublicId?: string | null;
   periodStart?: string | null;
   periodEnd?: string | null;
+  /** Formateur explicitement ciblé (Lot 19) ; facultatif, ignoré si vide. */
+  targetTeacherPublicId?: string | null;
+}
+
+/** `ClaimResponses.SessionOption` — recherche assistée du dépôt (Lot 18). */
+export interface ClaimSessionOption {
+  publicId: string;
+  label: string;
+}
+
+/** `ClaimResponses.TeacherOption` — ciblage facultatif du guichet TEACHER (Lot 19). */
+export interface ClaimTeacherOption {
+  publicId: string;
+  firstName: string;
+  lastName: string;
+}
+
+/** Nom affichable d'un formateur trouvé par la recherche assistée. */
+export function claimTeacherOptionLabel(option: ClaimTeacherOption): string {
+  return `${option.firstName} ${option.lastName}`.trim() || '—';
 }
 
 const CLAIM_EVENT_LABELS: Record<string, string> = {

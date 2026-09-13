@@ -90,12 +90,20 @@ class ClaimAudienceResolver {
                     recipients.addAll(userDirectory.findActiveUserPublicIdsByRole("SCHOOL_ADMINISTRATION"));
             case PEDAGOGICAL_MANAGER -> recipients.addAll(
                     responsibilityDirectory.findManagersOfClasses(classPublicIds(claim), today));
-            // Guichet formateur : le formateur de la séance visée. Sans
-            // séance, la réclamation n'a pas de formateur identifiable —
-            // avertir « tous les formateurs » serait absurde ; le
-            // responsable du périmètre prend alors le relais.
+            // Guichet formateur : le formateur explicitement ciblé (Lot
+            // 19) prend priorité — l'auteur l'a désigné, on ne bascule
+            // pas vers le responsable pédagogique. Sinon, le formateur de
+            // la séance visée. Sans cible ni séance, la réclamation n'a
+            // pas de formateur identifiable — avertir « tous les
+            // formateurs » serait absurde ; le responsable du périmètre
+            // prend alors le relais.
             case TEACHER -> {
-                if (claim.getCourseSessionId() != null) {
+                if (claim.getTargetTeacherUserId() != null) {
+                    userDirectory.findByInternalId(claim.getTargetTeacherUserId())
+                            .filter(ref -> !ref.archived())
+                            .map(UserDirectory.UserRef::publicId)
+                            .ifPresent(recipients::add);
+                } else if (claim.getCourseSessionId() != null) {
                     courseSessionDirectory.findSessionByInternalId(claim.getCourseSessionId())
                             .flatMap(ref -> courseSessionDirectory
                                     .findSessionNotificationInfo(ref.publicId()))

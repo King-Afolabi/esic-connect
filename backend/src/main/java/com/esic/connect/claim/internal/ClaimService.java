@@ -8,6 +8,7 @@ import com.esic.connect.claim.ClaimCategory;
 import com.esic.connect.claim.ClaimStatus;
 import com.esic.connect.coursesession.CourseSessionDirectory;
 import com.esic.connect.enrollment.EnrollmentDirectory;
+import com.esic.connect.identity.TeacherDirectory;
 import com.esic.connect.identity.UserDirectory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,7 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -46,6 +54,7 @@ class ClaimService {
     private final ClaimMessageRepository messageRepository;
     private final ClaimEventRepository eventRepository;
     private final UserDirectory userDirectory;
+    private final TeacherDirectory teacherDirectory;
     private final EnrollmentDirectory enrollmentDirectory;
     private final CourseSessionDirectory courseSessionDirectory;
     private final ClassGroupDirectory classGroupDirectory;
@@ -58,6 +67,7 @@ class ClaimService {
                  ClaimMessageRepository messageRepository,
                  ClaimEventRepository eventRepository,
                  UserDirectory userDirectory,
+                 TeacherDirectory teacherDirectory,
                  EnrollmentDirectory enrollmentDirectory,
                  CourseSessionDirectory courseSessionDirectory,
                  ClassGroupDirectory classGroupDirectory,
@@ -69,6 +79,7 @@ class ClaimService {
         this.messageRepository = messageRepository;
         this.eventRepository = eventRepository;
         this.userDirectory = userDirectory;
+        this.teacherDirectory = teacherDirectory;
         this.enrollmentDirectory = enrollmentDirectory;
         this.courseSessionDirectory = courseSessionDirectory;
         this.classGroupDirectory = classGroupDirectory;
@@ -102,6 +113,19 @@ class ClaimService {
             sessionInternalId = session.internalId();
         }
 
+        // Ciblage facultatif d'un formateur (Lot 19) : jamais un UUID
+        // accepté tel quel — le compte doit exister, être actif et porter
+        // un rôle TEACHER actif, exactement comme un formateur de séance
+        // (TeacherDirectory.findEligibleTeacher).
+        Long targetTeacherInternalId = null;
+        if (request.targetTeacherPublicId() != null && !request.targetTeacherPublicId().isBlank()) {
+            targetTeacherInternalId = teacherDirectory
+                    .findEligibleTeacher(parseUuid(request.targetTeacherPublicId(),
+                            ClaimException.Kind.TARGET_TEACHER_NOT_ELIGIBLE))
+                    .orElseThrow(() -> new ClaimException(ClaimException.Kind.TARGET_TEACHER_NOT_ELIGIBLE))
+                    .internalId();
+        }
+
         // Classe de l'auteur au jour de la création : elle borne la lecture
         // du responsable pédagogique. Sans elle, il verrait la file entière
         // de son guichet, périmètres confondus.
@@ -123,7 +147,8 @@ class ClaimService {
         }
 
         Claim claim = new Claim(author.internalId(), category, request.subject().trim(), audience,
-                sessionInternalId, request.periodStart(), request.periodEnd(), classInternalId);
+                sessionInternalId, request.periodStart(), request.periodEnd(), classInternalId,
+                targetTeacherInternalId);
         Claim saved = claimRepository.saveAndFlush(claim);
 
         // Le premier message porte la description : le cahier veut un fil,
@@ -286,8 +311,8 @@ class ClaimService {
         Pageable pageable = pageable(page, size, sort);
 
         if (!isStaff(caller)) {
-            return ClaimPageResponse.of(
-                    claimRepository.findByAuthorUserId(caller.internalId(), pageable), this::toResponse);
+            return ClaimPageResponse.ofBatch(
+                    claimRepository.findByAuthorUserId(caller.internalId(), pageable), this::toResponses);
         }
 
         ClaimAudience audience = audienceFilter == null || audienceFilter.isBlank()
@@ -303,7 +328,71 @@ class ClaimService {
                         ? Page.<Claim>empty(pageable)
                         : claimRepository.findByAudienceAndClassGroupIdIn(audience, ids, pageable))
                 .orElseGet(() -> claimRepository.findByAudience(audience, pageable));
-        return ClaimPageResponse.of(claims, this::toResponse);
+        return ClaimPageResponse.ofBatch(claims, this::toResponses);
+    }
+
+    /**
+     * Recherche assistée d'une séance pour le dépôt (Lot 18) — jamais un
+     * identifiant saisi à la main. Périmètre : les classes actives de
+     * l'appelant s'il est apprenant, son périmètre pédagogique s'il est
+     * intervenant, sans filtre s'il a l'accès global. Requête vide ⇒
+     * aucun résultat, jamais un « top N » sans rapport avec la saisie.
+     */
+    @Transactional(readOnly = true)
+    List<ClaimResponses.SessionOption> searchSessionsForFiling(String query, String callerSubject) {
+        UserDirectory.UserRef caller = requireCaller(callerSubject);
+        String trimmed = query == null ? "" : query.trim();
+        if (trimmed.isEmpty()) {
+            return List.of();
+        }
+        Optional<Set<UUID>> scope = callerClassScope(caller);
+        if (scope.isPresent() && scope.get().isEmpty()) {
+            return List.of();
+        }
+        return courseSessionDirectory.searchSessions(trimmed, scope.orElse(null), 20).stream()
+                .map(ref -> new ClaimResponses.SessionOption(ref.publicId(), sessionLabel(ref)))
+                .toList();
+    }
+
+    /**
+     * Recherche assistée d'un formateur pour le ciblage facultatif du
+     * guichet TEACHER (Lot 19) — jamais la liste complète des comptes.
+     */
+    @Transactional(readOnly = true)
+    List<ClaimResponses.TeacherOption> searchTeachersForFiling(String query, String callerSubject) {
+        requireCaller(callerSubject);
+        String trimmed = query == null ? "" : query.trim();
+        if (trimmed.isEmpty()) {
+            return List.of();
+        }
+        return teacherDirectory.searchEligibleTeachers(trimmed, 20).stream()
+                .map(ref -> new ClaimResponses.TeacherOption(ref.publicId(), ref.firstName(), ref.lastName()))
+                .toList();
+    }
+
+    /**
+     * Périmètre de classes (identifiants publics) applicable à une
+     * recherche de séance : {@link Optional#empty()} pour un accès
+     * global (aucun filtre), sinon l'ensemble — éventuellement vide — des
+     * classes visibles. Un apprenant est scopé à ses seules classes
+     * actives (mêmes données que la classe mémorisée à la création,
+     * §20.1) ; un intervenant l'est à son périmètre pédagogique.
+     */
+    private Optional<Set<UUID>> callerClassScope(UserDirectory.UserRef caller) {
+        if (academicScope.hasGlobalScope()) {
+            return Optional.empty();
+        }
+        if (!isStaff(caller)) {
+            Set<UUID> ownClasses = enrollmentDirectory
+                    .findActiveEnrollmentsForUserOn(caller.publicId(), LocalDate.now(clock)).stream()
+                    .map(EnrollmentDirectory.EnrollmentRef::classGroupPublicId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            return Optional.of(ownClasses);
+        }
+        return academicScope.visibleClassGroupIds()
+                .map(internalIds -> classGroupDirectory.findByInternalIds(internalIds).stream()
+                        .map(ClassGroupDirectory.ClassGroupRef::publicId)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
     // ------------------------------------------------------------------
@@ -362,17 +451,111 @@ class ClaimService {
     }
 
     private ClaimResponse toResponse(Claim claim) {
-        UUID sessionPublicId = claim.getCourseSessionId() == null ? null
-                : courseSessionDirectory.findSessionByInternalId(claim.getCourseSessionId())
-                        .map(CourseSessionDirectory.SessionRef::publicId).orElse(null);
-        UUID classPublicId = claim.getClassGroupId() == null ? null
-                : classGroupDirectory.findByInternalId(claim.getClassGroupId())
-                        .map(ClassGroupDirectory.ClassGroupRef::publicId).orElse(null);
-        return new ClaimResponse(claim.getPublicId(), authorPublicId(claim.getAuthorUserId()),
-                claim.getCategory().name(), claim.getSubject(), claim.getStatus().name(),
-                claim.getAudience().name(), sessionPublicId, classPublicId,
-                claim.getPeriodStart(), claim.getPeriodEnd(), claim.getClosedAt(),
-                claim.getCreatedAt(), claim.getUpdatedAt());
+        return toResponses(List.of(claim)).get(0);
+    }
+
+    /**
+     * Assemble un lot de réclamations en réponses enrichies (Lot 18) en un
+     * nombre de requêtes <strong>borné</strong>, pas proportionnel au
+     * nombre de réclamations (NFR-PERF-08) : une résolution de comptes en
+     * bloc ({@link UserDirectory#findNamedRefs}), une résolution de
+     * séances en bloc ({@link CourseSessionDirectory#findSessionsByInternalIds}),
+     * une résolution de classes en bloc ({@link ClassGroupDirectory#findByInternalIds}).
+     */
+    private List<ClaimResponse> toResponses(List<Claim> claims) {
+        if (claims.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> userIds = new LinkedHashSet<>();
+        Set<Long> sessionIds = new LinkedHashSet<>();
+        Set<Long> classIds = new LinkedHashSet<>();
+        for (Claim claim : claims) {
+            userIds.add(claim.getAuthorUserId());
+            if (claim.getTargetTeacherUserId() != null) {
+                userIds.add(claim.getTargetTeacherUserId());
+            }
+            if (claim.getCourseSessionId() != null) {
+                sessionIds.add(claim.getCourseSessionId());
+            }
+            if (claim.getClassGroupId() != null) {
+                classIds.add(claim.getClassGroupId());
+            }
+        }
+        Map<Long, UserDirectory.NamedUserRef> people = userDirectory.findNamedRefs(userIds);
+        Map<Long, CourseSessionDirectory.SessionRef> sessions = new HashMap<>();
+        for (CourseSessionDirectory.SessionRef ref : courseSessionDirectory.findSessionsByInternalIds(sessionIds)) {
+            sessions.put(ref.internalId(), ref);
+        }
+        Map<Long, ClassGroupDirectory.ClassGroupRef> classGroups = new HashMap<>();
+        for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByInternalIds(classIds)) {
+            classGroups.put(ref.internalId(), ref);
+        }
+
+        List<ClaimResponse> responses = new ArrayList<>(claims.size());
+        for (Claim claim : claims) {
+            UserDirectory.NamedUserRef authorRef = people.get(claim.getAuthorUserId());
+            CourseSessionDirectory.SessionRef session = claim.getCourseSessionId() == null ? null
+                    : sessions.get(claim.getCourseSessionId());
+            ClassGroupDirectory.ClassGroupRef classGroup = claim.getClassGroupId() == null ? null
+                    : classGroups.get(claim.getClassGroupId());
+            UserDirectory.NamedUserRef targetTeacherRef = claim.getTargetTeacherUserId() == null ? null
+                    : people.get(claim.getTargetTeacherUserId());
+            responses.add(new ClaimResponse(claim.getPublicId(),
+                    authorRef == null ? null : authorRef.publicId(),
+                    claim.getCategory().name(), claim.getSubject(), claim.getStatus().name(),
+                    claim.getAudience().name(),
+                    session == null ? null : session.publicId(),
+                    classGroup == null ? null : classGroup.publicId(),
+                    claim.getPeriodStart(), claim.getPeriodEnd(), claim.getClosedAt(),
+                    claim.getCreatedAt(), claim.getUpdatedAt(),
+                    fullName(authorRef),
+                    session == null ? null : sessionLabel(session),
+                    classGroup == null ? null : classLabel(classGroup),
+                    targetTeacherRef == null ? null : targetTeacherRef.publicId(),
+                    fullName(targetTeacherRef)));
+        }
+        return responses;
+    }
+
+    private static String fullName(UserDirectory.NamedUserRef ref) {
+        if (ref == null) {
+            return null;
+        }
+        String full = (nullToEmpty(ref.firstName()) + " " + nullToEmpty(ref.lastName())).trim();
+        return full.isEmpty() ? null : full;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    /**
+     * Libellé lisible d'une séance : libellé libre s'il existe, sinon un
+     * repli générique, suivi du début converti dans le fuseau
+     * <strong>déclaré de la séance</strong> — jamais celui du navigateur
+     * (docs/02 §8 ; cohérent avec le Lot 8) — et de ce fuseau, affiché à
+     * côté pour éviter toute ambiguïté.
+     */
+    private static String sessionLabel(CourseSessionDirectory.SessionRef session) {
+        String title = session.title() != null && !session.title().isBlank()
+                ? session.title()
+                : "Séance";
+        ZoneId zone = safeZone(session.timeZoneId());
+        String when = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(zone).format(session.startsAt());
+        return title + " — " + when + " (" + zone.getId() + ")";
+    }
+
+    private static ZoneId safeZone(String timeZoneId) {
+        try {
+            return ZoneId.of(timeZoneId);
+        } catch (RuntimeException invalid) {
+            return ZoneOffset.UTC;
+        }
+    }
+
+    /** Format « Nom — Code — Année », identique à celui visé pour les Lots 14/15. */
+    private static String classLabel(ClassGroupDirectory.ClassGroupRef classGroup) {
+        return classGroup.name() + " — " + classGroup.code() + " — " + classGroup.academicYearCode();
     }
 
     private UUID authorPublicId(Long internalId) {

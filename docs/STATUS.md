@@ -80,7 +80,10 @@ exploitation avancée). Ce ne sont pas des régressions.
   demandes d'annulation, remplacements datés, séances multi-classes,
   modalité d'enseignement (présentiel / distanciel / hybride) avec lien
   distant obligatoire en distanciel, facultatif en hybride, validé
-  (format URL) et jamais journalisé en entier.
+  (format URL) et jamais journalisé en entier, édition structurelle
+  complète d'une séance exceptionnelle tant qu'elle est planifiée et non
+  démarrée (formateur, classes, matière, salle, horaires, motif, libellé,
+  modalité, lien — atomique, sans création implicite de remplacement).
   **« Mon planning »** (CDC §5.6/§5.7) : un formateur et un apprenant
   consultent désormais leurs propres séances dans l'application
   (`GET /api/v1/me/planning`, périmètre décidé côté serveur) — jusque-là
@@ -99,7 +102,11 @@ exploitation avancée). Ce ne sont pas des régressions.
 - **Justificatifs et réclamations** : dépôt avec pièces jointes
   contrôlées (type réel, taille, analyse antivirus activable),
   examen et décision motivée, transformation `ABSENT → EXCUSED`,
-  réclamations conversationnelles avec transfert et réouverture.
+  réclamations conversationnelles avec transfert et réouverture,
+  contexte lisible (auteur, classe, séance résolus côté serveur, jamais
+  un identifiant technique brut) et ciblage facultatif d'un formateur
+  précis sur le guichet formateur, vérifié et prioritaire sur la
+  résolution par séance.
 - **Notifications** : centre persistant, courriel (encodage UTF-8),
   audience résolue après commit, préférences par canal et catégorie,
   garanties par une outbox transactionnelle avec reprise et file
@@ -153,7 +160,7 @@ Aucune ligne de code — limites explicitement assumées :
 **Monolithe modulaire** Spring Boot, **19 modules** Spring Modulith,
 isolation vérifiée automatiquement (aucune dépendance vers l'interne
 d'un autre module, aucun cycle, aucune entité JPA partagée). Schéma
-MySQL en **V34**, migrations Flyway. Communication entre modules par
+MySQL en **V37**, migrations Flyway. Communication entre modules par
 ports publics et par événements ; effets de bord externes par outbox
 transactionnelle.
 

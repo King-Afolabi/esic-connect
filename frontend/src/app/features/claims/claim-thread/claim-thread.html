@@ -30,6 +30,20 @@
           <p class="esic-page-header__description">
             {{ categoryLabel(t.claim.category) }} · {{ audienceLabel(t.claim.audience) }} ·
             ouverte le {{ formatInstantUtc(t.claim.createdAt) }}
+            @if (t.claim.authorName) {
+              · par {{ t.claim.authorName }}
+            }
+          </p>
+          <p class="claims__meta">
+            @if (t.claim.classLabel) {
+              <span>Classe : {{ t.claim.classLabel }}</span>
+            }
+            @if (t.claim.sessionLabel) {
+              <span> · Séance : {{ t.claim.sessionLabel }}</span>
+            }
+            @if (t.claim.targetTeacherName) {
+              <span> · Formateur ciblé : {{ t.claim.targetTeacherName }}</span>
+            }
           </p>
         </div>
         <div class="esic-page-header__actions">

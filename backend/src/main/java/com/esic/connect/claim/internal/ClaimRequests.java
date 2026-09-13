@@ -26,7 +26,15 @@ final class ClaimRequests {
             @NotBlank @Size(max = 32) String audience,
             @Size(max = 64) String sessionPublicId,
             LocalDate periodStart,
-            LocalDate periodEnd) {
+            LocalDate periodEnd,
+            /**
+             * Formateur explicitement ciblé (Lot 19) — facultatif, jamais
+             * déduit ; ignoré si absent ou vide, sans erreur. Vérifié
+             * côté service (compte existant, actif, rôle {@code TEACHER}
+             * actif) : un identifiant fourni par le client n'est jamais
+             * accepté aveuglément.
+             */
+            @Size(max = 64) String targetTeacherPublicId) {
     }
 
     /** Message ajouté au fil (EF-CLAIM-002). Append-only. */
