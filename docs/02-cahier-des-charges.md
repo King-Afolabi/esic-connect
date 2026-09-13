@@ -714,6 +714,38 @@ commentaire. Une séance annulée n'est pas reportée automatiquement : le
 responsable définit une nouvelle date, ce qui crée une séance liée à
 l'originale.
 
+## 14.5 Fermeture automatique (Lot 9, 2026-09)
+
+Une séance `OPEN` qui reste sans intervention humaine au-delà d'un délai
+de grâce après sa fin planifiée (`endsAt`) est fermée automatiquement
+(`AUTO_CLOSED` à l'audit ; statut final identique à une fermeture
+manuelle, `CLOSED`) : mêmes effets qu'une fermeture manuelle (points de
+contrôle encore ouverts fermés, jetons Redis purgés), jamais au nom d'un
+compte humain.
+
+```text
+Condition : endsAt + délaiDeGrâce(établissement) <= maintenant
+```
+
+- délai de grâce par défaut : **15 minutes** ;
+- fréquence technique du balayage (indépendante du délai métier) : 2
+  minutes par défaut ;
+- taille de lot par exécution : bornée, configurable ;
+- implémentation : `CourseSessionAutoCloseScheduler` (balayage) +
+  `CourseSessionAutoCloseService` (revérification et fermeture, une
+  transaction indépendante par séance) — voir `application.yml`,
+  préfixe `app.coursesession.auto-close.*`.
+
+**Établissement.** Le modèle actuel ne porte aucune notion
+d'établissement configurable (contrairement à l'aspiration de §14.3) :
+le délai de grâce est donc une **propriété globale unique** appliquée à
+toute l'instance (`CourseSessionAutoCloseProperties`), pas un réglage par
+établissement. Une évolution multi-établissement nécessiterait une
+entité ou une table de réglages métier propre à un établissement
+(inexistante aujourd'hui : `organization.internal.Site` est un campus
+physique sans réglages métier) et la résolution du délai à partir de
+l'établissement propriétaire de la séance.
+
 ---
 
 # 15. Modalités d'enseignement

@@ -208,6 +208,7 @@ défaut.
 | T-15 | file d'actions différées non persistante entre deux chargements |
 | T-16 | aucun locataire Microsoft réel sollicité — `EF-INT-002` / `EF-INT-003` restent `PARTIAL` |
 | T-17 | aucun fichier de logo dans le dépôt — l'en-tête des PDF est une signature typographique |
+| T-18 | fermeture d'une séance (manuelle **ou** automatique, Lot 9) : les points de contrôle encore ouverts sont fermés en cascade sans événement d'audit individuel par point de contrôle (`CHECKPOINT_CLOSED`) — seul l'événement de niveau séance (`SESSION_CLOSED` / `SESSION_AUTO_CLOSED`) est tracé. Préexistant à Lot 9 (même lacune côté fermeture manuelle) ; volontairement non corrigé dans ce lot faute de nécessité technique bloquante — à traiter séparément si l'audit par point de contrôle devient un besoin réel. |
 
 ---
 

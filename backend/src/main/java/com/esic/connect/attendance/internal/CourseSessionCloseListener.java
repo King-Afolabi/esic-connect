@@ -7,10 +7,11 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * À la fermeture <strong>ou à l'annulation</strong> (G1-C) d'une séance,
- * purge les jetons Redis d'émargement de cette séance — au-delà de
- * l'expiration par TTL. Aucune dépendance vers
- * {@code coursesession.internal} : l'événement public suffit.
+ * À la fermeture <strong>manuelle ou automatique</strong> (Lot 9)
+ * <strong>ou à l'annulation</strong> (G1-C) d'une séance, purge les
+ * jetons Redis d'émargement de cette séance — au-delà de l'expiration
+ * par TTL. Aucune dépendance vers {@code coursesession.internal} :
+ * l'événement public suffit.
  *
  * <p><strong>Purge après commit (durcie au checkpoint G1-C.3).</strong>
  * {@link TransactionalEventListener}{@code (phase = AFTER_COMMIT)} : la
@@ -35,6 +36,7 @@ class CourseSessionCloseListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCourseSessionChange(CourseSessionChangeEvent event) {
         if (event.action() == CourseSessionChangeAction.CLOSED
+                || event.action() == CourseSessionChangeAction.AUTO_CLOSED
                 || event.action() == CourseSessionChangeAction.CANCELLED) {
             tokenService.invalidateSession(event.resourcePublicId());
         }

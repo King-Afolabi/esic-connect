@@ -2,12 +2,14 @@ package com.esic.connect.coursesession.internal;
 
 import com.esic.connect.coursesession.SessionLifecycle;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,4 +68,22 @@ interface CourseSessionRepository
      */
     @Query("select distinct s from CourseSession s left join fetch s.classes where s.id in :ids")
     List<CourseSession> findAllWithClassesByIdIn(@Param("ids") java.util.Collection<Long> ids);
+
+    /**
+     * Candidats <strong>potentiels</strong> à la fermeture automatique
+     * (Lot 9) : séances {@code OPEN} dont {@code endsAt} est déjà passé
+     * à l'instant {@code cutoff} (généralement {@code now}). Le délai de
+     * grâce n'est volontairement <strong>pas</strong> appliqué ici — la
+     * borne la plus large et sûre possible (le délai de grâce ne peut
+     * être négatif) — l'éligibilité précise est revérifiée séance par
+     * séance, dans sa propre transaction
+     * ({@code CourseSessionAutoCloseService}), avant toute fermeture.
+     * Borné par {@code pageable} (taille de lot configurable) ; ordre
+     * stable ({@code endsAt} puis {@code id}) pour un balayage
+     * reproductible d'une exécution à l'autre.
+     */
+    @Query("select s from CourseSession s where s.status = :status and s.endsAt <= :cutoff "
+            + "order by s.endsAt asc, s.id asc")
+    List<CourseSession> findAutoCloseCandidates(@Param("status") SessionLifecycle status,
+                                                @Param("cutoff") Instant cutoff, Pageable pageable);
 }

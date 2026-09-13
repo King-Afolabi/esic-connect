@@ -9,6 +9,14 @@ public enum CourseSessionChangeAction {
     CREATED,
     OPENED,
     CLOSED,
+    /**
+     * Fermeture automatique d'une séance {@code OPEN} restée sans
+     * intervention humaine au-delà du délai de grâce (Lot 9). Statut
+     * final identique à {@link #CLOSED} ({@code SessionLifecycle.CLOSED}) ;
+     * seule cette action distingue l'origine à l'audit. Acteur toujours
+     * {@code null} (jamais un compte humain).
+     */
+    AUTO_CLOSED,
     /** Annulation avec motif d'une séance {@code PLANNED} / {@code OPEN} (G1-C). */
     CANCELLED,
     /** Remplaçant affecté à la séance (G1-C). */

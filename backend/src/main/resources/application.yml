@@ -330,3 +330,17 @@ app:
     max-duration: ${PLANNING_MAX_DURATION:PT8H}
     working-day-start: ${PLANNING_WORKING_DAY_START:08:00}
     working-day-end: ${PLANNING_WORKING_DAY_END:19:00}
+  coursesession:
+    auto-close:
+      # Fermeture automatique des séances OPEN restées sans intervention
+      # (Lot 9). Propriété globale : le modèle ne porte aujourd'hui aucune
+      # notion d'établissement configurable (CourseSessionAutoCloseProperties).
+      # Fréquence technique du balayage (planificateur) — distincte du
+      # délai de grâce métier ci-dessous.
+      check-interval-ms: ${COURSE_SESSION_AUTO_CLOSE_CHECK_INTERVAL_MS:120000}
+      # Nombre maximal de séances traitées par exécution planifiée.
+      batch-size: ${COURSE_SESSION_AUTO_CLOSE_BATCH_SIZE:200}
+      # Délai de grâce après la fin planifiée (endsAt) avant qu'une séance
+      # OPEN devienne éligible à la fermeture automatique.
+      grace-period: ${COURSE_SESSION_AUTO_CLOSE_GRACE_PERIOD:PT15M}
+      enabled: ${COURSE_SESSION_AUTO_CLOSE_ENABLED:true}

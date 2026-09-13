@@ -322,17 +322,34 @@ class CourseSessionService {
         }
         Instant now = clock.instant();
         Long actorId = changePublisher.actorId(callerSubject);
-        session.close(now, actorId);
         // Tous les points de contrôle encore ouverts sont fermés avec la
         // séance (V10). Les jetons Redis sont purgés à la réception de
         // l'événement CLOSED côté module attendance.
+        closeCore(session, now, actorId, CourseSessionChangeAction.CLOSED);
+    }
+
+    /**
+     * Noyau métier de la fermeture, réutilisé par {@link #close} (humain,
+     * {@code CLOSED}) et par {@code CourseSessionAutoCloseService} (Lot 9,
+     * système, {@code AUTO_CLOSED}) : mêmes effets (points de contrôle
+     * encore ouverts fermés avec la séance, purge Redis déclenchée par
+     * l'événement côté {@code attendance}), seule l'action publiée change
+     * — jamais d'acteur humain usurpé ({@code actorId} toujours
+     * {@code null} pour une fermeture automatique).
+     *
+     * <p>L'appelant doit avoir déjà revérifié l'éligibilité (statut
+     * {@code OPEN}, délai de grâce écoulé) dans la même transaction :
+     * cette méthode ne revalide rien elle-même.
+     */
+    void closeCore(CourseSession session, Instant now, Long actorId, CourseSessionChangeAction action) {
+        session.close(now, actorId);
         checkpointRepository.findByCourseSessionIdOrderByDisplayOrderAscIdAsc(session.getId())
                 .forEach(cp -> {
                     if (cp.isOpen()) {
                         cp.close(now, actorId);
                     }
                 });
-        changePublisher.publish(session.getPublicId(), CourseSessionChangeAction.CLOSED, actorId, null);
+        changePublisher.publish(session.getPublicId(), action, actorId, null);
     }
 
     /**

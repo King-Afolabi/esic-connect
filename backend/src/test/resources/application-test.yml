@@ -66,6 +66,16 @@ management:
       enabled: false
 
 app:
+  coursesession:
+    auto-close:
+      # Désactivé par défaut en test : la suite complète tourne largement
+      # sous l'intervalle par défaut (2 min), mais un déclenchement
+      # inopiné fermerait des séances OPEN que d'autres tests supposent
+      # rester ouvertes. Les tests dédiés au Lot 9 réactivent
+      # explicitement ce planificateur via
+      # @SpringBootTest(properties = "app.coursesession.auto-close.enabled=true")
+      # et pilotent une horloge fixe (aucune attente réelle).
+      enabled: false
   security:
     jwt:
       # Secret exclusif aux tests automatisés (≥ 32 octets) — jamais dans
