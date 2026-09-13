@@ -25,6 +25,9 @@ export const NOTIFICATION_TYPES = [
   'SESSION_SUBSTITUTION_ENDED',
   'JUSTIFICATION_ACCEPTED',
   'JUSTIFICATION_REJECTED',
+  'CLAIM_OPENED',
+  'CLAIM_MESSAGE_ADDED',
+  'CLAIM_STATUS_CHANGED',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -35,6 +38,9 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   SESSION_SUBSTITUTION_ENDED: 'Remplacement terminé',
   JUSTIFICATION_ACCEPTED: 'Justificatif accepté',
   JUSTIFICATION_REJECTED: 'Justificatif refusé',
+  CLAIM_OPENED: 'Réclamation ouverte',
+  CLAIM_MESSAGE_ADDED: 'Nouveau message sur une réclamation',
+  CLAIM_STATUS_CHANGED: 'Statut de réclamation modifié',
 };
 
 export function notificationTypeLabel(value: string): string {
@@ -129,6 +135,12 @@ export function notificationLink(
   }
   if (n.resourceType === 'JUSTIFICATION' && has(JUSTIFICATION_LINK_ROLES)) {
     return { commands: ['/my-attendance'], label: 'Voir mes présences' };
+  }
+  if (n.resourceType === 'CLAIM' && UUID_RE.test(n.resourcePublicId)) {
+    // `/claims/:publicId` n'a aucune garde de rôle (comme `POST
+    // /api/v1/claims`) : le serveur seul décide de ce que le compte peut
+    // voir. Aucun filtre de rôle n'est donc appliqué ici.
+    return { commands: ['/claims', n.resourcePublicId], label: 'Voir la réclamation' };
   }
   return null;
 }
