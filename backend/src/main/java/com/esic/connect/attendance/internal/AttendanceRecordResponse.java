@@ -13,6 +13,8 @@ import java.util.UUID;
  * @param sessionPublicId    séance concernée
  * @param checkpointPublicId point de contrôle concerné (V10)
  * @param sessionTitle       libellé de la séance ({@code null} possible)
+ * @param timeZoneId         fuseau IANA déclaré de la séance (Lot 8) ;
+ *                           {@code recordedAt} reste un instant technique UTC
  * @param status             {@code PRESENT} ou {@code LATE} (calculé serveur)
  * @param lateMinutes        minutes de retard si {@code LATE}, {@code null} sinon
  * @param manualValidationRequired retard au-delà du second palier
@@ -29,6 +31,7 @@ record AttendanceRecordResponse(
         UUID sessionPublicId,
         UUID checkpointPublicId,
         String sessionTitle,
+        String timeZoneId,
         AttendanceStatus status,
         Integer lateMinutes,
         boolean manualValidationRequired,

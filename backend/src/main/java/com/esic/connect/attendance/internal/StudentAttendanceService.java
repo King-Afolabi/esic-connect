@@ -170,8 +170,8 @@ class StudentAttendanceService {
         boolean canJustify = (derivedAbsent || realAbsent) && !hasActiveJustification;
         return new MyAttendanceRow(
                 attendancePublicId, session.publicId(), session.title(), session.startsAt(),
-                cp.publicId(), cp.label(), cp.type(), cp.required(), enrollment.classGroupCode(),
-                status, lateMinutes, comment, recordedAt,
+                session.timeZoneId(), cp.publicId(), cp.label(), cp.type(), cp.required(),
+                enrollment.classGroupCode(), status, lateMinutes, comment, recordedAt,
                 justification != null ? justification.getPublicId() : null,
                 justification != null ? justification.getStatus().name() : null,
                 canJustify);
@@ -181,7 +181,7 @@ class StudentAttendanceService {
         return new JustificationResponse(
                 j.getPublicId(), j.getStatus().name(), j.getCategory().name(), j.getExternalReference(),
                 j.getComment(), j.getSubmittedAt(), j.getReviewedAt(), j.getDecisionReason(),
-                row.sessionPublicId(), row.sessionTitle(), row.sessionStartsAt(),
+                row.sessionPublicId(), row.sessionTitle(), row.sessionStartsAt(), row.timeZoneId(),
                 row.checkpointPublicId(), row.checkpointLabel(), row.classCode(),
                 null, null, null, null, row.status());
     }

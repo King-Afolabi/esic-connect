@@ -19,7 +19,7 @@ class AttendanceReportSortTests {
 
     private static AttendanceReports.SessionRow session(String title, Instant startsAt, int present,
                                                        double rate, UUID id) {
-        return new AttendanceReports.SessionRow(id, title, startsAt, startsAt.plusSeconds(3600),
+        return new AttendanceReports.SessionRow(id, title, startsAt, startsAt.plusSeconds(3600), "Europe/Paris",
                 "C-DEMO", "Formateur", 1, 10, present, 0, 0, 0, rate);
     }
 

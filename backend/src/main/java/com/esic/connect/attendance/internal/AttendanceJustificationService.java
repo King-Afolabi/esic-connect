@@ -436,6 +436,7 @@ class AttendanceJustificationService {
                 session != null ? session.publicId() : null,
                 session != null ? session.title() : null,
                 session != null ? session.startsAt() : null,
+                session != null ? session.timeZoneId() : null,
                 checkpoint != null ? checkpoint.publicId() : null,
                 checkpoint != null ? checkpoint.label() : null,
                 enrollment != null ? enrollment.classGroupCode() : null,

@@ -20,6 +20,9 @@ import java.util.UUID;
  * @param sessionPublicId       séance de l'absence
  * @param sessionTitle          libellé de la séance ({@code null} possible)
  * @param sessionStartsAt       début de la séance
+ * @param timeZoneId            fuseau IANA déclaré de la séance (Lot 8),
+ *                              {@code null} si la séance n'a pas été résolue ;
+ *                              {@code sessionStartsAt} reste un {@code Instant} UTC
  * @param checkpointPublicId    point de contrôle de l'absence
  * @param checkpointLabel       libellé du point de contrôle
  * @param classCode             code de la classe de l'inscription
@@ -41,6 +44,7 @@ record JustificationResponse(
         UUID sessionPublicId,
         String sessionTitle,
         Instant sessionStartsAt,
+        String timeZoneId,
         UUID checkpointPublicId,
         String checkpointLabel,
         String classCode,

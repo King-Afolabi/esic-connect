@@ -27,6 +27,8 @@ record MyAttendanceRow(
         UUID sessionPublicId,
         String sessionTitle,
         Instant sessionStartsAt,
+        /** Fuseau IANA déclaré de la séance (Lot 8) ; {@code sessionStartsAt} reste UTC. */
+        String timeZoneId,
         UUID checkpointPublicId,
         String checkpointLabel,
         AttendanceCheckpointType checkpointType,

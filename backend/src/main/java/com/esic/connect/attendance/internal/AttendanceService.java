@@ -228,7 +228,7 @@ class AttendanceService {
                 "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
                         + ";source=" + source.name() + ";status=" + status.name());
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
-                session.title(), status, lateMinutes, manualValidationRequired,
+                session.title(), session.timeZoneId(), status, lateMinutes, manualValidationRequired,
                 saved.getRecordedAt(), source);
     }
 

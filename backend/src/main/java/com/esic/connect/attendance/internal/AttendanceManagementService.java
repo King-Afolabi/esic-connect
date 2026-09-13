@@ -125,7 +125,7 @@ class AttendanceManagementService {
         // Une présence saisie manuellement est DÉJÀ validée par un humain :
         // exiger une seconde validation n'aurait aucun sens.
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(), checkpoint.publicId(),
-                session.title(), status, lateMinutes, false, saved.getRecordedAt(),
+                session.title(), session.timeZoneId(), status, lateMinutes, false, saved.getRecordedAt(),
                 AttendanceRecordSource.MANUAL);
     }
 
@@ -301,7 +301,7 @@ class AttendanceManagementService {
                 .filter(cp -> cp.internalId() == record.getAttendanceCheckpointId())
                 .map(CheckpointRef::publicId).findFirst().orElse(null);
         return new AttendanceRecordResponse(record.getPublicId(), session.publicId(), checkpointPublicId,
-                session.title(), record.getStatus(), record.getLateMinutes(), false,
+                session.title(), session.timeZoneId(), record.getStatus(), record.getLateMinutes(), false,
                 record.getRecordedAt(), record.getSource());
     }
 

@@ -125,8 +125,8 @@ class AttendanceReportService {
             }
             double rate = expected == 0 ? 0d : round((double) present / expected);
             rows.add(new AttendanceReports.SessionRow(session.publicId(), session.title(), session.startsAt(),
-                    session.endsAt(), classCodes(session), teacherName(session), checkpoints.size(),
-                    expected, present, late, absent, excused, rate));
+                    session.endsAt(), session.timeZoneId(), classCodes(session), teacherName(session),
+                    checkpoints.size(), expected, present, late, absent, excused, rate));
         }
         return AttendanceReportSort.sortSessions(rows, sort);
     }

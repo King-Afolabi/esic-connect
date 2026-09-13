@@ -102,6 +102,8 @@ class EarlyDepartureIntegrationTests {
         assertThat(dossier.get("status")).isEqualTo("REQUESTED");
         // Signaler n'est pas être autorisé : l'effet reste en suspens.
         assertThat(dossier.get("effect")).isEqualTo("TO_CONFIRM");
+        // Lot 8 : le fuseau déclaré de la séance est exposé.
+        assertThat(dossier.get("timeZoneId")).isEqualTo("Europe/Paris");
         assertThat(dossier.get("sessionPublicId")).isEqualTo(fx.morningSessionId);
         assertThat(dossier.get("decidedAt")).isNull();
     }

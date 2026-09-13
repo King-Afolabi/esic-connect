@@ -22,12 +22,21 @@ final class AttendanceReports {
     private AttendanceReports() {
     }
 
-    /** Ligne d'un rapport par séance. */
+    /**
+     * Ligne d'un rapport par séance.
+     *
+     * @param timeZoneId fuseau IANA déclaré de la séance (Lot 8) — {@code
+     *                    startsAt} / {@code endsAt} restent des {@code
+     *                    Instant} UTC ; c'est à l'affichage de les
+     *                    convertir dans ce fuseau, jamais celui du
+     *                    navigateur.
+     */
     record SessionRow(
             UUID sessionPublicId,
             String sessionTitle,
             Instant startsAt,
             Instant endsAt,
+            String timeZoneId,
             String classCodes,
             String teacherName,
             int checkpointCount,

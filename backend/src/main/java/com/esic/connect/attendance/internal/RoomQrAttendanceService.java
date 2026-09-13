@@ -195,7 +195,7 @@ class RoomQrAttendanceService {
                 "session=" + session.publicId() + ";checkpoint=" + checkpoint.publicId()
                         + ";source=ROOM_STATIC_QR;room=" + room.code());
         return new AttendanceRecordResponse(saved.getPublicId(), session.publicId(),
-                checkpoint.publicId(), session.title(), AttendanceStatus.PRESENT, null, false,
+                checkpoint.publicId(), session.title(), session.timeZoneId(), AttendanceStatus.PRESENT, null, false,
                 saved.getRecordedAt(), AttendanceRecordSource.ROOM_STATIC_QR);
     }
 

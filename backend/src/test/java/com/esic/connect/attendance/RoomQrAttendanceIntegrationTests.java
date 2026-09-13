@@ -166,6 +166,9 @@ class RoomQrAttendanceIntegrationTests {
         assertThat(record.get("status")).isEqualTo("PRESENT");
         // Le corps n'a jamais désigné de séance : le serveur l'a déduite.
         assertThat(record.get("sessionPublicId")).isEqualTo(fx.sessionId);
+        // Lot 8 : le fuseau déclaré de la séance est exposé (cette séance
+        // est importée en UTC, voir openSessionIn).
+        assertThat(record.get("timeZoneId")).isEqualTo("UTC");
     }
 
     @Test

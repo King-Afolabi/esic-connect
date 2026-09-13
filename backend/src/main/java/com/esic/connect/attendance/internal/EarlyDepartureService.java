@@ -271,6 +271,7 @@ class EarlyDepartureService {
                 session != null ? session.publicId() : null,
                 session != null ? session.title() : null,
                 session != null ? session.startsAt() : null,
+                session != null ? session.timeZoneId() : null,
                 resolved != null ? resolved.publicId() : null,
                 resolved != null ? resolved.classGroupCode() : null,
                 dossier.getDepartureAt(),

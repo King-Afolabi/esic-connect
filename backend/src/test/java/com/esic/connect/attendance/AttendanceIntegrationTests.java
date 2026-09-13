@@ -107,6 +107,10 @@ class AttendanceIntegrationTests {
         assertThat(record.get("sessionPublicId")).isEqualTo(fx.sessionId());
         assertThat(record.get("source")).isEqualTo("SHORT_CODE");
         assertThat(record.get("recordedAt")).isNotNull();
+        // Lot 8 : le fuseau déclaré de la séance est exposé à côté du
+        // récépissé, sans requête supplémentaire (déjà résolu via
+        // CourseSessionDirectory.SessionRef).
+        assertThat(record.get("timeZoneId")).isEqualTo("Europe/Paris");
         assertThat(record).doesNotContainKeys("id", "token", "shortCode");
         assertThat(auditActions((String) record.get("attendancePublicId"))).contains("ATTENDANCE_RECORDED");
 
@@ -1009,6 +1013,8 @@ class AttendanceIntegrationTests {
         Map<String, Object> settled = getMap(
                 "/api/v1/attendance/justifications/" + justifId, reviewer);
         assertThat(settled.get("status")).isIn("ACCEPTED", "REJECTED");
+        // Lot 8 : le fuseau déclaré de la séance de l'absence est exposé.
+        assertThat(settled.get("timeZoneId")).isEqualTo("Europe/Paris");
     }
 
     // ------------------------------------------------------------------
@@ -1103,6 +1109,8 @@ class AttendanceIntegrationTests {
         assertThat(rows).anySatisfy(r -> {
             assertThat(r.get("status")).isEqualTo("ABSENT");
             assertThat(r.get("canJustify")).isEqualTo(true);
+            // Lot 8 : le fuseau déclaré de la séance est exposé sur chaque ligne.
+            assertThat(r.get("timeZoneId")).isEqualTo("Europe/Paris");
         });
 
         // Un non-STUDENT ne peut pas appeler /me/attendance.
@@ -1164,6 +1172,13 @@ class AttendanceIntegrationTests {
             assertThat(r.get("classCode")).isEqualTo("C1");
             assertThat(String.valueOf(r.get("classCode"))).isNotEqualTo(fx.classA());
         });
+
+        Map<String, Object> bySession = getMap("/api/v1/attendance/reports/sessions"
+                + "?from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z&classGroup=" + fx.classA(), admin);
+        List<Map<String, Object>> sessionRows = (List<Map<String, Object>>) bySession.get("content");
+        assertThat(sessionRows).isNotEmpty();
+        // Lot 8 : le fuseau déclaré de la séance est exposé sur chaque ligne du rapport.
+        assertThat(sessionRows).allSatisfy(r -> assertThat(r.get("timeZoneId")).isEqualTo("Europe/Paris"));
 
         // Tri serveur borné : valide accepté, invalide -> 400 ATT_REPORT_INVALID_SORT.
         assertThat(getMap("/api/v1/attendance/reports/students?from=2026-09-01T00:00:00Z"

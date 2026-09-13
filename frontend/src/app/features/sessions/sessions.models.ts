@@ -349,6 +349,8 @@ export interface AttendanceRecordResponse {
   sessionPublicId: string;
   checkpointPublicId: string | null;
   sessionTitle: string | null;
+  /** Fuseau IANA déclaré de la séance (Lot 8) ; `recordedAt` reste un instant technique UTC. */
+  timeZoneId: string | null;
   status: AttendanceStatus;
   lateMinutes: number | null;
   /**

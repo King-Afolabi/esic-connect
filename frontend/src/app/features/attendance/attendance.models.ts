@@ -75,6 +75,8 @@ export interface JustificationResponse {
   sessionPublicId: string | null;
   sessionTitle: string | null;
   sessionStartsAt: string | null;
+  /** Fuseau IANA déclaré de la séance (Lot 8) ; `null` si la séance n'a pas été résolue. */
+  timeZoneId: string | null;
   checkpointPublicId: string | null;
   checkpointLabel: string | null;
   classCode: string | null;
@@ -190,6 +192,8 @@ export interface MyAttendanceRow {
   sessionPublicId: string;
   sessionTitle: string | null;
   sessionStartsAt: string;
+  /** Fuseau IANA déclaré de la séance (Lot 8). */
+  timeZoneId: string;
   checkpointPublicId: string;
   checkpointLabel: string;
   checkpointType: CheckpointType;
@@ -243,6 +247,8 @@ export interface SessionReportRow {
   sessionTitle: string | null;
   startsAt: string;
   endsAt: string;
+  /** Fuseau IANA déclaré de la séance (Lot 8). */
+  timeZoneId: string;
   classCodes: string;
   teacherName: string;
   checkpointCount: number;
@@ -449,6 +455,8 @@ export interface EarlyDeparture {
   sessionPublicId: string | null;
   sessionTitle: string | null;
   sessionStartsAt: string | null;
+  /** Fuseau IANA déclaré de la séance (Lot 8) ; `null` si la séance n'a pas été résolue. */
+  timeZoneId: string | null;
   enrollmentPublicId: string | null;
   classCode: string | null;
   departureAt: string;
