@@ -12,6 +12,7 @@ import com.esic.connect.coursesession.CourseSessionDirectory.SessionRef;
 import com.esic.connect.coursesession.SessionLifecycle;
 import com.esic.connect.dashboard.internal.DashboardResponses.AdministrationCard;
 import com.esic.connect.dashboard.internal.DashboardResponses.AttendanceRateLine;
+import com.esic.connect.dashboard.internal.DashboardResponses.ClassRef;
 import com.esic.connect.dashboard.internal.DashboardResponses.Dashboard;
 import com.esic.connect.dashboard.internal.DashboardResponses.ImportLine;
 import com.esic.connect.dashboard.internal.DashboardResponses.ManagerCard;
@@ -176,14 +177,15 @@ class DashboardService {
                     List.of(), 0, 0, 0);
         }
         List<ClassGroupRef> classes = classGroupDirectory.findByInternalIds(visible.get());
-        Map<UUID, String> known = new HashMap<>();
+        Map<UUID, ClassRef> known = new HashMap<>();
         Set<UUID> classPublicIds = new LinkedHashSet<>();
-        List<String> classCodes = new ArrayList<>();
+        List<ClassRef> classRefs = new ArrayList<>();
         for (ClassGroupRef c : classes) {
-            known.put(c.publicId(), c.code());
+            ClassRef ref = toClassRef(c);
+            known.put(c.publicId(), ref);
             classPublicIds.add(c.publicId());
-            if (classCodes.size() < LIST_LIMIT) {
-                classCodes.add(c.code());
+            if (classRefs.size() < LIST_LIMIT) {
+                classRefs.add(ref);
             }
         }
         // Les codes des classes du périmètre sont déjà connus (findByInternalIds
@@ -218,7 +220,7 @@ class DashboardService {
         notes.add("Les séances sans formateur sont détectées à l'import du planning, "
                 + "pas ici : une séance publiée porte toujours un formateur.");
         notes.add("Assiduité mesurée sur les " + REPORTING_WINDOW.toDays() + " derniers jours.");
-        return new ManagerCard(classes.size(), upcoming, classCodes, from, now,
+        return new ManagerCard(classes.size(), upcoming, classRefs, from, now,
                 totals.rate(), totals.late(), totals.unjustified(), classRates,
                 attendanceDashboard.countPendingJustificationsInScope(from, now), openClaims, pendingActivations);
     }
@@ -325,31 +327,36 @@ class DashboardService {
      * réutilisés, seuls les codes manquants sont demandés via
      * {@link ClassGroupDirectory#findByPublicIds}.
      */
-    private List<SessionLine> lines(List<SessionRef> sessions, Map<UUID, String> known) {
+    private List<SessionLine> lines(List<SessionRef> sessions, Map<UUID, ClassRef> known) {
         if (sessions.isEmpty()) {
             return List.of();
         }
-        Map<UUID, String> codes = new HashMap<>(known);
+        Map<UUID, ClassRef> refs = new HashMap<>(known);
         Set<UUID> missing = new LinkedHashSet<>();
         for (SessionRef s : sessions) {
             for (UUID classPublicId : s.classGroupPublicIds()) {
-                if (classPublicId != null && !codes.containsKey(classPublicId)) {
+                if (classPublicId != null && !refs.containsKey(classPublicId)) {
                     missing.add(classPublicId);
                 }
             }
         }
         if (!missing.isEmpty()) {
             for (ClassGroupRef c : classGroupDirectory.findByPublicIds(missing)) {
-                codes.put(c.publicId(), c.code());
+                refs.put(c.publicId(), toClassRef(c));
             }
         }
         return sessions.stream()
                 .map(s -> new SessionLine(s.publicId(), s.title(), statusName(s.status()),
                         s.startsAt(), s.endsAt(),
                         s.classGroupPublicIds().stream()
-                                .map(id -> codes.getOrDefault(id, "—"))
+                                .map(refs::get)
+                                .filter(java.util.Objects::nonNull)
                                 .toList()))
                 .toList();
+    }
+
+    private static ClassRef toClassRef(ClassGroupRef c) {
+        return new ClassRef(c.publicId(), c.name(), c.code(), c.academicYearCode());
     }
 
     private static String statusName(SessionLifecycle status) {

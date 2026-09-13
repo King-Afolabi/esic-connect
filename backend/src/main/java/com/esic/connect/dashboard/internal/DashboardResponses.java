@@ -42,7 +42,15 @@ final class DashboardResponses {
             String status,
             Instant startsAt,
             Instant endsAt,
-            List<String> classCodes) {
+            List<ClassRef> classes) {
+    }
+
+    /**
+     * Identité d'une classe suffisante pour l'affichage « Nom — Code —
+     * Année » (Lot 14/15), sans que le client concatène lui-même des
+     * chaînes venues de plusieurs endroits.
+     */
+    record ClassRef(UUID publicId, String name, String code, String academicYearCode) {
     }
 
     record ImportLine(UUID publicId, String status, int totalRows, Instant createdAt) {
@@ -112,7 +120,7 @@ final class DashboardResponses {
      *
      * @param classCount              classes du périmètre
      * @param upcomingSessions        séances des 7 prochains jours (≤ 10)
-     * @param classCodes              codes des classes du périmètre (≤ 10)
+     * @param classes                 classes du périmètre (≤ 10)
      * @param periodFrom              début de la fenêtre d'assiduité mesurée
      * @param periodTo                fin de cette fenêtre
      * @param attendanceRate          taux de présence du périmètre sur la fenêtre
@@ -126,7 +134,7 @@ final class DashboardResponses {
     record ManagerCard(
             long classCount,
             List<SessionLine> upcomingSessions,
-            List<String> classCodes,
+            List<ClassRef> classes,
             Instant periodFrom,
             Instant periodTo,
             double attendanceRate,

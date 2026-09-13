@@ -246,6 +246,8 @@ class StudentDirectoryIntegrationTests {
         Map<String, Object> afterEnrollment = findRow(userPublicId);
         assertThat(afterEnrollment.get("currentEnrollmentPublicId")).isNotNull();
         assertThat(afterEnrollment.get("classGroupPublicId")).isEqualTo(chain.classA());
+        // Lot 14/15 : le nom de la classe est exposé à côté du code.
+        assertThat(afterEnrollment.get("classGroupName")).isEqualTo("Classe");
     }
 
     // ------------------------------------------------------------------

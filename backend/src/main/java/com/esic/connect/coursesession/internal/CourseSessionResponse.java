@@ -61,8 +61,12 @@ record CourseSessionResponse(
     record SubjectView(UUID publicId, String code, String name) {
     }
 
-    /** Identité minimale d'une classe rattachée. */
-    record SessionClassView(UUID publicId, String code) {
+    /**
+     * Identité d'une classe rattachée, suffisante pour l'affichage
+     * « Nom — Code — Année » (Lot 14/15) sans que le client ait à
+     * concaténer lui-même des chaînes venues de plusieurs endroits.
+     */
+    record SessionClassView(UUID publicId, String name, String code, String academicYearCode) {
     }
 
     /** Vue d'un point de contrôle d'émargement (V10). */

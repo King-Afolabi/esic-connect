@@ -134,7 +134,14 @@ class CourseSessionIntegrationTests {
         assertThat(((Map<?, ?>) session.get("teacher")).get("publicId")).isEqualTo(teacher.publicId());
         assertThat(session.get("checkpointOpen")).isEqualTo(false);
         assertThat(session).doesNotContainKeys("id", "teacherUserId");
-        assertThat((List<?>) session.get("classes")).hasSize(1);
+        List<?> classes = (List<?>) session.get("classes");
+        assertThat(classes).hasSize(1);
+        // Lot 14/15 : chaque classe porte son nom et l'année, pas
+        // seulement son code.
+        Map<?, ?> sessionClass = (Map<?, ?>) classes.get(0);
+        assertThat(sessionClass.get("name")).isEqualTo("Classe 1");
+        assertThat(sessionClass.get("code")).isEqualTo("C1");
+        assertThat(sessionClass.get("academicYearCode")).isNotNull();
         assertThat(auditActions(id)).contains("SESSION_CREATED");
 
         assertThat(status(HttpMethod.POST, "/api/v1/sessions/" + id + "/open", null, admin))

@@ -98,6 +98,14 @@ class MyPlanningIntegrationTests {
         assertThat(teacherSessions).hasSize(1);
         assertThat(((Map<?, ?>) teacherSessions.get(0)).get("sessionPublicId")).isEqualTo(ownSession);
         assertThat(((Map<?, ?>) teacherSessions.get(0)).get("title")).isEqualTo("Cours de la classe A");
+        // Lot 14/15 : chaque classe porte son nom, son code et l'année,
+        // pas seulement son code.
+        List<?> teacherClasses = (List<?>) ((Map<?, ?>) teacherSessions.get(0)).get("classes");
+        assertThat(teacherClasses).hasSize(1);
+        Map<?, ?> teacherClass = (Map<?, ?>) teacherClasses.get(0);
+        assertThat(teacherClass.get("name")).isEqualTo("Classe 1");
+        assertThat(teacherClass.get("code")).isEqualTo("C1");
+        assertThat(teacherClass.get("academicYearCode")).isNotNull();
 
         Map<String, Object> studentPlanning = getMap("/api/v1/me/planning", tokenFor(student));
         assertThat(studentPlanning.get("role")).isEqualTo("STUDENT");

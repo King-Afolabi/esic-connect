@@ -30,6 +30,7 @@ final class MyPlanningResponses {
     record TeacherView(UUID publicId, String firstName, String lastName) {
     }
 
-    record ClassView(UUID publicId, String code) {
+    /** Suffisant pour l'affichage « Nom — Code — Année » (Lot 14/15). */
+    record ClassView(UUID publicId, String name, String code, String academicYearCode) {
     }
 }

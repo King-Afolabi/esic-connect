@@ -399,9 +399,13 @@ class DashboardIntegrationTests {
         assertThat(sessions).isNotEmpty();
         assertThat(sessions).allSatisfy(s -> {
             @SuppressWarnings("unchecked")
-            List<String> classCodes = (List<String>) s.get("classCodes");
-            assertThat(classCodes).isNotEmpty();
-            assertThat(classCodes).allSatisfy(c -> assertThat(scope.classCodes()).contains(c));
+            List<Map<String, Object>> classes = (List<Map<String, Object>>) s.get("classes");
+            assertThat(classes).isNotEmpty();
+            assertThat(classes).allSatisfy(c -> {
+                assertThat(c.get("code")).isNotNull();
+                assertThat(c.get("name")).isNotNull();
+                assertThat(scope.classCodes()).contains((String) c.get("code"));
+            });
         });
     }
 

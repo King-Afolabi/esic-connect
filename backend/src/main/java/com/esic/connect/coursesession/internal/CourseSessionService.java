@@ -563,7 +563,8 @@ class CourseSessionService {
                 .map(classGroupDirectory::findByInternalId)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .map(ref -> new CourseSessionResponse.SessionClassView(ref.publicId(), ref.code()))
+                .map(ref -> new CourseSessionResponse.SessionClassView(
+                        ref.publicId(), ref.name(), ref.code(), ref.academicYearCode()))
                 .toList();
 
         List<AttendanceCheckpoint> checkpoints = checkpointRepository

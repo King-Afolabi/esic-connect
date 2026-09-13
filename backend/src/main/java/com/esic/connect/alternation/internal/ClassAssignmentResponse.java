@@ -10,11 +10,12 @@ import java.util.UUID;
  * Vue API d'une affectation de rythme à une classe — jamais
  * d'identifiant SQL interne (ni {@code id}, ni {@code classGroupId}, ni
  * {@code workStudyPatternId}). La classe est exposée par ses identifiants
- * publics et son code (résolus via {@link ClassGroupDirectory}).
+ * publics, son nom et son code (résolus via {@link ClassGroupDirectory}).
  */
 record ClassAssignmentResponse(
         UUID publicId,
         UUID classGroupPublicId,
+        String classGroupName,
         String classGroupCode,
         UUID workStudyPatternPublicId,
         String workStudyPatternCode,
@@ -31,6 +32,7 @@ record ClassAssignmentResponse(
         return new ClassAssignmentResponse(
                 assignment.getPublicId(),
                 classRef != null ? classRef.publicId() : null,
+                classRef != null ? classRef.name() : null,
                 classRef != null ? classRef.code() : null,
                 assignment.getPattern().getPublicId(),
                 assignment.getPattern().getCode(),

@@ -91,10 +91,12 @@ class MyPlanningService {
         for (long id : teacherIds) {
             userDirectory.findByInternalId(id).ifPresent(ref -> teacherPublicIds.put(id, ref.publicId()));
         }
-        Map<UUID, String> classCodes = new HashMap<>();
-        for (UUID classPublicId : classPublicIds) {
-            classGroupDirectory.findByPublicId(classPublicId)
-                    .ifPresent(ref -> classCodes.put(classPublicId, ref.code()));
+        // Une requête pour tout le lot (anti-N+1), plutôt qu'un
+        // findByPublicId par classe.
+        Map<UUID, ClassView> classViews = new HashMap<>();
+        for (ClassGroupDirectory.ClassGroupRef ref : classGroupDirectory.findByPublicIds(classPublicIds)) {
+            classViews.put(ref.publicId(), new ClassView(ref.publicId(), ref.name(), ref.code(),
+                    ref.academicYearCode()));
         }
 
         return sessions.stream().map(s -> {
@@ -102,7 +104,8 @@ class MyPlanningService {
             TeacherView teacher = new TeacherView(teacherPublicIds.get(s.teacherUserId()),
                     name != null ? name.firstName() : null, name != null ? name.lastName() : null);
             List<ClassView> classes = s.classGroupPublicIds().stream()
-                    .map(id -> new ClassView(id, classCodes.get(id)))
+                    .map(classViews::get)
+                    .filter(java.util.Objects::nonNull)
                     .toList();
             return new SessionLine(s.publicId(), s.title(), s.status().name(), s.startsAt(), s.endsAt(),
                     s.timeZoneId(), teacher, classes, s.roomCode());

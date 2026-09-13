@@ -116,6 +116,9 @@ class EnrollmentIntegrationTests {
         assertThat(first.get("workStudy")).isEqualTo(true);
         assertThat(first.get("companyName")).isEqualTo("ACME");
         assertThat(first.get("classGroupPublicId")).isEqualTo(chain.classA());
+        // Lot 14/15 : le nom de la classe est exposé à côté du code — plus
+        // seulement le code — pour l'affichage « Nom — Code — Année ».
+        assertThat(first.get("classGroupName")).isEqualTo("Classe 1");
         assertThat(first.get("academicYearCode")).isEqualTo(chain.yearCode());
         assertThat(first.get("previousEnrollmentPublicId")).isNull();
         assertThat(first).doesNotContainKeys("id", "userId", "classGroupId", "academicYearId");

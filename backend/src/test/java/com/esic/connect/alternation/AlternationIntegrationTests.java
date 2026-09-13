@@ -177,6 +177,8 @@ class AlternationIntegrationTests {
         String assignmentId = (String) assignment.get("publicId");
         assertThat(assignment.get("status")).isEqualTo("ACTIVE");
         assertThat(assignment.get("classGroupPublicId")).isEqualTo(chain.classA());
+        // Lot 14/15 : le nom de la classe est exposé à côté du code.
+        assertThat(assignment.get("classGroupName")).isEqualTo("Classe 1");
         assertThat(assignment).doesNotContainKeys("id", "classGroupId", "workStudyPatternId");
         assertThat(auditActions(assignmentId)).contains("CLASS_WORK_STUDY_PATTERN_ASSIGNED");
 
