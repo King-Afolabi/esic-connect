@@ -145,13 +145,15 @@ class EnrollmentServiceTests {
     }
 
     @Test
-    void enrollRejectsWhenActiveEnrollmentAlreadyExistsForYear() {
+    void enrollRejectsWhenAnActiveEnrollmentAlreadyExists() {
+        // Lot 13 : la garde est désormais globale — l'année de la classe
+        // cible n'entre plus en jeu, seul compte le compte lui-même.
         UUID userId = UUID.randomUUID();
         UUID classId = UUID.randomUUID();
         when(userDirectory.findByPublicId(userId)).thenReturn(Optional.of(studentRef(userId)));
         when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
-        when(enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(USER_INTERNAL_ID, 50L,
-                EnrollmentStatus.ACTIVE)).thenReturn(true);
+        when(enrollmentRepository.existsByUserIdAndStatus(USER_INTERNAL_ID, EnrollmentStatus.ACTIVE))
+                .thenReturn(true);
         assertThatThrownBy(() -> service().enroll(enrollRequest(userId, classId, null), null))
                 .extracting(ex -> ((EnrollmentException) ex).kind())
                 .isEqualTo(EnrollmentException.Kind.ACTIVE_ENROLLMENT_EXISTS);
@@ -164,8 +166,8 @@ class EnrollmentServiceTests {
         UUID classId = UUID.randomUUID();
         when(userDirectory.findByPublicId(userId)).thenReturn(Optional.of(studentRef(userId)));
         when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
-        when(enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(USER_INTERNAL_ID, 50L,
-                EnrollmentStatus.ACTIVE)).thenReturn(false);
+        when(enrollmentRepository.existsByUserIdAndStatus(USER_INTERNAL_ID, EnrollmentStatus.ACTIVE))
+                .thenReturn(false);
         when(changePublisher.actorId("caller")).thenReturn(42L);
         when(persister.persist(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
 
@@ -191,8 +193,8 @@ class EnrollmentServiceTests {
         LocalDate start = LocalDate.of(2026, 9, 1);
         when(userDirectory.findByPublicId(userId)).thenReturn(Optional.of(studentRef(userId)));
         when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
-        when(enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(USER_INTERNAL_ID, 50L,
-                EnrollmentStatus.ACTIVE)).thenReturn(false);
+        when(enrollmentRepository.existsByUserIdAndStatus(USER_INTERNAL_ID, EnrollmentStatus.ACTIVE))
+                .thenReturn(false);
         when(persister.persist(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
 
         service().enroll(enrollRequest(userId, classId, start), null);
@@ -203,15 +205,15 @@ class EnrollmentServiceTests {
     }
 
     @Test
-    void enrollTranslatesActivePerYearCollisionInto409() {
+    void enrollTranslatesActiveEnrollmentCollisionInto409() {
         UUID userId = UUID.randomUUID();
         UUID classId = UUID.randomUUID();
         when(userDirectory.findByPublicId(userId)).thenReturn(Optional.of(studentRef(userId)));
         when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
-        when(enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(USER_INTERNAL_ID, 50L,
-                EnrollmentStatus.ACTIVE)).thenReturn(false);
+        when(enrollmentRepository.existsByUserIdAndStatus(USER_INTERNAL_ID, EnrollmentStatus.ACTIVE))
+                .thenReturn(false);
         when(persister.persist(any(Enrollment.class))).thenThrow(new DataIntegrityViolationException(
-                "could not execute statement; Duplicate entry '1-50' for key 'uq_enrollment_active_per_year'"));
+                "could not execute statement; Duplicate entry '1' for key 'uq_enrollment_active_global'"));
 
         assertThatThrownBy(() -> service().enroll(enrollRequest(userId, classId, null), null))
                 .extracting(ex -> ((EnrollmentException) ex).kind())
@@ -227,8 +229,8 @@ class EnrollmentServiceTests {
                 "Duplicate entry 'x' for key 'uq_enrollment_public_id'");
         when(userDirectory.findByPublicId(userId)).thenReturn(Optional.of(studentRef(userId)));
         when(classGroupDirectory.findByPublicId(classId)).thenReturn(Optional.of(classRef(10L, 50L, true)));
-        when(enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(USER_INTERNAL_ID, 50L,
-                EnrollmentStatus.ACTIVE)).thenReturn(false);
+        when(enrollmentRepository.existsByUserIdAndStatus(USER_INTERNAL_ID, EnrollmentStatus.ACTIVE))
+                .thenReturn(false);
         when(persister.persist(any(Enrollment.class))).thenThrow(unrelated);
 
         assertThatThrownBy(() -> service().enroll(enrollRequest(userId, classId, null), null))
@@ -276,17 +278,27 @@ class EnrollmentServiceTests {
     }
 
     @Test
-    void transferRejectsActiveEnrollmentInTargetYear() {
+    void transferAcrossAcademicYearsSucceedsWithoutAnExplicitGuard() {
+        // Lot 13 : l'unicité est globale, pas par année — `current` est,
+        // par construction de l'invariant, la seule inscription active du
+        // compte. La clôturer libère donc déjà l'unique créneau, quelle
+        // que soit l'année cible : `transfer` n'a plus besoin d'un
+        // pré-contrôle explicite (contrairement à l'ancien régime par
+        // année), et ne consulte donc plus le repository pour ça.
         Enrollment current = enrollment(USER_INTERNAL_ID, 500L, 10L, 50L, LocalDate.of(2026, 6, 1));
         UUID targetPublicId = UUID.randomUUID();
+        UUID userPublicId = UUID.randomUUID();
         when(enrollmentRepository.findByPublicId(current.getPublicId())).thenReturn(Optional.of(current));
         when(classGroupDirectory.findByPublicId(targetPublicId)).thenReturn(Optional.of(classRef(20L, 60L, true)));
-        when(enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(USER_INTERNAL_ID, 60L,
-                EnrollmentStatus.ACTIVE)).thenReturn(true);
-        assertThatThrownBy(() -> service().transfer(current.getPublicId(),
-                new EnrollmentRequests.Transfer(targetPublicId.toString(), "changement", null), null))
-                .extracting(ex -> ((EnrollmentException) ex).kind())
-                .isEqualTo(EnrollmentException.Kind.ACTIVE_ENROLLMENT_EXISTS);
+        when(classGroupDirectory.findByInternalId(10L)).thenReturn(Optional.of(classRef(10L, 50L, true)));
+        when(userDirectory.findByInternalId(USER_INTERNAL_ID)).thenReturn(Optional.of(studentRef(userPublicId)));
+        when(enrollmentRepository.saveAndFlush(any(Enrollment.class))).thenAnswer(inv -> withPublicId(inv.getArgument(0)));
+
+        EnrollmentResponse response = service().transfer(current.getPublicId(),
+                new EnrollmentRequests.Transfer(targetPublicId.toString(), "changement d'année", null), null);
+
+        assertThat(response.enrollmentSource()).isEqualTo(EnrollmentSource.CLASS_TRANSFER);
+        verify(enrollmentRepository, never()).existsByUserIdAndStatus(any(), any());
     }
 
     @Test

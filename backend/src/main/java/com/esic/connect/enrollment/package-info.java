@@ -15,13 +15,17 @@
  * apprenants, ni les rythmes d'alternance, ni les apprenants provisoires,
  * ni Angular : ces domaines relèvent d'autres lots.
  *
- * <p>Règle centrale (docs/04 §13.3, RG-012) : un apprenant possède au
- * maximum une inscription {@code ACTIVE} pour une même année scolaire —
- * garantie par un pré-contrôle applicatif et par la contrainte SQL
- * {@code uq_enrollment_active_per_year} (colonnes générées). Un changement
- * de classe clôture l'inscription courante ({@code TRANSFERRED},
- * {@code end_date} renseigné, {@code previous_enrollment_id} sur la
- * nouvelle) sans jamais supprimer de ligne (docs/04 §13.2, §13.4).
+ * <p>Règle centrale (docs/04 §13.3, RG-012 ; Lot 13, 2026-09) : un
+ * apprenant possède au maximum une inscription {@code ACTIVE},
+ * <strong>toutes années scolaires confondues</strong> — garantie par un
+ * pré-contrôle applicatif et par la contrainte SQL
+ * {@code uq_enrollment_active_global} (colonne générée, V36 ; resserre
+ * l'ancienne {@code uq_enrollment_active_per_year} de V7, qui ne
+ * contraignait qu'une même année). Un changement de classe clôture
+ * l'inscription courante ({@code TRANSFERRED}, {@code end_date}
+ * renseigné, {@code previous_enrollment_id} sur la nouvelle) sans jamais
+ * supprimer de ligne (docs/04 §13.2, §13.4) — y compris entre deux années
+ * scolaires différentes.
  *
  * <p>Dépendances inter-modules limitées aux ports publics :
  * {@link com.esic.connect.identity.CurrentUserResolver} (auteur des

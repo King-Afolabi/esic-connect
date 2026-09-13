@@ -22,13 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Contraintes SQL de {@code student_profile} et {@code enrollment} (V7) :
- * unicité d'une inscription {@code ACTIVE} par apprenant et par année
- * scolaire (colonnes générées {@code active_student_key}/
- * {@code active_year_key}), libération du créneau par une clôture, année
- * distincte autorisée, unicités {@code user_id} / {@code student_number} /
- * {@code public_id}, {@code CHECK} de période, clés étrangères
- * {@code RESTRICT} (dont l'auto-référence {@code previous_enrollment_id}).
+ * Contraintes SQL de {@code enrollment} (V7, resserrée en V36 — Lot 13) :
+ * unicité d'une inscription {@code ACTIVE} par apprenant,
+ * <strong>toutes années scolaires confondues</strong> (colonne générée
+ * {@code active_student_key}, contrainte {@code uq_enrollment_active_global}),
+ * libération du créneau par une clôture (même à travers un changement
+ * d'année), unicités {@code public_id}, {@code CHECK} de période, clés
+ * étrangères {@code RESTRICT} (dont l'auto-référence
+ * {@code previous_enrollment_id}).
  *
  * <p>Refonte 2026-09 : {@code enrollment.user_id} référence directement
  * {@code user_account} — {@code enrollment} ne référence plus
@@ -91,9 +92,28 @@ class EnrollmentConstraintsTests {
     }
 
     @Test
-    void activeEnrollmentInADifferentYearIsAllowed() {
+    void aSecondActiveEnrollmentInADifferentYearIsRejected() {
+        // Lot 13 : au plus une inscription ACTIVE par apprenant, TOUTES
+        // années confondues — une deuxième inscription active reste une
+        // anomalie même si elle porte sur une autre année scolaire
+        // (avant V36, seule la même année était contrainte).
         Chain chain = insertChain();
         enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
+
+        DataIntegrityViolationException collision = assertThrows(DataIntegrityViolationException.class,
+                () -> enrollmentRepository
+                        .saveAndFlush(active(chain.userId(), chain.classOtherYear(), chain.otherYear())));
+        assertThat(EnrollmentPersistence.isActiveEnrollmentUniqueViolation(collision)).isTrue();
+    }
+
+    @Test
+    void closingTheActiveEnrollmentFreesTheSlotAcrossAcademicYears() {
+        Chain chain = insertChain();
+        Enrollment first = enrollmentRepository.saveAndFlush(active(chain.userId(), chain.classA(), chain.year()));
+
+        first.close(EnrollmentStatus.TRANSFERRED, "mutation", first.getStartDate(), null);
+        enrollmentRepository.saveAndFlush(first);
+
         assertDoesNotThrow(() -> enrollmentRepository
                 .saveAndFlush(active(chain.userId(), chain.classOtherYear(), chain.otherYear())));
     }

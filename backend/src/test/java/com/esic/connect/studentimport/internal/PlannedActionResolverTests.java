@@ -99,13 +99,13 @@ class PlannedActionResolverTests {
     }
 
     @Test
-    void anActiveEnrollmentInAnotherClassSameYearPlansTransfer() {
+    void anActiveEnrollmentInAnotherClassPlansTransfer() {
         UUID userId = UUID.randomUUID();
         UUID currentEnrollmentId = UUID.randomUUID();
         when(accountProvisioner.findByEmail(anyString())).thenReturn(Optional.of(new ExistingAccountView(
                 userId, 5L, StatusView.ACTIVE, "Jane", "Doe", null, true, "ESIC-1", null)));
         when(enrollmentProvisioner.describeSituation(userId, classPublicId))
-                .thenReturn(new Situation(Situation.Kind.OTHER_CLASS_SAME_YEAR, currentEnrollmentId, false, null));
+                .thenReturn(new Situation(Situation.Kind.OTHER_CLASS, currentEnrollmentId, false, null));
         RowResolution resolution = resolver.resolve(row("", ""), false);
         assertThat(resolution.plannedAction()).isEqualTo(StudentImportPlannedAction.TRANSFER_CLASS);
         assertThat(resolution.resolvedEnrollmentPublicId()).isEqualTo(currentEnrollmentId);

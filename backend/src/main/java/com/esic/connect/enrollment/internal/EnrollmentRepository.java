@@ -47,7 +47,8 @@ interface EnrollmentRepository
             @Param("classGroupIds") Collection<Long> classGroupIds,
             @Param("status") EnrollmentStatus status);
 
-    boolean existsByUserIdAndAcademicYearIdAndStatus(Long userId, Long academicYearId, EnrollmentStatus status);
+    /** Lot 13 : au plus une inscription {@code ACTIVE} par compte, toutes années confondues. */
+    boolean existsByUserIdAndStatus(Long userId, EnrollmentStatus status);
 
     /**
      * Inscriptions actives des comptes indiqués — utilisée notamment pour

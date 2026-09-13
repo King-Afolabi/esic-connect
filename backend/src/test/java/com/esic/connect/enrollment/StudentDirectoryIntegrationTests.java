@@ -187,15 +187,18 @@ class StudentDirectoryIntegrationTests {
         Chain chainA = academicChain();
         Chain chainB = academicChain();
 
-        // Deux inscriptions actives, sur deux années scolaires distinctes
-        // (une seule inscription ACTIVE par année — RG-012) : le même
-        // compte cumule donc deux enrollments sans jamais dupliquer sa
-        // ligne dans la liste des apprenants.
+        // Un compte ne porte jamais plus d'une inscription ACTIVE, toutes
+        // années confondues (Lot 13, RG-012 resserrée) : l'historique
+        // multiple vient ici d'un changement de classe entre deux années
+        // scolaires distinctes (clôture de la première, création de la
+        // seconde), pas de deux inscriptions actives simultanées. Le même
+        // compte cumule bien deux enrollments (un TRANSFERRED, un ACTIVE)
+        // sans jamais dupliquer sa ligne dans la liste des apprenants.
         String firstEnrollment = (String) created("/api/v1/enrollments", Map.of(
                 "studentUserPublicId", student.publicId(), "classGroupPublicId", chainA.classA()), admin)
                 .get("publicId");
-        created("/api/v1/enrollments", Map.of(
-                "studentUserPublicId", student.publicId(), "classGroupPublicId", chainB.classA()), admin);
+        created("/api/v1/enrollments/" + firstEnrollment + "/transfer", Map.of(
+                "classGroupPublicId", chainB.classA(), "reason", "changement d'année"), admin);
 
         Map<String, Object> page = getMap("/api/v1/students?q=" + student.email().substring(0, 12));
         @SuppressWarnings("unchecked")

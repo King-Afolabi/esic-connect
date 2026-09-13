@@ -33,8 +33,10 @@ public interface StudentEnrollmentProvisioner {
      * vis-à-vis d'une classe cible (rapport §3.3). Une inscription
      * rattache directement le compte, jamais un profil (refonte 2026-09).
      * {@link Situation#currentEnrollmentPublicId} est renseigné dès qu'une
-     * inscription active existe pour l'année de la classe cible (que ce
-     * soit la même classe ou une autre) ; {@code null} pour {@code NONE}.
+     * inscription active existe (que ce soit la même classe ou une autre,
+     * <strong>quelle que soit son année scolaire</strong> — un apprenant
+     * n'a jamais qu'une seule inscription active, toutes années
+     * confondues, Lot 13) ; {@code null} pour {@code NONE}.
      */
     Situation describeSituation(UUID userPublicId, UUID targetClassGroupPublicId);
 
@@ -90,12 +92,18 @@ public interface StudentEnrollmentProvisioner {
 
         /** Situations distinctes (rapport §3.3). */
         public enum Kind {
-            /** Aucune inscription active pour l'année de la classe cible. */
+            /** Aucune inscription active, pour ce compte. */
             NONE,
             /** Inscription active déjà dans la classe cible. */
             SAME_CLASS,
-            /** Inscription active dans une autre classe de la même année. */
-            OTHER_CLASS_SAME_YEAR
+            /**
+             * Inscription active dans une autre classe — d'une autre année
+             * scolaire y compris (Lot 13 : au plus une inscription active,
+             * toutes années confondues). Traité identiquement à un
+             * changement de classe au sein d'une même année : clôture puis
+             * nouvelle inscription, historique préservé.
+             */
+            OTHER_CLASS
         }
 
         public static Situation none() {

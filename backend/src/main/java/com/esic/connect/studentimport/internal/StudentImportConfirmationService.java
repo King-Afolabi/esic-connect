@@ -349,7 +349,7 @@ class StudentImportConfirmationService {
                 }
                 yield resolution.contactDivergent() ? StudentImportRowOutcome.UPDATED : StudentImportRowOutcome.NOOP;
             }
-            case OTHER_CLASS_SAME_YEAR -> {
+            case OTHER_CLASS -> {
                 enrollmentProvisioner.provisionTransfer(situation.currentEnrollmentPublicId(), classPublicId,
                         today, "import CSV apprenants", workStudy, companyName, actorId);
                 yield StudentImportRowOutcome.TRANSFERRED;

@@ -640,8 +640,9 @@ est attribué.
   en base.
 
 ### Contraintes métier notables ailleurs
-- `enrollment` : **une seule inscription active** par apprenant et par
-  année (contrainte SQL + isolation de la concurrence testée).
+- `enrollment` : **une seule inscription active** par apprenant, toutes
+  années académiques confondues (Lot 13, V36 ; contrainte SQL +
+  isolation de la concurrence testée).
 - `attendance_record` : **anti-double présence** par contrainte
   d'unicité — la concurrence produit `200` / `409`, jamais `500`.
 - `attendance_correction` : historique **append-only**, motif
@@ -1317,7 +1318,7 @@ Cette table est centrale pour conserver l’historique.
 | `previous_enrollment_id` | BIGINT FK NULL |
 | `work_study` | BOOLEAN |
 | `company_name` | VARCHAR(191) NULL |
-| `active_student_key` / `active_year_key` | BIGINT UNSIGNED, colonnes générées (`VIRTUAL`) — voir §13.3 |
+| `active_student_key` | BIGINT UNSIGNED, colonne générée (`VIRTUAL`) — voir §13.3 |
 | `created_at` | TIMESTAMP(6) |
 | `created_by_id` | BIGINT NULL |
 | `updated_at` | TIMESTAMP(6) |
@@ -1349,8 +1350,8 @@ pessimiste — la protection réelle est décrite en §13.3) :
 2. son `end_date` est renseigné à la date d’effet (aujourd’hui par
    défaut, jamais antérieure à `start_date`) et son statut devient
    `TRANSFERRED` — cette clôture est **flushée avant** l’insertion
-   suivante, pour libérer immédiatement le créneau (`active_student_key`
-   / `active_year_key`, §13.3) que la nouvelle inscription doit occuper ;
+   suivante, pour libérer immédiatement le créneau (`active_student_key`,
+   §13.3) que la nouvelle inscription doit occuper ;
 3. une nouvelle inscription est créée, avec `start_date` au lendemain de
    la date d’effet (bornes inclusives, sans chevauchement) ;
 4. `previous_enrollment_id` référence l’ancienne inscription ;
@@ -1360,34 +1361,44 @@ pessimiste — la protection réelle est décrite en §13.3) :
 6. l’opération est auditée (deux événements : `TRANSFERRED` sur
    l’ancienne, `CREATED` sur la nouvelle).
 
-Un transfert vers une **autre année académique** revalide explicitement
-qu’aucune inscription active n’existe déjà pour cette année (l’ancienne
-inscription ne libère pas ce créneau-là).
+Un transfert vers une **autre année académique** ne revalide plus rien
+explicitement (Lot 13) : l’unicité étant désormais globale, clôturer
+`current` — la seule inscription active du compte, par construction de
+l’invariant — libère déjà l’unique créneau, quelle que soit l’année
+cible. Une course résiduelle reste rattrapée par la contrainte SQL de
+dernier recours (§13.3) et retraduite en 409.
 
 Aucune ancienne présence n’est déplacée.
 
 ## 13.3 Unicité d’une inscription active
 
-Règle :
+Règle (Lot 13, 2026-09 ; resserrée depuis la version par année du V7) :
 
 ```text
-Un apprenant possède au maximum une inscription ACTIVE par année
-académique.
+Un apprenant possède au maximum une inscription ACTIVE,
+toutes années académiques confondues.
 ```
+
+Plusieurs inscriptions `ACTIVE` simultanées pour un même compte sont une
+anomalie — y compris sur des années académiques différentes — et non un
+cas normal à présenter tel quel (dashboard, écrans de classe : voir
+Lot 13 dashboard).
 
 Cette règle est protégée par deux mécanismes complémentaires, **sans
 verrouillage pessimiste** :
 
 - un contrôle métier préalable (`guardNoActiveEnrollment`), dans la
   transaction du service ;
-- une contrainte d’unicité **au niveau base**, portée par deux colonnes
-  générées virtuelles (`active_student_key` = `user_id` si `status =
-  'ACTIVE'`, sinon `NULL` ; `active_year_key` = `academic_year_id` dans
-  les mêmes conditions) et une contrainte `UNIQUE` composite
-  (`uq_enrollment_active_per_year`, V7) sur ces deux colonnes — MySQL
-  n’ayant pas d’index partiel natif, seules les lignes `ACTIVE` portent
-  une valeur non nulle et sont donc réellement contraintes ; une
-  clôture (`status != ACTIVE`) libère immédiatement le créneau.
+- une contrainte d’unicité **au niveau base**, portée par une colonne
+  générée virtuelle (`active_student_key` = `user_id` si `status =
+  'ACTIVE'`, sinon `NULL`) et une contrainte `UNIQUE` sur cette seule
+  colonne (`uq_enrollment_active_global`, V36 — remplace
+  `uq_enrollment_active_per_year` de V7, qui portait sur
+  `(active_student_key, active_year_key)` et ne contraignait donc
+  qu’une même année) — MySQL n’ayant pas d’index partiel natif, seules
+  les lignes `ACTIVE` portent une valeur non nulle et sont donc
+  réellement contraintes ; une clôture (`status != ACTIVE`) libère
+  immédiatement le créneau.
 
 Le contrôle applicatif rejette la grande majorité des cas ; la
 contrainte reste la garantie de dernier recours en cas de course
@@ -1396,6 +1407,12 @@ reconnue par nom de contrainte
 (`EnrollmentPersistence.isActiveEnrollmentUniqueViolation`) et
 retraduite en erreur métier 409 (`ENR_ACTIVE_ENROLLMENT_EXISTS`), jamais
 en 500 générique. Un test de concurrence vérifie ce chemin.
+
+V36 ne supprime ni ne corrige silencieusement aucune ligne existante :
+si des données violaient déjà l’invariant global au moment de la
+migration, l’ajout de la contrainte échoue explicitement (entrée en
+double MySQL), et la migration reste en échec jusqu’à résolution
+manuelle (voir le commentaire du script V36).
 
 ## 13.4 Suppression
 
@@ -2437,7 +2454,7 @@ INDEX enrollment(class_group_id)
 INDEX enrollment(academic_year_id)
 INDEX enrollment(status)
 INDEX enrollment(previous_enrollment_id)
-UNIQUE enrollment(active_student_key, active_year_key)  -- uq_enrollment_active_per_year, §13.3
+UNIQUE enrollment(active_student_key)  -- uq_enrollment_active_global, §13.3 (V36)
 ```
 
 ### Séances
@@ -3064,7 +3081,7 @@ sequenceDiagram
     S->>DB: Clôture l'ancienne inscription (TRANSFERRED, end_date) + flush
     S->>DB: Crée la nouvelle inscription (start_date = end_date + 1j)
     S->>DB: Lie previous_enrollment_id
-    Note over S,DB: Une seule transaction ; aucun verrouillage pessimiste —<br/>protection par uq_enrollment_active_per_year (§13.3)
+    Note over S,DB: Une seule transaction ; aucun verrouillage pessimiste —<br/>protection par uq_enrollment_active_global (§13.3, V36)
     S->>A: Publie EnrollmentTransferred (x2 : ancienne + nouvelle)
     S-->>R: Confirmation
 ```

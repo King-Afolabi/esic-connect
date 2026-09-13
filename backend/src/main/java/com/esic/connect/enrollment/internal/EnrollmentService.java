@@ -35,17 +35,20 @@ import java.util.UUID;
  * archivée et porter un rôle actif {@code STUDENT}
  * ({@code ENR_USER_NOT_ELIGIBLE} sinon).
  *
- * <p>Règle centrale : un apprenant possède au maximum une inscription
- * {@code ACTIVE} par année scolaire (docs/04 §13.3) — pré-contrôle
- * applicatif renvoyant {@code ENR_ACTIVE_ENROLLMENT_EXISTS}, doublé par la
- * contrainte SQL {@code uq_enrollment_active_per_year} (colonnes
- * générées).
+ * <p>Règle centrale (Lot 13) : un apprenant possède au maximum une
+ * inscription {@code ACTIVE}, <strong>toutes années scolaires
+ * confondues</strong> (docs/04 §13.3) — pré-contrôle applicatif renvoyant
+ * {@code ENR_ACTIVE_ENROLLMENT_EXISTS}, doublé par la contrainte SQL
+ * {@code uq_enrollment_active_global} (colonne générée
+ * {@code active_student_key}, V36). Plusieurs inscriptions {@code ACTIVE}
+ * simultanées pour un même compte sont une anomalie, jamais un cas
+ * normal — y compris sur des années académiques différentes.
  *
  * <p>Frontières transactionnelles et courses concurrentes :
  * <ul>
  *   <li>{@link #enroll} n'est pas transactionnel ; l'insertion passe par
  *       {@link EnrollmentPersister} ({@code REQUIRES_NEW}). Une collision
- *       sur {@code uq_enrollment_active_per_year} est reçue <em>hors</em>
+ *       sur {@code uq_enrollment_active_global} est reçue <em>hors</em>
  *       de toute transaction en échec et retraduite en 409 sur place ;
  *       toute autre violation d'intégrité est relancée telle quelle.</li>
  *   <li>{@link #transfer} est transactionnel : la clôture de l'ancienne
@@ -107,7 +110,7 @@ class EnrollmentService {
         ClassGroupDirectory.ClassGroupRef classRef = requireOpenClass(request.classGroupPublicId());
 
         LocalDate startDate = request.startDate() != null ? request.startDate() : LocalDate.now(clock);
-        guardNoActiveEnrollment(target.internalId(), classRef.academicYearInternalId());
+        guardNoActiveEnrollment(target.internalId());
 
         Long actorId = changePublisher.actorId(callerSubject);
         Enrollment enrollment = new Enrollment(target.internalId(), classRef.internalId(),
@@ -147,17 +150,20 @@ class EnrollmentService {
         }
         String reason = request.reason().trim();
 
-        // Vers une autre année : l'inscription courante ne libère pas ce
-        // créneau-là ; contrôle explicite avant écriture.
-        if (targetRef.academicYearInternalId() != current.getAcademicYearId()) {
-            guardNoActiveEnrollment(current.getUserId(), targetRef.academicYearInternalId());
-        }
+        // Lot 13 : l'unicité est désormais globale (une seule colonne
+        // générée par compte, plus par compte+année) — `current` est,
+        // par construction de l'invariant, la SEULE inscription active du
+        // compte, quelle que soit l'année cible. Sa clôture ci-dessous
+        // libère donc déjà l'unique créneau avant l'INSERT suivant : aucun
+        // second contrôle explicite n'est nécessaire, contrairement à
+        // l'ancien régime par année (où changer d'année ne libérait pas le
+        // créneau de l'année cible).
 
         Long actorId = changePublisher.actorId(callerSubject);
         current.close(EnrollmentStatus.TRANSFERRED, reason, effectiveDate, actorId);
-        // Flush de l'UPDATE d'abord : les colonnes générées de l'ancienne
-        // inscription passent à NULL et libèrent le créneau (apprenant,
-        // même année) avant l'INSERT suivant.
+        // Flush de l'UPDATE d'abord : la colonne générée de l'ancienne
+        // inscription passe à NULL et libère le créneau d'unicité (par
+        // compte, toutes années confondues) avant l'INSERT suivant.
         enrollmentRepository.saveAndFlush(current);
 
         // `end_date` est une borne inclusive (dernier jour dans l'ancienne
@@ -314,9 +320,9 @@ class EnrollmentService {
                 .orElseThrow(() -> new EnrollmentException(EnrollmentException.Kind.USER_NOT_ELIGIBLE));
     }
 
-    private void guardNoActiveEnrollment(Long userId, long academicYearId) {
-        if (enrollmentRepository.existsByUserIdAndAcademicYearIdAndStatus(
-                userId, academicYearId, EnrollmentStatus.ACTIVE)) {
+    /** Lot 13 : au plus une inscription {@code ACTIVE} par compte, toutes années confondues. */
+    private void guardNoActiveEnrollment(Long userId) {
+        if (enrollmentRepository.existsByUserIdAndStatus(userId, EnrollmentStatus.ACTIVE)) {
             throw new EnrollmentException(EnrollmentException.Kind.ACTIVE_ENROLLMENT_EXISTS);
         }
     }

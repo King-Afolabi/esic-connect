@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>{@code saveAndFlush} est isolé dans une transaction
  * {@link Propagation#REQUIRES_NEW} : si la contrainte d'unicité
- * {@code uq_enrollment_active_per_year} est violée par une course entre
+ * {@code uq_enrollment_active_global} est violée par une course entre
  * deux requêtes, <em>cette</em> transaction est marquée rollback-only et
  * annulée sans contaminer l'appelant. Le service reçoit alors la
  * {@link org.springframework.dao.DataIntegrityViolationException}

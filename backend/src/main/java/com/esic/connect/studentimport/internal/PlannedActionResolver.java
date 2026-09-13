@@ -126,7 +126,7 @@ class PlannedActionResolver {
         Situation situation = enrollmentProvisioner.describeSituation(account.publicId(), classRef.publicId());
         boolean divergent = contactDivergent(row, account, situation);
         return switch (situation.kind()) {
-            case OTHER_CLASS_SAME_YEAR -> new RowResolution(StudentImportPlannedAction.TRANSFER_CLASS,
+            case OTHER_CLASS -> new RowResolution(StudentImportPlannedAction.TRANSFER_CLASS,
                     classRef.publicId(), account.publicId(), situation.currentEnrollmentPublicId(), false,
                     divergent, startYear, issues);
             case NONE -> new RowResolution(StudentImportPlannedAction.ENROLL_EXISTING,

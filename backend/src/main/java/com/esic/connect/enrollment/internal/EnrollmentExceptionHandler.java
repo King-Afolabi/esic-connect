@@ -15,8 +15,9 @@ import java.util.UUID;
 /**
  * Traduit {@link EnrollmentException} en réponse {@link ApiError} homogène
  * (codes {@code ENR_*}), et retraduit une collision concurrente sur la
- * contrainte {@code uq_enrollment_active_per_year} en 409 plutôt qu'en
- * 500 générique. Aucun message ne divulgue de donnée personnelle. Aligné
+ * contrainte {@code uq_enrollment_active_global} (V36, Lot 13) en 409
+ * plutôt qu'en 500 générique. Aucun message ne divulgue de donnée
+ * personnelle. Aligné
  * sur {@code academic.internal.AcademicExceptionHandler}.
  */
 @RestControllerAdvice(assignableTypes = {
@@ -172,15 +173,16 @@ class EnrollmentExceptionHandler {
      * 409 ciblé ; toute autre violation d'intégrité est relancée telle
      * quelle (500 via le gestionnaire global) :
      * <ul>
-     *   <li>{@code uq_enrollment_active_per_year} → une seconde inscription
-     *       {@code ACTIVE} sur le même couple (apprenant, année).</li>
+     *   <li>{@code uq_enrollment_active_global} → une seconde inscription
+     *       {@code ACTIVE} pour le même apprenant (Lot 13 : toutes années
+     *       scolaires confondues).</li>
      * </ul>
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> handleIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
         if (EnrollmentPersistence.matchesConstraint(ex, EnrollmentPersistence.ACTIVE_ENROLLMENT_CONSTRAINT)) {
             return build(HttpStatus.CONFLICT, "ENR_ACTIVE_ENROLLMENT_EXISTS",
-                    "Cet apprenant a déjà une inscription active pour cette année scolaire ; "
+                    "Cet apprenant a déjà une inscription active ; "
                             + "clôturez-la ou utilisez un changement de classe.", request);
         }
         throw ex;

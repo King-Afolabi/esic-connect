@@ -137,7 +137,16 @@ class StudentImportConfirmationIntegrationTests {
     void reconfirmationIsIdempotent() {
         Actor admin = admin();
         Chain chain = academicChain(admin.token());
-        UUID jobId = simulate(admin, "one.csv", header() + row("once@x.test", chain));
+        // Email randomisé (comme le reste du fichier) : un identifiant fixe
+        // ("once@x.test") survivrait d'une exécution de la suite à l'autre
+        // dans cette base de test persistante et, avec une horloge de test
+        // déterministe, ferait retomber une ré-exécution sur l'inscription
+        // active laissée par la précédente — un changement de classe
+        // (Lot 13, describeSituation ne filtre plus par année) daté d'avant
+        // le début de cette inscription-là. Un compte frais élimine cette
+        // interférence entre exécutions.
+        UUID jobId = simulate(admin, "one.csv",
+                header() + row("once-" + UUID.randomUUID() + "@x.test", chain));
 
         var first = confirm(admin, jobId);
         long users = count("user_account");
@@ -265,6 +274,49 @@ class StudentImportConfirmationIntegrationTests {
                 "SELECT COUNT(*) FROM enrollment WHERE user_id = "
                         + "(SELECT id FROM user_account WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
                         + "AND status = 'ACTIVE'", Long.class, mover.publicId())).isEqualTo(1L);
+    }
+
+    @Test
+    void aTransferAcrossAcademicYearsPlansAndAppliesATransferNotASecondActiveEnrollment() {
+        // Lot 13 : au plus une inscription ACTIVE par compte, toutes
+        // années confondues. Avant ce lot, describeSituation() ne
+        // regardait que l'année de la classe cible : une inscription
+        // active dans une AUTRE année passait inaperçue (Kind.NONE) et
+        // l'import planifiait ENROLL_EXISTING — une seconde ligne ACTIVE,
+        // désormais rejetée par uq_enrollment_active_global (V36). Ce
+        // test verrouille le bon comportement : la classe cible relève
+        // d'une année scolaire différente de l'inscription active
+        // existante, et l'import doit tout de même transférer (clôturer
+        // l'ancienne, créer la nouvelle), jamais dupliquer.
+        Actor admin = admin();
+        Chain yearOne = academicChain(admin.token());
+        Chain yearTwo = academicChain(admin.token());
+
+        String studentEmail = "mover-cross-year." + UUID.randomUUID() + "@esic-connect.test";
+        Actor mover = actorWith(studentEmail, RoleCode.STUDENT);
+        String studentNumber = "ESIC-XY-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+        UserAccount moverAccount = userAccountRepository.findById(mover.internalId()).orElseThrow();
+        moverAccount.assignStudentNumber(studentNumber, null, null);
+        userAccountRepository.saveAndFlush(moverAccount);
+        created("/api/v1/enrollments", Map.of(
+                "studentUserPublicId", mover.publicId(), "classGroupPublicId", yearOne.classBPublicId()),
+                admin.token());
+
+        UUID jobId = simulate(admin, "transfer-cross-year.csv",
+                "last_name,first_name,email,formation_code,class_code,academic_year\n"
+                        + "Mover,Max," + studentEmail + "," + yearTwo.programCode() + "," + yearTwo.classA() + ","
+                        + yearTwo.yearCode() + "\n");
+        var result = confirm(admin, jobId);
+        assertThat(result.transferred()).isEqualTo(1);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM enrollment WHERE user_id = "
+                        + "(SELECT id FROM user_account WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
+                        + "AND status = 'ACTIVE'", Long.class, mover.publicId())).isEqualTo(1L);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM enrollment WHERE user_id = "
+                        + "(SELECT id FROM user_account WHERE public_id = UNHEX(REPLACE(?, '-', ''))) "
+                        + "AND status = 'TRANSFERRED'", Long.class, mover.publicId())).isEqualTo(1L);
     }
 
     // ------------------------------------------------------------------

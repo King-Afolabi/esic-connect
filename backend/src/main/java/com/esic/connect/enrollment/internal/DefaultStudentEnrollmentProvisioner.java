@@ -55,19 +55,18 @@ class DefaultStudentEnrollmentProvisioner implements StudentEnrollmentProvisione
         if (user == null) {
             return Situation.none();
         }
+        // Lot 13 : au plus une inscription active par compte, toutes années
+        // confondues — la situation ne filtre donc plus par année scolaire.
         List<Enrollment> active = enrollmentRepository
                 .findByUserIdAndStatus(user.internalId(), EnrollmentStatus.ACTIVE);
-        Optional<Enrollment> sameYear = active.stream()
-                .filter(e -> e.getAcademicYearId() != null
-                        && e.getAcademicYearId() == target.academicYearInternalId())
-                .findFirst();
-        if (sameYear.isEmpty()) {
+        Optional<Enrollment> current = active.stream().findFirst();
+        if (current.isEmpty()) {
             return Situation.none();
         }
-        Enrollment enrollment = sameYear.get();
+        Enrollment enrollment = current.get();
         Situation.Kind kind = enrollment.getClassGroupId() != null
                 && enrollment.getClassGroupId() == target.internalId()
-                ? Situation.Kind.SAME_CLASS : Situation.Kind.OTHER_CLASS_SAME_YEAR;
+                ? Situation.Kind.SAME_CLASS : Situation.Kind.OTHER_CLASS;
         return new Situation(kind, enrollment.getPublicId(), enrollment.isWorkStudy(),
                 enrollment.getCompanyName());
     }

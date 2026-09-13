@@ -6,8 +6,8 @@ import java.util.Locale;
 
 /**
  * Reconnaissance <em>ciblée</em> d'une violation d'une contrainte
- * d'unicité connue du module (V7), pour retraduire une collision
- * concurrente en 409 plutôt qu'en 500 générique.
+ * d'unicité connue du module (V7, resserrée en V36 — Lot 13), pour
+ * retraduire une collision concurrente en 409 plutôt qu'en 500 générique.
  *
  * <p>{@link #matchesConstraint} n'est vrai que si la violation d'intégrité
  * concerne précisément la contrainte nommée — jamais une autre FK,
@@ -19,7 +19,8 @@ import java.util.Locale;
  */
 final class EnrollmentPersistence {
 
-    static final String ACTIVE_ENROLLMENT_CONSTRAINT = "uq_enrollment_active_per_year";
+    /** Lot 13 (V36) : unicité globale — une seule inscription {@code ACTIVE} par compte. */
+    static final String ACTIVE_ENROLLMENT_CONSTRAINT = "uq_enrollment_active_global";
 
     private EnrollmentPersistence() {
     }
