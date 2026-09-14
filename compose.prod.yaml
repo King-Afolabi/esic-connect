@@ -128,6 +128,14 @@ services:
       APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS}
       ESIC_DEMO_PASSWORD: ${ESIC_DEMO_PASSWORD:-}
       ESIC_DEMO_TOTP_SECRET: ${ESIC_DEMO_TOTP_SECRET:-}
+      # Audit 2026-09-14 : clé dédiée pour le chiffrement AES-256-GCM des
+      # secrets TOTP (SecretCipher). Sans elle, la clé était dérivée de
+      # JWT_SECRET (avertissement au démarrage) — les 3 comptes réels
+      # avec MFA actif ont été rechiffrés avec cette nouvelle clé avant
+      # sa mise en service (transaction vérifiée par round-trip, backup
+      # pris avant). Ne jamais changer cette valeur sans repasser par la
+      # même procédure de rechiffrement.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
       # Audit 2026-09-14 : coupe l'amorçage des 6 comptes @example.test
       # sans changer de profil (la Pi tourne sous `demo` en permanence et
       # héberge de vrais comptes — voir DemoDataInitializer). Défaut à
