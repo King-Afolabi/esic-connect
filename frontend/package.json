@@ -33,7 +33,7 @@
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
     "angularx-qrcode": "^21.0.5",
-    "bootstrap": "^5.3.3",
+    "bootstrap": "^5.3.8",
     "jsqr": "^1.4.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
@@ -45,10 +45,10 @@
     "@eslint/js": "^10.0.1",
     "angular-eslint": "21.4.0",
     "axe-core": "^4.13.0",
-    "eslint": "^10.3.0",
+    "eslint": "^10.10.0",
     "jsdom": "^27.1.0",
     "typescript": "~5.9.2",
-    "typescript-eslint": "8.68.0",
+    "typescript-eslint": "8.70.0",
     "vitest": "^4.0.8"
   }
 }
