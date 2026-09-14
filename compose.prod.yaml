@@ -128,6 +128,12 @@ services:
       APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS}
       ESIC_DEMO_PASSWORD: ${ESIC_DEMO_PASSWORD:-}
       ESIC_DEMO_TOTP_SECRET: ${ESIC_DEMO_TOTP_SECRET:-}
+      # Audit 2026-09-14 : coupe l'amorçage des 6 comptes @example.test
+      # sans changer de profil (la Pi tourne sous `demo` en permanence et
+      # héberge de vrais comptes — voir DemoDataInitializer). Défaut à
+      # `true` pour rester inchangé partout où cette variable n'est pas
+      # définie dans .env.
+      ESIC_DEMO_SEED_ACCOUNTS: ${ESIC_DEMO_SEED_ACCOUNTS:-true}
       LOGIN_ORIGIN_LIMIT: ${LOGIN_ORIGIN_LIMIT:-60}
       JUSTIFICATION_STORAGE_PATH: /data/uploads/justifications
     volumes:
